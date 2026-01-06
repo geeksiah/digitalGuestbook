@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Couple Portal - Event Platform</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+    .header { background: #1a1a1a; color: white; padding: 1rem 2rem; }
+    .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+    .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin: 0.25rem; }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn:hover { opacity: 0.9; }
+    input { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; margin-top: 0.5rem; }
+    .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 1rem; }
+    .tab { padding: 0.75rem 1.5rem; cursor: pointer; border: none; background: none; }
+    .tab.active { border-bottom: 2px solid #007bff; color: #007bff; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .rsvp-item { border-left: 4px solid #ddd; padding: 1rem; margin-bottom: 1rem; }
+    .rsvp-item.pending { border-color: #ffc107; }
+    .rsvp-item.approved { border-color: #28a745; }
+    .rsvp-item.rejected { border-color: #dc3545; }
+    .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; }
+    .status-PENDING { background: #ffc107; color: #000; }
+    .status-APPROVED { background: #28a745; color: white; }
+    .status-REJECTED { background: #dc3545; color: white; }
+    .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .media-item { border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+    .media-item img, .media-item video { width: 100%; height: 150px; object-fit: cover; }
+    .media-item audio { width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Couple Portal</h1>
+    <div style="margin-top: 0.5rem;">
+      <input type="text" id="coupleKey" placeholder="Couple Access Key" style="width: 300px; margin-right: 1rem;">
+      <input type="text" id="eventId" placeholder="Event ID" style="width: 300px; margin-right: 1rem;">
+      <button class="btn btn-primary" onclick="loadPortal()">Load</button>
+    </div>
+  </div>
+
+  <div class="container" id="portalContent" style="display: none;">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('rsvps')">RSVPs</button>
+      <button class="tab" onclick="showTab('media')">Media</button>
+      <button class="tab" onclick="showTab('broadcasts')">Broadcasts</button>
+    </div>
+
+    <!-- RSVPs Tab -->
+    <div id="rsvps" class="tab-content active">
+      <div class="card">
+        <h2>RSVPs</h2>
+        <div style="margin-bottom: 1rem;">
+          <button class="btn btn-primary" onclick="loadRSVPs('PENDING')">Pending</button>
+          <button class="btn btn-primary" onclick="loadRSVPs('APPROVED')">Approved</button>
+          <button class="btn btn-primary" onclick="loadRSVPs('REJECTED')">Rejected</button>
+          <button class="btn btn-primary" onclick="loadRSVPs()">All</button>
+        </div>
+        <div id="rsvpsList"></div>
+      </div>
+    </div>
+
+    <!-- Media Tab -->
+    <div id="media" class="tab-content">
+      <div class="card">
+        <h2>Media Timeline</h2>
+        <button class="btn btn-success" onclick="downloadAllMedia()">Download All (ZIP)</button>
+        <div id="mediaList" class="media-grid" style="margin-top: 1rem;"></div>
+      </div>
+    </div>
+
+    <!-- Broadcasts Tab -->
+    <div id="broadcasts" class="tab-content">
+      <div class="card">
+        <h2>Send Broadcast</h2>
+        <form id="broadcastForm" onsubmit="sendBroadcast(event)">
+          <label>Audience:
+            <select name="audience" required>
+              <option value="ALL_RSVPS">All RSVPs</option>
+              <option value="APPROVED_ONLY">Approved Only</option>
+            </select>
+          </label>
+          <label>Channel:
+            <select name="channel" required>
+              <option value="EMAIL">Email</option>
+              <option value="SMS">SMS</option>
+              <option value="WHATSAPP">WhatsApp</option>
+            </select>
+          </label>
+          <label>Message:
+            <textarea name="body" rows="4" required maxlength="480"></textarea>
+          </label>
+          <button type="submit" class="btn btn-primary">Send</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Broadcast History</h2>
+        <div id="broadcastsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:4000';
+    let coupleKey = '';
+    let eventId = '';
+
+    function showTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabName).classList.add('active');
+      if (tabName === 'rsvps') loadRSVPs();
+      if (tabName === 'media') loadMedia();
+      if (tabName === 'broadcasts') loadBroadcasts();
+    }
+
+    function loadPortal() {
+      coupleKey = document.getElementById('coupleKey').value;
+      eventId = document.getElementById('eventId').value;
+      if (!coupleKey || !eventId) {
+        alert('Please enter both Couple Key and Event ID');
+        return;
+      }
+      document.getElementById('portalContent').style.display = 'block';
+      loadRSVPs();
+      loadMedia();
+      loadBroadcasts();
+    }
+
+    async function loadRSVPs(status) {
+      try {
+        const url = `${API_BASE}/v1/couple/events/${eventId}/rsvps${status ? '?status=' + status : ''}`;
+        const res = await fetch(url, {
+          headers: { 'x-couple-key': coupleKey }
+        });
+        const rsvps = await res.json();
+        const html = rsvps.map(r => `
+          <div class="rsvp-item ${r.status.toLowerCase()}">
+            <h3>${r.partyName}</h3>
+            <p><strong>Response:</strong> ${r.response}</p>
+            <p><strong>Guests:</strong> ${r.guestCount || 'N/A'}</p>
+            <p><strong>Status:</strong> <span class="status-badge status-${r.status}">${r.status}</span></p>
+            <p><strong>Submitted:</strong> ${new Date(r.createdAt).toLocaleString()}</p>
+            ${r.status === 'PENDING' ? `
+              <button class="btn btn-success" onclick="approveRSVP('${r.id}')">Approve</button>
+              <button class="btn btn-danger" onclick="rejectRSVP('${r.id}')">Reject</button>
+            ` : ''}
+            ${r.invitation ? `
+              <a href="${API_BASE}/v1/couple/rsvps/${r.id}/invitation-card.pdf" target="_blank" class="btn btn-primary">Download Invitation Card</a>
+            ` : ''}
+          </div>
+        `).join('');
+        document.getElementById('rsvpsList').innerHTML = html || '<p>No RSVPs</p>';
+      } catch (err) {
+        document.getElementById('rsvpsList').innerHTML = '<p class="error">Error loading RSVPs</p>';
+      }
+    }
+
+    async function approveRSVP(rsvpId) {
+      try {
+        const res = await fetch(`${API_BASE}/v1/couple/rsvps/${rsvpId}/approve`, {
+          method: 'POST',
+          headers: { 'x-couple-key': coupleKey }
+        });
+        if (res.ok) {
+          alert('RSVP approved! Invitation issued.');
+          loadRSVPs();
+        } else {
+          alert('Error: ' + (await res.text()));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function rejectRSVP(rsvpId) {
+      if (!confirm('Reject this RSVP?')) return;
+      try {
+        const res = await fetch(`${API_BASE}/v1/couple/rsvps/${rsvpId}/reject`, {
+          method: 'POST',
+          headers: { 'x-couple-key': coupleKey }
+        });
+        if (res.ok) {
+          alert('RSVP rejected.');
+          loadRSVPs();
+        } else {
+          alert('Error: ' + (await res.text()));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function loadMedia() {
+      try {
+        const res = await fetch(`${API_BASE}/v1/couple/events/${eventId}/media`, {
+          headers: { 'x-couple-key': coupleKey }
+        });
+        const media = await res.json();
+        const html = media.map(m => {
+          const url = `${API_BASE}/v1/couple/media/${m.id}/file?x-couple-key=${encodeURIComponent(coupleKey)}`;
+          if (m.type === 'PHOTO') {
+            return `<div class="media-item"><img src="${url}" alt="Photo"></div>`;
+          } else if (m.type === 'VIDEO') {
+            return `<div class="media-item"><video controls src="${url}"></video></div>`;
+          } else {
+            return `<div class="media-item"><audio controls src="${url}"></audio></div>`;
+          }
+        }).join('');
+        document.getElementById('mediaList').innerHTML = html || '<p>No media</p>';
+      } catch (err) {
+        document.getElementById('mediaList').innerHTML = '<p class="error">Error loading media</p>';
+      }
+    }
+
+    function downloadAllMedia() {
+      window.open(`${API_BASE}/v1/couple/events/${eventId}/media.zip?x-couple-key=${encodeURIComponent(coupleKey)}`);
+    }
+
+    async function sendBroadcast(e) {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      try {
+        const res = await fetch(`${API_BASE}/v1/couple/events/${eventId}/broadcasts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-couple-key': coupleKey },
+          body: JSON.stringify({
+            audience: formData.get('audience'),
+            channel: formData.get('channel'),
+            body: formData.get('body')
+          })
+        });
+        if (res.ok) {
+          alert('Broadcast sent!');
+          e.target.reset();
+          loadBroadcasts();
+        } else {
+          alert('Error: ' + (await res.text()));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function loadBroadcasts() {
+      try {
+        const res = await fetch(`${API_BASE}/v1/couple/events/${eventId}/broadcasts`, {
+          headers: { 'x-couple-key': coupleKey }
+        });
+        const broadcasts = await res.json();
+        const html = broadcasts.map(b => `
+          <div class="card">
+            <h3>${b.channel} - ${b.audience}</h3>
+            <p>${b.body}</p>
+            <p><strong>Sent:</strong> ${b.sentCount} recipients</p>
+            <p><strong>Date:</strong> ${new Date(b.createdAt).toLocaleString()}</p>
+          </div>
+        `).join('');
+        document.getElementById('broadcastsList').innerHTML = html || '<p>No broadcasts</p>';
+      } catch (err) {
+        document.getElementById('broadcastsList').innerHTML = '<p class="error">Error loading broadcasts</p>';
+      }
+    }
+  </script>
+</body>
+</html>
+
