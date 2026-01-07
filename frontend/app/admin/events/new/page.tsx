@@ -1,15 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi } from '@/lib/api';
-import { slugify } from '@/lib/utils';
+import { eventsApi, templatesApi } from '@/lib/api';
+import { slugify, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+
+interface Template {
+  id: string;
+  name: string;
+  type: string;
+  isDefault: boolean;
+  description: string | null;
+}
 
 export default function NewEventPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -28,7 +39,39 @@ export default function NewEventPage() {
     maxRecordingDuration: 120,
     minRecordingDuration: 30,
     maxPhotosPerGuest: 5,
+    // Template selections
+    invitationTemplateId: '',
+    rsvpTemplateId: '',
+    guestbookTemplateId: '',
+    thankYouTemplateId: '',
   });
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await templatesApi.list();
+      setTemplates(response.data.templates);
+      
+      // Auto-select default templates
+      const defaults: any = {};
+      response.data.templates.forEach((t: Template) => {
+        if (t.isDefault) {
+          if (t.type === 'INVITATION') defaults.invitationTemplateId = t.id;
+          if (t.type === 'RSVP') defaults.rsvpTemplateId = t.id;
+          if (t.type === 'GUESTBOOK') defaults.guestbookTemplateId = t.id;
+          if (t.type === 'THANK_YOU') defaults.thankYouTemplateId = t.id;
+        }
+      });
+      setFormData(prev => ({ ...prev, ...defaults }));
+    } catch (error) {
+      toast.error('Failed to load templates');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
 
   const handleNameChange = (name: string) => {
     setFormData({
@@ -43,7 +86,6 @@ export default function NewEventPage() {
     setLoading(true);
 
     try {
-      // Combine date and time
       const dateTime = new Date(`${formData.date}T${formData.time}`);
       const endDateTime = formData.endDate 
         ? new Date(`${formData.endDate}T${formData.endTime || '23:59'}`)
@@ -65,6 +107,10 @@ export default function NewEventPage() {
         maxRecordingDuration: formData.maxRecordingDuration,
         minRecordingDuration: formData.minRecordingDuration,
         maxPhotosPerGuest: formData.maxPhotosPerGuest,
+        invitationTemplateId: formData.invitationTemplateId || undefined,
+        rsvpTemplateId: formData.rsvpTemplateId || undefined,
+        guestbookTemplateId: formData.guestbookTemplateId || undefined,
+        thankYouTemplateId: formData.thankYouTemplateId || undefined,
       });
 
       toast.success('Event created successfully!');
@@ -76,8 +122,52 @@ export default function NewEventPage() {
     }
   };
 
+  const getTemplatesByType = (type: string) => 
+    templates.filter(t => t.type === type);
+
+  const TemplateSelect = ({ 
+    type, 
+    value, 
+    onChange, 
+    disabled,
+    label 
+  }: { 
+    type: string; 
+    value: string; 
+    onChange: (id: string) => void;
+    disabled?: boolean;
+    label: string;
+  }) => {
+    const typeTemplates = getTemplatesByType(type);
+    
+    return (
+      <div className={cn(disabled && 'opacity-50')}>
+        <label className="label">{label}</label>
+        <select
+          className="input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        >
+          <option value="">Select template...</option>
+          {typeTemplates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} {t.isDefault && '(Default)'}
+            </option>
+          ))}
+        </select>
+        {typeTemplates.length === 0 && (
+          <p className="text-xs text-surface-500 mt-1">
+            No {type.toLowerCase()} templates available. 
+            <Link href="/admin/templates/new" className="text-primary-600 ml-1">Create one</Link>
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <Link
@@ -90,7 +180,7 @@ export default function NewEventPage() {
           Back to Events
         </Link>
         <h1 className="text-2xl font-display font-bold text-navy-900">Create New Event</h1>
-        <p className="text-surface-600 mt-1">Set up a new event with all its details</p>
+        <p className="text-surface-600 mt-1">Set up a new event with all its details and templates</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -221,6 +311,7 @@ export default function NewEventPage() {
                 <option value="Europe/London">London</option>
                 <option value="Europe/Paris">Paris</option>
                 <option value="Asia/Tokyo">Tokyo</option>
+                <option value="Africa/Accra">Ghana (GMT)</option>
               </select>
             </div>
           </div>
@@ -295,6 +386,58 @@ export default function NewEventPage() {
               />
             </label>
           </div>
+        </div>
+
+        {/* Template Selection */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-navy-900">Page Templates</h2>
+              <p className="text-sm text-surface-600">Select custom templates for each page type</p>
+            </div>
+            <Link href="/admin/templates" className="text-sm text-primary-600 hover:text-primary-700">
+              Manage Templates →
+            </Link>
+          </div>
+
+          {loadingTemplates ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500" />
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <TemplateSelect
+                type="INVITATION"
+                label="Invitation Page Template"
+                value={formData.invitationTemplateId}
+                onChange={(id) => setFormData({ ...formData, invitationTemplateId: id })}
+                disabled={!formData.invitationEnabled}
+              />
+              
+              <TemplateSelect
+                type="RSVP"
+                label="RSVP Form Template"
+                value={formData.rsvpTemplateId}
+                onChange={(id) => setFormData({ ...formData, rsvpTemplateId: id })}
+                disabled={!formData.rsvpEnabled}
+              />
+              
+              <TemplateSelect
+                type="GUESTBOOK"
+                label="Guestbook Template"
+                value={formData.guestbookTemplateId}
+                onChange={(id) => setFormData({ ...formData, guestbookTemplateId: id })}
+                disabled={!formData.guestbookEnabled}
+              />
+              
+              <TemplateSelect
+                type="THANK_YOU"
+                label="Thank You Page Template"
+                value={formData.thankYouTemplateId}
+                onChange={(id) => setFormData({ ...formData, thankYouTemplateId: id })}
+              />
+            </div>
+          )}
         </div>
 
         {/* Guestbook Settings */}

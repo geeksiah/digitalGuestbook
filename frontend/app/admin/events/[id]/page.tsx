@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, checkInApi, mediaApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi } from '@/lib/api';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,7 @@ interface Event {
   date: string;
   endDate: string | null;
   venue: string | null;
+  timezone: string;
   phase: string;
   currentPhase: string;
   phaseOverride: boolean;
@@ -24,6 +25,17 @@ interface Event {
   rsvpEnabled: boolean;
   guestbookEnabled: boolean;
   checkInEnabled: boolean;
+  maxRecordingDuration: number;
+  minRecordingDuration: number;
+  maxPhotosPerGuest: number;
+  invitationTemplateId: string | null;
+  rsvpTemplateId: string | null;
+  guestbookTemplateId: string | null;
+  thankYouTemplateId: string | null;
+  invitationTemplate?: { id: string; name: string } | null;
+  rsvpTemplate?: { id: string; name: string } | null;
+  guestbookTemplate?: { id: string; name: string } | null;
+  thankYouTemplate?: { id: string; name: string } | null;
   _count: {
     rsvps: number;
     invitations: number;
@@ -48,7 +60,14 @@ interface RSVP {
   } | null;
 }
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'settings';
+interface Template {
+  id: string;
+  name: string;
+  type: string;
+  isDefault: boolean;
+}
+
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'settings';
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -57,12 +76,23 @@ export default function EventDetailPage() {
   
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
+  const [savingTemplates, setSavingTemplates] = useState(false);
+  
+  // Template selection state
+  const [selectedTemplates, setSelectedTemplates] = useState({
+    invitationTemplateId: '',
+    rsvpTemplateId: '',
+    guestbookTemplateId: '',
+    thankYouTemplateId: '',
+  });
 
   useEffect(() => {
     fetchEvent();
+    fetchTemplates();
   }, [eventId]);
 
   useEffect(() => {
@@ -70,6 +100,17 @@ export default function EventDetailPage() {
       fetchRsvps();
     }
   }, [activeTab, rsvpFilter]);
+
+  useEffect(() => {
+    if (event) {
+      setSelectedTemplates({
+        invitationTemplateId: event.invitationTemplateId || '',
+        rsvpTemplateId: event.rsvpTemplateId || '',
+        guestbookTemplateId: event.guestbookTemplateId || '',
+        thankYouTemplateId: event.thankYouTemplateId || '',
+      });
+    }
+  }, [event]);
 
   const fetchEvent = async () => {
     try {
@@ -80,6 +121,15 @@ export default function EventDetailPage() {
       router.push('/admin/events');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await templatesApi.list();
+      setTemplates(response.data.templates);
+    } catch (error) {
+      console.error('Failed to load templates');
     }
   };
 
@@ -115,6 +165,24 @@ export default function EventDetailPage() {
     }
   };
 
+  const handleSaveTemplates = async () => {
+    setSavingTemplates(true);
+    try {
+      await templatesApi.assign(eventId, {
+        invitationTemplateId: selectedTemplates.invitationTemplateId || null,
+        rsvpTemplateId: selectedTemplates.rsvpTemplateId || null,
+        guestbookTemplateId: selectedTemplates.guestbookTemplateId || null,
+        thankYouTemplateId: selectedTemplates.thankYouTemplateId || null,
+      });
+      toast.success('Templates updated successfully');
+      fetchEvent();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to update templates');
+    } finally {
+      setSavingTemplates(false);
+    }
+  };
+
   const handleCopyLink = async (path: string) => {
     const url = `${window.location.origin}${path}`;
     const success = await copyToClipboard(url);
@@ -122,6 +190,9 @@ export default function EventDetailPage() {
       toast.success('Link copied!');
     }
   };
+
+  const getTemplatesByType = (type: string) => 
+    templates.filter(t => t.type === type);
 
   if (loading || !event) {
     return (
@@ -136,6 +207,7 @@ export default function EventDetailPage() {
     { id: 'rsvps', label: 'RSVPs', count: event._count.rsvps },
     { id: 'checkin', label: 'Check-In', count: event._count.checkIns },
     { id: 'media', label: 'Media', count: event._count.mediaAssets },
+    { id: 'templates', label: 'Templates' },
     { id: 'settings', label: 'Settings' },
   ];
 
@@ -182,14 +254,14 @@ export default function EventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-surface-200">
-        <nav className="flex gap-6 -mb-px">
+      <div className="border-b border-surface-200 overflow-x-auto">
+        <nav className="flex gap-4 sm:gap-6 -mb-px min-w-max">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'pb-3 text-sm font-medium border-b-2 transition-colors',
+                'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab.id
                   ? 'border-primary-500 text-primary-600'
                   : 'border-transparent text-surface-600 hover:text-navy-900'
@@ -269,6 +341,15 @@ export default function EventDetailPage() {
                   className="w-full text-left p-2 rounded hover:bg-surface-50 flex items-center justify-between"
                 >
                   <span>RSVP Form</span>
+                  <svg className="w-4 h-4 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/guestbook`)}
+                  className="w-full text-left p-2 rounded hover:bg-surface-50 flex items-center justify-between"
+                >
+                  <span>Guestbook</span>
                   <svg className="w-4 h-4 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
@@ -415,25 +496,216 @@ export default function EventDetailPage() {
         </div>
       )}
 
+      {activeTab === 'templates' && (
+        <div className="space-y-6">
+          <div className="card">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-navy-900">Page Templates</h3>
+                <p className="text-sm text-surface-600">Customize the look and feel of each page</p>
+              </div>
+              <Link href="/admin/templates" className="text-sm text-primary-600 hover:text-primary-700">
+                Manage All Templates →
+              </Link>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-6">
+              {/* Invitation Template */}
+              <div className={cn(!event.invitationEnabled && 'opacity-50')}>
+                <label className="label">Invitation Page</label>
+                <select
+                  className="input"
+                  value={selectedTemplates.invitationTemplateId}
+                  onChange={(e) => setSelectedTemplates({ ...selectedTemplates, invitationTemplateId: e.target.value })}
+                  disabled={!event.invitationEnabled}
+                >
+                  <option value="">No template (use default)</option>
+                  {getTemplatesByType('INVITATION').map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isDefault && '(Default)'}
+                    </option>
+                  ))}
+                </select>
+                {!event.invitationEnabled && (
+                  <p className="text-xs text-surface-500 mt-1">Service disabled</p>
+                )}
+                {event.invitationTemplate && (
+                  <p className="text-xs text-surface-500 mt-1">
+                    Current: {event.invitationTemplate.name}
+                  </p>
+                )}
+              </div>
+
+              {/* RSVP Template */}
+              <div className={cn(!event.rsvpEnabled && 'opacity-50')}>
+                <label className="label">RSVP Form</label>
+                <select
+                  className="input"
+                  value={selectedTemplates.rsvpTemplateId}
+                  onChange={(e) => setSelectedTemplates({ ...selectedTemplates, rsvpTemplateId: e.target.value })}
+                  disabled={!event.rsvpEnabled}
+                >
+                  <option value="">No template (use default)</option>
+                  {getTemplatesByType('RSVP').map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isDefault && '(Default)'}
+                    </option>
+                  ))}
+                </select>
+                {!event.rsvpEnabled && (
+                  <p className="text-xs text-surface-500 mt-1">Service disabled</p>
+                )}
+              </div>
+
+              {/* Guestbook Template */}
+              <div className={cn(!event.guestbookEnabled && 'opacity-50')}>
+                <label className="label">Guestbook</label>
+                <select
+                  className="input"
+                  value={selectedTemplates.guestbookTemplateId}
+                  onChange={(e) => setSelectedTemplates({ ...selectedTemplates, guestbookTemplateId: e.target.value })}
+                  disabled={!event.guestbookEnabled}
+                >
+                  <option value="">No template (use default)</option>
+                  {getTemplatesByType('GUESTBOOK').map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isDefault && '(Default)'}
+                    </option>
+                  ))}
+                </select>
+                {!event.guestbookEnabled && (
+                  <p className="text-xs text-surface-500 mt-1">Service disabled</p>
+                )}
+              </div>
+
+              {/* Thank You Template */}
+              <div>
+                <label className="label">Thank You Page</label>
+                <select
+                  className="input"
+                  value={selectedTemplates.thankYouTemplateId}
+                  onChange={(e) => setSelectedTemplates({ ...selectedTemplates, thankYouTemplateId: e.target.value })}
+                >
+                  <option value="">No template (use default)</option>
+                  {getTemplatesByType('THANK_YOU').map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isDefault && '(Default)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6 pt-6 border-t border-surface-100">
+              <button
+                onClick={handleSaveTemplates}
+                disabled={savingTemplates}
+                className="btn-primary"
+              >
+                {savingTemplates ? 'Saving...' : 'Save Template Changes'}
+              </button>
+            </div>
+          </div>
+
+          {/* Template Preview Links */}
+          <div className="card">
+            <h3 className="font-semibold text-navy-900 mb-4">Preview Pages</h3>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Link
+                href={`/e/${event.slug}`}
+                target="_blank"
+                className="p-4 rounded-lg border border-surface-200 hover:border-primary-300 hover:bg-primary-50 transition-colors flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-navy-900">Invitation Page</p>
+                  <p className="text-xs text-surface-500">/e/{event.slug}</p>
+                </div>
+              </Link>
+              
+              <Link
+                href={`/e/${event.slug}/rsvp`}
+                target="_blank"
+                className="p-4 rounded-lg border border-surface-200 hover:border-primary-300 hover:bg-primary-50 transition-colors flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-navy-900">RSVP Form</p>
+                  <p className="text-xs text-surface-500">/e/{event.slug}/rsvp</p>
+                </div>
+              </Link>
+              
+              <Link
+                href={`/e/${event.slug}/guestbook`}
+                target="_blank"
+                className="p-4 rounded-lg border border-surface-200 hover:border-primary-300 hover:bg-primary-50 transition-colors flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-navy-900">Guestbook</p>
+                  <p className="text-xs text-surface-500">/e/{event.slug}/guestbook</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'settings' && (
-        <div className="card">
-          <h3 className="text-lg font-semibold text-navy-900 mb-4">Event Settings</h3>
-          <div className="space-y-4 text-sm">
-            <div className="flex justify-between py-2 border-b border-surface-100">
-              <span className="text-surface-600">Event Slug</span>
-              <span className="font-medium">/{event.slug}</span>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="card">
+            <h3 className="text-lg font-semibold text-navy-900 mb-4">Event Details</h3>
+            <div className="space-y-4 text-sm">
+              <div className="flex justify-between py-2 border-b border-surface-100">
+                <span className="text-surface-600">Event Slug</span>
+                <span className="font-medium font-mono">/{event.slug}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-surface-100">
+                <span className="text-surface-600">Date</span>
+                <span className="font-medium">{formatDate(event.date, 'PPP')}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-surface-100">
+                <span className="text-surface-600">Venue</span>
+                <span className="font-medium">{event.venue || '-'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-surface-100">
+                <span className="text-surface-600">Timezone</span>
+                <span className="font-medium">{event.timezone}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-surface-600">Invitation Only</span>
+                <span className="font-medium">{event.invitationOnly ? 'Yes' : 'No'}</span>
+              </div>
             </div>
-            <div className="flex justify-between py-2 border-b border-surface-100">
-              <span className="text-surface-600">Date</span>
-              <span className="font-medium">{formatDate(event.date, 'PPP')}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-surface-100">
-              <span className="text-surface-600">Venue</span>
-              <span className="font-medium">{event.venue || '-'}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-surface-100">
-              <span className="text-surface-600">Invitation Only</span>
-              <span className="font-medium">{event.invitationOnly ? 'Yes' : 'No'}</span>
+          </div>
+
+          <div className="card">
+            <h3 className="text-lg font-semibold text-navy-900 mb-4">Guestbook Settings</h3>
+            <div className="space-y-4 text-sm">
+              <div className="flex justify-between py-2 border-b border-surface-100">
+                <span className="text-surface-600">Min Recording Duration</span>
+                <span className="font-medium">{event.minRecordingDuration}s</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-surface-100">
+                <span className="text-surface-600">Max Recording Duration</span>
+                <span className="font-medium">{event.maxRecordingDuration}s</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-surface-600">Max Photos Per Guest</span>
+                <span className="font-medium">{event.maxPhotosPerGuest}</span>
+              </div>
             </div>
           </div>
         </div>
