@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { calculateEventPhase } from '../utils/phase';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -47,7 +48,7 @@ router.get('/:token', validateCoupleToken, async (req: Request, res: Response) =
         endDate: true,
         venue: true,
         timezone: true,
-        currentPhase: true,
+        phase: true,
         invitationOnly: true,
         _count: {
           select: {
@@ -64,7 +65,10 @@ router.get('/:token', validateCoupleToken, async (req: Request, res: Response) =
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    res.json({ event });
+    // Calculate current phase using utility function
+    const currentPhase = calculateEventPhase(event);
+
+    res.json({ event: { ...event, currentPhase } });
   } catch (error) {
     console.error('Error fetching event:', error);
     res.status(500).json({ error: 'Failed to fetch event' });
