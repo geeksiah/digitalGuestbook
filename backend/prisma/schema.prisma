@@ -72,6 +72,9 @@ model Event {
   minRecordingDuration Int @default(30)
   maxPhotosPerGuest    Int @default(5)
   
+  // Reel Generation (Admin toggle per event)
+  reelEnabled          Boolean @default(false)
+  
   // Metadata
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())

@@ -9,7 +9,7 @@ const api = axios.create({
 // Add auth token to requests
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('adminToken');
+    const token = localStorage.getItem('admin_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -56,11 +56,14 @@ export const rsvpApi = {
 
 // Media API
 export const mediaApi = {
-  list: (eventId: string) => api.get(`/events/${eventId}/media`),
+  list: (eventId: string) => api.get(`/media/event/${eventId}`),
   get: (id: string) => api.get(`/media/${id}`),
   delete: (id: string) => api.delete(`/media/${id}`),
-  downloadAll: (eventId: string) => api.get(`/events/${eventId}/media/download`, { responseType: 'blob' }),
-  generateReel: (eventId: string) => api.post(`/events/${eventId}/media/reel`),
+  download: (id: string) => api.get(`/media/${id}/download`, { responseType: 'blob' }),
+  downloadAll: (eventId: string) => api.get(`/media/event/${eventId}/download-all`, { responseType: 'blob' }),
+  stats: (eventId: string) => api.get(`/media/event/${eventId}/stats`),
+  timeline: (eventId: string) => api.get(`/media/event/${eventId}/timeline`),
+  generateReel: (eventId: string) => api.post(`/media/event/${eventId}/generate-reel`),
 };
 
 // Check-In API

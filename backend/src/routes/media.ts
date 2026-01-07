@@ -276,4 +276,71 @@ router.get('/event/:eventId/stats', authenticateAdmin, asyncHandler(async (req, 
   });
 }));
 
+/**
+ * POST /api/media/event/:eventId/generate-reel
+ * Generate a reel from event media (videos)
+ * Note: Actual video processing would require ffmpeg or similar
+ */
+router.post('/event/:eventId/generate-reel', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+
+  // Check if event exists and has reel enabled
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.reelEnabled) {
+    throw new AppError('Reel generation is not enabled for this event', 400);
+  }
+
+  // Get all video assets for the event
+  const videos = await prisma.mediaAsset.findMany({
+    where: { eventId, type: 'VIDEO' },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (videos.length === 0) {
+    throw new AppError('No videos available for reel generation', 400);
+  }
+
+  // TODO: Implement actual video processing with ffmpeg
+  // For now, return the list of videos that would be included
+  // Real implementation would:
+  // 1. Concatenate videos using ffmpeg
+  // 2. Add transitions
+  // 3. Add background music (optional)
+  // 4. Save the output file
+  // 5. Return the download URL
+
+  // Audit log
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'REEL_GENERATION_REQUESTED',
+      entityType: 'MEDIA',
+      details: JSON.stringify({
+        videoCount: videos.length,
+        totalDuration: videos.reduce((sum, v) => sum + (v.duration || 0), 0),
+      }),
+    },
+  });
+
+  res.json({
+    message: 'Reel generation initiated',
+    status: 'PROCESSING',
+    details: {
+      videoCount: videos.length,
+      totalDuration: videos.reduce((sum, v) => sum + (v.duration || 0), 0),
+      estimatedTime: Math.ceil(videos.length * 10), // seconds
+    },
+    // In real implementation, return a job ID to poll for status
+    note: 'Video processing requires ffmpeg integration. This is a placeholder response.',
+  });
+}));
+
 export default router;
