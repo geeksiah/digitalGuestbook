@@ -43,6 +43,9 @@ export default function NewEventPage() {
     invitationTemplateId: '',
     rsvpTemplateId: '',
     guestbookTemplateId: '',
+    guestbookVideoTemplateId: '',
+    guestbookAudioTemplateId: '',
+    guestbookPhotoTemplateId: '',
     thankYouTemplateId: '',
   });
 
@@ -62,6 +65,9 @@ export default function NewEventPage() {
           if (t.type === 'INVITATION') defaults.invitationTemplateId = t.id;
           if (t.type === 'RSVP') defaults.rsvpTemplateId = t.id;
           if (t.type === 'GUESTBOOK') defaults.guestbookTemplateId = t.id;
+          if (t.type === 'GUESTBOOK_VIDEO') defaults.guestbookVideoTemplateId = t.id;
+          if (t.type === 'GUESTBOOK_AUDIO') defaults.guestbookAudioTemplateId = t.id;
+          if (t.type === 'GUESTBOOK_PHOTO') defaults.guestbookPhotoTemplateId = t.id;
           if (t.type === 'THANK_YOU') defaults.thankYouTemplateId = t.id;
         }
       });
@@ -110,6 +116,9 @@ export default function NewEventPage() {
         invitationTemplateId: formData.invitationTemplateId || undefined,
         rsvpTemplateId: formData.rsvpTemplateId || undefined,
         guestbookTemplateId: formData.guestbookTemplateId || undefined,
+        guestbookVideoTemplateId: formData.guestbookVideoTemplateId || undefined,
+        guestbookAudioTemplateId: formData.guestbookAudioTemplateId || undefined,
+        guestbookPhotoTemplateId: formData.guestbookPhotoTemplateId || undefined,
         thankYouTemplateId: formData.thankYouTemplateId || undefined,
       });
 
@@ -405,10 +414,10 @@ export default function NewEventPage() {
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500" />
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <TemplateSelect
                 type="INVITATION"
-                label="Invitation Page Template"
+                label="Invitation Page"
                 value={formData.invitationTemplateId}
                 onChange={(id) => setFormData({ ...formData, invitationTemplateId: id })}
                 disabled={!formData.invitationEnabled}
@@ -416,7 +425,7 @@ export default function NewEventPage() {
               
               <TemplateSelect
                 type="RSVP"
-                label="RSVP Form Template"
+                label="RSVP Form"
                 value={formData.rsvpTemplateId}
                 onChange={(id) => setFormData({ ...formData, rsvpTemplateId: id })}
                 disabled={!formData.rsvpEnabled}
@@ -424,15 +433,39 @@ export default function NewEventPage() {
               
               <TemplateSelect
                 type="GUESTBOOK"
-                label="Guestbook Template"
+                label="Guestbook Menu"
                 value={formData.guestbookTemplateId}
                 onChange={(id) => setFormData({ ...formData, guestbookTemplateId: id })}
+                disabled={!formData.guestbookEnabled}
+              />
+
+              <TemplateSelect
+                type="GUESTBOOK_VIDEO"
+                label="Video Recording"
+                value={formData.guestbookVideoTemplateId}
+                onChange={(id) => setFormData({ ...formData, guestbookVideoTemplateId: id })}
+                disabled={!formData.guestbookEnabled}
+              />
+
+              <TemplateSelect
+                type="GUESTBOOK_AUDIO"
+                label="Audio Recording"
+                value={formData.guestbookAudioTemplateId}
+                onChange={(id) => setFormData({ ...formData, guestbookAudioTemplateId: id })}
+                disabled={!formData.guestbookEnabled}
+              />
+
+              <TemplateSelect
+                type="GUESTBOOK_PHOTO"
+                label="Photo Upload"
+                value={formData.guestbookPhotoTemplateId}
+                onChange={(id) => setFormData({ ...formData, guestbookPhotoTemplateId: id })}
                 disabled={!formData.guestbookEnabled}
               />
               
               <TemplateSelect
                 type="THANK_YOU"
-                label="Thank You Page Template"
+                label="Thank You Page"
                 value={formData.thankYouTemplateId}
                 onChange={(id) => setFormData({ ...formData, thankYouTemplateId: id })}
               />

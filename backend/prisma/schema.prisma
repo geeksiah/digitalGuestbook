@@ -59,6 +59,9 @@ model Event {
   invitationTemplateId String?
   rsvpTemplateId       String?
   guestbookTemplateId  String?
+  guestbookVideoTemplateId String?
+  guestbookAudioTemplateId String?
+  guestbookPhotoTemplateId String?
   thankYouTemplateId   String?
   
   // Couple Portal Access
@@ -78,6 +81,9 @@ model Event {
   invitationTemplate Template? @relation("InvitationTemplate", fields: [invitationTemplateId], references: [id])
   rsvpTemplate       Template? @relation("RsvpTemplate", fields: [rsvpTemplateId], references: [id])
   guestbookTemplate  Template? @relation("GuestbookTemplate", fields: [guestbookTemplateId], references: [id])
+  guestbookVideoTemplate   Template? @relation("GuestbookVideoTemplate", fields: [guestbookVideoTemplateId], references: [id])
+  guestbookAudioTemplate   Template? @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
+  guestbookPhotoTemplate   Template? @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
   thankYouTemplate   Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
   
   rsvps       RSVP[]
@@ -97,7 +103,7 @@ model Template {
   name        String
   description String?
   
-  // Template Type: INVITATION | RSVP | GUESTBOOK | THANK_YOU
+  // Template Type: INVITATION | RSVP | GUESTBOOK | GUESTBOOK_VIDEO | GUESTBOOK_AUDIO | GUESTBOOK_PHOTO | THANK_YOU
   type        String
   
   // Template Content (HTML/CSS/JS bundle)
@@ -117,6 +123,9 @@ model Template {
   eventsAsInvitation Event[] @relation("InvitationTemplate")
   eventsAsRsvp       Event[] @relation("RsvpTemplate")
   eventsAsGuestbook  Event[] @relation("GuestbookTemplate")
+  eventsAsGuestbookVideo Event[] @relation("GuestbookVideoTemplate")
+  eventsAsGuestbookAudio Event[] @relation("GuestbookAudioTemplate")
+  eventsAsGuestbookPhoto Event[] @relation("GuestbookPhotoTemplate")
   eventsAsThankYou   Event[] @relation("ThankYouTemplate")
 }
 

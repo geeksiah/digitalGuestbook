@@ -22,7 +22,10 @@ interface Template {
 const typeLabels: Record<string, string> = {
   INVITATION: 'Invitation',
   RSVP: 'RSVP Form',
-  GUESTBOOK: 'Guestbook',
+  GUESTBOOK: 'Guestbook Menu',
+  GUESTBOOK_VIDEO: 'Video Recording',
+  GUESTBOOK_AUDIO: 'Audio Recording',
+  GUESTBOOK_PHOTO: 'Photo Upload',
   THANK_YOU: 'Thank You',
 };
 
@@ -30,6 +33,9 @@ const typeColors: Record<string, string> = {
   INVITATION: 'bg-blue-100 text-blue-700 border-blue-200',
   RSVP: 'bg-green-100 text-green-700 border-green-200',
   GUESTBOOK: 'bg-purple-100 text-purple-700 border-purple-200',
+  GUESTBOOK_VIDEO: 'bg-red-100 text-red-700 border-red-200',
+  GUESTBOOK_AUDIO: 'bg-amber-100 text-amber-700 border-amber-200',
+  GUESTBOOK_PHOTO: 'bg-teal-100 text-teal-700 border-teal-200',
   THANK_YOU: 'bg-orange-100 text-orange-700 border-orange-200',
 };
 
@@ -37,6 +43,9 @@ const typeIconColors: Record<string, string> = {
   INVITATION: 'bg-blue-500',
   RSVP: 'bg-green-500',
   GUESTBOOK: 'bg-purple-500',
+  GUESTBOOK_VIDEO: 'bg-red-500',
+  GUESTBOOK_AUDIO: 'bg-amber-500',
+  GUESTBOOK_PHOTO: 'bg-teal-500',
   THANK_YOU: 'bg-orange-500',
 };
 
@@ -200,6 +209,9 @@ export default function TemplatesPage() {
     invitation: templates.filter(t => t.type === 'INVITATION').length,
     rsvp: templates.filter(t => t.type === 'RSVP').length,
     guestbook: templates.filter(t => t.type === 'GUESTBOOK').length,
+    guestbookVideo: templates.filter(t => t.type === 'GUESTBOOK_VIDEO').length,
+    guestbookAudio: templates.filter(t => t.type === 'GUESTBOOK_AUDIO').length,
+    guestbookPhoto: templates.filter(t => t.type === 'GUESTBOOK_PHOTO').length,
     thankYou: templates.filter(t => t.type === 'THANK_YOU').length,
   };
 
@@ -222,33 +234,36 @@ export default function TemplatesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <button
           onClick={() => setFilter('all')}
           className={cn(
-            'p-4 rounded-xl border-2 transition-all text-left',
+            'p-3 rounded-xl border-2 transition-all text-left',
             filter === 'all' ? 'border-primary-500 bg-primary-50' : 'border-surface-200 hover:border-surface-300'
           )}
         >
-          <p className="text-2xl font-bold text-navy-900">{stats.total}</p>
-          <p className="text-sm text-surface-600">All Templates</p>
+          <p className="text-xl font-bold text-navy-900">{stats.total}</p>
+          <p className="text-xs text-surface-600">All</p>
         </button>
         {[
           { type: 'INVITATION', count: stats.invitation },
           { type: 'RSVP', count: stats.rsvp },
           { type: 'GUESTBOOK', count: stats.guestbook },
+          { type: 'GUESTBOOK_VIDEO', count: stats.guestbookVideo },
+          { type: 'GUESTBOOK_AUDIO', count: stats.guestbookAudio },
+          { type: 'GUESTBOOK_PHOTO', count: stats.guestbookPhoto },
           { type: 'THANK_YOU', count: stats.thankYou },
         ].map(({ type, count }) => (
           <button
             key={type}
             onClick={() => setFilter(type)}
             className={cn(
-              'p-4 rounded-xl border-2 transition-all text-left',
+              'p-3 rounded-xl border-2 transition-all text-left',
               filter === type ? 'border-primary-500 bg-primary-50' : 'border-surface-200 hover:border-surface-300'
             )}
           >
-            <p className="text-2xl font-bold text-navy-900">{count}</p>
-            <p className="text-sm text-surface-600">{typeLabels[type]}</p>
+            <p className="text-xl font-bold text-navy-900">{count}</p>
+            <p className="text-xs text-surface-600 truncate">{typeLabels[type]}</p>
           </button>
         ))}
       </div>
@@ -506,8 +521,8 @@ export default function TemplatesPage() {
       {/* Preview Modal */}
       {previewTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={closePreview}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-3 border-b border-surface-200 flex-shrink-0">
               <div>
                 <h2 className="text-lg font-semibold text-navy-900">{previewTemplate.name}</h2>
                 <p className="text-sm text-surface-500">{typeLabels[previewTemplate.type]} Template</p>
@@ -521,12 +536,12 @@ export default function TemplatesPage() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden bg-surface-100 p-4">
+            <div className="flex-1 bg-surface-100 p-4 overflow-hidden">
               <div className="w-full h-full bg-white rounded-lg shadow-inner overflow-hidden">
                 <iframe ref={iframeRef} srcDoc={getPreviewContent(previewTemplate)} className="w-full h-full border-0" sandbox="allow-same-origin allow-scripts" title={previewTemplate.name} />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-surface-200 bg-surface-50">
+            <div className="px-6 py-2 border-t border-surface-200 bg-surface-50 flex-shrink-0">
               <p className="text-sm text-surface-500 text-center">Preview with sample data</p>
             </div>
           </div>
