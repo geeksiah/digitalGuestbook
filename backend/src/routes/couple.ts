@@ -94,7 +94,7 @@ router.get('/:token/rsvps', validateCoupleToken, async (req: Request, res: Respo
           select: {
             id: true,
             accessCode: true,
-            qrCodeUrl: true,
+            qrCodeData: true,
             isCheckedIn: true,
             checkedInAt: true,
           },
@@ -153,7 +153,9 @@ router.post('/:token/rsvps/:rsvpId/review', validateCoupleToken, async (req: Req
           eventId,
           accessCode,
           token,
-          qrCodeUrl: `/api/qr/${token}`, // QR code URL
+          qrCodeData: `/api/qr/${token}`, // QR code data/URL
+          guestName: rsvp.primaryName,
+          guestCount: rsvp.guestCount,
         },
       });
 
@@ -162,7 +164,9 @@ router.post('/:token/rsvps/:rsvpId/review', validateCoupleToken, async (req: Req
         data: {
           eventId,
           action: 'RSVP_APPROVED',
-          details: { rsvpId, guestName: rsvp.primaryName },
+          entityType: 'RSVP',
+          entityId: rsvpId,
+          details: JSON.stringify({ rsvpId, guestName: rsvp.primaryName }),
         },
       });
     } else {
@@ -171,7 +175,9 @@ router.post('/:token/rsvps/:rsvpId/review', validateCoupleToken, async (req: Req
         data: {
           eventId,
           action: 'RSVP_REJECTED',
-          details: { rsvpId, guestName: rsvp.primaryName },
+          entityType: 'RSVP',
+          entityId: rsvpId,
+          details: JSON.stringify({ rsvpId, guestName: rsvp.primaryName }),
         },
       });
     }
