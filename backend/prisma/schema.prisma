@@ -1,0 +1,333 @@
+// Digital Event Platform - Prisma Schema
+// Following SRS: Event Phases, RSVP with Approval Gating, Check-In, Guestbook
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ADMIN & AUTHENTICATION
+// ============================================
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("admin") // admin | superadmin
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  auditLogs AuditLog[]
+}
+
+// ============================================
+// EVENT MANAGEMENT
+// ============================================
+
+model Event {
+  id          String   @id @default(uuid())
+  slug        String   @unique // URL-friendly identifier
+  name        String
+  description String?
+  date        DateTime
+  endDate     DateTime?
+  timezone    String   @default("UTC")
+  venue       String?
+  
+  // Event Phase Control (Critical per SRS Section 3)
+  // Values: PRE_EVENT | LIVE | POST_EVENT
+  phase            String  @default("PRE_EVENT")
+  phaseOverride    Boolean @default(false) // Manual override flag
+  
+  // Service Flags (per Build Plan - modular services)
+  invitationEnabled Boolean @default(true)
+  rsvpEnabled       Boolean @default(true)
+  guestbookEnabled  Boolean @default(true)
+  checkInEnabled    Boolean @default(true)
+  
+  // Invitation-Only Flag (Critical per SRS Section 4.3)
+  invitationOnly Boolean @default(false)
+  
+  // Template Assignments
+  invitationTemplateId String?
+  rsvpTemplateId       String?
+  guestbookTemplateId  String?
+  thankYouTemplateId   String?
+  
+  // Couple Portal Access
+  coupleAccessToken String @unique @default(uuid())
+  
+  // Guestbook Settings
+  maxRecordingDuration Int @default(120) // seconds (30-120 per SRS)
+  minRecordingDuration Int @default(30)
+  maxPhotosPerGuest    Int @default(5)
+  
+  // Metadata
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  invitationTemplate Template? @relation("InvitationTemplate", fields: [invitationTemplateId], references: [id])
+  rsvpTemplate       Template? @relation("RsvpTemplate", fields: [rsvpTemplateId], references: [id])
+  guestbookTemplate  Template? @relation("GuestbookTemplate", fields: [guestbookTemplateId], references: [id])
+  thankYouTemplate   Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
+  
+  rsvps       RSVP[]
+  invitations Invitation[]
+  checkIns    CheckIn[]
+  mediaAssets MediaAsset[]
+  broadcasts  Broadcast[]
+  auditLogs   AuditLog[]
+}
+
+// ============================================
+// TEMPLATE SYSTEM (Build Plan Increment 2)
+// ============================================
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  
+  // Template Type: INVITATION | RSVP | GUESTBOOK | THANK_YOU
+  type        String
+  
+  // Template Content (HTML/CSS/JS bundle)
+  htmlContent String
+  cssContent  String?
+  jsContent   String?
+  
+  // Template Variables (JSON schema for injection)
+  variables   String? // JSON string of available variables
+  
+  // Metadata
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations - Events using this template
+  eventsAsInvitation Event[] @relation("InvitationTemplate")
+  eventsAsRsvp       Event[] @relation("RsvpTemplate")
+  eventsAsGuestbook  Event[] @relation("GuestbookTemplate")
+  eventsAsThankYou   Event[] @relation("ThankYouTemplate")
+}
+
+// ============================================
+// RSVP SYSTEM (SRS Sections 4-7)
+// ============================================
+
+model RSVP {
+  id        String   @id @default(uuid())
+  eventId   String
+  
+  // Guest Information (SRS Section 4.2)
+  primaryName   String
+  secondaryName String?
+  email         String?
+  phone         String?
+  
+  // Response (Yes / No / Maybe)
+  attendance    String   @default("PENDING") // YES | NO | MAYBE | PENDING
+  guestCount    Int      @default(1)
+  mealPreference String?
+  dietaryNotes   String?
+  note          String?
+  
+  // RSVP Status (Critical - SRS Section 4.3)
+  // Values: PENDING | APPROVED | REJECTED
+  status        String   @default("PENDING")
+  
+  // Channel used for submission (for rejection notification)
+  submissionChannel String? // EMAIL | SMS | WHATSAPP | WEB
+  
+  // Timestamps
+  submittedAt   DateTime @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?  // Admin ID who reviewed
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitation Invitation?
+}
+
+// ============================================
+// INVITATION PASS (SRS Section 6)
+// ============================================
+
+model Invitation {
+  id      String @id @default(uuid())
+  eventId String
+  rsvpId  String @unique
+  
+  // Credentials (SRS Section 6.1)
+  token       String @unique @default(uuid()) // Unique attendee token
+  qrCodeData  String // Base64 encoded QR code
+  accessCode  String @unique // 6-digit numeric code
+  
+  // Guest Info (denormalized for PDF generation)
+  guestName   String
+  guestCount  Int    @default(1)
+  
+  // Delivery Status
+  emailSent     Boolean   @default(false)
+  smsSent       Boolean   @default(false)
+  whatsappSent  Boolean   @default(false)
+  pdfGenerated  Boolean   @default(false)
+  pdfPath       String?
+  
+  // Check-in Status
+  isCheckedIn   Boolean   @default(false)
+  checkedInAt   DateTime?
+  
+  // Metadata
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rsvp     RSVP     @relation(fields: [rsvpId], references: [id], onDelete: Cascade)
+  checkIns CheckIn[]
+}
+
+// ============================================
+// CHECK-IN SYSTEM (SRS Section 8)
+// ============================================
+
+model CheckIn {
+  id           String   @id @default(uuid())
+  eventId      String
+  invitationId String
+  
+  // Check-in Method (SRS Section 8.1)
+  method       String   // QR_SCAN | MANUAL_CODE
+  
+  // Validation Result
+  success      Boolean
+  failureReason String? // INVALID | ALREADY_USED | NOT_APPROVED
+  
+  // Device Info
+  deviceInfo   String?
+  ipAddress    String?
+  
+  // Timestamp
+  checkedInAt  DateTime @default(now())
+
+  // Relations
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// GUESTBOOK & MEDIA (SRS Section 9-10)
+// ============================================
+
+model MediaAsset {
+  id      String @id @default(uuid())
+  eventId String
+  
+  // Media Type: VIDEO | AUDIO | PHOTO
+  type        String
+  
+  // Guest Info (optional - anonymous allowed)
+  guestName   String?
+  guestEmail  String?
+  
+  // File Information
+  fileName    String
+  filePath    String
+  fileSize    Int      // bytes
+  mimeType    String
+  duration    Int?     // seconds (for video/audio)
+  
+  // Processing Status
+  status      String   @default("UPLOADED") // UPLOADED | PROCESSING | READY | FAILED
+  thumbnailPath String?
+  
+  // Access Mode (SRS Section 9.1)
+  captureMode String   @default("PERSONAL") // PERSONAL | BOOTH
+  
+  // Device fingerprint (for upload limits)
+  deviceId    String?
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// BROADCAST MESSAGING (SRS Section 11)
+// ============================================
+
+model Broadcast {
+  id      String @id @default(uuid())
+  eventId String
+  
+  // Message Content
+  subject  String?
+  message  String
+  
+  // Target Audience: ALL_RSVPS | APPROVED_ONLY
+  audience String
+  
+  // Channels Used
+  channels String // JSON array: ["EMAIL", "SMS", "WHATSAPP"]
+  
+  // Delivery Stats
+  totalRecipients  Int @default(0)
+  deliveredCount   Int @default(0)
+  failedCount      Int @default(0)
+  
+  // Status: DRAFT | SENDING | SENT | FAILED
+  status    String   @default("DRAFT")
+  sentAt    DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// AUDIT LOG (Non-Functional - Auditability)
+// ============================================
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  eventId   String?
+  adminId   String?
+  
+  // Action Type
+  action    String   // RSVP_APPROVED | RSVP_REJECTED | CHECK_IN | PHASE_CHANGE | etc.
+  
+  // Target Entity
+  entityType String? // RSVP | INVITATION | EVENT | MEDIA
+  entityId   String?
+  
+  // Details
+  details   String?  // JSON string with action details
+  
+  // Request Info
+  ipAddress String?
+  userAgent String?
+  
+  createdAt DateTime @default(now())
+
+  // Relations
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+}
