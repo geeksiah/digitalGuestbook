@@ -179,7 +179,7 @@ export default function CheckInPage() {
     }
   };
 
-  const handleCheckIn = async (code?: string, token?: string) => {
+  const handleCheckIn = async (accessCode?: string, token?: string) => {
     if (!eventId) return;
     
     setCheckInState('checking');
@@ -187,8 +187,8 @@ export default function CheckInPage() {
 
     try {
       const response = await checkInApi.checkIn(eventId, {
-        accessCode: code,
-        token: token,
+        accessCode,
+        token,
         method: token ? 'QR_SCAN' : 'MANUAL_CODE',
       });
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -19,8 +19,8 @@ api.interceptors.request.use((config) => {
 
 // Auth API
 export const authApi = {
-  login: (apiKey: string) => api.post('/auth/login', { apiKey }),
-  verify: () => api.get('/auth/verify'),
+  login: (email: string, password: string) => api.post('/auth/login', { email, password }),
+  verify: () => api.get('/auth/me'),
 };
 
 // Events API
@@ -65,17 +65,16 @@ export const mediaApi = {
 
 // Check-In API
 export const checkInApi = {
-  list: (eventId: string) => api.get(`/events/${eventId}/checkins`),
-  verify: (eventId: string, data: { code?: string; token?: string }) =>
-    api.post(`/events/${eventId}/checkin/verify`, data),
-  checkIn: (eventId: string, data: { code?: string; token?: string; method: string }) =>
-    api.post(`/events/${eventId}/checkin`, data),
+  list: (eventId: string) => api.get(`/checkin/${eventId}/list`),
+  stats: (eventId: string) => api.get(`/checkin/${eventId}/stats`),
+  checkIn: (eventId: string, data: { accessCode?: string; token?: string; method: string }) =>
+    api.post(`/checkin/${eventId}`, data),
 };
 
 // Public API (no auth required)
 export const publicApi = {
-  getEvent: (slug: string) => axios.get(`${API_BASE_URL}/api/public/events/${slug}`),
-  getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/public/events/token/${token}`),
+  getEvent: (slug: string) => axios.get(`${API_BASE_URL}/api/public/event/${slug}`),
+  getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/public/event/token/${token}`),
 };
 
 // Guestbook API

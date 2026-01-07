@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { coupleApi } from '@/lib/api';
+import { coupleApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, getStatusColor, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -30,7 +30,7 @@ interface RSVP {
   note: string | null;
   status: string;
   submittedAt: string;
-  invitation?: { accessCode: string; qrCodeUrl: string | null; isCheckedIn: boolean } | null;
+  invitation?: { accessCode: string; qrCodeData: string | null; isCheckedIn: boolean } | null;
 }
 
 interface MediaAsset {
@@ -246,7 +246,7 @@ export default function CouplePortalPage() {
                   <div className="grid grid-cols-3 gap-2">
                     {media.slice(0, 6).map(m => (
                       <div key={m.id} onClick={() => setPreviewMedia(m)} className="aspect-square bg-surface-100 rounded-lg cursor-pointer hover:opacity-80 flex items-center justify-center overflow-hidden">
-                        {m.type === 'PHOTO' ? <img src={`${process.env.NEXT_PUBLIC_API_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" /> : (
+                        {m.type === 'PHOTO' ? <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" /> : (
                           <div className={cn('w-10 h-10 rounded-full flex items-center justify-center', m.type === 'VIDEO' ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-500')}><Icon type={m.type} /></div>
                         )}
                       </div>
@@ -312,7 +312,7 @@ export default function CouplePortalPage() {
                 {media.map(m => (
                   <div key={m.id} onClick={() => setPreviewMedia(m)} className="bg-white rounded-xl shadow-sm border border-surface-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow group">
                     <div className="aspect-square bg-surface-100 flex items-center justify-center relative">
-                      {m.type === 'PHOTO' ? <img src={`${process.env.NEXT_PUBLIC_API_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" /> : <div className={cn('w-16 h-16 rounded-full flex items-center justify-center', m.type === 'VIDEO' ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-500')}><Icon type={m.type} /></div>}
+                      {m.type === 'PHOTO' ? <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" /> : <div className={cn('w-16 h-16 rounded-full flex items-center justify-center', m.type === 'VIDEO' ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-500')}><Icon type={m.type} /></div>}
                       <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/30 transition-colors flex items-center justify-center"><svg className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>
                     </div>
                     <div className="p-3"><p className="font-medium text-navy-900 text-sm truncate">{m.guestName || 'Anonymous'}</p><p className="text-xs text-surface-500">{formatDate(m.createdAt, 'MMM d, h:mm a')}</p></div>
@@ -358,9 +358,9 @@ export default function CouplePortalPage() {
               <button onClick={() => setPreviewMedia(null)} className="p-2 rounded-lg hover:bg-surface-100"><svg className="w-6 h-6 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             <div className="p-6 bg-surface-100 min-h-[50vh] flex items-center justify-center">
-              {previewMedia.type === 'PHOTO' && <img src={`${process.env.NEXT_PUBLIC_API_URL}${previewMedia.filePath}`} alt="" className="max-h-[60vh] mx-auto rounded-lg" />}
-              {previewMedia.type === 'VIDEO' && <video src={`${process.env.NEXT_PUBLIC_API_URL}${previewMedia.filePath}`} controls autoPlay className="max-h-[60vh] mx-auto rounded-lg" />}
-              {previewMedia.type === 'AUDIO' && <audio src={`${process.env.NEXT_PUBLIC_API_URL}${previewMedia.filePath}`} controls autoPlay className="w-full max-w-md" />}
+              {previewMedia.type === 'PHOTO' && <img src={`${API_BASE_URL}${previewMedia.filePath}`} alt="" className="max-h-[60vh] mx-auto rounded-lg" />}
+              {previewMedia.type === 'VIDEO' && <video src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="max-h-[60vh] mx-auto rounded-lg" />}
+              {previewMedia.type === 'AUDIO' && <audio src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="w-full max-w-md" />}
             </div>
           </div>
         </div>
