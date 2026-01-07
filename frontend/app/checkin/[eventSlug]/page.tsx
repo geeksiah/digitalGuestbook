@@ -3,13 +3,15 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { QrCode, Keypad, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { QrCode, Keypad } from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import ManualCodeInput from '@/components/checkin/ManualCodeInput'
+import CheckInResultToast from '@/components/checkin/CheckInResultToast'
 
 export default function CheckInPage() {
   const params = useParams()
@@ -95,17 +97,15 @@ export default function CheckInPage() {
             </TabsList>
 
             <TabsContent value="code" className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Enter 6-Digit Code</Label>
-                <Input
-                  id="code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  maxLength={6}
-                  className="text-center text-3xl tracking-widest font-mono"
-                />
-              </div>
+              <ManualCodeInput
+                length={6}
+                onComplete={(completedCode) => {
+                  setCode(completedCode)
+                  handleCheckIn()
+                }}
+                disabled={checking || !deviceKey}
+                error={result?.type === 'error' ? result.text : undefined}
+              />
             </TabsContent>
 
             <TabsContent value="scan" className="space-y-4">
@@ -132,25 +132,12 @@ export default function CheckInPage() {
           </motion.button>
 
           {result && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`p-4 rounded-lg text-center ${
-                result.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
-                result.type === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
-                'bg-red-50 text-red-800 border border-red-200'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2 mb-2">
-                {result.type === 'success' && <CheckCircle className="h-5 w-5" />}
-                {result.type === 'warning' && <AlertCircle className="h-5 w-5" />}
-                {result.type === 'error' && <XCircle className="h-5 w-5" />}
-                <p className="font-medium">{result.text}</p>
-              </div>
-              {result.partyName && (
-                <p className="text-sm mt-1">{result.partyName}</p>
-              )}
-            </motion.div>
+            <CheckInResultToast
+              type={result.type}
+              message={result.text}
+              partyName={result.partyName}
+              onClose={() => setResult(null)}
+            />
           )}
         </CardContent>
       </Card>

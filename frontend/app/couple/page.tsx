@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Users, Image, MessageSquare, CheckCircle, XCircle, Clock, Download, Play, Video, Mic, Heart } from 'lucide-react'
+import { Users, Image, MessageSquare, Clock, Download, Heart } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import EmptyState from '@/components/dashboard/EmptyState'
 import StatCard from '@/components/dashboard/StatCard'
 import { apiGet, apiPost } from '@/lib/api'
+import RSVPApprovalTable from '@/components/rsvp/RSVPApprovalTable'
+import MediaTimeline from '@/components/media/MediaTimeline'
 
 interface RSVP {
   id: string
@@ -262,89 +263,16 @@ export default function CoupleDashboard() {
               <p className="text-sm text-gray-500 mt-1">Review and manage RSVP submissions</p>
             </div>
             <div className="p-6">
-              {loading ? (
-                <div className="text-center py-12 text-gray-500">Loading...</div>
-              ) : rsvps.length === 0 ? (
-                <EmptyState
-                  icon={Users}
-                  title="No RSVPs yet"
-                  description="RSVP submissions will appear here"
-                />
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Response</TableHead>
-                        <TableHead>Guests</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rsvps.map((rsvp, index) => (
-                        <motion.tr
-                          key={rsvp.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="border-b hover:bg-gray-50"
-                        >
-                          <TableCell className="font-medium">{rsvp.partyName}</TableCell>
-                          <TableCell>{rsvp.response}</TableCell>
-                          <TableCell>{rsvp.guestCount || '-'}</TableCell>
-                          <TableCell>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              rsvp.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
-                              rsvp.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {rsvp.status}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {rsvp.status === 'PENDING' && (
-                              <div className="flex items-center justify-end gap-2">
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => approveRSVP(rsvp.id)}
-                                  className="px-3 py-1.5 text-sm border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2"
-                                >
-                                  <CheckCircle className="h-4 w-4" />
-                                  Approve
-                                </motion.button>
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => rejectRSVP(rsvp.id)}
-                                  className="px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-2"
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                  Reject
-                                </motion.button>
-                              </div>
-                            )}
-                            {rsvp.status === 'APPROVED' && (
-                              <motion.a
-                                href={`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:4000'}/v1/couple/rsvps/${rsvp.id}/invitation-card.pdf?x-couple-key=${encodeURIComponent(coupleKey)}`}
-                                download
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                              >
-                                <Download className="h-4 w-4" />
-                                Invitation
-                              </motion.a>
-                            )}
-                          </TableCell>
-                        </motion.tr>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              <RSVPApprovalTable
+                rsvps={rsvps}
+                loading={loading}
+                onApprove={approveRSVP}
+                onReject={rejectRSVP}
+                onDownloadInvitation={(id) => {
+                  const url = `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:4000'}/v1/couple/rsvps/${id}/invitation-card.pdf?x-couple-key=${encodeURIComponent(coupleKey)}`
+                  window.open(url, '_blank')
+                }}
+              />
             </div>
           </motion.div>
         </TabsContent>
@@ -355,129 +283,28 @@ export default function CoupleDashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-xl border border-gray-200 shadow-sm"
           >
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Media Timeline</h2>
-                  <p className="text-sm text-gray-500 mt-1">View all guestbook submissions</p>
-                </div>
-                {mediaAssets.length > 0 && (
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={downloadAllMedia}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download All
-                  </motion.button>
-                )}
-              </div>
-            </div>
             <div className="p-6">
-              {mediaLoading ? (
-                <div className="text-center py-12 text-gray-500">Loading media...</div>
-              ) : mediaAssets.length === 0 ? (
-                <EmptyState
-                  icon={Image}
-                  title="No media submissions yet"
-                  description="Guest messages will appear here"
-                />
-              ) : (
-                <div className="space-y-6">
-                  {mediaAssets.map((asset, index) => (
-                    <motion.div
-                      key={asset.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="border border-gray-200 rounded-xl p-6 space-y-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {asset.type === 'VIDEO' && <Video className="h-5 w-5 text-gray-600" />}
-                          {asset.type === 'AUDIO' && <Mic className="h-5 w-5 text-gray-600" />}
-                          {asset.type === 'PHOTO' && <Image className="h-5 w-5 text-gray-600" />}
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {asset.type} {asset.source === 'BOOTH' && '(Booth)'}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(asset.createdAt).toLocaleString()}
-                              {asset.durationSec && ` • ${formatDuration(asset.durationSec)}`}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {(asset.type === 'VIDEO' || asset.type === 'AUDIO') && (
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => setPlayingAsset(playingAsset === asset.id ? null : asset.id)}
-                              className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-                            >
-                              <Play className="h-4 w-4" />
-                              {playingAsset === asset.id ? 'Hide' : 'Play'}
-                            </motion.button>
-                          )}
-                          <motion.a
-                            href={getMediaUrl(asset)}
-                            download
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <Download className="h-4 w-4" />
-                            Download
-                          </motion.a>
-                        </div>
-                      </div>
-                      <AnimatePresence>
-                        {playingAsset === asset.id && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mt-4"
-                          >
-                            {asset.type === 'VIDEO' && (
-                              <video
-                                src={getMediaUrl(asset)}
-                                controls
-                                className="w-full rounded-lg"
-                                autoPlay
-                              />
-                            )}
-                            {asset.type === 'AUDIO' && (
-                              <audio
-                                src={getMediaUrl(asset)}
-                                controls
-                                className="w-full"
-                                autoPlay
-                              />
-                            )}
-                            {asset.type === 'PHOTO' && (
-                              <img
-                                src={getMediaUrl(asset)}
-                                alt="Guest submission"
-                                className="w-full rounded-lg"
-                              />
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      {asset.type === 'PHOTO' && playingAsset !== asset.id && (
-                        <img
-                          src={getMediaUrl(asset)}
-                          alt="Guest submission"
-                          className="w-full rounded-lg max-h-64 object-cover cursor-pointer"
-                          onClick={() => setPlayingAsset(asset.id)}
-                        />
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-              )}
+              <MediaTimeline
+                assets={mediaAssets.map(asset => ({
+                  id: asset.id,
+                  type: asset.type as 'VIDEO' | 'AUDIO' | 'PHOTO',
+                  source: asset.source as 'PERSONAL' | 'BOOTH',
+                  durationSec: asset.durationSec,
+                  createdAt: asset.createdAt,
+                  downloadUrl: getMediaUrl(asset)
+                }))}
+                onDownload={(assetId) => {
+                  const asset = mediaAssets.find(a => a.id === assetId)
+                  if (asset) {
+                    const a = document.createElement('a')
+                    a.href = getMediaUrl(asset)
+                    a.download = `media-${assetId}`
+                    a.click()
+                  }
+                }}
+                onDownloadAll={downloadAllMedia}
+                loading={mediaLoading}
+              />
             </div>
           </motion.div>
         </TabsContent>

@@ -5,11 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Copy, Check, Calendar, Settings } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import EmptyState from '@/components/dashboard/EmptyState'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import EventCreateForm from '@/components/admin/EventCreateForm'
 
 interface Event {
   id: string
@@ -30,20 +28,28 @@ export default function AdminEventsPage() {
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const apiKey = localStorage.getItem('adminApiKey') || ''
+  const [apiKey, setApiKey] = useState<string>('')
 
   useEffect(() => {
-    if (apiKey) {
-      loadEvents()
-    } else {
-      window.location.href = '/admin'
+    // Access localStorage only on client side
+    if (typeof window !== 'undefined') {
+      const key = localStorage.getItem('adminApiKey') || ''
+      setApiKey(key)
+      if (key) {
+        loadEvents(key)
+      } else {
+        window.location.href = '/admin'
+      }
     }
-  }, [apiKey])
+  }, [])
 
-  async function loadEvents() {
+  async function loadEvents(key?: string) {
+    const authKey = key || apiKey
+    if (!authKey) return
+    
     try {
       const data = await apiGet<Event[]>('/v1/admin/events', {
-        'x-api-key': apiKey
+        'x-api-key': authKey
       })
       setEvents(data)
     } catch (err) {
@@ -206,57 +212,35 @@ export default function AdminEventsPage() {
       </motion.div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Create New Event</DialogTitle>
             <DialogDescription>
               Configure a new event for your platform
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input id="slug" name="slug" required placeholder="demo-wedding" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">Event Name</Label>
-                <Input id="name" name="name" required placeholder="Demo Wedding" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dateTime">Date & Time</Label>
-                <Input id="dateTime" name="dateTime" type="datetime-local" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Input id="timezone" name="timezone" defaultValue="UTC" />
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input type="checkbox" id="invitationOnly" name="invitationOnly" />
-                  <Label htmlFor="invitationOnly">Invitation Only</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input type="checkbox" id="featureInvitationWebsite" name="featureInvitationWebsite" defaultChecked />
-                  <Label htmlFor="featureInvitationWebsite">Invitation Website</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input type="checkbox" id="featureRsvp" name="featureRsvp" defaultChecked />
-                  <Label htmlFor="featureRsvp">RSVP System</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input type="checkbox" id="featureGuestbook" name="featureGuestbook" defaultChecked />
-                  <Label htmlFor="featureGuestbook">Digital Guestbook</Label>
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Create Event</Button>
-            </DialogFooter>
-          </form>
+          <EventCreateForm
+            onSubmit={async (data) => {
+              try {
+                await apiPost('/v1/admin/events', {
+                  slug: data.slug,
+                  name: data.name,
+                  dateTime: data.dateTime,
+                  timezone: data.timezone,
+                  invitationOnly: data.invitationOnly,
+                  featureInvitationWebsite: data.featureInvitationWebsite,
+                  featureRsvp: data.featureRsvp,
+                  featureGuestbook: data.featureGuestbook
+                }, { 'x-api-key': apiKey })
+                setCreateOpen(false)
+                loadEvents()
+              } catch (err) {
+                throw err
+              }
+            }}
+            onCancel={() => setCreateOpen(false)}
+            loading={false}
+          />
         </DialogContent>
       </Dialog>
     </div>

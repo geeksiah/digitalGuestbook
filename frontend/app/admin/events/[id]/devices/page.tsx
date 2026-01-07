@@ -23,24 +23,32 @@ export default function CheckInDevicesPage() {
   const params = useParams()
   const router = useRouter()
   const eventId = params.id as string
-  const apiKey = localStorage.getItem('adminApiKey') || ''
+  const [apiKey, setApiKey] = useState<string>('')
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
   useEffect(() => {
-    if (apiKey && eventId) {
-      loadDevices()
-    } else {
-      router.push('/admin')
+    // Access localStorage only on client side
+    if (typeof window !== 'undefined') {
+      const key = localStorage.getItem('adminApiKey') || ''
+      setApiKey(key)
+      if (key && eventId) {
+        loadDevices(key)
+      } else {
+        router.push('/admin')
+      }
     }
-  }, [apiKey, eventId])
+  }, [eventId, router])
 
-  async function loadDevices() {
+  async function loadDevices(key?: string) {
+    const authKey = key || apiKey
+    if (!authKey) return
+    
     try {
       const data = await apiGet<Device[]>(`/v1/admin/${eventId}/devices`, {
-        'x-api-key': apiKey
+        'x-api-key': authKey
       })
       setDevices(data)
     } catch (err) {
@@ -62,7 +70,7 @@ export default function CheckInDevicesPage() {
         'x-api-key': apiKey
       })
       setCreateOpen(false)
-      loadDevices()
+      loadDevices(apiKey)
       // Show the API key to copy
       setCopiedKey(result.apiKey)
       navigator.clipboard.writeText(result.apiKey)

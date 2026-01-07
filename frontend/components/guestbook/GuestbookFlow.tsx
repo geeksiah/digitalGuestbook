@@ -4,6 +4,11 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Video, Mic, Image as ImageIcon, Camera, CheckCircle, AlertCircle, Upload, Clock, X } from 'lucide-react'
 import { apiPost } from '@/lib/api'
+import GuestModeSelector from './GuestModeSelector'
+import PermissionGate from './PermissionGate'
+import RecordingProgressOverlay from './RecordingProgressOverlay'
+import UploadProgressIndicator from './UploadProgressIndicator'
+import AudioRecorder from './AudioRecorder'
 
 const MAX_VIDEO_DURATION = 120 // 2 minutes
 const MAX_AUDIO_DURATION = 180 // 3 minutes
@@ -228,6 +233,13 @@ export default function GuestbookFlow({ eventSlug, isBoothMode = false }: Guestb
 
   return (
     <div className={`${isBoothMode ? 'fixed inset-0' : 'min-h-screen'} bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-4`}>
+      {recording && mode && mode !== 'PHOTO' && (
+        <RecordingProgressOverlay
+          duration={recordingTime}
+          maxDuration={mode === 'VIDEO' ? MAX_VIDEO_DURATION : MAX_AUDIO_DURATION}
+          isRecording={recording}
+        />
+      )}
       <div className="w-full max-w-4xl">
         <AnimatePresence mode="wait">
           {/* Step 1: Mode Selection */}
@@ -318,36 +330,25 @@ export default function GuestbookFlow({ eventSlug, isBoothMode = false }: Guestb
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-xl p-8 max-w-md mx-auto"
+              className="max-w-md mx-auto"
             >
-              <div className="text-center space-y-6">
-                <div className="flex justify-center">
-                  <div className="p-4 bg-gray-100 rounded-full">
-                    <Camera className="h-12 w-12 text-gray-900" />
-                  </div>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                    {mode === 'VIDEO' ? 'Camera & Microphone' : 'Microphone'} Access
-                  </h2>
-                  <p className="text-gray-600">
-                    We need access to your {mode === 'VIDEO' ? 'camera and microphone' : 'microphone'} to record your message.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setStep('mode-selection')}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={requestPermission}
-                    className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-                  >
-                    Allow Access
-                  </button>
-                </div>
+              <PermissionGate
+                requiredPermissions={mode === 'VIDEO' ? 'both' : 'audio'}
+                onGranted={() => {
+                  setPermissionGranted(true)
+                  setStep('recording')
+                }}
+                onDenied={() => {
+                  setError('Permission denied. Please allow access and try again.')
+                }}
+              />
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => setStep('mode-selection')}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+                >
+                  ← Back
+                </button>
               </div>
             </motion.div>
           )}
@@ -505,30 +506,13 @@ export default function GuestbookFlow({ eventSlug, isBoothMode = false }: Guestb
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-xl p-8 max-w-md mx-auto text-center space-y-6"
+              className="max-w-md mx-auto"
             >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                className="flex justify-center"
-              >
-                <Upload className="h-12 w-12 text-gray-900" />
-              </motion.div>
-              <div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Uploading Your Message</h2>
-                <p className="text-gray-600">Please wait while we save your message...</p>
-              </div>
-              <div className="space-y-2">
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadProgress}%` }}
-                    transition={{ duration: 0.3 }}
-                    className="h-full bg-gray-900 rounded-full"
-                  />
-                </div>
-                <p className="text-sm text-gray-500">{uploadProgress}%</p>
-              </div>
+              <UploadProgressIndicator
+                progress={uploadProgress}
+                status="uploading"
+                message="Please wait while we save your message..."
+              />
             </motion.div>
           )}
 

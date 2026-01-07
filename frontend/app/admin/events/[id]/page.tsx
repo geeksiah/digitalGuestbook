@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import TemplateSelector from '@/components/admin/TemplateSelector'
 
 interface Event {
   id: string
@@ -44,7 +45,7 @@ export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
   const eventId = params.id as string
-  const apiKey = localStorage.getItem('adminApiKey') || ''
+  const [apiKey, setApiKey] = useState<string>('')
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -55,19 +56,27 @@ export default function EventDetailPage() {
   const [selectedTemplateType, setSelectedTemplateType] = useState<string>('')
 
   useEffect(() => {
-    if (apiKey && eventId) {
-      loadEvent()
-      loadTemplates()
-      loadAssignments()
-    } else {
-      router.push('/admin')
+    // Access localStorage only on client side
+    if (typeof window !== 'undefined') {
+      const key = localStorage.getItem('adminApiKey') || ''
+      setApiKey(key)
+      if (key && eventId) {
+        loadEvent(key)
+        loadTemplates(key)
+        loadAssignments(key)
+      } else {
+        router.push('/admin')
+      }
     }
-  }, [apiKey, eventId])
+  }, [eventId, router])
 
-  async function loadEvent() {
+  async function loadEvent(key?: string) {
+    const authKey = key || apiKey
+    if (!authKey) return
+    
     try {
       const data = await apiGet<Event>(`/v1/admin/events/${eventId}`, {
-        'x-api-key': apiKey
+        'x-api-key': authKey
       })
       setEvent(data)
     } catch (err) {
@@ -77,10 +86,13 @@ export default function EventDetailPage() {
     }
   }
 
-  async function loadTemplates() {
+  async function loadTemplates(key?: string) {
+    const authKey = key || apiKey
+    if (!authKey) return
+    
     try {
       const data = await apiGet<Template[]>('/v1/admin/templates', {
-        'x-api-key': apiKey
+        'x-api-key': authKey
       })
       setTemplates(data)
     } catch (err) {
@@ -88,10 +100,13 @@ export default function EventDetailPage() {
     }
   }
 
-  async function loadAssignments() {
+  async function loadAssignments(key?: string) {
+    const authKey = key || apiKey
+    if (!authKey) return
+    
     try {
       const data = await apiGet<TemplateAssignment[]>(`/v1/admin/events/${eventId}/templates`, {
-        'x-api-key': apiKey
+        'x-api-key': authKey
       })
       setAssignments(data)
     } catch (err) {
@@ -118,7 +133,7 @@ export default function EventDetailPage() {
       await apiPatch(`/v1/admin/events/${eventId}`, data, {
         'x-api-key': apiKey
       })
-      loadEvent()
+      loadEvent(apiKey)
       alert('Event updated successfully')
     } catch (err) {
       alert('Failed to update: ' + (err as Error).message)
@@ -132,7 +147,7 @@ export default function EventDetailPage() {
       await apiPost(`/v1/admin/events/${eventId}/phase-override`, { phase }, {
         'x-api-key': apiKey
       })
-      loadEvent()
+      loadEvent(apiKey)
       setPhaseOverrideOpen(false)
     } catch (err) {
       alert('Failed to override phase: ' + (err as Error).message)
@@ -147,7 +162,7 @@ export default function EventDetailPage() {
       }, {
         'x-api-key': apiKey
       })
-      loadAssignments()
+      loadAssignments(apiKey)
       setTemplateAssignOpen(false)
     } catch (err) {
       alert('Failed to assign template: ' + (err as Error).message)
@@ -316,18 +331,51 @@ export default function EventDetailPage() {
                 Assign Template
               </Button>
             </div>
-            <div className="space-y-3">
-              {assignments.map((assignment) => (
-                <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{assignment.template.name}</p>
-                    <p className="text-sm text-gray-500">{assignment.templateType}</p>
+            <div className="space-y-6">
+              {(['INVITATION', 'RSVP', 'GUESTBOOK', 'THANK_YOU'] as const).map((templateType) => {
+                const assignment = assignments.find(a => a.templateType === templateType)
+                return (
+                  <div key={templateType} className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-medium text-gray-900">{templateType.replace('_', ' ')}</h4>
+                      {assignment ? (
+                        <span className="text-sm text-green-600">Assigned</span>
+                      ) : (
+                        <span className="text-sm text-gray-400">Not assigned</span>
+                      )}
+                    </div>
+                    {assignment ? (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">{assignment.template.name}</p>
+                          <p className="text-sm text-gray-500">Version {assignment.template.version}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedTemplateType(templateType)
+                            setTemplateAssignOpen(true)
+                          }}
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedTemplateType(templateType)
+                          setTemplateAssignOpen(true)
+                        }}
+                      >
+                        Assign Template
+                      </Button>
+                    )}
                   </div>
-                </div>
-              ))}
-              {assignments.length === 0 && (
-                <p className="text-center text-gray-500 py-8">No templates assigned</p>
-              )}
+                )
+              })}
             </div>
             <div className="mt-6 pt-6 border-t">
               <Button
@@ -371,65 +419,56 @@ export default function EventDetailPage() {
       </Dialog>
 
       <Dialog open={templateAssignOpen} onOpenChange={setTemplateAssignOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Assign Template</DialogTitle>
             <DialogDescription>
-              Assign a template to a page type for this event
+              Select a template to assign to this event's {selectedTemplateType?.toLowerCase().replace('_', ' ')} page
             </DialogDescription>
           </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              const formData = new FormData(e.currentTarget)
-              const templateId = formData.get('templateId') as string
-              if (templateId && selectedTemplateType) {
-                handleTemplateAssign(templateId)
-              }
-            }}
-            className="space-y-4 py-4"
-          >
-            <div className="space-y-2">
-              <Label>Template Type</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={selectedTemplateType}
-                onChange={(e) => setSelectedTemplateType(e.target.value)}
-                required
-              >
-                <option value="">Select type...</option>
-                <option value="INVITATION">Invitation</option>
-                <option value="RSVP">RSVP</option>
-                <option value="GUESTBOOK">Guestbook</option>
-                <option value="THANK_YOU">Thank You</option>
-              </select>
+          {selectedTemplateType && (
+            <div className="py-4">
+              <TemplateSelector
+                templates={templates}
+                selectedTemplateId={assignments.find(a => a.templateType === selectedTemplateType)?.templateId}
+                templateType={selectedTemplateType}
+                onSelect={(templateId) => {
+                  handleTemplateAssign(templateId)
+                }}
+                onPreview={(templateId) => {
+                  // Preview would open in a modal
+                  console.log('Preview template:', templateId)
+                }}
+              />
             </div>
-            {selectedTemplateType && (
+          )}
+          {!selectedTemplateType && (
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Template</Label>
+                <Label>Template Type</Label>
                 <select
-                  name="templateId"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={selectedTemplateType}
+                  onChange={(e) => setSelectedTemplateType(e.target.value)}
                   required
                 >
-                  <option value="">Select template...</option>
-                  {templates
-                    .filter(t => t.type === selectedTemplateType)
-                    .map(template => (
-                      <option key={template.id} value={template.id}>
-                        {template.name} (v{template.version})
-                      </option>
-                    ))}
+                  <option value="">Select type...</option>
+                  <option value="INVITATION">Invitation</option>
+                  <option value="RSVP">RSVP</option>
+                  <option value="GUESTBOOK">Guestbook</option>
+                  <option value="THANK_YOU">Thank You</option>
                 </select>
               </div>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setTemplateAssignOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Assign</Button>
-            </DialogFooter>
-          </form>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => {
+              setTemplateAssignOpen(false)
+              setSelectedTemplateType('')
+            }}>
+              Cancel
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

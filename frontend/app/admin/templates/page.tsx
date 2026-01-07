@@ -24,20 +24,28 @@ export default function AdminTemplatesPage() {
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const apiKey = localStorage.getItem('adminApiKey') || ''
+  const [apiKey, setApiKey] = useState<string>('')
 
   useEffect(() => {
-    if (apiKey) {
-      loadTemplates()
-    } else {
-      window.location.href = '/admin'
+    // Access localStorage only on client side
+    if (typeof window !== 'undefined') {
+      const key = localStorage.getItem('adminApiKey') || ''
+      setApiKey(key)
+      if (key) {
+        loadTemplates(key)
+      } else {
+        window.location.href = '/admin'
+      }
     }
-  }, [apiKey])
+  }, [])
 
-  async function loadTemplates() {
+  async function loadTemplates(key?: string) {
+    const authKey = key || apiKey
+    if (!authKey) return
+    
     try {
       const data = await apiGet<Template[]>('/v1/admin/templates', {
-        'x-api-key': apiKey
+        'x-api-key': authKey
       })
       setTemplates(data)
     } catch (err) {
@@ -82,7 +90,7 @@ export default function AdminTemplatesPage() {
       }
 
       setUploadOpen(false)
-      loadTemplates()
+      loadTemplates(apiKey)
     } catch (err) {
       alert('Failed to upload: ' + (err as Error).message)
     } finally {
@@ -96,7 +104,7 @@ export default function AdminTemplatesPage() {
       await apiDelete(`/v1/admin/templates/${id}`, {
         'x-api-key': apiKey
       })
-      loadTemplates()
+      loadTemplates(apiKey)
     } catch (err) {
       alert('Failed to delete: ' + (err as Error).message)
     }
