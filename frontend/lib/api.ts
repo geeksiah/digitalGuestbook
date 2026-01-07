@@ -81,7 +81,8 @@ export const eventsApi = {
 
 // Templates API
 export const templatesApi = {
-  list: (type?: string) => api.get('/api/templates', { params: { type } }),
+  list: (type?: string, includeContent?: boolean) => 
+    api.get('/api/templates', { params: { type, includeContent: includeContent ? 'true' : undefined } }),
   
   get: (id: string) => api.get(`/api/templates/${id}`),
   
@@ -140,17 +141,17 @@ export const checkInApi = {
 
 // Guestbook API
 export const guestbookApi = {
-  getConfig: (eventId: string, accessCode?: string) =>
-    api.get(`/api/guestbook/${eventId}/config`, { params: { accessCode } }),
+  getConfig: (eventId: string, accessCode?: string, token?: string) =>
+    api.get(`/api/guestbook/${eventId}/config`, { params: { accessCode, token } }),
   
-  upload: (eventId: string, formData: FormData, accessCode?: string) =>
+  upload: (eventId: string, formData: FormData, accessCode?: string, token?: string) =>
     api.post(`/api/guestbook/${eventId}/upload`, formData, {
-      params: { accessCode },
+      params: { accessCode, token },
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   
-  getQuota: (eventId: string, deviceId?: string, accessCode?: string) =>
-    api.get(`/api/guestbook/${eventId}/quota`, { params: { deviceId, accessCode } }),
+  getQuota: (eventId: string, deviceId?: string, accessCode?: string, token?: string) =>
+    api.get(`/api/guestbook/${eventId}/quota`, { params: { deviceId, accessCode, token } }),
 };
 
 // Media API

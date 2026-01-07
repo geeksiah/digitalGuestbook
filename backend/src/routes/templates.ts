@@ -12,13 +12,41 @@ router.use(authenticateAdmin);
 /**
  * GET /api/templates
  * List all templates with optional type filter
+ * Query params:
+ *   - type: filter by template type
+ *   - includeContent: if 'true', include HTML/CSS/JS content for previews
  */
 router.get('/', asyncHandler(async (req, res) => {
-  const { type } = req.query;
+  const { type, includeContent } = req.query;
 
   const where: any = {};
   if (type) {
     where.type = type;
+  }
+
+  const selectFields: any = {
+    id: true,
+    name: true,
+    description: true,
+    type: true,
+    isDefault: true,
+    createdAt: true,
+    updatedAt: true,
+    _count: {
+      select: {
+        eventsAsInvitation: true,
+        eventsAsRsvp: true,
+        eventsAsGuestbook: true,
+        eventsAsThankYou: true,
+      },
+    },
+  };
+
+  // Include content if requested (for thumbnail previews)
+  if (includeContent === 'true') {
+    selectFields.htmlContent = true;
+    selectFields.cssContent = true;
+    selectFields.jsContent = true;
   }
 
   const templates = await prisma.template.findMany({
@@ -28,20 +56,11 @@ router.get('/', asyncHandler(async (req, res) => {
       { isDefault: 'desc' },
       { name: 'asc' },
     ],
-    include: {
-      _count: {
-        select: {
-          eventsAsInvitation: true,
-          eventsAsRsvp: true,
-          eventsAsGuestbook: true,
-          eventsAsThankYou: true,
-        },
-      },
-    },
+    select: selectFields,
   });
 
   // Calculate total usage count
-  const templatesWithUsage = templates.map((t) => ({
+  const templatesWithUsage = templates.map((t: any) => ({
     ...t,
     usageCount: 
       t._count.eventsAsInvitation +
