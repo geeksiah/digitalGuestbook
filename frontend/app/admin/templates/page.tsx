@@ -154,7 +154,7 @@ export default function TemplatesPage() {
     if (!confirm(`Delete ${selectedTemplates.size} template(s)?`)) return;
     
     let deleted = 0;
-    for (const id of selectedTemplates) {
+    for (const id of Array.from(selectedTemplates)) {
       try {
         await templatesApi.delete(id);
         deleted++;
