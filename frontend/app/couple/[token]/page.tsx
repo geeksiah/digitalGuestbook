@@ -71,97 +71,6 @@ const Icons = {
   chevronDown: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
 };
 
-// Custom Video Player
-function VideoPlayer({ src, onClose }: { src: string; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (playing) videoRef.current.pause();
-      else videoRef.current.play();
-      setPlaying(!playing);
-    }
-  };
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (videoRef.current) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      videoRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * videoRef.current.duration;
-    }
-  };
-
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-
-  return (
-    <div className="relative bg-black rounded-xl overflow-hidden max-w-4xl w-full">
-      <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors">{Icons.close}</button>
-      <video
-        ref={videoRef}
-        src={src}
-        className="w-full max-h-[70vh]"
-        autoPlay
-        onTimeUpdate={() => videoRef.current && setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100)}
-        onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
-        onEnded={() => setPlaying(false)}
-        onClick={togglePlay}
-      />
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-10">
-        <div onClick={handleSeek} className="h-1 bg-white/30 rounded-full cursor-pointer mb-3">
-          <div className="h-full bg-white rounded-full" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="flex items-center justify-between">
-          <button onClick={togglePlay} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
-            {playing ? Icons.pause : Icons.play}
-          </button>
-          <span className="text-white/70 text-sm font-mono">{formatTime(videoRef.current?.currentTime || 0)} / {formatTime(duration)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Custom Audio Player
-function AudioPlayer({ src, guestName, onClose }: { src: string; guestName: string; onClose: () => void }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(true);
-  const [progress, setProgress] = useState(0);
-
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (playing) audioRef.current.pause();
-      else audioRef.current.play();
-      setPlaying(!playing);
-    }
-  };
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (audioRef.current) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * audioRef.current.duration;
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-2xl">
-      <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-surface-100 text-surface-500 hover:bg-surface-200 transition-colors">{Icons.close}</button>
-      <audio ref={audioRef} src={src} autoPlay onTimeUpdate={() => audioRef.current && setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100)} onEnded={() => setPlaying(false)} />
-      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-surface-100 flex items-center justify-center text-surface-400">{Icons.audio}</div>
-      <h3 className="text-lg font-medium text-navy-900 text-center mb-1">{guestName || 'Voice Message'}</h3>
-      <p className="text-sm text-surface-500 text-center mb-6">Audio Message</p>
-      <div onClick={handleSeek} className="h-1.5 bg-surface-200 rounded-full cursor-pointer mb-4">
-        <div className="h-full bg-navy-900 rounded-full transition-all" style={{ width: `${progress}%` }} />
-      </div>
-      <button onClick={togglePlay} className="w-full py-3 rounded-lg bg-navy-900 text-white font-medium hover:bg-navy-800 transition-colors flex items-center justify-center gap-2">
-        {playing ? Icons.pause : Icons.play}
-        {playing ? 'Pause' : 'Play'}
-      </button>
-    </div>
-  );
-}
-
 // Export helper
 function exportToCSV(data: any[], filename: string, columns: { key: string; label: string }[]) {
   const getValue = (row: any, key: string) => key.split('.').reduce((obj, k) => obj?.[k], row);
@@ -524,22 +433,6 @@ export default function CouplePortalPage() {
           </div>
         )}
       </main>
-
-      {/* Media Preview Modal */}
-      {previewMedia && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90" onClick={() => setPreviewMedia(null)}>
-          <div onClick={e => e.stopPropagation()} className="relative">
-            {previewMedia.type === 'PHOTO' && (
-              <div className="relative">
-                <button onClick={() => setPreviewMedia(null)} className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white transition-colors">{Icons.close}</button>
-                <img src={`${API_BASE_URL}${previewMedia.filePath}`} alt="" className="max-h-[80vh] rounded-xl shadow-2xl" />
-              </div>
-            )}
-            {previewMedia.type === 'VIDEO' && <VideoPlayer src={`${API_BASE_URL}${previewMedia.filePath}`} onClose={() => setPreviewMedia(null)} />}
-            {previewMedia.type === 'AUDIO' && <AudioPlayer src={`${API_BASE_URL}${previewMedia.filePath}`} guestName={previewMedia.guestName || ''} onClose={() => setPreviewMedia(null)} />}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
