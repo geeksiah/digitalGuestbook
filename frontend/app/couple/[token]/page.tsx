@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { coupleApi, API_BASE_URL } from '@/lib/api';
+import { coupleApi, API_BASE_URL, mediaApi } from '@/lib/api';
 import { formatDate, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,7 @@ interface Event {
   venue: string | null;
   currentPhase: string;
   invitationOnly: boolean;
+  reelEnabled?: boolean;
   _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number };
 }
 
@@ -50,162 +51,110 @@ interface CheckIn {
 }
 
 type Tab = 'dashboard' | 'rsvps' | 'media' | 'checkins';
-type MediaTab = 'all' | 'photos' | 'messages';
+type MediaTab = 'all' | 'photos' | 'videos' | 'audio';
 
-// Custom Icons
+// SVG Icons
 const Icons = {
-  video: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
-  audio: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
-  photo: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  video: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  audio: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
+  photo: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   download: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
-  play: <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>,
-  pause: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>,
-  close: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+  play: <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>,
+  pause: <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>,
+  close: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
   export: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+  rsvp: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  users: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  checkin: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
+  message: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
+  reel: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>,
+  chevronDown: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
 };
 
-// Custom Video Player Component
+// Custom Video Player
 function VideoPlayer({ src, onClose }: { src: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
 
   const togglePlay = () => {
     if (videoRef.current) {
-      if (playing) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
+      if (playing) videoRef.current.pause();
+      else videoRef.current.play();
       setPlaying(!playing);
-    }
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
     }
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (videoRef.current) {
       const rect = e.currentTarget.getBoundingClientRect();
-      const pos = (e.clientX - rect.left) / rect.width;
-      videoRef.current.currentTime = pos * videoRef.current.duration;
+      videoRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * videoRef.current.duration;
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
   return (
-    <div className="relative bg-black rounded-2xl overflow-hidden max-w-4xl w-full">
-      <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors">
-        {Icons.close}
-      </button>
+    <div className="relative bg-black rounded-xl overflow-hidden max-w-4xl w-full">
+      <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors">{Icons.close}</button>
       <video
         ref={videoRef}
         src={src}
-        className="w-full max-h-[70vh] object-contain"
-        onTimeUpdate={handleTimeUpdate}
+        className="w-full max-h-[70vh]"
+        autoPlay
+        onTimeUpdate={() => videoRef.current && setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100)}
         onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
         onEnded={() => setPlaying(false)}
         onClick={togglePlay}
       />
-      {/* Custom Controls */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
-        <div onClick={handleSeek} className="h-1.5 bg-white/30 rounded-full cursor-pointer mb-3 group">
-          <div className="h-full bg-primary-500 rounded-full relative transition-all" style={{ width: `${progress}%` }}>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg" />
-          </div>
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-10">
+        <div onClick={handleSeek} className="h-1 bg-white/30 rounded-full cursor-pointer mb-3">
+          <div className="h-full bg-white rounded-full" style={{ width: `${progress}%` }} />
         </div>
         <div className="flex items-center justify-between">
-          <button onClick={togglePlay} className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <button onClick={togglePlay} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
             {playing ? Icons.pause : Icons.play}
           </button>
-          <span className="text-white/80 text-sm font-mono">
-            {formatTime(videoRef.current?.currentTime || 0)} / {formatTime(duration)}
-          </span>
+          <span className="text-white/70 text-sm font-mono">{formatTime(videoRef.current?.currentTime || 0)} / {formatTime(duration)}</span>
         </div>
       </div>
     </div>
   );
 }
 
-// Custom Audio Player Component
+// Custom Audio Player
 function AudioPlayer({ src, guestName, onClose }: { src: string; guestName: string; onClose: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   const togglePlay = () => {
     if (audioRef.current) {
-      if (playing) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
+      if (playing) audioRef.current.pause();
+      else audioRef.current.play();
       setPlaying(!playing);
-    }
-  };
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
     }
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (audioRef.current) {
       const rect = e.currentTarget.getBoundingClientRect();
-      const pos = (e.clientX - rect.left) / rect.width;
-      audioRef.current.currentTime = pos * audioRef.current.duration;
+      audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * audioRef.current.duration;
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
   return (
-    <div className="bg-gradient-to-br from-navy-900 to-navy-800 rounded-2xl p-8 max-w-md w-full shadow-2xl">
-      <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors">
-        {Icons.close}
-      </button>
-      <audio
-        ref={audioRef}
-        src={src}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-        onEnded={() => setPlaying(false)}
-      />
-      {/* Album Art Placeholder */}
-      <div className="w-40 h-40 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg">
-        <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
-          {Icons.audio}
-        </div>
+    <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-2xl">
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-surface-100 text-surface-500 hover:bg-surface-200 transition-colors">{Icons.close}</button>
+      <audio ref={audioRef} src={src} autoPlay onTimeUpdate={() => audioRef.current && setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100)} onEnded={() => setPlaying(false)} />
+      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-surface-100 flex items-center justify-center text-surface-400">{Icons.audio}</div>
+      <h3 className="text-lg font-medium text-navy-900 text-center mb-1">{guestName || 'Voice Message'}</h3>
+      <p className="text-sm text-surface-500 text-center mb-6">Audio Message</p>
+      <div onClick={handleSeek} className="h-1.5 bg-surface-200 rounded-full cursor-pointer mb-4">
+        <div className="h-full bg-navy-900 rounded-full transition-all" style={{ width: `${progress}%` }} />
       </div>
-      <h3 className="text-white text-xl font-medium text-center mb-2">{guestName || 'Voice Message'}</h3>
-      <p className="text-white/60 text-sm text-center mb-6">Audio Message</p>
-      {/* Progress Bar */}
-      <div onClick={handleSeek} className="h-2 bg-white/20 rounded-full cursor-pointer mb-4 group">
-        <div className="h-full bg-primary-500 rounded-full relative transition-all" style={{ width: `${progress}%` }}>
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg" />
-        </div>
-      </div>
-      <div className="flex items-center justify-between text-white/60 text-sm mb-4 font-mono">
-        <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
-        <span>{formatTime(duration)}</span>
-      </div>
-      {/* Play Button */}
-      <button onClick={togglePlay} className="w-full py-4 rounded-xl bg-primary-500 text-navy-900 font-semibold hover:bg-primary-400 transition-colors flex items-center justify-center gap-2">
+      <button onClick={togglePlay} className="w-full py-3 rounded-lg bg-navy-900 text-white font-medium hover:bg-navy-800 transition-colors flex items-center justify-center gap-2">
         {playing ? Icons.pause : Icons.play}
         {playing ? 'Pause' : 'Play'}
       </button>
@@ -213,91 +162,19 @@ function AudioPlayer({ src, guestName, onClose }: { src: string; guestName: stri
   );
 }
 
-// Photo Viewer Component
-function PhotoViewer({ src, guestName, onClose }: { src: string; guestName: string; onClose: () => void }) {
-  return (
-    <div className="relative max-w-5xl w-full">
-      <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors">
-        {Icons.close}
-      </button>
-      <img src={src} alt="" className="max-h-[80vh] mx-auto rounded-2xl shadow-2xl object-contain" />
-      {guestName && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/60 backdrop-blur-sm rounded-full text-white">
-          <span className="font-medium">{guestName}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Media Thumbnail Component
-function MediaThumbnail({ media, onClick, onDownload }: { media: MediaAsset; onClick: () => void; onDownload: (e: React.MouseEvent) => void }) {
-  const getMediaIcon = () => {
-    switch (media.type) {
-      case 'VIDEO': return <div className="w-12 h-12 rounded-full bg-red-500/90 flex items-center justify-center text-white">{Icons.video}</div>;
-      case 'AUDIO': return <div className="w-12 h-12 rounded-full bg-purple-500/90 flex items-center justify-center text-white">{Icons.audio}</div>;
-      default: return null;
-    }
-  };
-
-  return (
-    <div onClick={onClick} className="group relative bg-white rounded-xl shadow-sm border border-surface-200 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-      <div className="aspect-square bg-surface-100 flex items-center justify-center relative overflow-hidden">
-        {media.type === 'PHOTO' ? (
-          <img src={`${API_BASE_URL}${media.filePath}`} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        ) : (
-          <div className={cn(
-            'w-full h-full flex items-center justify-center',
-            media.type === 'VIDEO' ? 'bg-gradient-to-br from-red-50 to-red-100' : 'bg-gradient-to-br from-purple-50 to-purple-100'
-          )}>
-            {getMediaIcon()}
-          </div>
-        )}
-        {/* Hover Overlay */}
-        <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/40 transition-colors flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity scale-75 group-hover:scale-100">
-            {Icons.play}
-          </div>
-        </div>
-        {/* Download Button */}
-        <button 
-          onClick={onDownload}
-          className="absolute top-2 right-2 p-2 rounded-lg bg-white/90 text-surface-700 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white shadow-sm z-10"
-        >
-          {Icons.download}
-        </button>
-        {/* Duration Badge */}
-        {media.duration && (
-          <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/70 text-white text-xs font-mono">
-            {Math.floor(media.duration / 60)}:{(media.duration % 60).toString().padStart(2, '0')}
-          </div>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-medium text-navy-900 text-sm truncate">{media.guestName || 'Anonymous'}</p>
-        <p className="text-xs text-surface-500">{formatDate(media.createdAt, 'MMM d, h:mm a')}</p>
-      </div>
-    </div>
-  );
-}
-
 // Export helper
 function exportToCSV(data: any[], filename: string, columns: { key: string; label: string }[]) {
+  const getValue = (row: any, key: string) => key.split('.').reduce((obj, k) => obj?.[k], row);
   const header = columns.map(c => c.label).join(',');
-  const rows = data.map(row => 
-    columns.map(c => {
-      const value = c.key.split('.').reduce((obj, key) => obj?.[key], row);
-      return typeof value === 'string' && value.includes(',') ? `"${value}"` : value ?? '';
-    }).join(',')
-  );
-  const csv = [header, ...rows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
+  const rows = data.map(row => columns.map(c => {
+    const val = getValue(row, c.key);
+    return typeof val === 'string' && val.includes(',') ? `"${val}"` : val ?? '';
+  }).join(','));
+  const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
-  a.href = url;
+  a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
 }
 
 export default function CouplePortalPage() {
@@ -315,6 +192,7 @@ export default function CouplePortalPage() {
   const [rsvpFilter, setRsvpFilter] = useState('all');
   const [previewMedia, setPreviewMedia] = useState<MediaAsset | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [exportOpen, setExportOpen] = useState(false);
 
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -344,10 +222,7 @@ export default function CouplePortalPage() {
       if (!silent) setLoading(false);
       setLastUpdated(new Date());
     } catch (err: any) {
-      if (!silent) {
-        setError(err.response?.data?.error || 'Invalid access token');
-        setLoading(false);
-      }
+      if (!silent) { setError(err.response?.data?.error || 'Invalid access token'); setLoading(false); }
     }
   };
 
@@ -355,139 +230,113 @@ export default function CouplePortalPage() {
     try {
       const response = await coupleApi.getRsvps(token, rsvpFilter !== 'all' ? { status: rsvpFilter } : undefined);
       setRsvps(response.data.rsvps);
-    } catch (err) {
-      if (!silent) toast.error('Failed to load RSVPs');
-    }
+    } catch { if (!silent) toast.error('Failed to load RSVPs'); }
   };
 
   const fetchMedia = async (silent = false) => {
-    try {
-      const response = await coupleApi.getMedia(token);
-      setMedia(response.data.media);
-    } catch (err) {
-      if (!silent) toast.error('Failed to load media');
-    }
+    try { const response = await coupleApi.getMedia(token); setMedia(response.data.media); }
+    catch { if (!silent) toast.error('Failed to load media'); }
   };
 
   const fetchCheckIns = async (silent = false) => {
-    try {
-      const response = await coupleApi.getCheckIns(token);
-      setCheckIns(response.data.checkIns);
-    } catch (err) {
-      if (!silent) toast.error('Failed to load check-ins');
-    }
+    try { const response = await coupleApi.getCheckIns(token); setCheckIns(response.data.checkIns); }
+    catch { if (!silent) toast.error('Failed to load check-ins'); }
   };
 
   const handleReviewRsvp = async (rsvpId: string, status: 'APPROVED' | 'REJECTED') => {
     try {
       await coupleApi.reviewRsvp(token, rsvpId, status);
       toast.success(`RSVP ${status.toLowerCase()}`);
-      fetchRsvps();
-      fetchEvent();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to review RSVP');
-    }
+      fetchRsvps(); fetchEvent();
+    } catch (err: any) { toast.error(err.response?.data?.error || 'Failed'); }
   };
 
-  const downloadMedia = async (mediaItem: MediaAsset) => {
-    try {
-      const link = document.createElement('a');
-      link.href = `${API_BASE_URL}${mediaItem.filePath}`;
-      link.download = `${mediaItem.guestName || 'media'}-${mediaItem.id}.${mediaItem.filePath.split('.').pop()}`;
-      link.click();
-    } catch (err) {
-      toast.error('Failed to download');
-    }
+  const downloadMedia = (m: MediaAsset) => {
+    const link = document.createElement('a');
+    link.href = `${API_BASE_URL}${m.filePath}`;
+    link.download = `${m.guestName || 'media'}-${m.id}.${m.filePath.split('.').pop()}`;
+    link.click();
   };
 
   const downloadAllMedia = async () => {
     try {
       const response = await coupleApi.downloadMedia(token);
-      const url = URL.createObjectURL(response.data);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = URL.createObjectURL(response.data);
       a.download = `${event?.slug}-media.zip`;
       a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error('Failed to download media');
+    } catch { toast.error('Failed to download'); }
+  };
+
+  const generateReel = async () => {
+    if (!event?.id) return;
+    try {
+      toast.loading('Generating reel...', { id: 'reel' });
+      await mediaApi.generateReel(event.id);
+      toast.dismiss('reel');
+      toast.success('Reel generation started!');
+    } catch (e: any) {
+      toast.dismiss('reel');
+      toast.error(e.response?.data?.error || 'Failed');
     }
   };
 
   const exportRsvps = (filter: string) => {
     const filtered = filter === 'all' ? rsvps : rsvps.filter(r => r.status === filter);
-    const columns = [
-      { key: 'primaryName', label: 'Name' },
-      { key: 'secondaryName', label: 'Guest Name' },
-      { key: 'email', label: 'Email' },
-      { key: 'phone', label: 'Phone' },
-      { key: 'attendance', label: 'Attendance' },
-      { key: 'guestCount', label: 'Guest Count' },
-      { key: 'mealPreference', label: 'Meal Preference' },
-      { key: 'dietaryNotes', label: 'Dietary Notes' },
-      { key: 'note', label: 'Note' },
-      { key: 'status', label: 'Status' },
-      { key: 'submittedAt', label: 'Submitted At' },
-    ];
-    exportToCSV(filtered, `rsvps-${filter}.csv`, columns);
+    exportToCSV(filtered, `rsvps-${filter}.csv`, [
+      { key: 'primaryName', label: 'Name' }, { key: 'secondaryName', label: 'Guest' },
+      { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
+      { key: 'attendance', label: 'Attendance' }, { key: 'guestCount', label: 'Guests' },
+      { key: 'status', label: 'Status' }, { key: 'submittedAt', label: 'Submitted' },
+    ]);
     toast.success(`Exported ${filtered.length} RSVPs`);
+    setExportOpen(false);
   };
 
   const exportCheckIns = () => {
-    const columns = [
-      { key: 'invitation.rsvp.primaryName', label: 'Guest Name' },
-      { key: 'invitation.rsvp.secondaryName', label: 'Plus One' },
+    exportToCSV(checkIns, 'checkins.csv', [
+      { key: 'invitation.rsvp.primaryName', label: 'Guest' },
       { key: 'invitation.rsvp.guestCount', label: 'Party Size' },
-      { key: 'invitation.accessCode', label: 'Access Code' },
-      { key: 'checkedInAt', label: 'Checked In At' },
-    ];
-    exportToCSV(checkIns, 'checkins.csv', columns);
+      { key: 'checkedInAt', label: 'Checked In' },
+    ]);
     toast.success(`Exported ${checkIns.length} check-ins`);
   };
 
-  // Filter media by category
-  const filteredMedia = mediaTab === 'photos' 
-    ? media.filter(m => m.type === 'PHOTO')
-    : mediaTab === 'messages'
-    ? media.filter(m => m.type === 'VIDEO' || m.type === 'AUDIO')
+  const filteredMedia = mediaTab === 'photos' ? media.filter(m => m.type === 'PHOTO')
+    : mediaTab === 'videos' ? media.filter(m => m.type === 'VIDEO')
+    : mediaTab === 'audio' ? media.filter(m => m.type === 'AUDIO')
     : media;
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      PENDING: 'bg-amber-100 text-amber-700',
-      APPROVED: 'bg-green-100 text-green-700',
-      REJECTED: 'bg-red-100 text-red-700',
-      YES: 'bg-green-100 text-green-700',
-      NO: 'bg-red-100 text-red-700',
-      MAYBE: 'bg-blue-100 text-blue-700',
-    };
-    return `px-2 py-1 rounded-full text-xs font-medium ${colors[status] || 'bg-surface-100 text-surface-700'}`;
-  };
-
+  const videoCount = media.filter(m => m.type === 'VIDEO').length;
   const pendingCount = rsvps.filter(r => r.status === 'PENDING').length;
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
+      APPROVED: 'bg-green-50 text-green-700 border-green-200',
+      REJECTED: 'bg-red-50 text-red-700 border-red-200',
+      YES: 'bg-green-50 text-green-700 border-green-200',
+      NO: 'bg-red-50 text-red-700 border-red-200',
+      MAYBE: 'bg-blue-50 text-blue-700 border-blue-200',
+    };
+    return `px-2 py-0.5 rounded border text-xs font-medium ${styles[status] || 'bg-surface-50 text-surface-600 border-surface-200'}`;
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-surface-50 to-surface-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4" />
-          <p className="text-surface-600">Loading your portal...</p>
-        </div>
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 to-navy-950 flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-6">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-display font-bold text-white mb-2">Access Denied</h1>
-          <p className="text-surface-400">{error}</p>
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-14 h-14 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-4 text-red-500">{Icons.close}</div>
+          <h1 className="text-xl font-semibold text-navy-900 mb-2">Access Denied</h1>
+          <p className="text-surface-500">{error}</p>
         </div>
       </div>
     );
@@ -496,45 +345,50 @@ export default function CouplePortalPage() {
   if (!event) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-surface-50 via-white to-surface-50">
+    <div className="min-h-screen bg-surface-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-surface-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div>
-              <h1 className="text-xl font-display font-bold text-navy-900">{event.name}</h1>
-              <p className="text-xs text-surface-500">Last updated: {formatDate(lastUpdated.toISOString(), 'h:mm:ss a')}</p>
+      <header className="bg-white border-b border-surface-200 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-navy-900 truncate">{event.name}</h1>
             </div>
-            <div className={cn('px-3 py-1.5 rounded-full text-sm font-medium', 
-              event.currentPhase === 'LIVE' ? 'bg-green-100 text-green-700' : 
-              event.currentPhase === 'POST_EVENT' ? 'bg-surface-100 text-surface-700' : 
-              'bg-blue-100 text-blue-700'
-            )}>
-              {event.currentPhase === 'LIVE' && <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse" />}
-              {event.currentPhase.replace('_', ' ')}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-surface-400 hidden sm:block">Updated {formatDate(lastUpdated.toISOString(), 'h:mm a')}</span>
+              <span className={cn(
+                'px-2 py-1 rounded text-xs font-medium',
+                event.currentPhase === 'LIVE' ? 'bg-green-50 text-green-700' : 'bg-surface-100 text-surface-600'
+              )}>
+                {event.currentPhase === 'LIVE' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />}
+                {event.currentPhase.replace('_', ' ')}
+              </span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Navigation Tabs */}
-      <nav className="bg-white border-b border-surface-200 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1 overflow-x-auto py-2">
-            {(['dashboard', 'rsvps', 'media', 'checkins'] as Tab[]).map(tab => (
+      {/* Tabs */}
+      <nav className="bg-white border-b border-surface-200 sticky top-14 z-30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex gap-1 -mb-px overflow-x-auto py-1">
+            {([
+              { id: 'dashboard', label: 'Overview', icon: Icons.rsvp },
+              { id: 'rsvps', label: 'RSVPs', icon: Icons.users, badge: pendingCount },
+              { id: 'media', label: 'Media', icon: Icons.message },
+              { id: 'checkins', label: 'Check-ins', icon: Icons.checkin },
+            ] as { id: Tab; label: string; icon: JSX.Element; badge?: number }[]).map(tab => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
-                  activeTab === tab
-                    ? 'bg-navy-900 text-white shadow-lg'
-                    : 'text-surface-600 hover:bg-surface-100'
+                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap',
+                  activeTab === tab.id ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-100'
                 )}
               >
-                {tab === 'rsvps' ? 'RSVPs' : tab === 'checkins' ? 'Check-ins' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                {tab === 'rsvps' && pendingCount > 0 && (
-                  <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs">{pendingCount}</span>
+                {tab.icon}
+                {tab.label}
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span className={cn('px-1.5 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white/20' : 'bg-amber-100 text-amber-700')}>{tab.badge}</span>
                 )}
               </button>
             ))}
@@ -542,70 +396,43 @@ export default function CouplePortalPage() {
         </div>
       </nav>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Tab */}
+      {/* Content */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        {/* Dashboard */}
         {activeTab === 'dashboard' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Stats Cards */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total RSVPs', value: event._count.rsvps, icon: '📋', color: 'from-blue-500 to-blue-600' },
-              { label: 'Approved', value: event._count.invitations, icon: '✅', color: 'from-green-500 to-green-600' },
-              { label: 'Checked In', value: event._count.checkIns, icon: '🎫', color: 'from-purple-500 to-purple-600' },
-              { label: 'Messages', value: event._count.mediaAssets, icon: '💬', color: 'from-pink-500 to-pink-600' },
+              { label: 'Total RSVPs', value: event._count.rsvps, icon: Icons.rsvp },
+              { label: 'Approved', value: event._count.invitations, icon: Icons.users },
+              { label: 'Checked In', value: event._count.checkIns, icon: Icons.checkin },
+              { label: 'Messages', value: event._count.mediaAssets, icon: Icons.message },
             ].map(stat => (
-              <div key={stat.label} className="bg-white rounded-2xl shadow-sm border border-surface-200 p-6 hover:shadow-lg transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-2xl">{stat.icon}</span>
-                  <div className={cn('w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-bold text-lg', stat.color)}>
-                    {stat.value}
+              <div key={stat.label} className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-surface-500 mb-1">{stat.label}</p>
+                    <p className="text-2xl font-bold text-navy-900">{stat.value}</p>
                   </div>
+                  <div className="w-10 h-10 rounded-lg bg-surface-50 flex items-center justify-center text-surface-400">{stat.icon}</div>
                 </div>
-                <p className="text-surface-600 text-sm">{stat.label}</p>
               </div>
             ))}
 
-            {/* Quick Actions */}
-            <div className="md:col-span-2 bg-white rounded-2xl shadow-sm border border-surface-200 p-6">
-              <h3 className="font-semibold text-navy-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setActiveTab('rsvps')} className="p-4 rounded-xl bg-surface-50 hover:bg-surface-100 text-left transition-colors">
-                  <span className="text-2xl mb-2 block">📋</span>
-                  <span className="font-medium text-navy-900">Review RSVPs</span>
-                  {pendingCount > 0 && <span className="block text-sm text-amber-600">{pendingCount} pending</span>}
-                </button>
-                <button onClick={() => setActiveTab('media')} className="p-4 rounded-xl bg-surface-50 hover:bg-surface-100 text-left transition-colors">
-                  <span className="text-2xl mb-2 block">💬</span>
-                  <span className="font-medium text-navy-900">View Messages</span>
-                  <span className="block text-sm text-surface-500">{media.length} total</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="md:col-span-2 bg-white rounded-2xl shadow-sm border border-surface-200 p-6">
+            <div className="sm:col-span-2 lg:col-span-4 bg-white rounded-xl border border-surface-200 p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-navy-900">Recent Messages</h3>
-                <button onClick={() => setActiveTab('media')} className="text-sm text-primary-600 hover:text-primary-700">View All</button>
+                <h3 className="font-medium text-navy-900">Recent Messages</h3>
+                <button onClick={() => setActiveTab('media')} className="text-sm text-surface-500 hover:text-navy-900 transition-colors">View all</button>
               </div>
               {media.length === 0 ? (
-                <p className="text-surface-500 text-center py-8">No messages yet</p>
+                <p className="text-surface-400 text-center py-8">No messages yet</p>
               ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {media.slice(0, 4).map(m => (
-                    <div 
-                      key={m.id} 
-                      onClick={() => setPreviewMedia(m)} 
-                      className="aspect-square bg-surface-100 rounded-lg cursor-pointer hover:opacity-80 flex items-center justify-center overflow-hidden"
-                    >
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  {media.slice(0, 6).map(m => (
+                    <div key={m.id} onClick={() => setPreviewMedia(m)} className="aspect-square bg-surface-100 rounded-lg cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center overflow-hidden">
                       {m.type === 'PHOTO' ? (
                         <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <div className={cn('w-10 h-10 rounded-full flex items-center justify-center', 
-                          m.type === 'VIDEO' ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-500'
-                        )}>
-                          {m.type === 'VIDEO' ? Icons.video : Icons.audio}
-                        </div>
+                        <div className="text-surface-400">{m.type === 'VIDEO' ? Icons.video : Icons.audio}</div>
                       )}
                     </div>
                   ))}
@@ -615,91 +442,66 @@ export default function CouplePortalPage() {
           </div>
         )}
 
-        {/* RSVPs Tab */}
+        {/* RSVPs */}
         {activeTab === 'rsvps' && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-1 bg-white rounded-lg p-1 border border-surface-200">
                 {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
-                  <button 
-                    key={s} 
-                    onClick={() => { setRsvpFilter(s); fetchRsvps(); }} 
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                      rsvpFilter === s 
-                        ? 'bg-navy-900 text-white' 
-                        : 'bg-white text-surface-600 hover:bg-surface-100 border border-surface-200'
-                    )}
-                  >
+                  <button key={s} onClick={() => { setRsvpFilter(s); fetchRsvps(); }} className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    rsvpFilter === s ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-50'
+                  )}>
                     {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
-                    {s === 'PENDING' && pendingCount > 0 && (
-                      <span className="ml-2 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-xs">{pendingCount}</span>
-                    )}
                   </button>
                 ))}
               </div>
-              {/* Export Dropdown */}
-              <div className="relative group">
-                <button className="btn-secondary flex items-center gap-2">
-                  {Icons.export}
-                  Export
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <div className="relative">
+                <button onClick={() => setExportOpen(!exportOpen)} className="btn-outline flex items-center gap-2">
+                  {Icons.export} Export {Icons.chevronDown}
                 </button>
-                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-surface-200 py-1 min-w-[140px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                  {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(filter => (
-                    <button key={filter} onClick={() => exportRsvps(filter)} className="w-full px-4 py-2 text-left text-sm hover:bg-surface-50">
-                      {filter === 'all' ? 'All RSVPs' : `${filter.charAt(0)}${filter.slice(1).toLowerCase()} Only`}
-                    </button>
-                  ))}
-                </div>
+                {exportOpen && (
+                  <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-surface-200 py-1 min-w-[140px] z-10">
+                    {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(f => (
+                      <button key={f} onClick={() => exportRsvps(f)} className="w-full px-4 py-2 text-left text-sm hover:bg-surface-50 transition-colors">
+                        {f === 'all' ? 'All RSVPs' : f.charAt(0) + f.slice(1).toLowerCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-surface-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-surface-200 bg-surface-50">
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Guest</th>
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Response</th>
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Details</th>
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Status</th>
-                      <th className="text-right py-4 px-6 text-sm font-semibold text-surface-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rsvps.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-12 text-center text-surface-500">No RSVPs found</td>
-                      </tr>
-                    ) : rsvps.map(r => (
-                      <tr key={r.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
-                        <td className="py-4 px-6">
+                  <thead><tr className="border-b border-surface-100 bg-surface-50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                    <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-surface-100">
+                    {rsvps.length === 0 ? <tr><td colSpan={4} className="py-12 text-center text-surface-400">No RSVPs</td></tr> : rsvps.map(r => (
+                      <tr key={r.id} className="hover:bg-surface-50 transition-colors">
+                        <td className="py-3 px-4">
                           <p className="font-medium text-navy-900">{r.primaryName}</p>
                           {r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}
                           {r.email && <p className="text-xs text-surface-400">{r.email}</p>}
                         </td>
-                        <td className="py-4 px-6">
-                          <span className={getStatusColor(r.attendance)}>{r.attendance}</span>
+                        <td className="py-3 px-4">
+                          <span className={getStatusBadge(r.attendance)}>{r.attendance}</span>
                           <p className="text-sm text-surface-500 mt-1">{r.guestCount} guest(s)</p>
                         </td>
-                        <td className="py-4 px-6 text-sm">
-                          {r.mealPreference && <p>Meal: {r.mealPreference}</p>}
-                          {r.note && <p className="text-surface-500 truncate max-w-[200px]">{r.note}</p>}
+                        <td className="py-3 px-4">
+                          <span className={getStatusBadge(r.status)}>{r.status}</span>
+                          {r.invitation?.isCheckedIn && <p className="text-xs text-green-600 mt-1">Checked in</p>}
                         </td>
-                        <td className="py-4 px-6">
-                          <span className={getStatusColor(r.status)}>{r.status}</span>
-                          {r.invitation?.isCheckedIn && <p className="text-xs text-green-600 mt-1">✓ Checked In</p>}
-                        </td>
-                        <td className="py-4 px-6 text-right">
+                        <td className="py-3 px-4 text-right">
                           {r.status === 'PENDING' && (
                             <div className="flex justify-end gap-2">
-                              <button onClick={() => handleReviewRsvp(r.id, 'APPROVED')} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium">
-                                Approve
-                              </button>
-                              <button onClick={() => handleReviewRsvp(r.id, 'REJECTED')} className="px-4 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium">
-                                Reject
-                              </button>
+                              <button onClick={() => handleReviewRsvp(r.id, 'APPROVED')} className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium">Approve</button>
+                              <button onClick={() => handleReviewRsvp(r.id, 'REJECTED')} className="px-3 py-1.5 text-sm bg-surface-100 text-surface-600 rounded-lg hover:bg-surface-200 transition-colors font-medium">Reject</button>
                             </div>
                           )}
                         </td>
@@ -712,94 +514,104 @@ export default function CouplePortalPage() {
           </div>
         )}
 
-        {/* Media Tab */}
+        {/* Media */}
         {activeTab === 'media' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              {/* Media Category Tabs */}
-              <div className="flex bg-white rounded-xl p-1 border border-surface-200">
-                {(['all', 'photos', 'messages'] as MediaTab[]).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setMediaTab(tab)}
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                      mediaTab === tab ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-50'
-                    )}
-                  >
-                    {tab === 'all' ? `All (${media.length})` : 
-                     tab === 'photos' ? `Photos (${media.filter(m => m.type === 'PHOTO').length})` :
-                     `Messages (${media.filter(m => m.type !== 'PHOTO').length})`}
-                  </button>
+              <div className="flex gap-1 bg-white rounded-lg p-1 border border-surface-200">
+                {([
+                  { id: 'all', label: `All (${media.length})` },
+                  { id: 'videos', label: `Videos (${videoCount})` },
+                  { id: 'audio', label: `Audio (${media.filter(m => m.type === 'AUDIO').length})` },
+                  { id: 'photos', label: `Photos (${media.filter(m => m.type === 'PHOTO').length})` },
+                ] as { id: MediaTab; label: string }[]).map(t => (
+                  <button key={t.id} onClick={() => setMediaTab(t.id)} className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    mediaTab === t.id ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-50'
+                  )}>{t.label}</button>
                 ))}
               </div>
-              
-              {media.length > 0 && (
-                <button onClick={downloadAllMedia} className="btn-primary flex items-center gap-2">
-                  {Icons.download}
-                  Download All
-                </button>
-              )}
+              <div className="flex gap-2">
+                {event.reelEnabled && videoCount > 0 && mediaTab === 'videos' && (
+                  <button onClick={generateReel} className="btn-outline flex items-center gap-2">
+                    {Icons.reel} Generate Reel
+                  </button>
+                )}
+                {media.length > 0 && (
+                  <button onClick={downloadAllMedia} className="btn-primary flex items-center gap-2">
+                    {Icons.download} Download All
+                  </button>
+                )}
+              </div>
             </div>
 
             {filteredMedia.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-sm border border-surface-200 p-16 text-center">
-                <div className="w-16 h-16 mx-auto rounded-full bg-surface-100 flex items-center justify-center mb-4">
-                  {mediaTab === 'photos' ? Icons.photo : mediaTab === 'messages' ? Icons.video : Icons.video}
-                </div>
-                <h3 className="text-lg font-medium text-navy-900 mb-1">
-                  No {mediaTab === 'all' ? 'media' : mediaTab} yet
-                </h3>
-                <p className="text-surface-600">Guest {mediaTab === 'photos' ? 'photos' : 'messages'} will appear here</p>
+              <div className="bg-white rounded-xl border border-surface-200 p-16 text-center">
+                <div className="w-12 h-12 mx-auto rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 mb-4">{Icons.video}</div>
+                <h3 className="text-lg font-medium text-navy-900 mb-1">No {mediaTab === 'all' ? 'media' : mediaTab} yet</h3>
+                <p className="text-surface-500">Guest content will appear here</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {filteredMedia.map(m => (
-                  <MediaThumbnail
-                    key={m.id}
-                    media={m}
-                    onClick={() => setPreviewMedia(m)}
-                    onDownload={(e) => { e.stopPropagation(); downloadMedia(m); }}
-                  />
+                  <div key={m.id} className="group bg-white rounded-xl border border-surface-200 overflow-hidden hover:border-surface-300 hover:shadow-sm transition-all">
+                    <div onClick={() => setPreviewMedia(m)} className="aspect-square bg-surface-100 flex items-center justify-center relative overflow-hidden cursor-pointer">
+                      {m.type === 'PHOTO' ? (
+                        <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-surface-200 flex items-center justify-center text-surface-500">
+                          {m.type === 'VIDEO' ? Icons.video : Icons.audio}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/20 transition-colors flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 text-navy-900">{Icons.play}</div>
+                      </div>
+                      {m.duration && (
+                        <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-mono">
+                          {Math.floor(m.duration / 60)}:{(m.duration % 60).toString().padStart(2, '0')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="font-medium text-navy-900 text-sm truncate">{m.guestName || 'Anonymous'}</p>
+                        <p className="text-xs text-surface-400">{formatDate(m.createdAt, 'MMM d')}</p>
+                      </div>
+                      <button onClick={() => downloadMedia(m)} className="p-1.5 rounded-lg text-surface-400 hover:bg-surface-100 hover:text-surface-600 transition-colors opacity-0 group-hover:opacity-100">{Icons.download}</button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
           </div>
         )}
 
-        {/* Check-ins Tab */}
+        {/* Check-ins */}
         {activeTab === 'checkins' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-surface-600">{checkIns.length} guest(s) checked in</p>
+              <p className="text-surface-500">{checkIns.length} guest(s) checked in</p>
               {checkIns.length > 0 && (
-                <button onClick={exportCheckIns} className="btn-secondary flex items-center gap-2">
-                  {Icons.export}
-                  Export Check-ins
-                </button>
+                <button onClick={exportCheckIns} className="btn-outline flex items-center gap-2">{Icons.export} Export</button>
               )}
             </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-surface-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-surface-200 bg-surface-50">
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Guest</th>
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Party Size</th>
-                      <th className="text-left py-4 px-6 text-sm font-semibold text-surface-700">Checked In At</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {checkIns.length === 0 ? (
-                      <tr><td colSpan={3} className="py-12 text-center text-surface-500">No check-ins yet</td></tr>
-                    ) : checkIns.map(c => (
-                      <tr key={c.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
-                        <td className="py-4 px-6">
+                  <thead><tr className="border-b border-surface-100 bg-surface-50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Party</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Time</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-surface-100">
+                    {checkIns.length === 0 ? <tr><td colSpan={3} className="py-12 text-center text-surface-400">No check-ins yet</td></tr> : checkIns.map(c => (
+                      <tr key={c.id} className="hover:bg-surface-50 transition-colors">
+                        <td className="py-3 px-4">
                           <p className="font-medium text-navy-900">{c.invitation.rsvp.primaryName}</p>
                           {c.invitation.rsvp.secondaryName && <p className="text-sm text-surface-500">& {c.invitation.rsvp.secondaryName}</p>}
                         </td>
-                        <td className="py-4 px-6 text-surface-600">{c.invitation.rsvp.guestCount}</td>
-                        <td className="py-4 px-6 text-surface-600">{formatDate(c.checkedInAt, 'MMM d, h:mm a')}</td>
+                        <td className="py-3 px-4 text-surface-600">{c.invitation.rsvp.guestCount}</td>
+                        <td className="py-3 px-4 text-surface-600">{formatDate(c.checkedInAt, 'MMM d, h:mm a')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -812,31 +624,16 @@ export default function CouplePortalPage() {
 
       {/* Media Preview Modal */}
       {previewMedia && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
-          onClick={() => setPreviewMedia(null)}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90" onClick={() => setPreviewMedia(null)}>
           <div onClick={e => e.stopPropagation()} className="relative">
             {previewMedia.type === 'PHOTO' && (
-              <PhotoViewer
-                src={`${API_BASE_URL}${previewMedia.filePath}`}
-                guestName={previewMedia.guestName || ''}
-                onClose={() => setPreviewMedia(null)}
-              />
+              <div className="relative">
+                <button onClick={() => setPreviewMedia(null)} className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white transition-colors">{Icons.close}</button>
+                <img src={`${API_BASE_URL}${previewMedia.filePath}`} alt="" className="max-h-[80vh] rounded-xl shadow-2xl" />
+              </div>
             )}
-            {previewMedia.type === 'VIDEO' && (
-              <VideoPlayer
-                src={`${API_BASE_URL}${previewMedia.filePath}`}
-                onClose={() => setPreviewMedia(null)}
-              />
-            )}
-            {previewMedia.type === 'AUDIO' && (
-              <AudioPlayer
-                src={`${API_BASE_URL}${previewMedia.filePath}`}
-                guestName={previewMedia.guestName || ''}
-                onClose={() => setPreviewMedia(null)}
-              />
-            )}
+            {previewMedia.type === 'VIDEO' && <VideoPlayer src={`${API_BASE_URL}${previewMedia.filePath}`} onClose={() => setPreviewMedia(null)} />}
+            {previewMedia.type === 'AUDIO' && <AudioPlayer src={`${API_BASE_URL}${previewMedia.filePath}`} guestName={previewMedia.guestName || ''} onClose={() => setPreviewMedia(null)} />}
           </div>
         </div>
       )}

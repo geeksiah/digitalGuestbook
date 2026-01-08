@@ -50,6 +50,7 @@ export const updateEventSchema = createEventSchema.partial().extend({
   phase: z.enum(['PRE_EVENT', 'LIVE', 'POST_EVENT']).optional(),
   phaseOverride: z.boolean().optional(),
   isArchived: z.boolean().optional(),
+  reelEnabled: z.boolean().optional(),
 });
 
 // ============================================

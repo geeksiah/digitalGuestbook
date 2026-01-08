@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -24,6 +24,7 @@ interface Event {
   rsvpEnabled: boolean;
   guestbookEnabled: boolean;
   checkInEnabled: boolean;
+  reelEnabled: boolean;
   maxRecordingDuration: number;
   minRecordingDuration: number;
   maxPhotosPerGuest: number;
@@ -47,7 +48,7 @@ interface RSVP {
   note: string | null;
   status: string;
   submittedAt: string;
-  invitation?: { id: string; accessCode: string; token: string; qrCodeUrl: string | null; isCheckedIn: boolean } | null;
+  invitation?: { id: string; accessCode: string; token: string; qrCodeData: string | null; isCheckedIn: boolean } | null;
 }
 
 interface MediaAsset {
@@ -61,7 +62,7 @@ interface MediaAsset {
 
 interface CheckIn {
   id: string;
-  invitation: { accessCode: string; rsvp: { primaryName: string; secondaryName: string | null; guestCount: number } };
+  invitation: { guestName: string; guestCount: number; accessCode: string };
   checkedInAt: string;
   method: string;
 }
@@ -69,6 +70,23 @@ interface CheckIn {
 interface Template { id: string; name: string; type: string; isDefault: boolean; }
 
 type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'settings';
+type MediaTab = 'all' | 'videos' | 'audio' | 'photos';
+
+// SVG Icons
+const Icons = {
+  back: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
+  external: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>,
+  copy: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  download: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+  play: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  edit: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+  check: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+  close: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+  video: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  audio: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
+  photo: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  reel: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>,
+};
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -82,6 +100,7 @@ export default function EventDetailPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [mediaTab, setMediaTab] = useState<MediaTab>('all');
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
   const [savingTemplates, setSavingTemplates] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
@@ -90,7 +109,7 @@ export default function EventDetailPage() {
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
-    venue: '', timezone: '', invitationOnly: false,
+    venue: '', timezone: '', invitationOnly: false, reelEnabled: false,
     maxRecordingDuration: 120, minRecordingDuration: 30, maxPhotosPerGuest: 5,
   });
 
@@ -126,6 +145,7 @@ export default function EventDetailPage() {
         date: d.toISOString().split('T')[0], time: d.toTimeString().slice(0, 5),
         endDate: ed ? ed.toISOString().split('T')[0] : '', endTime: ed ? ed.toTimeString().slice(0, 5) : '',
         venue: event.venue || '', timezone: event.timezone, invitationOnly: event.invitationOnly,
+        reelEnabled: event.reelEnabled || false,
         maxRecordingDuration: event.maxRecordingDuration, minRecordingDuration: event.minRecordingDuration, maxPhotosPerGuest: event.maxPhotosPerGuest,
       });
     }
@@ -178,6 +198,7 @@ export default function EventDetailPage() {
         date: dt.toISOString(), endDate: edt?.toISOString() || null,
         venue: eventSettings.venue || null, timezone: eventSettings.timezone,
         invitationOnly: eventSettings.invitationOnly,
+        reelEnabled: eventSettings.reelEnabled,
         maxRecordingDuration: eventSettings.maxRecordingDuration, minRecordingDuration: eventSettings.minRecordingDuration, maxPhotosPerGuest: eventSettings.maxPhotosPerGuest,
       });
       toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
@@ -195,8 +216,8 @@ export default function EventDetailPage() {
   };
 
   const exportCheckInsToCSV = () => {
-    const h = ['Name','Secondary Name','Guests','Code','Checked In At','Method'];
-    const rows = checkIns.map(c => [c.invitation.rsvp.primaryName, c.invitation.rsvp.secondaryName||'', c.invitation.rsvp.guestCount, c.invitation.accessCode, formatDate(c.checkedInAt,'yyyy-MM-dd HH:mm'), c.method]);
+    const h = ['Name','Guests','Code','Checked In At','Method'];
+    const rows = checkIns.map(c => [c.invitation.guestName, c.invitation.guestCount, c.invitation.accessCode, formatDate(c.checkedInAt,'yyyy-MM-dd HH:mm'), c.method]);
     downloadCSV([h,...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'), `checkins-${event?.slug}.csv`);
   };
 
@@ -211,15 +232,21 @@ export default function EventDetailPage() {
   };
 
   const generateReel = async () => {
+    if (!event?.reelEnabled) {
+      toast.error('Enable reel generation in event settings first');
+      return;
+    }
     try { toast.loading('Generating reel...', { id: 'reel' }); await mediaApi.generateReel(eventId); toast.dismiss('reel'); toast.success('Reel generation started!'); }
-    catch { toast.dismiss('reel'); toast.error('Failed'); }
+    catch (e: any) { toast.dismiss('reel'); toast.error(e.response?.data?.error || 'Failed to generate reel'); }
   };
 
-  const Icon = ({ type }: { type: string }) => {
-    if (type === 'VIDEO') return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
-    if (type === 'AUDIO') return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>;
-    return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
-  };
+  // Filter media by type
+  const filteredMedia = mediaTab === 'videos' ? media.filter(m => m.type === 'VIDEO')
+    : mediaTab === 'audio' ? media.filter(m => m.type === 'AUDIO')
+    : mediaTab === 'photos' ? media.filter(m => m.type === 'PHOTO')
+    : media;
+
+  const videoCount = media.filter(m => m.type === 'VIDEO').length;
 
   if (loading || !event) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>;
 
@@ -237,28 +264,38 @@ export default function EventDetailPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <Link href="/admin/events" className="inline-flex items-center text-surface-600 hover:text-navy-900 mb-2">
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            Events
+          <Link href="/admin/events" className="inline-flex items-center text-surface-500 hover:text-navy-900 mb-2 text-sm transition-colors">
+            {Icons.back}
+            <span className="ml-1">Back to Events</span>
           </Link>
           <h1 className="text-2xl font-display font-bold text-navy-900">{event.name}</h1>
           <div className="flex items-center gap-3 mt-2">
             <span className={getStatusColor(event.currentPhase)}>{getPhaseLabel(event.currentPhase)}</span>
-            {event.phaseOverride && <span className="text-xs text-surface-500">(Manual Override)</span>}
+            {event.phaseOverride && <span className="text-xs text-surface-500">(Override)</span>}
             {event.invitationOnly && <span className="badge-info">Invite Only</span>}
+            {event.reelEnabled && <span className="px-2 py-0.5 rounded text-xs bg-surface-100 text-surface-600">Reel Enabled</span>}
           </div>
         </div>
         <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">
-          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-          View Public Page
+          {Icons.external}
+          <span className="ml-2">View Public Page</span>
         </Link>
       </div>
 
       {/* Tabs */}
       <div className="border-b border-surface-200 overflow-x-auto">
-        <nav className="flex gap-4 sm:gap-6 -mb-px min-w-max">
+        <nav className="flex gap-1 -mb-px min-w-max">
           {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap', activeTab === tab.id ? 'border-primary-500 text-primary-600' : 'border-transparent text-surface-600 hover:text-navy-900')}>
+            <button 
+              key={tab.id} 
+              onClick={() => setActiveTab(tab.id)} 
+              className={cn(
+                'px-4 py-3 text-sm font-medium border-b-2 transition-all',
+                activeTab === tab.id 
+                  ? 'border-navy-900 text-navy-900' 
+                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+              )}
+            >
               {tab.label}
               {tab.count !== undefined && <span className="ml-2 px-2 py-0.5 rounded-full bg-surface-100 text-xs">{tab.count}</span>}
             </button>
@@ -270,26 +307,63 @@ export default function EventDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
-            {[{ l: 'Total RSVPs', v: event._count.rsvps }, { l: 'Invitations Sent', v: event._count.invitations }, { l: 'Checked In', v: event._count.checkIns }, { l: 'Media Captured', v: event._count.mediaAssets }].map(s => (
-              <div key={s.l} className="card"><p className="text-sm text-surface-600 mb-1">{s.l}</p><p className="text-3xl font-bold text-navy-900">{s.v}</p></div>
+            {[
+              { l: 'Total RSVPs', v: event._count.rsvps, icon: Icons.check },
+              { l: 'Invitations', v: event._count.invitations, icon: Icons.copy },
+              { l: 'Checked In', v: event._count.checkIns, icon: Icons.check },
+              { l: 'Media', v: event._count.mediaAssets, icon: Icons.video },
+            ].map(s => (
+              <div key={s.l} className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-surface-500 mb-1">{s.l}</p>
+                    <p className="text-3xl font-bold text-navy-900">{s.v}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-500">
+                    {s.icon}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
           <div className="space-y-4">
-            <div className="card">
+            <div className="bg-white rounded-xl border border-surface-200 p-5">
               <h3 className="font-semibold text-navy-900 mb-4">Phase Control</h3>
               <div className="space-y-2">
                 {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map(p => (
-                  <button key={p} onClick={() => handlePhaseChange(p)} disabled={event.currentPhase === p} className={cn('w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors', event.currentPhase === p ? 'bg-primary-500 text-navy-900' : 'bg-surface-100 text-surface-700 hover:bg-surface-200')}>{getPhaseLabel(p)}</button>
+                  <button 
+                    key={p} 
+                    onClick={() => handlePhaseChange(p)} 
+                    disabled={event.currentPhase === p} 
+                    className={cn(
+                      'w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      event.currentPhase === p 
+                        ? 'bg-navy-900 text-white' 
+                        : 'bg-surface-50 text-surface-700 hover:bg-surface-100'
+                    )}
+                  >
+                    {getPhaseLabel(p)}
+                  </button>
                 ))}
               </div>
             </div>
-            <div className="card">
+            <div className="bg-white rounded-xl border border-surface-200 p-5">
               <h3 className="font-semibold text-navy-900 mb-4">Quick Links</h3>
-              <div className="space-y-2 text-sm">
-                {[{ l: 'Invitation Page', p: `/e/${event.slug}` }, { l: 'RSVP Form', p: `/e/${event.slug}/rsvp` }, { l: 'Guestbook', p: `/e/${event.slug}/guestbook` }, { l: 'Check-In', p: `/e/${event.slug}/checkin` }, { l: 'Couple Portal', p: `/couple/${event.coupleAccessToken}` }].map(x => (
-                  <button key={x.p} onClick={() => handleCopyLink(x.p)} className="w-full text-left p-2 rounded hover:bg-surface-50 flex items-center justify-between">
+              <div className="space-y-1 text-sm">
+                {[
+                  { l: 'Invitation', p: `/e/${event.slug}` },
+                  { l: 'RSVP Form', p: `/e/${event.slug}/rsvp` },
+                  { l: 'Guestbook', p: `/e/${event.slug}/guestbook` },
+                  { l: 'Check-In', p: `/e/${event.slug}/checkin` },
+                  { l: 'Couple Portal', p: `/couple/${event.coupleAccessToken}` },
+                ].map(x => (
+                  <button 
+                    key={x.p} 
+                    onClick={() => handleCopyLink(x.p)} 
+                    className="w-full text-left p-2.5 rounded-lg hover:bg-surface-50 flex items-center justify-between text-surface-600 hover:text-navy-900 transition-colors"
+                  >
                     <span>{x.l}</span>
-                    <svg className="w-4 h-4 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    <span className="text-surface-400">{Icons.copy}</span>
                   </button>
                 ))}
               </div>
@@ -302,36 +376,45 @@ export default function EventDetailPage() {
       {activeTab === 'rsvps' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex gap-2">
+            <div className="flex gap-1 bg-surface-100 p-1 rounded-lg">
               {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
-                <button key={s} onClick={() => setRsvpFilter(s)} className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors', rsvpFilter === s ? 'bg-navy-900 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200')}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</button>
+                <button 
+                  key={s} 
+                  onClick={() => setRsvpFilter(s)} 
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                    rsvpFilter === s ? 'bg-white text-navy-900 shadow-sm' : 'text-surface-600 hover:text-surface-900'
+                  )}
+                >
+                  {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+                </button>
               ))}
             </div>
             <button onClick={exportRsvpsToCSV} className="btn-outline">
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Export CSV
+              {Icons.download}
+              <span className="ml-2">Export CSV</span>
             </button>
           </div>
-          <div className="card overflow-hidden">
+          <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="border-b border-surface-200 bg-surface-50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Guest</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Contact</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Response</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Details</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Status</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-surface-600">Actions</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Details</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
                 </tr></thead>
-                <tbody>
+                <tbody className="divide-y divide-surface-100">
                   {rsvps.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-surface-500">No RSVPs found</td></tr> : rsvps.map(r => (
-                    <tr key={r.id} className="border-b border-surface-100 hover:bg-surface-50">
+                    <tr key={r.id} className="hover:bg-surface-50 transition-colors">
                       <td className="py-3 px-4"><p className="font-medium text-navy-900">{r.primaryName}</p>{r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}</td>
                       <td className="py-3 px-4">{r.email && <p className="text-sm text-surface-600">{r.email}</p>}{r.phone && <p className="text-sm text-surface-500">{r.phone}</p>}</td>
                       <td className="py-3 px-4"><span className={getStatusColor(r.attendance)}>{r.attendance}</span><p className="text-sm text-surface-500">{r.guestCount} guest(s)</p></td>
-                      <td className="py-3 px-4 text-sm">{r.mealPreference && <p>Meal: {r.mealPreference}</p>}{r.dietaryNotes && <p className="text-xs text-surface-500">Diet: {r.dietaryNotes}</p>}{r.note && <p className="text-xs text-surface-500 truncate max-w-[150px]" title={r.note}>Note: {r.note}</p>}</td>
-                      <td className="py-3 px-4"><span className={getStatusColor(r.status)}>{r.status}</span>{r.invitation?.isCheckedIn && <span className="ml-2 text-xs text-green-600 flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Checked In</span>}{r.invitation?.accessCode && <p className="text-xs text-surface-500 mt-1 font-mono">Code: {r.invitation.accessCode}</p>}</td>
-                      <td className="py-3 px-4 text-right">{r.status === 'PENDING' && <div className="flex justify-end gap-2"><button onClick={() => handleReviewRsvp(r.id, 'APPROVED')} className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200">Approve</button><button onClick={() => handleReviewRsvp(r.id, 'REJECTED')} className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200">Reject</button></div>}</td>
+                      <td className="py-3 px-4 text-sm">{r.mealPreference && <p>Meal: {r.mealPreference}</p>}{r.note && <p className="text-xs text-surface-500 truncate max-w-[150px]">{r.note}</p>}</td>
+                      <td className="py-3 px-4"><span className={getStatusColor(r.status)}>{r.status}</span>{r.invitation?.isCheckedIn && <span className="ml-2 text-xs text-green-600">{Icons.check} In</span>}{r.invitation?.accessCode && <p className="text-xs text-surface-400 mt-1 font-mono">{r.invitation.accessCode}</p>}</td>
+                      <td className="py-3 px-4 text-right">{r.status === 'PENDING' && <div className="flex justify-end gap-2"><button onClick={() => handleReviewRsvp(r.id, 'APPROVED')} className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors">Approve</button><button onClick={() => handleReviewRsvp(r.id, 'REJECTED')} className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors">Reject</button></div>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -348,30 +431,37 @@ export default function EventDetailPage() {
             <p className="text-surface-600">{checkIns.length} guest(s) checked in</p>
             <div className="flex gap-2">
               <button onClick={exportCheckInsToCSV} className="btn-outline">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Export CSV
+                {Icons.download}
+                <span className="ml-2">Export CSV</span>
               </button>
               <Link href={`/e/${event.slug}/checkin`} target="_blank" className="btn-primary">Open Check-In Station</Link>
             </div>
           </div>
-          <div className="card overflow-hidden">
+          <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="border-b border-surface-200 bg-surface-50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Guest</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Party Size</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Code</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Checked In At</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Method</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Party</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Code</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Time</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Method</th>
                 </tr></thead>
-                <tbody>
+                <tbody className="divide-y divide-surface-100">
                   {checkIns.length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-surface-500">No check-ins yet</td></tr> : checkIns.map(c => (
-                    <tr key={c.id} className="border-b border-surface-100 hover:bg-surface-50">
-                      <td className="py-3 px-4"><p className="font-medium text-navy-900">{c.invitation.rsvp.primaryName}</p>{c.invitation.rsvp.secondaryName && <p className="text-sm text-surface-500">& {c.invitation.rsvp.secondaryName}</p>}</td>
-                      <td className="py-3 px-4 text-surface-600">{c.invitation.rsvp.guestCount}</td>
+                    <tr key={c.id} className="hover:bg-surface-50 transition-colors">
+                      <td className="py-3 px-4"><p className="font-medium text-navy-900">{c.invitation.guestName}</p></td>
+                      <td className="py-3 px-4 text-surface-600">{c.invitation.guestCount}</td>
                       <td className="py-3 px-4 font-mono text-surface-600">{c.invitation.accessCode}</td>
                       <td className="py-3 px-4 text-surface-600">{formatDate(c.checkedInAt, 'MMM d, h:mm a')}</td>
-                      <td className="py-3 px-4"><span className={cn('px-2 py-1 rounded text-xs font-medium', c.method === 'QR_SCAN' ? 'bg-blue-100 text-blue-700' : 'bg-surface-100 text-surface-600')}>{c.method === 'QR_SCAN' ? 'QR Scan' : 'Manual'}</span></td>
+                      <td className="py-3 px-4">
+                        <span className={cn(
+                          'px-2 py-1 rounded text-xs font-medium',
+                          c.method === 'QR_SCAN' ? 'bg-blue-50 text-blue-700' : 'bg-surface-100 text-surface-600'
+                        )}>
+                          {c.method === 'QR_SCAN' ? 'QR' : 'Code'}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -385,33 +475,81 @@ export default function EventDetailPage() {
       {activeTab === 'media' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <p className="text-surface-600">{media.length} media item(s)</p>
+            <div className="flex gap-1 bg-surface-100 p-1 rounded-lg">
+              {([
+                { id: 'all', label: `All (${media.length})` },
+                { id: 'videos', label: `Videos (${media.filter(m => m.type === 'VIDEO').length})` },
+                { id: 'audio', label: `Audio (${media.filter(m => m.type === 'AUDIO').length})` },
+                { id: 'photos', label: `Photos (${media.filter(m => m.type === 'PHOTO').length})` },
+              ] as { id: MediaTab; label: string }[]).map(t => (
+                <button 
+                  key={t.id} 
+                  onClick={() => setMediaTab(t.id)} 
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                    mediaTab === t.id ? 'bg-white text-navy-900 shadow-sm' : 'text-surface-600 hover:text-surface-900'
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2">
-              <button onClick={generateReel} className="btn-outline">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Generate Reel
-              </button>
+              {event.reelEnabled && videoCount > 0 && (
+                <button onClick={generateReel} className="btn-outline">
+                  {Icons.reel}
+                  <span className="ml-2">Generate Reel</span>
+                </button>
+              )}
               <button onClick={downloadAllMedia} className="btn-primary">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Download All
+                {Icons.download}
+                <span className="ml-2">Download All</span>
               </button>
             </div>
           </div>
-          {media.length === 0 ? (
-            <div className="card text-center py-12">
-              <svg className="w-12 h-12 mx-auto text-surface-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+          
+          {!event.reelEnabled && videoCount > 0 && (
+            <div className="bg-surface-50 border border-surface-200 rounded-lg p-4 text-sm text-surface-600">
+              Enable reel generation in Settings to create video compilations from {videoCount} video(s).
+            </div>
+          )}
+
+          {filteredMedia.length === 0 ? (
+            <div className="bg-white rounded-xl border border-surface-200 text-center py-16">
+              <div className="w-12 h-12 mx-auto rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 mb-4">{Icons.video}</div>
               <h3 className="text-lg font-medium text-navy-900 mb-1">No media yet</h3>
-              <p className="text-surface-600">Media will appear here when guests submit messages</p>
+              <p className="text-surface-500">Media will appear here when guests submit messages</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {media.map(m => (
-                <div key={m.id} onClick={() => setPreviewMedia(m)} className="card p-0 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group">
-                  <div className="aspect-square bg-surface-100 flex items-center justify-center relative">
-                    {m.type === 'PHOTO' ? <img src={`${process.env.NEXT_PUBLIC_API_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" /> : <div className={cn('w-16 h-16 rounded-full flex items-center justify-center', m.type === 'VIDEO' ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-500')}><Icon type={m.type} /></div>}
-                    <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/30 transition-colors flex items-center justify-center"><svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredMedia.map(m => (
+                <div key={m.id} onClick={() => setPreviewMedia(m)} className="bg-white rounded-xl border border-surface-200 overflow-hidden cursor-pointer hover:border-surface-300 hover:shadow-md transition-all group">
+                  <div className="aspect-square bg-surface-100 flex items-center justify-center relative overflow-hidden">
+                    {m.type === 'PHOTO' ? (
+                      <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    ) : (
+                      <div className={cn(
+                        'w-14 h-14 rounded-full flex items-center justify-center',
+                        m.type === 'VIDEO' ? 'bg-surface-200 text-surface-600' : 'bg-surface-200 text-surface-600'
+                      )}>
+                        {m.type === 'VIDEO' ? Icons.video : Icons.audio}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/20 transition-colors flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100">
+                        {Icons.play}
+                      </div>
+                    </div>
+                    {m.duration && (
+                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-mono">
+                        {Math.floor(m.duration / 60)}:{(m.duration % 60).toString().padStart(2, '0')}
+                      </div>
+                    )}
                   </div>
-                  <div className="p-3"><p className="font-medium text-navy-900 text-sm truncate">{m.guestName || 'Anonymous'}</p><p className="text-xs text-surface-500 flex items-center gap-1"><Icon type={m.type} />{m.type}{m.duration && ` • ${m.duration}s`}</p></div>
+                  <div className="p-3">
+                    <p className="font-medium text-navy-900 text-sm truncate">{m.guestName || 'Anonymous'}</p>
+                    <p className="text-xs text-surface-500">{formatDate(m.createdAt, 'MMM d, h:mm a')}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -421,10 +559,10 @@ export default function EventDetailPage() {
 
       {/* Templates */}
       {activeTab === 'templates' && (
-        <div className="card">
+        <div className="bg-white rounded-xl border border-surface-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <div><h3 className="text-lg font-semibold text-navy-900">Page Templates</h3><p className="text-sm text-surface-600">Customize each page's look and feel</p></div>
-            <Link href="/admin/templates" className="text-sm text-primary-600 hover:text-primary-700">Manage Templates →</Link>
+            <div><h3 className="text-lg font-semibold text-navy-900">Page Templates</h3><p className="text-sm text-surface-500">Customize each page's appearance</p></div>
+            <Link href="/admin/templates" className="text-sm text-surface-600 hover:text-navy-900 transition-colors">Manage Templates</Link>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
@@ -439,28 +577,27 @@ export default function EventDetailPage() {
               <div key={x.t} className={cn(!x.e && 'opacity-50')}>
                 <label className="label">{x.l}</label>
                 <select className="input" value={(selectedTemplates as any)[x.f] || ''} onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })} disabled={!x.e}>
-                  <option value="">No template (use default)</option>
+                  <option value="">Default</option>
                   {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
                 </select>
-                {!x.e && <p className="text-xs text-surface-500 mt-1">Service disabled</p>}
               </div>
             ))}
           </div>
           <div className="flex justify-end mt-6 pt-6 border-t border-surface-100">
-            <button onClick={handleSaveTemplates} disabled={savingTemplates} className="btn-primary">{savingTemplates ? 'Saving...' : 'Save Template Changes'}</button>
+            <button onClick={handleSaveTemplates} disabled={savingTemplates} className="btn-primary">{savingTemplates ? 'Saving...' : 'Save Changes'}</button>
           </div>
         </div>
       )}
 
       {/* Settings */}
       {activeTab === 'settings' && (
-        <div className="card">
+        <div className="bg-white rounded-xl border border-surface-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-navy-900">Event Settings</h3>
             {!editingSettings ? (
               <button onClick={() => setEditingSettings(true)} className="btn-outline">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                Edit
+                {Icons.edit}
+                <span className="ml-2">Edit</span>
               </button>
             ) : (
               <div className="flex gap-2">
@@ -470,7 +607,7 @@ export default function EventDetailPage() {
             )}
           </div>
           {editingSettings ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2"><label className="label">Event Name</label><input type="text" className="input" value={eventSettings.name} onChange={e => setEventSettings({ ...eventSettings, name: e.target.value })} /></div>
                 <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} className="input" value={eventSettings.description} onChange={e => setEventSettings({ ...eventSettings, description: e.target.value })} /></div>
@@ -480,26 +617,57 @@ export default function EventDetailPage() {
                 <div><label className="label">End Time</label><input type="time" className="input" value={eventSettings.endTime} onChange={e => setEventSettings({ ...eventSettings, endTime: e.target.value })} /></div>
                 <div className="sm:col-span-2"><label className="label">Venue</label><input type="text" className="input" value={eventSettings.venue} onChange={e => setEventSettings({ ...eventSettings, venue: e.target.value })} /></div>
                 <div><label className="label">Timezone</label><select className="input" value={eventSettings.timezone} onChange={e => setEventSettings({ ...eventSettings, timezone: e.target.value })}><option value="UTC">UTC</option><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option><option value="Europe/London">London</option><option value="Africa/Accra">Ghana (GMT)</option></select></div>
-                <div><label className="flex items-center gap-2 cursor-pointer mt-6"><input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-primary-500" checked={eventSettings.invitationOnly} onChange={e => setEventSettings({ ...eventSettings, invitationOnly: e.target.checked })} /><span className="font-medium text-navy-900">Invitation Only</span></label></div>
               </div>
-              <hr className="my-6" />
-              <h4 className="font-medium text-navy-900 mb-4">Guestbook Settings</h4>
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div><label className="label">Min Recording (sec)</label><input type="number" min="10" max="60" className="input" value={eventSettings.minRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, minRecordingDuration: parseInt(e.target.value) })} /></div>
-                <div><label className="label">Max Recording (sec)</label><input type="number" min="30" max="300" className="input" value={eventSettings.maxRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, maxRecordingDuration: parseInt(e.target.value) })} /></div>
-                <div><label className="label">Max Photos/Guest</label><input type="number" min="1" max="20" className="input" value={eventSettings.maxPhotosPerGuest} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerGuest: parseInt(e.target.value) })} /></div>
+              
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-navy-900 mb-4">Access & Features</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.invitationOnly} onChange={e => setEventSettings({ ...eventSettings, invitationOnly: e.target.checked })} />
+                    <div><span className="font-medium text-navy-900">Invitation Only</span><p className="text-sm text-surface-500">Guests must be approved before accessing event features</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.reelEnabled} onChange={e => setEventSettings({ ...eventSettings, reelEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-navy-900">Enable Reel Generation</span><p className="text-sm text-surface-500">Allow generating video compilations from guest videos</p></div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-navy-900 mb-4">Guestbook Limits</h4>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div><label className="label">Min Recording (sec)</label><input type="number" min="10" max="60" className="input" value={eventSettings.minRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, minRecordingDuration: parseInt(e.target.value) })} /></div>
+                  <div><label className="label">Max Recording (sec)</label><input type="number" min="30" max="300" className="input" value={eventSettings.maxRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, maxRecordingDuration: parseInt(e.target.value) })} /></div>
+                  <div><label className="label">Max Photos/Guest</label><input type="number" min="1" max="20" className="input" value={eventSettings.maxPhotosPerGuest} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerGuest: parseInt(e.target.value) })} /></div>
+                </div>
               </div>
             </div>
           ) : (
-            <div className="grid lg:grid-cols-2 gap-6">
-              <div className="space-y-4 text-sm">
-                {[{ l: 'Event Slug', v: `/${event.slug}` }, { l: 'Date', v: formatDate(event.date, 'PPP') }, { l: 'Venue', v: event.venue || '-' }, { l: 'Timezone', v: event.timezone }, { l: 'Invitation Only', v: event.invitationOnly ? 'Yes' : 'No' }].map((r, i) => (
-                  <div key={i} className={cn('flex justify-between py-2', i < 4 && 'border-b border-surface-100')}><span className="text-surface-600">{r.l}</span><span className="font-medium">{r.v}</span></div>
+            <div className="grid lg:grid-cols-2 gap-8">
+              <div className="space-y-3">
+                {[
+                  { l: 'Slug', v: `/${event.slug}` },
+                  { l: 'Date', v: formatDate(event.date, 'PPP') },
+                  { l: 'Venue', v: event.venue || '—' },
+                  { l: 'Timezone', v: event.timezone },
+                ].map((r, i) => (
+                  <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
+                    <span className="text-surface-500">{r.l}</span>
+                    <span className="font-medium text-navy-900">{r.v}</span>
+                  </div>
                 ))}
               </div>
-              <div className="space-y-4 text-sm">
-                {[{ l: 'Min Recording', v: `${event.minRecordingDuration}s` }, { l: 'Max Recording', v: `${event.maxRecordingDuration}s` }, { l: 'Max Photos/Guest', v: event.maxPhotosPerGuest }].map((r, i) => (
-                  <div key={i} className={cn('flex justify-between py-2', i < 2 && 'border-b border-surface-100')}><span className="text-surface-600">{r.l}</span><span className="font-medium">{r.v}</span></div>
+              <div className="space-y-3">
+                {[
+                  { l: 'Invitation Only', v: event.invitationOnly ? 'Yes' : 'No' },
+                  { l: 'Reel Generation', v: event.reelEnabled ? 'Enabled' : 'Disabled' },
+                  { l: 'Recording Limits', v: `${event.minRecordingDuration}s – ${event.maxRecordingDuration}s` },
+                  { l: 'Max Photos/Guest', v: event.maxPhotosPerGuest },
+                ].map((r, i) => (
+                  <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
+                    <span className="text-surface-500">{r.l}</span>
+                    <span className="font-medium text-navy-900">{r.v}</span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -509,16 +677,28 @@ export default function EventDetailPage() {
 
       {/* Media Preview Modal */}
       {previewMedia && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={() => setPreviewMedia(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90" onClick={() => setPreviewMedia(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200">
-              <div><h2 className="font-semibold text-navy-900">{previewMedia.guestName || 'Anonymous'}</h2><p className="text-sm text-surface-500">{previewMedia.type} • {formatDate(previewMedia.createdAt, 'MMM d, yyyy h:mm a')}</p></div>
-              <button onClick={() => setPreviewMedia(null)} className="p-2 rounded-lg hover:bg-surface-100"><svg className="w-6 h-6 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+              <div>
+                <h2 className="font-semibold text-navy-900">{previewMedia.guestName || 'Anonymous'}</h2>
+                <p className="text-sm text-surface-500">{previewMedia.type} • {formatDate(previewMedia.createdAt, 'MMM d, yyyy h:mm a')}</p>
+              </div>
+              <button onClick={() => setPreviewMedia(null)} className="p-2 rounded-lg hover:bg-surface-100 transition-colors text-surface-500">
+                {Icons.close}
+              </button>
             </div>
-            <div className="p-6 bg-surface-100 min-h-[50vh] flex items-center justify-center">
-              {previewMedia.type === 'PHOTO' && <img src={`${process.env.NEXT_PUBLIC_API_URL}${previewMedia.filePath}`} alt="" className="max-h-[60vh] mx-auto rounded-lg" />}
-              {previewMedia.type === 'VIDEO' && <video src={`${process.env.NEXT_PUBLIC_API_URL}${previewMedia.filePath}`} controls autoPlay className="max-h-[60vh] mx-auto rounded-lg" />}
-              {previewMedia.type === 'AUDIO' && <audio src={`${process.env.NEXT_PUBLIC_API_URL}${previewMedia.filePath}`} controls autoPlay className="w-full max-w-md" />}
+            <div className="p-6 bg-surface-50 min-h-[50vh] flex items-center justify-center">
+              {previewMedia.type === 'PHOTO' && <img src={`${API_BASE_URL}${previewMedia.filePath}`} alt="" className="max-h-[60vh] mx-auto rounded-lg shadow-lg" />}
+              {previewMedia.type === 'VIDEO' && <video src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="max-h-[60vh] mx-auto rounded-lg shadow-lg" />}
+              {previewMedia.type === 'AUDIO' && (
+                <div className="bg-white rounded-xl p-8 shadow-lg">
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-surface-100 flex items-center justify-center text-surface-400">
+                    {Icons.audio}
+                  </div>
+                  <audio src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="w-full" />
+                </div>
+              )}
             </div>
           </div>
         </div>
