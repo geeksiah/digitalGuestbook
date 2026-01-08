@@ -83,6 +83,10 @@ model Event {
   maxRecordingDuration Int @default(120) // seconds (30-120 per SRS)
   minRecordingDuration Int @default(30)
   maxPhotosPerGuest    Int @default(5)
+
+  // PhotoBooth settings
+  maxPhotosPerBoothSession Int @default(10)
+  boothShutterCountdown    Int @default(3)
   
   // Reel Generation (Admin toggle per event)
   reelEnabled          Boolean @default(false)
