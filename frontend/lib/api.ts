@@ -13,12 +13,28 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('admin_token');
-    if (token) {
+    if (token && token !== 'null' && token !== 'undefined') {
       config.headers.Authorization = `Bearer ${token}`;
     }
   }
   return config;
 });
+
+// Handle auth errors globally
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      // Token expired or invalid - clear auth and redirect
+      const path = window.location.pathname;
+      if (path.startsWith('/admin') && path !== '/admin/login') {
+        localStorage.removeItem('admin_token');
+        window.location.href = '/admin/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Auth API
 export const authApi = {
@@ -28,13 +44,17 @@ export const authApi = {
 
 // Events API
 export const eventsApi = {
-  list: () => api.get('/events'),
+  list: (params?: { archived?: boolean; phase?: string }) => api.get('/events', { params }),
   get: (id: string) => api.get(`/events/${id}`),
   create: (data: any) => api.post('/events', data),
-  update: (id: string, data: any) => api.put(`/events/${id}`, data),
+  update: (id: string, data: any) => api.patch(`/events/${id}`, data),
   delete: (id: string) => api.delete(`/events/${id}`),
   setPhase: (id: string, phase: string, override: boolean = false) =>
     api.post(`/events/${id}/phase`, { phase, override }),
+  archive: (id: string) => api.post(`/events/${id}/archive`),
+  unarchive: (id: string) => api.post(`/events/${id}/unarchive`),
+  regenerateCoupleToken: (id: string) => api.post(`/events/${id}/regenerate-couple-token`),
+  stats: (id: string) => api.get(`/events/${id}/stats`),
 };
 
 // Templates API
