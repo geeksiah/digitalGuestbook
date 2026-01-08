@@ -2,11 +2,7 @@ import QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import prisma from '../utils/prisma.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Ensure generated directory exists
 const generatedDir = path.join(__dirname, '../../generated/invitations');

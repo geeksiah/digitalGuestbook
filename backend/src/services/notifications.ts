@@ -86,7 +86,7 @@ export async function sendEmailWithProvider(
       });
       
       if (response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { id?: string };
         console.log('[Email] Sent via Mailgun to:', to);
         return { success: true, messageId: result.id };
       } else {
@@ -118,7 +118,7 @@ export async function sendSmsWithProvider(
       
       const result = await client.messages.create({
         body: message,
-        from: provider.phoneNumber,
+        from: provider.phoneNumber || undefined,
         to,
       });
       
@@ -141,7 +141,7 @@ export async function sendSmsWithProvider(
       });
       
       if (response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { message_id?: string };
         console.log('[SMS] Sent via Termii to:', to);
         return { success: true, messageId: result.message_id };
       } else {
@@ -167,7 +167,7 @@ export async function sendSmsWithProvider(
       });
       
       if (response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { SMSMessageData?: { Recipients?: { messageId?: string }[] } };
         console.log('[SMS] Sent via Africa\'s Talking to:', to);
         return { success: true, messageId: result.SMSMessageData?.Recipients?.[0]?.messageId };
       } else {
@@ -228,7 +228,7 @@ export async function sendWhatsappWithProvider(
       });
       
       if (response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { messages?: { id?: string }[] };
         console.log('[WhatsApp] Sent via Meta to:', to);
         return { success: true, messageId: result.messages?.[0]?.id };
       } else {
