@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// API Base URL - defaults to localhost:3001 for development
+export const API_BASE_URL = typeof window !== 'undefined' 
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
+  : 'http://localhost:3001';
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
