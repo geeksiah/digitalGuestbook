@@ -193,47 +193,69 @@ export default function MediaGallery({
       return;
     }
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    // Get auth token based on context - admin or couple
+    const adminToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    
+    // Determine the API endpoint and headers based on context
+    let endpoint = `${API_BASE_URL}/api/media/event/${eventId}/generate-reel`;
+    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    
+    if (adminToken) {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+    } else if (coupleToken) {
+      // Use couple portal endpoint
+      endpoint = `${API_BASE_URL}/api/couple/${coupleToken}/generate-reel`;
+    } else {
+      toast.error('Authentication required');
+      return;
+    }
     
     try {
       setIsGenerating(true);
-      const response = await fetch(`${API_BASE_URL}/api/media/event/${eventId}/generate-reel`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
+        headers,
         body: JSON.stringify({ maxDuration: 300 }),
       });
       
       if (!response.ok) {
         const err = await response.json();
+        // Handle specific errors with better messages
+        if (err.error?.includes('FFmpeg')) {
+          throw new Error('FFmpeg is not installed on the server. Please contact your administrator to enable reel generation.');
+        }
         throw new Error(err.error || 'Failed to start generation');
       }
       
       const { jobId } = await response.json();
       toast.success('Reel generation started');
 
+      // Determine status endpoint based on context
+      const statusEndpoint = adminToken 
+        ? `${API_BASE_URL}/api/media/reel/${jobId}/status`
+        : `${API_BASE_URL}/api/couple/${coupleToken}/reel/${jobId}/status`;
+
       // Poll for status
       const pollInterval = setInterval(async () => {
         try {
-          const statusRes = await fetch(`${API_BASE_URL}/api/media/reel/${jobId}/status`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          const statusRes = await fetch(statusEndpoint, {
+            headers: adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {},
           });
-          const { job } = await statusRes.json();
-          setReelProgress(job.progress);
+          const { status: jobStatus } = await statusRes.json();
+          setReelProgress(jobStatus.progress);
 
-          if (job.status === 'completed') {
+          if (jobStatus.status === 'completed') {
             clearInterval(pollInterval);
             setIsGenerating(false);
-            toast.success('Reel generated!');
-            if (job.outputPath) {
-              window.open(`${API_BASE_URL}${job.outputPath}`, '_blank');
+            toast.success('Reel generated successfully!');
+            if (jobStatus.outputPath) {
+              window.open(`${API_BASE_URL}${jobStatus.outputPath}`, '_blank');
             }
-          } else if (job.status === 'failed') {
+            onRefresh?.();
+          } else if (jobStatus.status === 'failed') {
             clearInterval(pollInterval);
             setIsGenerating(false);
-            toast.error(job.error || 'Reel generation failed');
+            toast.error(jobStatus.error || 'Reel generation failed');
           }
         } catch {
           clearInterval(pollInterval);
@@ -323,13 +345,13 @@ export default function MediaGallery({
 
         {reelEnabled && videos.length > 0 && (
           <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl p-6 text-white">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">{Icons.reel}</div>
                 <div>
                   <h4 className="font-medium">Video Reel</h4>
                   <p className="text-sm text-white/70">
-                    {videos.length} video{videos.length !== 1 ? 's' : ''} • {formatDuration(videos.reduce((s, v) => s + (v.duration || 0), 0))}
+                    {videos.length} video{videos.length !== 1 ? 's' : ''} - {formatDuration(videos.reduce((s, v) => s + (v.duration || 0), 0))}
                   </p>
                 </div>
               </div>
@@ -420,17 +442,17 @@ export default function MediaGallery({
 
       {/* ============ LIGHTBOX ============ */}
       {previewMedia && previewIndex !== null && (
-        <div className="fixed inset-0 z-50 bg-black" onClick={() => setPreviewIndex(null)}>
-          {/* Top bar */}
-          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
-            <div className="flex items-center gap-4">
-              <span className="text-white/80 text-sm font-medium">{previewIndex + 1} / {currentMedia.length}</span>
-              <span className="text-white font-medium">{previewMedia.guestName || 'Anonymous'}</span>
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm" onClick={() => setPreviewIndex(null)}>
+          {/* Top bar - responsive */}
+          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-2 sm:p-4 bg-gradient-to-b from-black/80 to-transparent safe-area-top">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <span className="text-white/80 text-xs sm:text-sm font-medium flex-shrink-0">{previewIndex + 1} / {currentMedia.length}</span>
+              <span className="text-white font-medium text-sm sm:text-base truncate">{previewMedia.guestName || 'Anonymous'}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <button
                 onClick={(e) => { e.stopPropagation(); handleDownload(previewMedia); }}
-                className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
                 title="Download"
               >
                 {Icons.download}
@@ -438,70 +460,92 @@ export default function MediaGallery({
               {isAdmin && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteMedia(previewMedia.id); }}
-                  className="p-3 rounded-full bg-white/10 text-white hover:bg-red-500 transition-colors"
+                  className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-red-500 transition-colors"
                   title="Delete"
                 >
                   {Icons.trash}
                 </button>
               )}
-              <button onClick={() => setPreviewIndex(null)} className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors">{Icons.close}</button>
+              <button onClick={() => setPreviewIndex(null)} className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors">{Icons.close}</button>
             </div>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation - responsive positioning */}
           {currentMedia.length > 1 && (
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); if (previewIndex > 0) setPreviewIndex(previewIndex - 1); }}
                 disabled={previewIndex === 0}
-                className={cn('absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 text-white transition-all', previewIndex === 0 ? 'opacity-30' : 'hover:bg-white/20')}
+                className={cn(
+                  'absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-2 sm:p-3 rounded-full bg-white/10 text-white transition-all',
+                  previewIndex === 0 ? 'opacity-30' : 'hover:bg-white/20'
+                )}
               >
                 {Icons.chevronLeft}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); if (previewIndex < currentMedia.length - 1) setPreviewIndex(previewIndex + 1); }}
                 disabled={previewIndex === currentMedia.length - 1}
-                className={cn('absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 text-white transition-all', previewIndex === currentMedia.length - 1 ? 'opacity-30' : 'hover:bg-white/20')}
+                className={cn(
+                  'absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-2 sm:p-3 rounded-full bg-white/10 text-white transition-all',
+                  previewIndex === currentMedia.length - 1 ? 'opacity-30' : 'hover:bg-white/20'
+                )}
               >
                 {Icons.chevronRight}
               </button>
             </>
           )}
 
-          {/* Media Content */}
-          <div className="absolute inset-0 flex items-center justify-center p-16" onClick={e => e.stopPropagation()}>
+          {/* Media Content - click anywhere on background to close */}
+          <div className="absolute inset-0 flex items-center justify-center p-2 pt-14 pb-20 sm:p-4 sm:pt-16 sm:pb-24 md:p-8 md:pt-20 md:pb-28">
             {previewMedia.type === 'PHOTO' && (
-              <img src={`${API_BASE_URL}${previewMedia.filePath}`} alt="" className="max-h-full max-w-full object-contain" />
+              <img 
+                src={`${API_BASE_URL}${previewMedia.filePath}`} 
+                alt="" 
+                className="max-h-full max-w-full object-contain rounded-lg cursor-zoom-out"
+                onClick={() => setPreviewIndex(null)}
+              />
             )}
             {previewMedia.type === 'VIDEO' && (
-              <video key={previewMedia.id} src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="max-h-full max-w-full" />
+              <video 
+                key={previewMedia.id} 
+                src={`${API_BASE_URL}${previewMedia.filePath}`} 
+                controls 
+                autoPlay 
+                playsInline
+                className="max-h-full max-w-full rounded-lg"
+                onClick={e => e.stopPropagation()}
+              />
             )}
             {previewMedia.type === 'AUDIO' && (
-              <div className="bg-white rounded-2xl p-10 shadow-2xl max-w-md w-full">
-                <div className="w-24 h-24 mx-auto rounded-full bg-violet-100 flex items-center justify-center text-violet-500 mb-6">
-                  <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+              <div className="bg-white rounded-2xl p-6 sm:p-10 shadow-2xl max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+                <div className="w-16 h-16 sm:w-24 sm:h-24 mx-auto rounded-full bg-surface-100 flex items-center justify-center text-surface-500 mb-4 sm:mb-6">
+                  <svg className="w-8 h-8 sm:w-12 sm:h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                 </div>
-                <p className="text-center font-medium text-navy-900 mb-4">{previewMedia.guestName || 'Anonymous'}</p>
+                <p className="text-center font-medium text-navy-900 mb-4 text-sm sm:text-base">{previewMedia.guestName || 'Anonymous'}</p>
                 <audio key={previewMedia.id} src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="w-full" />
               </div>
             )}
           </div>
 
-          {/* Thumbnail strip */}
+          {/* Thumbnail strip - responsive */}
           {currentMedia.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2 p-2 bg-black/50 backdrop-blur rounded-xl max-w-[80vw] overflow-x-auto">
+            <div className="absolute bottom-2 sm:bottom-4 left-2 right-2 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-20 flex gap-1 sm:gap-2 p-1.5 sm:p-2 bg-black/60 backdrop-blur rounded-lg sm:rounded-xl overflow-x-auto sm:max-w-[80vw] safe-area-bottom">
               {currentMedia.map((item, idx) => (
                 <button
                   key={item.id}
                   onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx); }}
-                  className={cn('w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all', idx === previewIndex ? 'border-white' : 'border-transparent opacity-50 hover:opacity-100')}
+                  className={cn(
+                    'w-10 h-10 sm:w-12 sm:h-12 rounded-md sm:rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all',
+                    idx === previewIndex ? 'border-white' : 'border-transparent opacity-50 hover:opacity-100'
+                  )}
                 >
                   {item.type === 'PHOTO' ? (
                     <img src={`${API_BASE_URL}${item.filePath}`} alt="" className="w-full h-full object-cover" />
                   ) : item.thumbnailPath ? (
                     <img src={`${API_BASE_URL}${item.thumbnailPath}`} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <div className={cn('w-full h-full flex items-center justify-center text-white', item.type === 'VIDEO' ? 'bg-rose-500' : 'bg-violet-500')}>
+                    <div className={cn('w-full h-full flex items-center justify-center text-white text-xs', item.type === 'VIDEO' ? 'bg-rose-500' : 'bg-violet-500')}>
                       {item.type === 'VIDEO' ? Icons.video : Icons.audio}
                     </div>
                   )}

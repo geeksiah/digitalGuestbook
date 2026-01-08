@@ -279,4 +279,94 @@ router.get('/:token/media/download', validateCoupleToken, async (req: Request, r
   }
 });
 
+// POST /api/couple/:token/generate-reel - Generate video reel
+router.post('/:token/generate-reel', validateCoupleToken, async (req: Request, res: Response) => {
+  try {
+    const eventId = (req as any).eventId;
+    const event = (req as any).event;
+    const { maxDuration = 300 } = req.body;
+
+    // Check if reel is enabled for this event
+    const eventDetails = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { reelEnabled: true, slug: true, name: true, date: true, venue: true, primaryColor: true, secondaryColor: true },
+    });
+
+    if (!eventDetails?.reelEnabled) {
+      return res.status(400).json({ error: 'Reel generation is not enabled for this event' });
+    }
+
+    // Check for videos
+    const videoCount = await prisma.mediaAsset.count({
+      where: { eventId, type: 'VIDEO' },
+    });
+
+    if (videoCount === 0) {
+      return res.status(400).json({ error: 'No videos available for reel generation' });
+    }
+
+    // Import and use the reel generator
+    const { generateReel, checkFfmpegAvailable } = await import('../services/reelGenerator.js');
+
+    // Check FFmpeg availability
+    const ffmpegAvailable = await checkFfmpegAvailable();
+    if (!ffmpegAvailable) {
+      return res.status(503).json({ error: 'FFmpeg is not installed on the server. Reel generation is unavailable.' });
+    }
+
+    // Start reel generation with event details for covers
+    const jobId = await generateReel({
+      eventId,
+      outputName: `${eventDetails.slug}-reel`,
+      maxDuration,
+      eventDetails: {
+        name: eventDetails.name,
+        date: eventDetails.date,
+        venue: eventDetails.venue,
+        primaryColor: eventDetails.primaryColor,
+        secondaryColor: eventDetails.secondaryColor,
+      },
+    });
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        eventId,
+        action: 'REEL_GENERATION_STARTED',
+        entityType: 'MEDIA',
+        entityId: jobId,
+        details: JSON.stringify({ videoCount, maxDuration }),
+      },
+    });
+
+    res.json({ 
+      message: 'Reel generation started', 
+      jobId,
+      videoCount,
+    });
+  } catch (error) {
+    console.error('Error starting reel generation:', error);
+    res.status(500).json({ error: 'Failed to start reel generation' });
+  }
+});
+
+// GET /api/couple/:token/reel/:jobId/status - Get reel generation status
+router.get('/:token/reel/:jobId/status', validateCoupleToken, async (req: Request, res: Response) => {
+  try {
+    const { jobId } = req.params;
+
+    const { getReelJobStatus } = await import('../services/reelGenerator.js');
+    const status = getReelJobStatus(jobId);
+
+    if (!status) {
+      return res.status(404).json({ error: 'Reel job not found' });
+    }
+
+    res.json({ status });
+  } catch (error) {
+    console.error('Error fetching reel status:', error);
+    res.status(500).json({ error: 'Failed to fetch reel status' });
+  }
+});
+
 export default router;

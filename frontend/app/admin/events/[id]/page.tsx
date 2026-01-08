@@ -117,6 +117,8 @@ export default function EventDetailPage() {
     maxRecordingDuration: 120, minRecordingDuration: 30, maxPhotosPerGuest: 5,
     notifyOnRsvp: true, notifyOnCheckIn: false, notifyOnGuestbook: false,
     emailNotifications: true, smsNotifications: false, whatsappNotifications: false,
+    primaryColor: '#FFD700', secondaryColor: '#1a1a2e', accentColor: '#ffffff',
+    coupleName1: '', coupleName2: '', coupleEmail: '', couplePhone: '',
   });
 
   const [selectedTemplates, setSelectedTemplates] = useState({
@@ -152,6 +154,8 @@ export default function EventDetailPage() {
         endDate: ed ? ed.toISOString().split('T')[0] : '', endTime: ed ? ed.toTimeString().slice(0, 5) : '',
         venue: event.venue || '', timezone: event.timezone, invitationOnly: event.invitationOnly,
         reelEnabled: event.reelEnabled || false,
+        primaryColor: event.primaryColor || '#FFD700', secondaryColor: event.secondaryColor || '#1a1a2e', accentColor: event.accentColor || '#ffffff',
+        coupleName1: event.coupleName1 || '', coupleName2: event.coupleName2 || '', coupleEmail: event.coupleEmail || '', couplePhone: event.couplePhone || '',
         maxRecordingDuration: event.maxRecordingDuration, minRecordingDuration: event.minRecordingDuration, maxPhotosPerGuest: event.maxPhotosPerGuest,
         notifyOnRsvp: event.notifyOnRsvp ?? true, notifyOnCheckIn: event.notifyOnCheckIn ?? false, notifyOnGuestbook: event.notifyOnGuestbook ?? false,
         emailNotifications: event.emailNotifications ?? true, smsNotifications: event.smsNotifications ?? false, whatsappNotifications: event.whatsappNotifications ?? false,
@@ -210,6 +214,8 @@ export default function EventDetailPage() {
         maxRecordingDuration: eventSettings.maxRecordingDuration, minRecordingDuration: eventSettings.minRecordingDuration, maxPhotosPerGuest: eventSettings.maxPhotosPerGuest,
         notifyOnRsvp: eventSettings.notifyOnRsvp, notifyOnCheckIn: eventSettings.notifyOnCheckIn, notifyOnGuestbook: eventSettings.notifyOnGuestbook,
         emailNotifications: eventSettings.emailNotifications, smsNotifications: eventSettings.smsNotifications, whatsappNotifications: eventSettings.whatsappNotifications,
+        primaryColor: eventSettings.primaryColor, secondaryColor: eventSettings.secondaryColor, accentColor: eventSettings.accentColor,
+        coupleName1: eventSettings.coupleName1 || null, coupleName2: eventSettings.coupleName2 || null, coupleEmail: eventSettings.coupleEmail || null, couplePhone: eventSettings.couplePhone || null,
       });
       toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -534,6 +540,50 @@ export default function EventDetailPage() {
                 <div><label className="label">Timezone</label><select className="input" value={eventSettings.timezone} onChange={e => setEventSettings({ ...eventSettings, timezone: e.target.value })}><option value="UTC">UTC</option><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option><option value="Europe/London">London</option><option value="Africa/Accra">Ghana (GMT)</option></select></div>
               </div>
               
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-navy-900 mb-4">Couple Contact Information</h4>
+                <p className="text-sm text-surface-500 mb-4">Notifications will be sent to this contact for RSVPs, check-ins, and guestbook entries.</p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div><label className="label">Couple Name 1</label><input type="text" className="input" placeholder="e.g., Sarah" value={eventSettings.coupleName1} onChange={e => setEventSettings({ ...eventSettings, coupleName1: e.target.value })} /></div>
+                  <div><label className="label">Couple Name 2</label><input type="text" className="input" placeholder="e.g., John" value={eventSettings.coupleName2} onChange={e => setEventSettings({ ...eventSettings, coupleName2: e.target.value })} /></div>
+                  <div><label className="label">Email</label><input type="email" className="input" placeholder="couple@example.com" value={eventSettings.coupleEmail} onChange={e => setEventSettings({ ...eventSettings, coupleEmail: e.target.value })} /></div>
+                  <div><label className="label">Phone</label><input type="tel" className="input" placeholder="+1234567890" value={eventSettings.couplePhone} onChange={e => setEventSettings({ ...eventSettings, couplePhone: e.target.value })} /></div>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-navy-900 mb-4">Event Colors</h4>
+                <p className="text-sm text-surface-500 mb-4">Used for invitations, reel generation, and branding.</p>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">Primary Color</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" className="w-10 h-10 rounded border border-surface-300 cursor-pointer" value={eventSettings.primaryColor} onChange={e => setEventSettings({ ...eventSettings, primaryColor: e.target.value })} />
+                      <input type="text" className="input flex-1" value={eventSettings.primaryColor} onChange={e => setEventSettings({ ...eventSettings, primaryColor: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Secondary Color</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" className="w-10 h-10 rounded border border-surface-300 cursor-pointer" value={eventSettings.secondaryColor} onChange={e => setEventSettings({ ...eventSettings, secondaryColor: e.target.value })} />
+                      <input type="text" className="input flex-1" value={eventSettings.secondaryColor} onChange={e => setEventSettings({ ...eventSettings, secondaryColor: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Accent Color</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" className="w-10 h-10 rounded border border-surface-300 cursor-pointer" value={eventSettings.accentColor} onChange={e => setEventSettings({ ...eventSettings, accentColor: e.target.value })} />
+                      <input type="text" className="input flex-1" value={eventSettings.accentColor} onChange={e => setEventSettings({ ...eventSettings, accentColor: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 p-4 rounded-lg flex items-center gap-4" style={{ backgroundColor: eventSettings.primaryColor, color: eventSettings.secondaryColor }}>
+                  <span className="text-sm font-medium">Preview:</span>
+                  <span className="text-lg font-semibold">{eventSettings.name || 'Event Name'}</span>
+                  <span className="px-3 py-1 rounded-full text-sm font-medium" style={{ backgroundColor: eventSettings.secondaryColor, color: eventSettings.accentColor }}>Sample Button</span>
+                </div>
+              </div>
+
               <div className="border-t border-surface-100 pt-6">
                 <h4 className="font-medium text-navy-900 mb-4">Access & Features</h4>
                 <div className="space-y-3">

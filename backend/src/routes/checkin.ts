@@ -4,8 +4,50 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, optionalAdminAuth } from '../middleware/auth.js';
 import { checkInSchema } from '../utils/validation.js';
 import { calculateEventPhase, canCheckIn } from '../utils/phase.js';
+import { sendEmail, sendSMS, sendWhatsApp } from '../services/notifications.js';
 
 const router = Router();
+
+// Notify couple about check-in
+async function notifyCoupleAboutCheckIn(eventId: string, guestName: string, guestCount: number) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      name: true,
+      coupleEmail: true,
+      couplePhone: true,
+      notifyOnCheckIn: true,
+      emailNotifications: true,
+      smsNotifications: true,
+      whatsappNotifications: true,
+    },
+  });
+
+  if (!event || !event.notifyOnCheckIn) return;
+
+  const message = `Guest checked in: ${guestName} (${guestCount} guests) - ${event.name}`;
+
+  if (event.coupleEmail && event.emailNotifications) {
+    await sendEmail(
+      event.coupleEmail,
+      `Guest Checked In - ${event.name}`,
+      `<div style="font-family: sans-serif;">
+        <h2>Guest Checked In</h2>
+        <p><strong>Guest:</strong> ${guestName}</p>
+        <p><strong>Party Size:</strong> ${guestCount}</p>
+        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+      </div>`
+    );
+  }
+
+  if (event.couplePhone && event.smsNotifications) {
+    await sendSMS(event.couplePhone, message);
+  }
+
+  if (event.couplePhone && event.whatsappNotifications) {
+    await sendWhatsApp(event.couplePhone, message);
+  }
+}
 
 /**
  * POST /api/checkin/:eventId
@@ -121,6 +163,10 @@ router.post('/:eventId', optionalAdminAuth, asyncHandler(async (req, res) => {
         userAgent: req.get('user-agent'),
       },
     });
+
+    // Notify couple (async - don't wait)
+    notifyCoupleAboutCheckIn(eventId, invitation.guestName, invitation.guestCount)
+      .catch(err => console.error('[Notification] Failed to notify couple about check-in:', err));
   }
 
   // Response

@@ -160,11 +160,20 @@ export default function CouplePortalPage() {
 
   const exportRsvps = (filter: string) => {
     const filtered = filter === 'all' ? rsvps : rsvps.filter(r => r.status === filter);
-    exportToCSV(filtered, `rsvps-${filter}.csv`, [
-      { key: 'primaryName', label: 'Name' }, { key: 'secondaryName', label: 'Guest' },
-      { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
-      { key: 'attendance', label: 'Attendance' }, { key: 'guestCount', label: 'Guests' },
-      { key: 'status', label: 'Status' }, { key: 'submittedAt', label: 'Submitted' },
+    exportToCSV(filtered, `rsvps-${event?.slug || 'event'}-${filter}-${new Date().toISOString().split('T')[0]}.csv`, [
+      { key: 'primaryName', label: 'Primary Name' },
+      { key: 'secondaryName', label: 'Secondary Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'attendance', label: 'Attendance' },
+      { key: 'guestCount', label: 'Guest Count' },
+      { key: 'mealPreference', label: 'Meal Preference' },
+      { key: 'dietaryNotes', label: 'Dietary Notes' },
+      { key: 'note', label: 'Note' },
+      { key: 'status', label: 'Status' },
+      { key: 'invitation.accessCode', label: 'Access Code' },
+      { key: 'invitation.isCheckedIn', label: 'Checked In' },
+      { key: 'submittedAt', label: 'Submitted At' },
     ]);
     toast.success(`Exported ${filtered.length} RSVPs`);
     setExportOpen(false);
@@ -299,7 +308,7 @@ export default function CouplePortalPage() {
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                   {media.slice(0, 6).map(m => (
-                    <div key={m.id} onClick={() => setPreviewMedia(m)} className="aspect-square bg-surface-100 rounded-lg cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center overflow-hidden">
+                    <div key={m.id} onClick={() => setActiveTab('media')} className="aspect-square bg-surface-100 rounded-lg cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center overflow-hidden">
                       {m.type === 'PHOTO' ? (
                         <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -345,36 +354,74 @@ export default function CouplePortalPage() {
 
             <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full text-sm">
                   <thead><tr className="border-b border-surface-100 bg-surface-50">
                     <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Details</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
                     <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
                   </tr></thead>
                   <tbody className="divide-y divide-surface-100">
-                    {rsvps.length === 0 ? <tr><td colSpan={4} className="py-12 text-center text-surface-400">No RSVPs</td></tr> : rsvps.map(r => (
+                    {rsvps.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-surface-400">No RSVPs</td></tr> : rsvps.map(r => (
                       <tr key={r.id} className="hover:bg-surface-50 transition-colors">
                         <td className="py-3 px-4">
                           <p className="font-medium text-navy-900">{r.primaryName}</p>
-                          {r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}
-                          {r.email && <p className="text-xs text-surface-400">{r.email}</p>}
+                          {r.secondaryName && <p className="text-sm text-surface-500">+ {r.secondaryName}</p>}
+                          <p className="text-xs text-surface-400 mt-1">{r.guestCount} guest(s)</p>
+                        </td>
+                        <td className="py-3 px-4">
+                          {r.email && <p className="text-surface-600">{r.email}</p>}
+                          {r.phone && <p className="text-surface-500">{r.phone}</p>}
+                          {!r.email && !r.phone && <span className="text-surface-400">-</span>}
                         </td>
                         <td className="py-3 px-4">
                           <span className={getStatusBadge(r.attendance)}>{r.attendance}</span>
-                          <p className="text-sm text-surface-500 mt-1">{r.guestCount} guest(s)</p>
+                          <p className="text-xs text-surface-400 mt-1">{formatDate(r.submittedAt)}</p>
+                        </td>
+                        <td className="py-3 px-4 max-w-[200px]">
+                          {r.mealPreference && (
+                            <p className="text-surface-600 truncate" title={r.mealPreference}>
+                              <span className="text-surface-400">Meal:</span> {r.mealPreference}
+                            </p>
+                          )}
+                          {r.dietaryNotes && (
+                            <p className="text-surface-600 truncate" title={r.dietaryNotes}>
+                              <span className="text-surface-400">Diet:</span> {r.dietaryNotes}
+                            </p>
+                          )}
+                          {r.note && (
+                            <p className="text-surface-500 text-xs truncate italic" title={r.note}>{r.note}</p>
+                          )}
+                          {!r.mealPreference && !r.dietaryNotes && !r.note && <span className="text-surface-400">-</span>}
                         </td>
                         <td className="py-3 px-4">
                           <span className={getStatusBadge(r.status)}>{r.status}</span>
                           {r.invitation?.isCheckedIn && <p className="text-xs text-green-600 mt-1">Checked in</p>}
+                          {r.invitation && !r.invitation.isCheckedIn && (
+                            <p className="text-xs text-surface-400 mt-1">Code: {r.invitation.accessCode}</p>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          {r.status === 'PENDING' && (
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => handleReviewRsvp(r.id, 'APPROVED')} className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium">Approve</button>
-                              <button onClick={() => handleReviewRsvp(r.id, 'REJECTED')} className="px-3 py-1.5 text-sm bg-surface-100 text-surface-600 rounded-lg hover:bg-surface-200 transition-colors font-medium">Reject</button>
-                            </div>
-                          )}
+                          <div className="flex justify-end gap-2 items-center flex-wrap">
+                            {r.status !== 'APPROVED' && (
+                              <button 
+                                onClick={() => handleReviewRsvp(r.id, 'APPROVED')} 
+                                className="px-3 py-1.5 text-xs bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
+                              >
+                                {r.status === 'PENDING' ? 'Approve' : 'Re-approve'}
+                              </button>
+                            )}
+                            {r.status !== 'REJECTED' && (
+                              <button 
+                                onClick={() => handleReviewRsvp(r.id, 'REJECTED')} 
+                                className="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                              >
+                                Reject
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

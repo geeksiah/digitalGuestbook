@@ -41,6 +41,17 @@ model Event {
   timezone    String   @default("UTC")
   venue       String?
   
+  // Couple Contact Information
+  coupleName1       String?
+  coupleName2       String?
+  coupleEmail       String?
+  couplePhone       String?
+  
+  // Event Styling
+  primaryColor      String   @default("#FFD700")  // Gold
+  secondaryColor    String   @default("#1a1a2e")  // Navy
+  accentColor       String   @default("#ffffff")  // White
+  
   // Event Phase Control (Critical per SRS Section 3)
   // Values: PRE_EVENT | LIVE | POST_EVENT
   phase            String  @default("PRE_EVENT")
@@ -329,25 +340,6 @@ model Broadcast {
 model SystemSettings {
   id        String   @id @default("default")
   
-  // Email Settings (SMTP)
-  smtpHost      String?
-  smtpPort      Int?
-  smtpUser      String?
-  smtpPass      String?
-  smtpFrom      String?
-  smtpFromName  String?
-  smtpSecure    Boolean @default(true)
-  
-  // SMS Settings (Twilio)
-  twilioAccountSid  String?
-  twilioAuthToken   String?
-  twilioPhoneNumber String?
-  
-  // WhatsApp Settings (Twilio/Meta)
-  whatsappApiKey    String?
-  whatsappPhoneId   String?
-  whatsappBusinessId String?
-  
   // General Settings
   siteName          String @default("Digital Event Platform")
   siteUrl           String?
@@ -358,8 +350,84 @@ model SystemSettings {
   smsEnabled        Boolean @default(false)
   whatsappEnabled   Boolean @default(false)
   
+  // Default providers (reference by id)
+  defaultEmailProviderId    String?
+  defaultSmsProviderId      String?
+  defaultWhatsappProviderId String?
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Email Provider (SMTP, SendGrid, Mailgun, etc.)
+model EmailProvider {
+  id          String   @id @default(uuid())
+  name        String   // Display name
+  provider    String   // smtp | sendgrid | mailgun | ses
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  
+  // SMTP Settings
+  smtpHost    String?
+  smtpPort    Int?
+  smtpUser    String?
+  smtpPass    String?
+  smtpSecure  Boolean  @default(true)
+  
+  // SendGrid / API-based
+  apiKey      String?
+  
+  // Common fields
+  fromEmail   String?
+  fromName    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// SMS Provider (Twilio, Vonage, Africa's Talking, etc.)
+model SmsProvider {
+  id          String   @id @default(uuid())
+  name        String   // Display name
+  provider    String   // twilio | vonage | africastalking | termii
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  
+  // Twilio Settings
+  accountSid  String?
+  authToken   String?
+  phoneNumber String?
+  
+  // API-based providers
+  apiKey      String?
+  apiSecret   String?
+  senderId    String?  // For some providers
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// WhatsApp Provider (Twilio, Meta Cloud API, etc.)
+model WhatsappProvider {
+  id            String   @id @default(uuid())
+  name          String   // Display name
+  provider      String   // twilio | meta
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  
+  // Twilio WhatsApp Settings
+  accountSid    String?
+  authToken     String?
+  phoneNumber   String?
+  
+  // Meta Cloud API Settings
+  apiKey        String?
+  phoneNumberId String?
+  businessId    String?
+  accessToken   String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 // ============================================

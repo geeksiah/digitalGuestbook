@@ -1,121 +1,323 @@
 import nodemailer from 'nodemailer';
 import prisma from '../utils/prisma.js';
+import type { EmailProvider, SmsProvider, WhatsappProvider } from '@prisma/client';
 
-// Get system settings
-async function getSettings() {
-  let settings = await prisma.systemSettings.findUnique({
-    where: { id: 'default' },
+// ============================================
+// PROVIDER-BASED EMAIL
+// ============================================
+
+export async function sendEmailWithProvider(
+  provider: EmailProvider,
+  to: string,
+  subject: string,
+  html: string,
+  text?: string
+) {
+  try {
+    if (provider.provider === 'smtp') {
+      const transporter = nodemailer.createTransport({
+        host: provider.smtpHost!,
+        port: provider.smtpPort || 587,
+        secure: provider.smtpSecure,
+        auth: {
+          user: provider.smtpUser!,
+          pass: provider.smtpPass || '',
+        },
+      });
+      
+      const result = await transporter.sendMail({
+        from: provider.fromName 
+          ? `"${provider.fromName}" <${provider.fromEmail || provider.smtpUser}>`
+          : provider.fromEmail || provider.smtpUser!,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]*>/g, ''),
+      });
+      
+      console.log('[Email] Sent via', provider.name, 'to:', to, 'ID:', result.messageId);
+      return { success: true, messageId: result.messageId };
+    }
+    
+    if (provider.provider === 'sendgrid' && provider.apiKey) {
+      // SendGrid via HTTP API
+      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${provider.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: to }] }],
+          from: { email: provider.fromEmail, name: provider.fromName },
+          subject,
+          content: [
+            { type: 'text/html', value: html },
+            { type: 'text/plain', value: text || html.replace(/<[^>]*>/g, '') },
+          ],
+        }),
+      });
+      
+      if (response.ok) {
+        console.log('[Email] Sent via SendGrid to:', to);
+        return { success: true };
+      } else {
+        const error = await response.text();
+        throw new Error(`SendGrid error: ${error}`);
+      }
+    }
+    
+    if (provider.provider === 'mailgun' && provider.apiKey) {
+      // Mailgun requires domain in API key format
+      const [apiKey, domain] = provider.apiKey.split(':');
+      
+      const formData = new URLSearchParams();
+      formData.append('from', provider.fromName ? `${provider.fromName} <${provider.fromEmail}>` : provider.fromEmail || '');
+      formData.append('to', to);
+      formData.append('subject', subject);
+      formData.append('html', html);
+      
+      const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
+        },
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[Email] Sent via Mailgun to:', to);
+        return { success: true, messageId: result.id };
+      } else {
+        const error = await response.text();
+        throw new Error(`Mailgun error: ${error}`);
+      }
+    }
+    
+    return { success: false, error: `Unsupported email provider: ${provider.provider}` };
+  } catch (error: any) {
+    console.error('[Email] Failed to send via', provider.name, ':', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// PROVIDER-BASED SMS
+// ============================================
+
+export async function sendSmsWithProvider(
+  provider: SmsProvider,
+  to: string,
+  message: string
+) {
+  try {
+    if (provider.provider === 'twilio' && provider.accountSid && provider.authToken) {
+      const twilio = await import('twilio');
+      const client = twilio.default(provider.accountSid, provider.authToken);
+      
+      const result = await client.messages.create({
+        body: message,
+        from: provider.phoneNumber,
+        to,
+      });
+      
+      console.log('[SMS] Sent via Twilio to:', to, 'SID:', result.sid);
+      return { success: true, sid: result.sid };
+    }
+    
+    if (provider.provider === 'termii' && provider.apiKey) {
+      const response = await fetch('https://api.ng.termii.com/api/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          from: provider.senderId || 'Event',
+          sms: message,
+          type: 'plain',
+          channel: 'generic',
+          api_key: provider.apiKey,
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[SMS] Sent via Termii to:', to);
+        return { success: true, messageId: result.message_id };
+      } else {
+        const error = await response.text();
+        throw new Error(`Termii error: ${error}`);
+      }
+    }
+    
+    if (provider.provider === 'africastalking' && provider.apiKey) {
+      const response = await fetch('https://api.africastalking.com/version1/messaging', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'apiKey': provider.apiKey,
+        },
+        body: new URLSearchParams({
+          username: provider.accountSid || 'sandbox',
+          to,
+          message,
+          from: provider.senderId || '',
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[SMS] Sent via Africa\'s Talking to:', to);
+        return { success: true, messageId: result.SMSMessageData?.Recipients?.[0]?.messageId };
+      } else {
+        const error = await response.text();
+        throw new Error(`Africa's Talking error: ${error}`);
+      }
+    }
+    
+    return { success: false, error: `Unsupported SMS provider: ${provider.provider}` };
+  } catch (error: any) {
+    console.error('[SMS] Failed to send via', provider.name, ':', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// PROVIDER-BASED WHATSAPP
+// ============================================
+
+export async function sendWhatsappWithProvider(
+  provider: WhatsappProvider,
+  to: string,
+  message: string
+) {
+  try {
+    if (provider.provider === 'twilio' && provider.accountSid && provider.authToken) {
+      const twilio = await import('twilio');
+      const client = twilio.default(provider.accountSid, provider.authToken);
+      
+      const whatsappTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
+      const whatsappFrom = provider.phoneNumber?.startsWith('whatsapp:') 
+        ? provider.phoneNumber 
+        : `whatsapp:${provider.phoneNumber}`;
+      
+      const result = await client.messages.create({
+        body: message,
+        from: whatsappFrom,
+        to: whatsappTo,
+      });
+      
+      console.log('[WhatsApp] Sent via Twilio to:', to, 'SID:', result.sid);
+      return { success: true, sid: result.sid };
+    }
+    
+    if (provider.provider === 'meta' && provider.accessToken && provider.phoneNumberId) {
+      const response = await fetch(`https://graph.facebook.com/v18.0/${provider.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${provider.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: to.replace(/^\+/, ''),
+          type: 'text',
+          text: { body: message },
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[WhatsApp] Sent via Meta to:', to);
+        return { success: true, messageId: result.messages?.[0]?.id };
+      } else {
+        const error = await response.json();
+        throw new Error(`Meta WhatsApp error: ${JSON.stringify(error)}`);
+      }
+    }
+    
+    return { success: false, error: `Unsupported WhatsApp provider: ${provider.provider}` };
+  } catch (error: any) {
+    console.error('[WhatsApp] Failed to send via', provider.name, ':', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// DEFAULT PROVIDER FUNCTIONS (use default active provider)
+// ============================================
+
+async function getDefaultEmailProvider(): Promise<EmailProvider | null> {
+  return prisma.emailProvider.findFirst({
+    where: { isDefault: true, isActive: true },
   });
-  
-  if (!settings) {
-    settings = await prisma.systemSettings.create({
-      data: { id: 'default' },
-    });
-  }
-  
-  return settings;
 }
 
-// Email Service
+async function getDefaultSmsProvider(): Promise<SmsProvider | null> {
+  return prisma.smsProvider.findFirst({
+    where: { isDefault: true, isActive: true },
+  });
+}
+
+async function getDefaultWhatsappProvider(): Promise<WhatsappProvider | null> {
+  return prisma.whatsappProvider.findFirst({
+    where: { isDefault: true, isActive: true },
+  });
+}
+
 export async function sendEmail(to: string, subject: string, html: string, text?: string) {
-  const settings = await getSettings();
-  
-  if (!settings.emailEnabled || !settings.smtpHost || !settings.smtpUser) {
-    console.log('[Email] Service not configured, skipping email to:', to);
-    return { success: false, error: 'Email not configured' };
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+  if (!settings?.emailEnabled) {
+    console.log('[Email] Service disabled, skipping email to:', to);
+    return { success: false, error: 'Email not enabled' };
   }
   
-  try {
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpSecure,
-      auth: {
-        user: settings.smtpUser,
-        pass: settings.smtpPass || '',
-      },
-    });
-    
-    const result = await transporter.sendMail({
-      from: settings.smtpFromName 
-        ? `"${settings.smtpFromName}" <${settings.smtpFrom || settings.smtpUser}>`
-        : settings.smtpFrom || settings.smtpUser,
-      to,
-      subject,
-      html,
-      text: text || html.replace(/<[^>]*>/g, ''),
-    });
-    
-    console.log('[Email] Sent to:', to, 'Message ID:', result.messageId);
-    return { success: true, messageId: result.messageId };
-  } catch (error: any) {
-    console.error('[Email] Failed to send:', error.message);
-    return { success: false, error: error.message };
+  const provider = await getDefaultEmailProvider();
+  if (!provider) {
+    console.log('[Email] No default provider configured');
+    return { success: false, error: 'No email provider configured' };
   }
+  
+  return sendEmailWithProvider(provider, to, subject, html, text);
 }
 
-// SMS Service (Twilio)
 export async function sendSMS(to: string, message: string) {
-  const settings = await getSettings();
-  
-  if (!settings.smsEnabled || !settings.twilioAccountSid || !settings.twilioAuthToken) {
-    console.log('[SMS] Service not configured, skipping SMS to:', to);
-    return { success: false, error: 'SMS not configured' };
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+  if (!settings?.smsEnabled) {
+    console.log('[SMS] Service disabled, skipping SMS to:', to);
+    return { success: false, error: 'SMS not enabled' };
   }
   
-  try {
-    // Dynamic import of Twilio
-    const twilio = await import('twilio');
-    const client = twilio.default(settings.twilioAccountSid, settings.twilioAuthToken);
-    
-    const result = await client.messages.create({
-      body: message,
-      from: settings.twilioPhoneNumber,
-      to,
-    });
-    
-    console.log('[SMS] Sent to:', to, 'SID:', result.sid);
-    return { success: true, sid: result.sid };
-  } catch (error: any) {
-    console.error('[SMS] Failed to send:', error.message);
-    return { success: false, error: error.message };
+  const provider = await getDefaultSmsProvider();
+  if (!provider) {
+    console.log('[SMS] No default provider configured');
+    return { success: false, error: 'No SMS provider configured' };
   }
+  
+  return sendSmsWithProvider(provider, to, message);
 }
 
-// WhatsApp Service (via Twilio)
 export async function sendWhatsApp(to: string, message: string) {
-  const settings = await getSettings();
-  
-  if (!settings.whatsappEnabled || !settings.twilioAccountSid || !settings.twilioAuthToken) {
-    console.log('[WhatsApp] Service not configured, skipping message to:', to);
-    return { success: false, error: 'WhatsApp not configured' };
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+  if (!settings?.whatsappEnabled) {
+    console.log('[WhatsApp] Service disabled, skipping message to:', to);
+    return { success: false, error: 'WhatsApp not enabled' };
   }
   
-  try {
-    const twilio = await import('twilio');
-    const client = twilio.default(settings.twilioAccountSid, settings.twilioAuthToken);
-    
-    // Format phone number for WhatsApp
-    const whatsappTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-    const whatsappFrom = settings.twilioPhoneNumber?.startsWith('whatsapp:') 
-      ? settings.twilioPhoneNumber 
-      : `whatsapp:${settings.twilioPhoneNumber}`;
-    
-    const result = await client.messages.create({
-      body: message,
-      from: whatsappFrom,
-      to: whatsappTo,
-    });
-    
-    console.log('[WhatsApp] Sent to:', to, 'SID:', result.sid);
-    return { success: true, sid: result.sid };
-  } catch (error: any) {
-    console.error('[WhatsApp] Failed to send:', error.message);
-    return { success: false, error: error.message };
+  const provider = await getDefaultWhatsappProvider();
+  if (!provider) {
+    console.log('[WhatsApp] No default provider configured');
+    return { success: false, error: 'No WhatsApp provider configured' };
   }
+  
+  return sendWhatsappWithProvider(provider, to, message);
 }
 
-// Broadcast message to multiple recipients
+// ============================================
+// BROADCAST & NOTIFICATION FUNCTIONS
+// ============================================
+
 export async function sendBroadcast(
   eventId: string,
   broadcastId: string,
@@ -124,9 +326,8 @@ export async function sendBroadcast(
   channels: string[],
   audience: 'ALL_RSVPS' | 'APPROVED_ONLY'
 ) {
-  const settings = await getSettings();
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
   
-  // Get recipients
   const where: any = { eventId };
   if (audience === 'APPROVED_ONLY') {
     where.status = 'APPROVED';
@@ -154,8 +355,7 @@ export async function sendBroadcast(
       ? subject.replace(/\{name\}/g, rsvp.primaryName)
       : 'Message from Event';
     
-    // Send via each enabled channel
-    if (channels.includes('EMAIL') && rsvp.email && settings.emailEnabled) {
+    if (channels.includes('EMAIL') && rsvp.email && settings?.emailEnabled) {
       const result = await sendEmail(
         rsvp.email,
         personalizedSubject,
@@ -168,20 +368,19 @@ export async function sendBroadcast(
       else failed++;
     }
     
-    if (channels.includes('SMS') && rsvp.phone && settings.smsEnabled) {
+    if (channels.includes('SMS') && rsvp.phone && settings?.smsEnabled) {
       const result = await sendSMS(rsvp.phone, personalizedMessage);
       if (result.success) delivered++;
       else failed++;
     }
     
-    if (channels.includes('WHATSAPP') && rsvp.phone && settings.whatsappEnabled) {
+    if (channels.includes('WHATSAPP') && rsvp.phone && settings?.whatsappEnabled) {
       const result = await sendWhatsApp(rsvp.phone, personalizedMessage);
       if (result.success) delivered++;
       else failed++;
     }
   }
   
-  // Update broadcast status
   await prisma.broadcast.update({
     where: { id: broadcastId },
     data: {
@@ -196,7 +395,6 @@ export async function sendBroadcast(
   return { totalRecipients: rsvps.length, delivered, failed };
 }
 
-// Send RSVP confirmation email
 export async function sendRsvpConfirmation(rsvpId: string) {
   const rsvp = await prisma.rSVP.findUnique({
     where: { id: rsvpId },
@@ -207,9 +405,6 @@ export async function sendRsvpConfirmation(rsvpId: string) {
   });
   
   if (!rsvp || !rsvp.email) return { success: false, error: 'No email address' };
-  
-  const settings = await getSettings();
-  if (!settings.emailEnabled) return { success: false, error: 'Email not enabled' };
   
   const eventDate = new Date(rsvp.event.date).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -260,7 +455,6 @@ export async function sendRsvpConfirmation(rsvpId: string) {
   return sendEmail(rsvp.email, `RSVP Confirmation - ${rsvp.event.name}`, html);
 }
 
-// Send invitation with QR code
 export async function sendInvitationEmail(invitationId: string) {
   const invitation = await prisma.invitation.findUnique({
     where: { id: invitationId },
@@ -273,9 +467,6 @@ export async function sendInvitationEmail(invitationId: string) {
   if (!invitation || !invitation.rsvp.email) {
     return { success: false, error: 'No email address' };
   }
-  
-  const settings = await getSettings();
-  if (!settings.emailEnabled) return { success: false, error: 'Email not enabled' };
   
   const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -332,8 +523,10 @@ export default {
   sendEmail,
   sendSMS,
   sendWhatsApp,
+  sendEmailWithProvider,
+  sendSmsWithProvider,
+  sendWhatsappWithProvider,
   sendBroadcast,
   sendRsvpConfirmation,
   sendInvitationEmail,
 };
-

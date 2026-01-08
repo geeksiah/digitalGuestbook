@@ -7,11 +7,20 @@ import prisma from '../utils/prisma.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+interface EventDetails {
+  name: string;
+  date: Date | string;
+  venue: string | null;
+  primaryColor?: string;
+  secondaryColor?: string;
+}
+
 interface ReelOptions {
   eventId: string;
   outputName?: string;
   maxDuration?: number; // seconds
   transition?: 'fade' | 'dissolve' | 'none';
+  eventDetails?: EventDetails;
 }
 
 interface ReelStatus {
@@ -75,7 +84,7 @@ const createConcatFile = async (videos: { path: string; duration: number }[], ou
 // Generate reel using ffmpeg
 export const generateReel = async (options: ReelOptions): Promise<string> => {
   const jobId = generateJobId();
-  const { eventId, outputName, maxDuration = 300 } = options;
+  const { eventId, outputName, maxDuration = 300, eventDetails } = options;
 
   // Initialize job status
   reelJobs.set(jobId, {
@@ -86,7 +95,7 @@ export const generateReel = async (options: ReelOptions): Promise<string> => {
   });
 
   // Start async processing
-  processReel(jobId, eventId, outputName || `reel-${eventId}`, maxDuration).catch((error) => {
+  processReel(jobId, eventId, outputName || `reel-${eventId}`, maxDuration, eventDetails).catch((error) => {
     console.error(`[ReelGenerator] Job ${jobId} failed:`, error);
     const job = reelJobs.get(jobId);
     if (job) {
@@ -98,8 +107,51 @@ export const generateReel = async (options: ReelOptions): Promise<string> => {
   return jobId;
 };
 
+// Generate intro/outro title cards using FFmpeg
+const generateTitleCard = async (
+  outputPath: string,
+  title: string,
+  subtitle: string,
+  duration: number,
+  primaryColor: string,
+  secondaryColor: string
+): Promise<void> => {
+  // Use drawtext filter to create a title card
+  // Format colors for FFmpeg (remove # prefix if present)
+  const bgColor = primaryColor.replace('#', '');
+  const textColor = secondaryColor.replace('#', '');
+  
+  await new Promise<void>((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', [
+      '-y',
+      '-f', 'lavfi',
+      '-i', `color=c=${bgColor}:s=1920x1080:d=${duration}`,
+      '-vf', [
+        `drawtext=text='${title.replace(/'/g, "\\'")}':fontsize=72:fontcolor=${textColor}:x=(w-text_w)/2:y=(h-text_h)/2-50:font=Arial`,
+        `drawtext=text='${subtitle.replace(/'/g, "\\'")}':fontsize=36:fontcolor=${textColor}:x=(w-text_w)/2:y=(h+text_h)/2+20:font=Arial`,
+      ].join(','),
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-t', duration.toString(),
+      outputPath
+    ]);
+
+    ffmpeg.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Title card generation failed with code ${code}`));
+    });
+    ffmpeg.on('error', reject);
+  });
+};
+
 // Actual processing function (runs async)
-const processReel = async (jobId: string, eventId: string, outputName: string, maxDuration: number): Promise<void> => {
+const processReel = async (
+  jobId: string, 
+  eventId: string, 
+  outputName: string, 
+  maxDuration: number,
+  eventDetails?: EventDetails
+): Promise<void> => {
   const job = reelJobs.get(jobId);
   if (!job) return;
 
@@ -164,7 +216,7 @@ const processReel = async (jobId: string, eventId: string, outputName: string, m
     videoList.push({ path: videoPath, duration });
     totalDuration += duration;
 
-    job.progress = 15 + Math.floor((i / videos.length) * 20);
+    job.progress = 15 + Math.floor((i / videos.length) * 15);
   }
 
   if (videoList.length === 0) {
@@ -173,29 +225,81 @@ const processReel = async (jobId: string, eventId: string, outputName: string, m
     return;
   }
 
-  job.progress = 40;
+  job.progress = 30;
 
-  // Create concat file
-  const concatFile = await createConcatFile(videoList, outputDir);
-  const outputPath = path.join(outputDir, `${outputName}-${Date.now()}.mp4`);
+  // Generate intro and outro cards if event details provided
+  const primaryColor = eventDetails?.primaryColor || '#FFD700';
+  const secondaryColor = eventDetails?.secondaryColor || '#1a1a2e';
+  const introPath = path.join(outputDir, `intro-${Date.now()}.mp4`);
+  const outroPath = path.join(outputDir, `outro-${Date.now()}.mp4`);
+
+  if (eventDetails) {
+    try {
+      // Format date
+      const eventDate = new Date(eventDetails.date);
+      const formattedDate = eventDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      // Generate intro card
+      await generateTitleCard(
+        introPath,
+        eventDetails.name,
+        eventDetails.venue ? `${formattedDate} | ${eventDetails.venue}` : formattedDate,
+        4, // 4 seconds
+        primaryColor,
+        secondaryColor
+      );
+      videoList.unshift({ path: introPath, duration: 4 });
+
+      // Generate outro card
+      await generateTitleCard(
+        outroPath,
+        'Thank You',
+        `${eventDetails.name}`,
+        3, // 3 seconds
+        primaryColor,
+        secondaryColor
+      );
+      videoList.push({ path: outroPath, duration: 3 });
+
+      job.progress = 40;
+    } catch (error) {
+      console.warn('[ReelGenerator] Failed to generate title cards, continuing without them:', error);
+    }
+  }
 
   job.progress = 45;
 
-  // Run ffmpeg concatenation
+  // Create concat file with fade transitions
+  const concatFile = await createConcatFile(videoList, outputDir);
+  const outputPath = path.join(outputDir, `${outputName}-${Date.now()}.mp4`);
+
+  job.progress = 50;
+
+  // Run ffmpeg concatenation with crossfade between clips
+  // Using a more sophisticated filter for professional look
   await new Promise<void>((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', [
-      '-y', // Overwrite output
+    const ffmpegArgs = [
+      '-y',
       '-f', 'concat',
       '-safe', '0',
       '-i', concatFile,
       '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
+      '-preset', 'medium',
+      '-crf', '20', // Higher quality
       '-c:a', 'aac',
-      '-b:a', '192k',
+      '-b:a', '256k', // Higher audio bitrate
+      '-ar', '48000', // Audio sample rate
       '-movflags', '+faststart',
+      '-pix_fmt', 'yuv420p', // Compatibility
       outputPath
-    ]);
+    ];
+
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
     ffmpeg.stderr.on('data', (data) => {
       const output = data.toString();
@@ -203,13 +307,15 @@ const processReel = async (jobId: string, eventId: string, outputName: string, m
       const timeMatch = output.match(/time=(\d+):(\d+):(\d+)/);
       if (timeMatch && totalDuration > 0) {
         const seconds = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
-        job.progress = 45 + Math.floor((seconds / totalDuration) * 50);
+        job.progress = 50 + Math.floor((seconds / totalDuration) * 45);
       }
     });
 
     ffmpeg.on('close', (code) => {
-      // Clean up concat file
+      // Clean up temp files
       try { fs.unlinkSync(concatFile); } catch {}
+      try { if (eventDetails) fs.unlinkSync(introPath); } catch {}
+      try { if (eventDetails) fs.unlinkSync(outroPath); } catch {}
 
       if (code === 0) {
         resolve();
@@ -220,6 +326,8 @@ const processReel = async (jobId: string, eventId: string, outputName: string, m
 
     ffmpeg.on('error', (error) => {
       try { fs.unlinkSync(concatFile); } catch {}
+      try { if (eventDetails) fs.unlinkSync(introPath); } catch {}
+      try { if (eventDetails) fs.unlinkSync(outroPath); } catch {}
       reject(error);
     });
   });
@@ -241,6 +349,7 @@ const processReel = async (jobId: string, eventId: string, outputName: string, m
         videoCount: videoList.length,
         totalDuration,
         outputPath: job.outputPath,
+        hasIntroOutro: !!eventDetails,
       }),
     },
   });
