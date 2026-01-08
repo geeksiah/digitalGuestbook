@@ -279,10 +279,10 @@ router.get('/event/:eventId/stats', authenticateAdmin, asyncHandler(async (req, 
 /**
  * POST /api/media/event/:eventId/generate-reel
  * Generate a reel from event media (videos)
- * Note: Actual video processing would require ffmpeg or similar
  */
 router.post('/event/:eventId/generate-reel', authenticateAdmin, asyncHandler(async (req, res) => {
   const { eventId } = req.params;
+  const { maxDuration = 300 } = req.body;
 
   // Check if event exists and has reel enabled
   const event = await prisma.event.findUnique({
@@ -307,14 +307,21 @@ router.post('/event/:eventId/generate-reel', authenticateAdmin, asyncHandler(asy
     throw new AppError('No videos available for reel generation', 400);
   }
 
-  // TODO: Implement actual video processing with ffmpeg
-  // For now, return the list of videos that would be included
-  // Real implementation would:
-  // 1. Concatenate videos using ffmpeg
-  // 2. Add transitions
-  // 3. Add background music (optional)
-  // 4. Save the output file
-  // 5. Return the download URL
+  // Import reel generator service
+  const { generateReel, checkFfmpegAvailable } = await import('../services/reelGenerator.js');
+
+  // Check if ffmpeg is available
+  const ffmpegAvailable = await checkFfmpegAvailable();
+  if (!ffmpegAvailable) {
+    throw new AppError('FFmpeg is not installed on the server. Reel generation is unavailable.', 503);
+  }
+
+  // Start reel generation
+  const jobId = await generateReel({
+    eventId,
+    outputName: `${event.slug}-reel`,
+    maxDuration,
+  });
 
   // Audit log
   await prisma.auditLog.create({
@@ -324,6 +331,7 @@ router.post('/event/:eventId/generate-reel', authenticateAdmin, asyncHandler(asy
       action: 'REEL_GENERATION_REQUESTED',
       entityType: 'MEDIA',
       details: JSON.stringify({
+        jobId,
         videoCount: videos.length,
         totalDuration: videos.reduce((sum, v) => sum + (v.duration || 0), 0),
       }),
@@ -331,16 +339,32 @@ router.post('/event/:eventId/generate-reel', authenticateAdmin, asyncHandler(asy
   });
 
   res.json({
-    message: 'Reel generation initiated',
-    status: 'PROCESSING',
+    message: 'Reel generation started',
+    jobId,
+    status: 'processing',
     details: {
       videoCount: videos.length,
       totalDuration: videos.reduce((sum, v) => sum + (v.duration || 0), 0),
-      estimatedTime: Math.ceil(videos.length * 10), // seconds
+      estimatedTime: Math.ceil(videos.reduce((sum, v) => sum + (v.duration || 0), 0) * 0.5),
     },
-    // In real implementation, return a job ID to poll for status
-    note: 'Video processing requires ffmpeg integration. This is a placeholder response.',
   });
+}));
+
+/**
+ * GET /api/media/reel/:jobId/status
+ * Get reel generation job status
+ */
+router.get('/reel/:jobId/status', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { jobId } = req.params;
+
+  const { getReelJobStatus } = await import('../services/reelGenerator.js');
+  const status = getReelJobStatus(jobId);
+
+  if (!status) {
+    throw new AppError('Job not found', 404);
+  }
+
+  res.json({ job: status });
 }));
 
 export default router;

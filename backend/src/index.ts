@@ -75,13 +75,28 @@ app.use(requestLogger);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/generated', express.static(path.join(__dirname, '../generated')));
 
-// Health Check
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  });
+// Health Check with database status
+app.get('/health', async (req, res) => {
+  try {
+    const { checkDatabaseHealth } = await import('./utils/prisma.js');
+    const dbHealthy = await checkDatabaseHealth();
+    
+    res.json({ 
+      status: dbHealthy ? 'healthy' : 'degraded',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      services: {
+        database: dbHealthy ? 'connected' : 'disconnected',
+        api: 'running',
+      }
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed',
+    });
+  }
 });
 
 // API Routes

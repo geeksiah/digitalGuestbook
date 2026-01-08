@@ -29,9 +29,15 @@ router.post('/login', asyncHandler(async (req, res) => {
     throw new AppError('Invalid email or password', 401);
   }
 
+  // Get JWT secret with validation
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret && process.env.NODE_ENV === 'production') {
+    throw new AppError('Server configuration error', 500);
+  }
+
   const token = jwt.sign(
     { adminId: admin.id },
-    process.env.JWT_SECRET || 'fallback-secret',
+    jwtSecret || 'development-fallback-secret-change-in-production',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 

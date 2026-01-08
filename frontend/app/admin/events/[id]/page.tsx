@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, API_BASE_URL } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi } from '@/lib/api';
+import MediaGallery from '@/components/media/MediaGallery';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -70,7 +71,6 @@ interface CheckIn {
 interface Template { id: string; name: string; type: string; isDefault: boolean; }
 
 type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'settings';
-type MediaTab = 'all' | 'videos' | 'audio' | 'photos';
 
 // SVG Icons
 const Icons = {
@@ -100,12 +100,10 @@ export default function EventDetailPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [mediaTab, setMediaTab] = useState<MediaTab>('all');
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
   const [savingTemplates, setSavingTemplates] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [previewMedia, setPreviewMedia] = useState<MediaAsset | null>(null);
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
@@ -226,27 +224,6 @@ export default function EventDetailPage() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = filename; a.click();
   };
 
-  const downloadAllMedia = async () => {
-    try { toast.loading('Preparing...', { id: 'dl' }); const r = await mediaApi.downloadAll(eventId); const b = new Blob([r.data], { type: 'application/zip' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `media-${event?.slug}.zip`; a.click(); toast.dismiss('dl'); toast.success('Download started'); }
-    catch { toast.dismiss('dl'); toast.error('Failed'); }
-  };
-
-  const generateReel = async () => {
-    if (!event?.reelEnabled) {
-      toast.error('Enable reel generation in event settings first');
-      return;
-    }
-    try { toast.loading('Generating reel...', { id: 'reel' }); await mediaApi.generateReel(eventId); toast.dismiss('reel'); toast.success('Reel generation started!'); }
-    catch (e: any) { toast.dismiss('reel'); toast.error(e.response?.data?.error || 'Failed to generate reel'); }
-  };
-
-  // Filter media by type
-  const filteredMedia = mediaTab === 'videos' ? media.filter(m => m.type === 'VIDEO')
-    : mediaTab === 'audio' ? media.filter(m => m.type === 'AUDIO')
-    : mediaTab === 'photos' ? media.filter(m => m.type === 'PHOTO')
-    : media;
-
-  const videoCount = media.filter(m => m.type === 'VIDEO').length;
 
   if (loading || !event) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>;
 
@@ -473,88 +450,14 @@ export default function EventDetailPage() {
 
       {/* Media */}
       {activeTab === 'media' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex gap-1 bg-surface-100 p-1 rounded-lg">
-              {([
-                { id: 'all', label: `All (${media.length})` },
-                { id: 'videos', label: `Videos (${media.filter(m => m.type === 'VIDEO').length})` },
-                { id: 'audio', label: `Audio (${media.filter(m => m.type === 'AUDIO').length})` },
-                { id: 'photos', label: `Photos (${media.filter(m => m.type === 'PHOTO').length})` },
-              ] as { id: MediaTab; label: string }[]).map(t => (
-                <button 
-                  key={t.id} 
-                  onClick={() => setMediaTab(t.id)} 
-                  className={cn(
-                    'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-                    mediaTab === t.id ? 'bg-white text-navy-900 shadow-sm' : 'text-surface-600 hover:text-surface-900'
-                  )}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {event.reelEnabled && videoCount > 0 && (
-                <button onClick={generateReel} className="btn-outline">
-                  {Icons.reel}
-                  <span className="ml-2">Generate Reel</span>
-                </button>
-              )}
-              <button onClick={downloadAllMedia} className="btn-primary">
-                {Icons.download}
-                <span className="ml-2">Download All</span>
-              </button>
-            </div>
-          </div>
-          
-          {!event.reelEnabled && videoCount > 0 && (
-            <div className="bg-surface-50 border border-surface-200 rounded-lg p-4 text-sm text-surface-600">
-              Enable reel generation in Settings to create video compilations from {videoCount} video(s).
-            </div>
-          )}
-
-          {filteredMedia.length === 0 ? (
-            <div className="bg-white rounded-xl border border-surface-200 text-center py-16">
-              <div className="w-12 h-12 mx-auto rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 mb-4">{Icons.video}</div>
-              <h3 className="text-lg font-medium text-navy-900 mb-1">No media yet</h3>
-              <p className="text-surface-500">Media will appear here when guests submit messages</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {filteredMedia.map(m => (
-                <div key={m.id} onClick={() => setPreviewMedia(m)} className="bg-white rounded-xl border border-surface-200 overflow-hidden cursor-pointer hover:border-surface-300 hover:shadow-md transition-all group">
-                  <div className="aspect-square bg-surface-100 flex items-center justify-center relative overflow-hidden">
-                    {m.type === 'PHOTO' ? (
-                      <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                    ) : (
-                      <div className={cn(
-                        'w-14 h-14 rounded-full flex items-center justify-center',
-                        m.type === 'VIDEO' ? 'bg-surface-200 text-surface-600' : 'bg-surface-200 text-surface-600'
-                      )}>
-                        {m.type === 'VIDEO' ? Icons.video : Icons.audio}
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/20 transition-colors flex items-center justify-center">
-                      <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100">
-                        {Icons.play}
-                      </div>
-                    </div>
-                    {m.duration && (
-                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-mono">
-                        {Math.floor(m.duration / 60)}:{(m.duration % 60).toString().padStart(2, '0')}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="font-medium text-navy-900 text-sm truncate">{m.guestName || 'Anonymous'}</p>
-                    <p className="text-xs text-surface-500">{formatDate(m.createdAt, 'MMM d, h:mm a')}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <MediaGallery 
+          eventId={eventId} 
+          eventSlug={event.slug}
+          media={media} 
+          reelEnabled={event.reelEnabled} 
+          onRefresh={fetchMedia}
+          isAdmin={true}
+        />
       )}
 
       {/* Templates */}
@@ -675,34 +578,6 @@ export default function EventDetailPage() {
         </div>
       )}
 
-      {/* Media Preview Modal */}
-      {previewMedia && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90" onClick={() => setPreviewMedia(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200">
-              <div>
-                <h2 className="font-semibold text-navy-900">{previewMedia.guestName || 'Anonymous'}</h2>
-                <p className="text-sm text-surface-500">{previewMedia.type} • {formatDate(previewMedia.createdAt, 'MMM d, yyyy h:mm a')}</p>
-              </div>
-              <button onClick={() => setPreviewMedia(null)} className="p-2 rounded-lg hover:bg-surface-100 transition-colors text-surface-500">
-                {Icons.close}
-              </button>
-            </div>
-            <div className="p-6 bg-surface-50 min-h-[50vh] flex items-center justify-center">
-              {previewMedia.type === 'PHOTO' && <img src={`${API_BASE_URL}${previewMedia.filePath}`} alt="" className="max-h-[60vh] mx-auto rounded-lg shadow-lg" />}
-              {previewMedia.type === 'VIDEO' && <video src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="max-h-[60vh] mx-auto rounded-lg shadow-lg" />}
-              {previewMedia.type === 'AUDIO' && (
-                <div className="bg-white rounded-xl p-8 shadow-lg">
-                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-surface-100 flex items-center justify-center text-surface-400">
-                    {Icons.audio}
-                  </div>
-                  <audio src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="w-full" />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

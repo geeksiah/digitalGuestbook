@@ -59,14 +59,16 @@ export const rsvpApi = {
 
 // Media API
 export const mediaApi = {
-  list: (eventId: string) => api.get(`/media/event/${eventId}`),
+  list: (eventId: string, type?: string) => api.get(`/media/event/${eventId}`, { params: type ? { type } : undefined }),
   get: (id: string) => api.get(`/media/${id}`),
   delete: (id: string) => api.delete(`/media/${id}`),
   download: (id: string) => api.get(`/media/${id}/download`, { responseType: 'blob' }),
   downloadAll: (eventId: string) => api.get(`/media/event/${eventId}/download-all`, { responseType: 'blob' }),
   stats: (eventId: string) => api.get(`/media/event/${eventId}/stats`),
   timeline: (eventId: string) => api.get(`/media/event/${eventId}/timeline`),
-  generateReel: (eventId: string) => api.post(`/media/event/${eventId}/generate-reel`),
+  generateReel: (eventId: string, maxDuration?: number) => 
+    api.post(`/media/event/${eventId}/generate-reel`, { maxDuration }),
+  getReelStatus: (jobId: string) => api.get(`/media/reel/${jobId}/status`),
 };
 
 // Check-In API

@@ -19,6 +19,20 @@ declare global {
   }
 }
 
+// Get JWT secret with validation
+const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret === 'fallback-secret') {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Auth] CRITICAL: JWT_SECRET not set in production!');
+      throw new Error('JWT_SECRET must be set in production');
+    }
+    console.warn('[Auth] Warning: Using fallback JWT secret - set JWT_SECRET in production');
+    return 'development-fallback-secret-change-in-production';
+  }
+  return secret;
+};
+
 // Admin Authentication (JWT)
 export const authenticateAdmin = async (
   req: Request,
@@ -29,15 +43,28 @@ export const authenticateAdmin = async (
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError('No authentication token provided', 401);
+      throw new AppError('Authentication required', 401);
     }
 
     const token = authHeader.split(' ')[1];
     
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'fallback-secret'
-    ) as { adminId: string };
+    if (!token || token === 'null' || token === 'undefined') {
+      throw new AppError('Invalid authentication token', 401);
+    }
+
+    let decoded: { adminId: string; iat: number; exp: number };
+    
+    try {
+      decoded = jwt.verify(token, getJwtSecret()) as typeof decoded;
+    } catch (jwtError) {
+      if (jwtError instanceof jwt.TokenExpiredError) {
+        throw new AppError('Session expired. Please sign in again.', 401);
+      }
+      if (jwtError instanceof jwt.JsonWebTokenError) {
+        throw new AppError('Invalid authentication token', 401);
+      }
+      throw new AppError('Authentication failed', 401);
+    }
 
     const admin = await prisma.admin.findUnique({
       where: { id: decoded.adminId },
@@ -45,7 +72,7 @@ export const authenticateAdmin = async (
     });
 
     if (!admin) {
-      throw new AppError('Admin not found', 401);
+      throw new AppError('Account not found. Please sign in again.', 401);
     }
 
     req.admin = admin;
@@ -54,12 +81,7 @@ export const authenticateAdmin = async (
     if (error instanceof AppError) {
       return next(error);
     }
-    if (error instanceof jwt.JsonWebTokenError) {
-      return next(new AppError('Invalid authentication token', 401));
-    }
-    if (error instanceof jwt.TokenExpiredError) {
-      return next(new AppError('Authentication token expired', 401));
-    }
+    console.error('[Auth] Authentication error:', error);
     next(new AppError('Authentication failed', 401));
   }
 };
@@ -73,16 +95,27 @@ export const authenticateCouple = async (
   try {
     const coupleToken = req.headers['x-couple-token'] as string;
     
-    if (!coupleToken) {
-      throw new AppError('No access token provided', 401);
+    if (!coupleToken || coupleToken === 'null' || coupleToken === 'undefined') {
+      throw new AppError('Access token required', 401);
     }
 
     const event = await prisma.event.findUnique({
       where: { coupleAccessToken: coupleToken },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        date: true,
+        venue: true,
+        timezone: true,
+        phase: true,
+        invitationOnly: true,
+        reelEnabled: true,
+      },
     });
 
     if (!event) {
-      throw new AppError('Invalid access token', 401);
+      throw new AppError('Invalid or expired access token', 401);
     }
 
     req.event = event;
@@ -92,6 +125,7 @@ export const authenticateCouple = async (
     if (error instanceof AppError) {
       return next(error);
     }
+    console.error('[Auth] Couple authentication error:', error);
     next(new AppError('Authentication failed', 401));
   }
 };
@@ -107,23 +141,42 @@ export const optionalAdminAuth = async (
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
-      const decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET || 'fallback-secret'
-      ) as { adminId: string };
+      
+      if (token && token !== 'null' && token !== 'undefined') {
+        try {
+          const decoded = jwt.verify(token, getJwtSecret()) as { adminId: string };
 
-      const admin = await prisma.admin.findUnique({
-        where: { id: decoded.adminId },
-        select: { id: true, email: true, name: true, role: true },
-      });
+          const admin = await prisma.admin.findUnique({
+            where: { id: decoded.adminId },
+            select: { id: true, email: true, name: true, role: true },
+          });
 
-      if (admin) {
-        req.admin = admin;
+          if (admin) {
+            req.admin = admin;
+          }
+        } catch {
+          // Token invalid but optional, continue without auth
+        }
       }
     }
     next();
-  } catch (error) {
+  } catch {
     // Silently continue without auth
     next();
   }
+};
+
+// Role-based authorization middleware
+export const requireRole = (...roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.admin) {
+      return next(new AppError('Authentication required', 401));
+    }
+    
+    if (!roles.includes(req.admin.role)) {
+      return next(new AppError('Insufficient permissions', 403));
+    }
+    
+    next();
+  };
 };
