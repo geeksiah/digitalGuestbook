@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { API_BASE_URL, mediaApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -16,13 +16,6 @@ interface MediaAsset {
   duration: number | null;
   thumbnailPath: string | null;
   createdAt: string;
-}
-
-interface MediaStats {
-  total: number;
-  byType: { video: number; audio: number; photo: number };
-  totalSizeMB: number;
-  totalDurationSeconds: number;
 }
 
 interface MediaGalleryProps {
@@ -42,10 +35,12 @@ const Icons = {
   photo: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   download: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
   play: <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>,
-  close: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+  close: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
   back: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
   trash: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
   reel: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>,
+  chevronLeft: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
+  chevronRight: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
 };
 
 type ViewMode = 'folders' | 'videos' | 'audio' | 'photos';
@@ -59,7 +54,7 @@ export default function MediaGallery({
   isAdmin = true 
 }: MediaGalleryProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('folders');
-  const [previewMedia, setPreviewMedia] = useState<MediaAsset | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [reelJobId, setReelJobId] = useState<string | null>(null);
   const [reelProgress, setReelProgress] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -75,12 +70,47 @@ export default function MediaGallery({
     { id: 'photos', label: 'Photos', count: photos.length, icon: Icons.photo, color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
   ];
 
-  const getCurrentMedia = () => {
+  const getCurrentMedia = useCallback(() => {
     switch (viewMode) {
       case 'videos': return videos;
       case 'audio': return audioFiles;
       case 'photos': return photos;
       default: return media;
+    }
+  }, [viewMode, videos, audioFiles, photos, media]);
+
+  const currentMedia = getCurrentMedia();
+  const previewMedia = previewIndex !== null ? currentMedia[previewIndex] : null;
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    if (previewIndex === null) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewIndex(null);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigatePrev();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateNext();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewIndex, currentMedia.length]);
+
+  const navigatePrev = () => {
+    if (previewIndex !== null && previewIndex > 0) {
+      setPreviewIndex(previewIndex - 1);
+    }
+  };
+
+  const navigateNext = () => {
+    if (previewIndex !== null && previewIndex < currentMedia.length - 1) {
+      setPreviewIndex(previewIndex + 1);
     }
   };
 
@@ -90,6 +120,22 @@ export default function MediaGallery({
 
   const handleBack = () => {
     setViewMode('folders');
+  };
+
+  const handleDownload = async (item: MediaAsset, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const link = document.createElement('a');
+      link.href = `${API_BASE_URL}${item.filePath}`;
+      link.download = item.fileName || `media-${item.id}`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Download started');
+    } catch {
+      toast.error('Failed to download');
+    }
   };
 
   const handleDownloadAll = async () => {
@@ -124,12 +170,10 @@ export default function MediaGallery({
       setReelJobId(jobId);
       toast.success('Reel generation started');
 
-      // Poll for status
       const pollInterval = setInterval(async () => {
         try {
           const statusResponse = await mediaApi.getReelStatus(jobId);
           const { job } = statusResponse.data;
-
           setReelProgress(job.progress);
 
           if (job.status === 'completed') {
@@ -157,12 +201,14 @@ export default function MediaGallery({
     }
   };
 
-  const handleDeleteMedia = async (id: string) => {
+  const handleDeleteMedia = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (!confirm('Delete this media permanently?')) return;
     
     try {
       await mediaApi.delete(id);
       toast.success('Media deleted');
+      setPreviewIndex(null);
       onRefresh?.();
     } catch {
       toast.error('Failed to delete');
@@ -223,7 +269,7 @@ export default function MediaGallery({
           ))}
         </div>
 
-        {/* Reel Generation (only if videos exist and enabled) */}
+        {/* Reel Generation */}
         {reelEnabled && videos.length > 0 && (
           <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl p-6 text-white">
             <div className="flex items-center justify-between">
@@ -252,18 +298,13 @@ export default function MediaGallery({
                     </svg>
                     {reelProgress}%
                   </span>
-                ) : (
-                  'Generate Reel'
-                )}
+                ) : 'Generate Reel'}
               </button>
             </div>
             {isGenerating && (
               <div className="mt-4">
                 <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-white rounded-full transition-all duration-300"
-                    style={{ width: `${reelProgress}%` }}
-                  />
+                  <div className="h-full bg-white rounded-full transition-all duration-300" style={{ width: `${reelProgress}%` }} />
                 </div>
               </div>
             )}
@@ -285,7 +326,6 @@ export default function MediaGallery({
   }
 
   // Individual folder view
-  const currentMedia = getCurrentMedia();
   const folderInfo = folders.find(f => f.id === viewMode);
 
   return (
@@ -310,11 +350,11 @@ export default function MediaGallery({
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {currentMedia.map(item => (
+          {currentMedia.map((item, index) => (
             <div key={item.id} className="group bg-white rounded-xl border border-surface-200 overflow-hidden hover:border-surface-300 hover:shadow-md transition-all">
               {/* Thumbnail/Preview */}
               <div 
-                onClick={() => setPreviewMedia(item)}
+                onClick={() => setPreviewIndex(index)}
                 className="aspect-square bg-surface-100 flex items-center justify-center relative cursor-pointer overflow-hidden"
               >
                 {item.type === 'PHOTO' ? (
@@ -358,14 +398,26 @@ export default function MediaGallery({
                 <p className="font-medium text-navy-900 text-sm truncate">{item.guestName || 'Anonymous'}</p>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-xs text-surface-400">{formatDate(item.createdAt, 'MMM d')}</p>
-                  {isAdmin && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    {/* Download button */}
                     <button 
-                      onClick={(e) => { e.stopPropagation(); handleDeleteMedia(item.id); }}
-                      className="p-1 rounded text-surface-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                      onClick={(e) => handleDownload(item, e)}
+                      className="p-1.5 rounded text-surface-500 hover:text-navy-900 hover:bg-surface-100 transition-colors"
+                      title="Download"
                     >
-                      {Icons.trash}
+                      {Icons.download}
                     </button>
-                  )}
+                    {/* Delete button (admin only) */}
+                    {isAdmin && (
+                      <button 
+                        onClick={(e) => handleDeleteMedia(item.id, e)}
+                        className="p-1.5 rounded text-surface-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Delete"
+                      >
+                        {Icons.trash}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -373,76 +425,155 @@ export default function MediaGallery({
         </div>
       )}
 
-      {/* Preview Modal */}
-      {previewMedia && (
+      {/* Lightbox Modal */}
+      {previewMedia && previewIndex !== null && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90" 
-          onClick={() => setPreviewMedia(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95" 
+          onClick={() => setPreviewIndex(null)}
         >
-          <div onClick={e => e.stopPropagation()} className="relative max-w-5xl w-full">
-            <button 
-              onClick={() => setPreviewMedia(null)}
-              className="absolute -top-12 right-0 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            >
-              {Icons.close}
-            </button>
+          {/* Close button */}
+          <button 
+            onClick={() => setPreviewIndex(null)}
+            className="absolute top-4 right-4 z-10 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+          >
+            {Icons.close}
+          </button>
 
-            <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
-              {/* Media player */}
-              <div className="bg-black min-h-[50vh] flex items-center justify-center">
-                {previewMedia.type === 'PHOTO' && (
-                  <img 
-                    src={`${API_BASE_URL}${previewMedia.filePath}`} 
-                    alt="" 
-                    className="max-h-[70vh] object-contain" 
-                  />
+          {/* Counter */}
+          <div className="absolute top-4 left-4 z-10 px-4 py-2 rounded-full bg-white/10 text-white text-sm font-medium">
+            {previewIndex + 1} / {currentMedia.length}
+          </div>
+
+          {/* Navigation arrows */}
+          {currentMedia.length > 1 && (
+            <>
+              <button 
+                onClick={(e) => { e.stopPropagation(); navigatePrev(); }}
+                disabled={previewIndex === 0}
+                className={cn(
+                  'absolute left-4 z-10 p-3 rounded-full bg-white/10 text-white transition-all',
+                  previewIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/20'
                 )}
-                {previewMedia.type === 'VIDEO' && (
-                  <video 
+              >
+                {Icons.chevronLeft}
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); navigateNext(); }}
+                disabled={previewIndex === currentMedia.length - 1}
+                className={cn(
+                  'absolute right-4 z-10 p-3 rounded-full bg-white/10 text-white transition-all',
+                  previewIndex === currentMedia.length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/20'
+                )}
+              >
+                {Icons.chevronRight}
+              </button>
+            </>
+          )}
+
+          {/* Content container */}
+          <div onClick={e => e.stopPropagation()} className="relative max-w-6xl w-full mx-4">
+            {/* Media display */}
+            <div className="flex items-center justify-center min-h-[60vh]">
+              {previewMedia.type === 'PHOTO' && (
+                <img 
+                  src={`${API_BASE_URL}${previewMedia.filePath}`} 
+                  alt="" 
+                  className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-2xl" 
+                />
+              )}
+              {previewMedia.type === 'VIDEO' && (
+                <video 
+                  key={previewMedia.id}
+                  src={`${API_BASE_URL}${previewMedia.filePath}`} 
+                  controls 
+                  autoPlay 
+                  className="max-h-[80vh] max-w-full rounded-lg shadow-2xl" 
+                />
+              )}
+              {previewMedia.type === 'AUDIO' && (
+                <div className="bg-white rounded-2xl p-10 shadow-2xl max-w-md w-full">
+                  <div className="w-24 h-24 mx-auto rounded-full bg-violet-100 flex items-center justify-center text-violet-500 mb-6">
+                    <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
+                  <p className="text-center font-medium text-navy-900 mb-4">{previewMedia.guestName || 'Anonymous'}</p>
+                  <audio 
+                    key={previewMedia.id}
                     src={`${API_BASE_URL}${previewMedia.filePath}`} 
                     controls 
                     autoPlay 
-                    className="max-h-[70vh] w-full" 
+                    className="w-full" 
                   />
-                )}
-                {previewMedia.type === 'AUDIO' && (
-                  <div className="p-12 w-full max-w-md">
-                    <div className="w-24 h-24 mx-auto rounded-full bg-violet-100 flex items-center justify-center text-violet-500 mb-6">
-                      {Icons.audio}
-                    </div>
-                    <audio 
-                      src={`${API_BASE_URL}${previewMedia.filePath}`} 
-                      controls 
-                      autoPlay 
-                      className="w-full" 
-                    />
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
 
-              {/* Info bar */}
-              <div className="px-6 py-4 flex items-center justify-between bg-white border-t border-surface-100">
-                <div>
-                  <p className="font-medium text-navy-900">{previewMedia.guestName || 'Anonymous'}</p>
-                  <p className="text-sm text-surface-500">
+            {/* Bottom info bar */}
+            <div className="absolute bottom-0 left-0 right-0 transform translate-y-full pt-4">
+              <div className="bg-white/10 backdrop-blur-lg rounded-xl px-6 py-4 flex items-center justify-between">
+                <div className="text-white">
+                  <p className="font-medium">{previewMedia.guestName || 'Anonymous'}</p>
+                  <p className="text-sm text-white/70">
                     {formatDate(previewMedia.createdAt, 'MMMM d, yyyy h:mm a')}
                     {previewMedia.duration && ` • ${formatDuration(previewMedia.duration)}`}
                     {previewMedia.fileSize && ` • ${formatFileSize(previewMedia.fileSize)}`}
                   </p>
                 </div>
-                <button 
-                  onClick={() => window.open(`${API_BASE_URL}${previewMedia.filePath}`, '_blank')}
-                  className="btn-outline"
-                >
-                  {Icons.download}
-                  <span className="ml-2">Download</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Download button */}
+                  <button 
+                    onClick={() => handleDownload(previewMedia)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white text-navy-900 rounded-lg font-medium hover:bg-white/90 transition-colors"
+                  >
+                    {Icons.download}
+                    <span>Download</span>
+                  </button>
+                  {/* Delete button (admin only) */}
+                  {isAdmin && (
+                    <button 
+                      onClick={() => handleDeleteMedia(previewMedia.id)}
+                      className="p-2.5 bg-white/10 text-white rounded-lg hover:bg-red-500 transition-colors"
+                      title="Delete"
+                    >
+                      {Icons.trash}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Thumbnail strip */}
+          {currentMedia.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 p-2 bg-white/10 backdrop-blur-lg rounded-xl max-w-[80vw] overflow-x-auto">
+              {currentMedia.map((item, idx) => (
+                <button
+                  key={item.id}
+                  onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx); }}
+                  className={cn(
+                    'w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all',
+                    idx === previewIndex ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'
+                  )}
+                >
+                  {item.type === 'PHOTO' ? (
+                    <img src={`${API_BASE_URL}${item.filePath}`} alt="" className="w-full h-full object-cover" />
+                  ) : item.type === 'VIDEO' && item.thumbnailPath ? (
+                    <img src={`${API_BASE_URL}${item.thumbnailPath}`} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className={cn(
+                      'w-full h-full flex items-center justify-center',
+                      item.type === 'VIDEO' ? 'bg-rose-500' : 'bg-violet-500'
+                    )}>
+                      {item.type === 'VIDEO' ? Icons.video : Icons.audio}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-
