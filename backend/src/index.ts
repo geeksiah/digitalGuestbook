@@ -4,9 +4,83 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import bcrypt from 'bcryptjs';
+import prisma from './utils/prisma.js';
 
 // Load environment variables
 dotenv.config();
+
+// Auto-seed database on startup (creates admin if not exists)
+async function initializeDatabase() {
+  try {
+    const adminCount = await prisma.admin.count();
+    if (adminCount === 0) {
+      console.log('🌱 No admin found, creating default admin...');
+      const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 12);
+      await prisma.admin.create({
+        data: {
+          email: process.env.ADMIN_EMAIL || 'admin@example.com',
+          passwordHash,
+          name: process.env.ADMIN_NAME || 'Platform Admin',
+          role: 'superadmin',
+        },
+      });
+      console.log('✅ Default admin created: ' + (process.env.ADMIN_EMAIL || 'admin@example.com'));
+    }
+
+    // Create default templates if none exist
+    const templateCount = await prisma.template.count();
+    if (templateCount === 0) {
+      console.log('🌱 Creating default templates...');
+      await prisma.template.createMany({
+        data: [
+          { id: 'default-invitation', name: 'Elegant Invitation', type: 'INVITATION', isDefault: true, htmlContent: '<div>{{event.name}}</div>', cssContent: '' },
+          { id: 'default-rsvp', name: 'Classic RSVP', type: 'RSVP', isDefault: true, htmlContent: '<div>RSVP Form</div>', cssContent: '' },
+          { id: 'default-guestbook', name: 'Modern Guestbook', type: 'GUESTBOOK', isDefault: true, htmlContent: '<div>Guestbook</div>', cssContent: '' },
+          { id: 'default-thankyou', name: 'Thank You', type: 'THANK_YOU', isDefault: true, htmlContent: '<div>Thank You</div>', cssContent: '' },
+        ],
+      });
+      console.log('✅ Default templates created');
+    }
+
+    // Create system settings if not exists
+    const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+    if (!settings) {
+      await prisma.systemSettings.create({
+        data: { id: 'default', siteName: 'Digital Event Platform' },
+      });
+      console.log('✅ System settings initialized');
+    }
+
+    // Create sample event if none exist
+    const eventCount = await prisma.event.count();
+    if (eventCount === 0) {
+      console.log('🌱 Creating sample event...');
+      const event = await prisma.event.create({
+        data: {
+          slug: 'sample-wedding',
+          name: "Sarah & Michael's Wedding",
+          description: 'Join us as we celebrate our love.',
+          date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          timezone: 'America/New_York',
+          venue: 'The Grand Ballroom',
+          invitationOnly: true,
+          invitationEnabled: true,
+          rsvpEnabled: true,
+          guestbookEnabled: true,
+          checkInEnabled: true,
+        },
+      });
+      console.log('✅ Sample event created: ' + event.slug);
+      console.log('   Couple Portal: /couple/' + event.coupleAccessToken);
+    }
+  } catch (error) {
+    console.error('Database initialization error:', error);
+  }
+}
+
+// Initialize database
+initializeDatabase();
 
 // Routes
 import authRoutes from './routes/auth.js';
