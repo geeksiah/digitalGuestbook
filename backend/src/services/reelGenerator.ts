@@ -179,7 +179,7 @@ const processReel = async (
   job.progress = 15;
 
   // Prepare video list with durations
-  const baseDir = path.join(__dirname, '../..');
+  const baseDir = process.cwd();
   const outputDir = path.join(baseDir, 'generated', 'reels', eventId);
   
   if (!fs.existsSync(outputDir)) {

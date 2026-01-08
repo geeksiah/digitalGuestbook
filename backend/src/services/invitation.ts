@@ -5,7 +5,7 @@ import path from 'path';
 import prisma from '../utils/prisma.js';
 
 // Ensure generated directory exists
-const generatedDir = path.join(__dirname, '../../generated/invitations');
+const generatedDir = path.join(process.cwd(), 'generated/invitations');
 if (!fs.existsSync(generatedDir)) {
   fs.mkdirSync(generatedDir, { recursive: true });
 }
@@ -227,7 +227,7 @@ export async function getInvitationPDF(invitationId: string): Promise<string> {
   }
 
   if (invitation.pdfGenerated && invitation.pdfPath) {
-    const fullPath = path.join(__dirname, '../..', invitation.pdfPath);
+    const fullPath = path.join(process.cwd(), invitation.pdfPath);
     if (fs.existsSync(fullPath)) {
       return fullPath;
     }

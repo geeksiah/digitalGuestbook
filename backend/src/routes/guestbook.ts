@@ -2,19 +2,15 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { mediaUploadSchema } from '../utils/validation.js';
 import { calculateEventPhase, canAccessGuestbook } from '../utils/phase.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const router = Router();
 
 // Configure multer for media uploads
-const uploadsDir = path.join(__dirname, '../../uploads/media');
+const uploadsDir = path.join(process.cwd(), 'uploads/media');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }

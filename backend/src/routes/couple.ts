@@ -50,6 +50,7 @@ router.get('/:token', validateCoupleToken, async (req: Request, res: Response) =
         venue: true,
         timezone: true,
         phase: true,
+        phaseOverride: true,
         invitationOnly: true,
         reelEnabled: true,
         _count: {

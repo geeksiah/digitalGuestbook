@@ -2,13 +2,9 @@ import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
-import { fileURLToPath } from 'url';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateCouple } from '../middleware/auth.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const router = Router();
 
@@ -83,7 +79,7 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
   const relativePath = mediaAsset.filePath.startsWith('/') 
     ? mediaAsset.filePath.slice(1) 
     : mediaAsset.filePath;
-  const filePath = path.join(__dirname, '../..', relativePath);
+  const filePath = path.join(process.cwd(), relativePath);
   
   if (!fs.existsSync(filePath)) {
     console.error(`[Media] File not found: ${filePath}`);
@@ -140,7 +136,7 @@ router.get('/event/:eventId/download-all', authenticateAdmin, asyncHandler(async
     const relativePath = asset.filePath.startsWith('/') 
       ? asset.filePath.slice(1) 
       : asset.filePath;
-    const filePath = path.join(__dirname, '../..', relativePath);
+    const filePath = path.join(process.cwd(), relativePath);
     
     if (fs.existsSync(filePath)) {
       const folder = asset.type.toLowerCase();
@@ -174,7 +170,7 @@ router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
   const relativePath = mediaAsset.filePath.startsWith('/') 
     ? mediaAsset.filePath.slice(1) 
     : mediaAsset.filePath;
-  const filePath = path.join(__dirname, '../..', relativePath);
+  const filePath = path.join(process.cwd(), relativePath);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
@@ -184,7 +180,7 @@ router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
     const thumbRelativePath = mediaAsset.thumbnailPath.startsWith('/') 
       ? mediaAsset.thumbnailPath.slice(1) 
       : mediaAsset.thumbnailPath;
-    const thumbPath = path.join(__dirname, '../..', thumbRelativePath);
+    const thumbPath = path.join(process.cwd(), thumbRelativePath);
     if (fs.existsSync(thumbPath)) {
       fs.unlinkSync(thumbPath);
     }

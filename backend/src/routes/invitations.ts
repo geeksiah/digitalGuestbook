@@ -1,13 +1,9 @@
 import { Router } from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { generateInvitationPass, getInvitationPDF } from '../services/invitation.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const router = Router();
 

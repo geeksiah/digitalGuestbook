@@ -292,8 +292,43 @@ router.post('/:id/review', authenticateAdmin, asyncHandler(async (req, res) => {
  * Quick approve RSVP (Admin only)
  */
 router.post('/:id/approve', authenticateAdmin, asyncHandler(async (req, res) => {
-  req.body = { status: 'APPROVED' };
-  return router.handle(req, res, () => {});
+  const rsvp = await prisma.rSVP.findUnique({
+    where: { id: req.params.id },
+    include: { event: true },
+  });
+
+  if (!rsvp) {
+    throw new AppError('RSVP not found', 404);
+  }
+
+  const updatedRsvp = await prisma.rSVP.update({
+    where: { id: req.params.id },
+    data: {
+      status: 'APPROVED',
+      reviewedAt: new Date(),
+      reviewedBy: req.admin!.id,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId: rsvp.eventId,
+      adminId: req.admin!.id,
+      action: 'RSVP_APPROVED',
+      entityType: 'RSVP',
+      entityId: rsvp.id,
+      details: JSON.stringify({ name: rsvp.primaryName, guestCount: rsvp.guestCount }),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    },
+  });
+
+  let invitation = null;
+  if (rsvp.attendance === 'YES') {
+    invitation = await generateInvitationPass(rsvp.id);
+  }
+
+  res.json({ rsvp: updatedRsvp, invitation, message: 'RSVP approved successfully' });
 }));
 
 /**
@@ -301,8 +336,37 @@ router.post('/:id/approve', authenticateAdmin, asyncHandler(async (req, res) => 
  * Quick reject RSVP (Admin only)
  */
 router.post('/:id/reject', authenticateAdmin, asyncHandler(async (req, res) => {
-  req.body = { status: 'REJECTED' };
-  return router.handle(req, res, () => {});
+  const rsvp = await prisma.rSVP.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!rsvp) {
+    throw new AppError('RSVP not found', 404);
+  }
+
+  const updatedRsvp = await prisma.rSVP.update({
+    where: { id: req.params.id },
+    data: {
+      status: 'REJECTED',
+      reviewedAt: new Date(),
+      reviewedBy: req.admin!.id,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId: rsvp.eventId,
+      adminId: req.admin!.id,
+      action: 'RSVP_REJECTED',
+      entityType: 'RSVP',
+      entityId: rsvp.id,
+      details: JSON.stringify({ name: rsvp.primaryName, guestCount: rsvp.guestCount }),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    },
+  });
+
+  res.json({ rsvp: updatedRsvp, message: 'RSVP rejected. Guest has been notified.' });
 }));
 
 /**
