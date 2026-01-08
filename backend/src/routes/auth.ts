@@ -38,7 +38,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   const token = jwt.sign(
     { adminId: admin.id },
     jwtSecret || 'development-fallback-secret-change-in-production',
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as string }
   );
 
   res.json({

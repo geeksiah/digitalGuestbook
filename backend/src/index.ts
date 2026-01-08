@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Load environment variables
 dotenv.config();
@@ -26,9 +25,6 @@ import settingsRoutes from './routes/settings.js';
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -98,8 +94,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
 // Static Files (uploads, generated PDFs)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/generated', express.static(path.join(__dirname, '../generated')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/generated', express.static(path.join(process.cwd(), 'generated')));
 
 // Health Check with database status
 app.get('/health', async (req, res) => {
