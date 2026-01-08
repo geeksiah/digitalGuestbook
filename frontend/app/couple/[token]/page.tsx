@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { coupleApi, API_BASE_URL, mediaApi } from '@/lib/api';
+import { coupleApi, API_BASE_URL } from '@/lib/api';
+import MediaGallery from '@/components/media/MediaGallery';
 import { formatDate, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -51,7 +52,6 @@ interface CheckIn {
 }
 
 type Tab = 'dashboard' | 'rsvps' | 'media' | 'checkins';
-type MediaTab = 'all' | 'photos' | 'videos' | 'audio';
 
 // SVG Icons
 const Icons = {
@@ -188,9 +188,7 @@ export default function CouplePortalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [mediaTab, setMediaTab] = useState<MediaTab>('all');
   const [rsvpFilter, setRsvpFilter] = useState('all');
-  const [previewMedia, setPreviewMedia] = useState<MediaAsset | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -251,36 +249,6 @@ export default function CouplePortalPage() {
     } catch (err: any) { toast.error(err.response?.data?.error || 'Failed'); }
   };
 
-  const downloadMedia = (m: MediaAsset) => {
-    const link = document.createElement('a');
-    link.href = `${API_BASE_URL}${m.filePath}`;
-    link.download = `${m.guestName || 'media'}-${m.id}.${m.filePath.split('.').pop()}`;
-    link.click();
-  };
-
-  const downloadAllMedia = async () => {
-    try {
-      const response = await coupleApi.downloadMedia(token);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(response.data);
-      a.download = `${event?.slug}-media.zip`;
-      a.click();
-    } catch { toast.error('Failed to download'); }
-  };
-
-  const generateReel = async () => {
-    if (!event?.id) return;
-    try {
-      toast.loading('Generating reel...', { id: 'reel' });
-      await mediaApi.generateReel(event.id);
-      toast.dismiss('reel');
-      toast.success('Reel generation started!');
-    } catch (e: any) {
-      toast.dismiss('reel');
-      toast.error(e.response?.data?.error || 'Failed');
-    }
-  };
-
   const exportRsvps = (filter: string) => {
     const filtered = filter === 'all' ? rsvps : rsvps.filter(r => r.status === filter);
     exportToCSV(filtered, `rsvps-${filter}.csv`, [
@@ -302,12 +270,6 @@ export default function CouplePortalPage() {
     toast.success(`Exported ${checkIns.length} check-ins`);
   };
 
-  const filteredMedia = mediaTab === 'photos' ? media.filter(m => m.type === 'PHOTO')
-    : mediaTab === 'videos' ? media.filter(m => m.type === 'VIDEO')
-    : mediaTab === 'audio' ? media.filter(m => m.type === 'AUDIO')
-    : media;
-
-  const videoCount = media.filter(m => m.type === 'VIDEO').length;
   const pendingCount = rsvps.filter(r => r.status === 'PENDING').length;
 
   const getStatusBadge = (status: string) => {
@@ -516,74 +478,15 @@ export default function CouplePortalPage() {
 
         {/* Media */}
         {activeTab === 'media' && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex gap-1 bg-white rounded-lg p-1 border border-surface-200">
-                {([
-                  { id: 'all', label: `All (${media.length})` },
-                  { id: 'videos', label: `Videos (${videoCount})` },
-                  { id: 'audio', label: `Audio (${media.filter(m => m.type === 'AUDIO').length})` },
-                  { id: 'photos', label: `Photos (${media.filter(m => m.type === 'PHOTO').length})` },
-                ] as { id: MediaTab; label: string }[]).map(t => (
-                  <button key={t.id} onClick={() => setMediaTab(t.id)} className={cn(
-                    'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    mediaTab === t.id ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-50'
-                  )}>{t.label}</button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                {event.reelEnabled && videoCount > 0 && mediaTab === 'videos' && (
-                  <button onClick={generateReel} className="btn-outline flex items-center gap-2">
-                    {Icons.reel} Generate Reel
-                  </button>
-                )}
-                {media.length > 0 && (
-                  <button onClick={downloadAllMedia} className="btn-primary flex items-center gap-2">
-                    {Icons.download} Download All
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {filteredMedia.length === 0 ? (
-              <div className="bg-white rounded-xl border border-surface-200 p-16 text-center">
-                <div className="w-12 h-12 mx-auto rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 mb-4">{Icons.video}</div>
-                <h3 className="text-lg font-medium text-navy-900 mb-1">No {mediaTab === 'all' ? 'media' : mediaTab} yet</h3>
-                <p className="text-surface-500">Guest content will appear here</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {filteredMedia.map(m => (
-                  <div key={m.id} className="group bg-white rounded-xl border border-surface-200 overflow-hidden hover:border-surface-300 hover:shadow-sm transition-all">
-                    <div onClick={() => setPreviewMedia(m)} className="aspect-square bg-surface-100 flex items-center justify-center relative overflow-hidden cursor-pointer">
-                      {m.type === 'PHOTO' ? (
-                        <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-surface-200 flex items-center justify-center text-surface-500">
-                          {m.type === 'VIDEO' ? Icons.video : Icons.audio}
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/20 transition-colors flex items-center justify-center">
-                        <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 text-navy-900">{Icons.play}</div>
-                      </div>
-                      {m.duration && (
-                        <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-mono">
-                          {Math.floor(m.duration / 60)}:{(m.duration % 60).toString().padStart(2, '0')}
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="font-medium text-navy-900 text-sm truncate">{m.guestName || 'Anonymous'}</p>
-                        <p className="text-xs text-surface-400">{formatDate(m.createdAt, 'MMM d')}</p>
-                      </div>
-                      <button onClick={() => downloadMedia(m)} className="p-1.5 rounded-lg text-surface-400 hover:bg-surface-100 hover:text-surface-600 transition-colors opacity-0 group-hover:opacity-100">{Icons.download}</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <MediaGallery
+            eventId={event.id}
+            eventSlug={event.slug}
+            media={media.map(m => ({ ...m, fileName: m.filePath.split('/').pop() || '', thumbnailPath: null, fileSize: undefined }))}
+            reelEnabled={event.reelEnabled}
+            onRefresh={fetchMedia}
+            isAdmin={false}
+            coupleToken={token as string}
+          />
         )}
 
         {/* Check-ins */}

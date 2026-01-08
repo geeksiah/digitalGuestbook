@@ -25,11 +25,11 @@ export const createEventSchema = z.object({
   slug: z.string()
     .min(2, 'Slug must be at least 2 characters')
     .regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   date: z.string().datetime('Invalid date format'),
-  endDate: z.string().datetime('Invalid date format').optional(),
+  endDate: z.string().datetime('Invalid date format').optional().nullable(),
   timezone: z.string().default('UTC'),
-  venue: z.string().optional(),
+  venue: z.string().optional().nullable(),
   
   // Service Flags
   invitationEnabled: z.boolean().default(true),
@@ -41,12 +41,33 @@ export const createEventSchema = z.object({
   invitationOnly: z.boolean().default(false),
   
   // Guestbook Settings
-  maxRecordingDuration: z.number().min(30).max(120).default(120),
-  minRecordingDuration: z.number().min(10).max(60).default(30),
-  maxPhotosPerGuest: z.number().min(1).max(20).default(5),
+  maxRecordingDuration: z.number().min(30).max(300).default(120),
+  minRecordingDuration: z.number().min(5).max(60).default(30),
+  maxPhotosPerGuest: z.number().min(1).max(50).default(5),
 });
 
-export const updateEventSchema = createEventSchema.partial().extend({
+export const updateEventSchema = z.object({
+  name: z.string().min(2).optional(),
+  slug: z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
+  description: z.string().optional().nullable(),
+  date: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional().nullable(),
+  timezone: z.string().optional(),
+  venue: z.string().optional().nullable(),
+  
+  // Service Flags
+  invitationEnabled: z.boolean().optional(),
+  rsvpEnabled: z.boolean().optional(),
+  guestbookEnabled: z.boolean().optional(),
+  checkInEnabled: z.boolean().optional(),
+  invitationOnly: z.boolean().optional(),
+  
+  // Guestbook Settings
+  maxRecordingDuration: z.number().min(30).max(300).optional(),
+  minRecordingDuration: z.number().min(5).max(60).optional(),
+  maxPhotosPerGuest: z.number().min(1).max(50).optional(),
+  
+  // Phase & Status
   phase: z.enum(['PRE_EVENT', 'LIVE', 'POST_EVENT']).optional(),
   phaseOverride: z.boolean().optional(),
   isArchived: z.boolean().optional(),
