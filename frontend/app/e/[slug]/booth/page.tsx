@@ -402,7 +402,7 @@ export default function BoothPage() {
       formData.append('deviceId', getDeviceId());
       formData.append('duration', recordingTime.toString());
 
-      await guestbookApi.upload(config.eventId, formData);
+      await guestbookApi.boothUpload(config.eventId, formData);
       setViewState('success');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Upload failed. Please try again.');
@@ -426,7 +426,7 @@ export default function BoothPage() {
         formData.append('captureMode', 'BOOTH');
         formData.append('deviceId', getDeviceId());
 
-        await guestbookApi.upload(config.eventId, formData);
+        await guestbookApi.boothUpload(config.eventId, formData);
 
         newProgress[i] = 100;
         setUploadProgress([...newProgress]);

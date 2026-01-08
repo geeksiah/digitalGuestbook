@@ -64,8 +64,9 @@ const upload = multer({
 
 /**
  * Middleware to verify guestbook access
+ * @param requireAccessCode - Whether to require access code for invitation-only events (default: true)
  */
-const verifyGuestbookAccess = asyncHandler(async (req, res, next) => {
+const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => asyncHandler(async (req, res, next) => {
   const event = await prisma.event.findFirst({
     where: {
       OR: [
@@ -89,8 +90,8 @@ const verifyGuestbookAccess = asyncHandler(async (req, res, next) => {
     throw new AppError('Guestbook is only available during the live event', 400);
   }
 
-  // For invitation-only events, verify guest has valid invitation
-  if (event.invitationOnly) {
+  // For invitation-only events, verify guest has valid invitation (unless booth mode)
+  if (event.invitationOnly && requireAccessCode) {
     const { accessCode } = req.query;
     
     if (!accessCode) {
@@ -116,6 +117,12 @@ const verifyGuestbookAccess = asyncHandler(async (req, res, next) => {
   (req as any).event = event;
   next();
 });
+
+// Standard guestbook access middleware (requires access code for invitation-only events)
+const verifyGuestbookAccess = createGuestbookAccessMiddleware(true);
+
+// Booth mode access middleware (no access code required - kiosk mode)
+const verifyBoothAccess = createGuestbookAccessMiddleware(false);
 
 /**
  * GET /api/guestbook/:eventId/config
@@ -285,9 +292,9 @@ router.get('/:eventId/quota', verifyGuestbookAccess, asyncHandler(async (req, re
 
 /**
  * GET /api/guestbook/:eventId/booth
- * Get booth mode configuration
+ * Get booth mode configuration (no access code required - kiosk mode)
  */
-router.get('/:eventId/booth', verifyGuestbookAccess, asyncHandler(async (req, res) => {
+router.get('/:eventId/booth', verifyBoothAccess, asyncHandler(async (req, res) => {
   const event = (req as any).event;
 
   res.json({
@@ -296,8 +303,48 @@ router.get('/:eventId/booth', verifyGuestbookAccess, asyncHandler(async (req, re
       eventName: event.name,
       maxRecordingDuration: event.maxRecordingDuration,
       minRecordingDuration: event.minRecordingDuration,
-      // Booth mode typically allows unlimited photos from the kiosk
+      // Booth mode allows unlimited photos from the kiosk
       unlimitedPhotos: true,
+    },
+  });
+}));
+
+/**
+ * POST /api/guestbook/:eventId/booth/upload
+ * Upload media in booth mode (no access code required)
+ */
+router.post('/:eventId/booth/upload', verifyBoothAccess, upload.single('media'), asyncHandler(async (req, res) => {
+  const event = (req as any).event;
+  const file = req.file;
+
+  if (!file) {
+    throw new AppError('No media file provided', 400);
+  }
+
+  const data = mediaUploadSchema.parse({
+    ...req.body,
+    captureMode: 'BOOTH', // Force booth mode
+  });
+
+  // Create media entry
+  const media = await prisma.media.create({
+    data: {
+      eventId: event.id,
+      type: data.type,
+      filePath: `/uploads/media/${event.id}/${file.filename}`,
+      guestName: data.guestName || 'Booth Guest',
+      guestEmail: data.guestEmail || null,
+      captureMode: 'BOOTH',
+      deviceId: data.deviceId,
+      duration: data.duration,
+    },
+  });
+
+  res.status(201).json({
+    message: 'Media uploaded successfully',
+    media: {
+      id: media.id,
+      type: media.type,
     },
   });
 }));

@@ -111,13 +111,17 @@ export const guestbookApi = {
     axios.get(`${API_BASE_URL}/api/guestbook/${eventId}/config`, {
       params: accessCode ? { accessCode } : undefined,
     }),
-  getBoothConfig: (eventId: string, accessCode?: string) =>
-    axios.get(`${API_BASE_URL}/api/guestbook/${eventId}/booth`, {
-      params: accessCode ? { accessCode } : undefined,
-    }),
+  getBoothConfig: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/guestbook/${eventId}/booth`),
   upload: (eventId: string, formData: FormData, accessCode?: string) =>
     axios.post(
       `${API_BASE_URL}/api/guestbook/${eventId}/upload${accessCode ? `?accessCode=${accessCode}` : ''}`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ),
+  boothUpload: (eventId: string, formData: FormData) =>
+    axios.post(
+      `${API_BASE_URL}/api/guestbook/${eventId}/booth/upload`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     ),
