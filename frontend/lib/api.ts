@@ -130,4 +130,13 @@ export const coupleApi = {
   downloadMedia: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/media/download`, { responseType: 'blob' }),
 };
 
+// System Settings API (admin only)
+export const settingsApi = {
+  get: () => api.get('/settings'),
+  update: (data: any) => api.patch('/settings', data),
+  testEmail: (email: string) => api.post('/settings/test-email', { email }),
+  testSMS: (phone: string) => api.post('/settings/test-sms', { phone }),
+  testWhatsApp: (phone: string) => api.post('/settings/test-whatsapp', { phone }),
+};
+
 export default api;

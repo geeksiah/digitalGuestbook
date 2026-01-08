@@ -75,6 +75,14 @@ model Event {
   // Reel Generation (Admin toggle per event)
   reelEnabled          Boolean @default(false)
   
+  // Notification Settings per Event
+  notifyOnRsvp         Boolean @default(true)
+  notifyOnCheckIn      Boolean @default(false)
+  notifyOnGuestbook    Boolean @default(false)
+  emailNotifications   Boolean @default(true)
+  smsNotifications     Boolean @default(false)
+  whatsappNotifications Boolean @default(false)
+  
   // Metadata
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -312,6 +320,46 @@ model Broadcast {
 
   // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSettings {
+  id        String   @id @default("default")
+  
+  // Email Settings (SMTP)
+  smtpHost      String?
+  smtpPort      Int?
+  smtpUser      String?
+  smtpPass      String?
+  smtpFrom      String?
+  smtpFromName  String?
+  smtpSecure    Boolean @default(true)
+  
+  // SMS Settings (Twilio)
+  twilioAccountSid  String?
+  twilioAuthToken   String?
+  twilioPhoneNumber String?
+  
+  // WhatsApp Settings (Twilio/Meta)
+  whatsappApiKey    String?
+  whatsappPhoneId   String?
+  whatsappBusinessId String?
+  
+  // General Settings
+  siteName          String @default("Digital Event Platform")
+  siteUrl           String?
+  logoUrl           String?
+  
+  // Feature Toggles
+  emailEnabled      Boolean @default(false)
+  smsEnabled        Boolean @default(false)
+  whatsappEnabled   Boolean @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ============================================

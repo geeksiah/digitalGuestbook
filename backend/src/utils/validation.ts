@@ -67,6 +67,14 @@ export const updateEventSchema = z.object({
   minRecordingDuration: z.number().min(5).max(60).optional(),
   maxPhotosPerGuest: z.number().min(1).max(50).optional(),
   
+  // Notification Settings
+  notifyOnRsvp: z.boolean().optional(),
+  notifyOnCheckIn: z.boolean().optional(),
+  notifyOnGuestbook: z.boolean().optional(),
+  emailNotifications: z.boolean().optional(),
+  smsNotifications: z.boolean().optional(),
+  whatsappNotifications: z.boolean().optional(),
+  
   // Phase & Status
   phase: z.enum(['PRE_EVENT', 'LIVE', 'POST_EVENT']).optional(),
   phaseOverride: z.boolean().optional(),

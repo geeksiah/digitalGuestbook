@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { calculateEventPhase } from '../utils/phase';
+import { calculateEventPhase } from '../utils/phase.js';
+import { generateInvitationPass } from '../services/invitation.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -143,22 +144,10 @@ router.post('/:token/rsvps/:rsvpId/review', validateCoupleToken, async (req: Req
       },
     });
 
-    // If approved, create invitation with QR code
+    // If approved, create invitation with proper QR code
     if (status === 'APPROVED') {
-      const accessCode = generateAccessCode();
-      const token = generateToken();
-
-      await prisma.invitation.create({
-        data: {
-          rsvpId,
-          eventId,
-          accessCode,
-          token,
-          qrCodeData: `/api/qr/${token}`, // QR code data/URL
-          guestName: rsvp.primaryName,
-          guestCount: rsvp.guestCount,
-        },
-      });
+      // Use the invitation service to generate proper QR codes
+      const invitation = await generateInvitationPass(rsvpId);
 
       // Log the approval
       await prisma.auditLog.create({
@@ -167,7 +156,12 @@ router.post('/:token/rsvps/:rsvpId/review', validateCoupleToken, async (req: Req
           action: 'RSVP_APPROVED',
           entityType: 'RSVP',
           entityId: rsvpId,
-          details: JSON.stringify({ rsvpId, guestName: rsvp.primaryName }),
+          details: JSON.stringify({ 
+            rsvpId, 
+            guestName: rsvp.primaryName,
+            invitationId: invitation.id,
+            accessCode: invitation.accessCode,
+          }),
         },
       });
     } else {
@@ -284,19 +278,5 @@ router.get('/:token/media/download', validateCoupleToken, async (req: Request, r
     res.status(500).json({ error: 'Failed to download media' });
   }
 });
-
-// Helper functions
-function generateAccessCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function generateToken(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
 
 export default router;

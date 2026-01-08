@@ -21,6 +21,7 @@ import guestbookRoutes from './routes/guestbook.js';
 import mediaRoutes from './routes/media.js';
 import coupleRoutes from './routes/couple.js';
 import publicRoutes from './routes/public.js';
+import settingsRoutes from './routes/settings.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -132,6 +133,9 @@ app.use('/api/couple', coupleRoutes);
 
 // Public Event Pages
 app.use('/api/public', publicRoutes);
+
+// System Settings (admin only)
+app.use('/api/settings', settingsRoutes);
 
 // 404 Handler
 app.use((req, res) => {
