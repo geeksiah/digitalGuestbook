@@ -39,6 +39,15 @@ interface Event {
   rsvpTemplateId: string | null;
   guestbookTemplateId: string | null;
   thankYouTemplateId: string | null;
+  // Event branding
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  // Couple info
+  coupleName1?: string;
+  coupleName2?: string;
+  coupleEmail?: string;
+  couplePhone?: string;
   _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number };
 }
 

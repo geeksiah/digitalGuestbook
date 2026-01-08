@@ -1,31 +1,50 @@
-# Use Node.js with FFmpeg support
+# Multi-stage build for smaller final image
+
+# Stage 1: Build
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Copy package files AND prisma schema
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Install ALL dependencies (including devDependencies for TypeScript)
+RUN npm ci
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy source code
+COPY . .
+
+# Build TypeScript
+RUN npm run build
+
+# Stage 2: Production
 FROM node:20-slim
 
-# Install FFmpeg and other dependencies
+# Install FFmpeg and other runtime dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     openssl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files AND prisma schema first (needed for postinstall)
+# Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies (this will run postinstall which needs prisma schema)
+# Install only production dependencies
 RUN npm ci --omit=dev
 
-# Generate Prisma client
+# Generate Prisma client in production image
 RUN npx prisma generate
 
-# Copy the rest of the application
-COPY . .
-
-# Build TypeScript
-RUN npm run build
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
 
 # Create directories for uploads and generated files
 RUN mkdir -p uploads/media generated/reels data
