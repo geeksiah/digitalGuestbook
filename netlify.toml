@@ -1,4 +1,5 @@
 [build]
+  base = "frontend"
   command = "npm run build"
   publish = ".next"
 
@@ -8,7 +9,4 @@
 # Next.js requires the @netlify/plugin-nextjs
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-# Environment variables (set these in Netlify dashboard)
-# NEXT_PUBLIC_API_URL = "https://your-backend-url.com"
 

@@ -11,14 +11,12 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files AND prisma schema first (needed for postinstall)
 COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy prisma schema
 COPY prisma ./prisma/
+
+# Install dependencies (this will run postinstall which needs prisma schema)
+RUN npm ci --omit=dev
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -26,8 +24,11 @@ RUN npx prisma generate
 # Copy the rest of the application
 COPY . .
 
+# Build TypeScript
+RUN npm run build
+
 # Create directories for uploads and generated files
-RUN mkdir -p uploads/media generated/reels
+RUN mkdir -p uploads/media generated/reels data
 
 # Expose port
 EXPOSE 3001
@@ -37,5 +38,4 @@ ENV NODE_ENV=production
 ENV PORT=3001
 
 # Start the application
-CMD ["npm", "start"]
-
+CMD ["npm", "run", "start:prod"]
