@@ -628,7 +628,7 @@ export default function GuestbookPage() {
             <p className="text-surface-400">Enter your 6-digit invitation code</p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="bg-white rounded-2xl shadow-2xl p-8">
             <div className="flex justify-center gap-2 sm:gap-3 mb-6" onPaste={handleCodePaste}>
               {accessCodeInput.map((digit, index) => (
                 <input
@@ -640,6 +640,7 @@ export default function GuestbookPage() {
                   value={digit}
                   onChange={(e) => handleCodeChange(index, e.target.value)}
                   onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                  onPaste={handleCodePaste}
                   disabled={verifying}
                   className={cn(
                     'w-11 h-14 sm:w-12 sm:h-16 text-center text-2xl font-bold rounded-xl border-2 bg-surface-50',

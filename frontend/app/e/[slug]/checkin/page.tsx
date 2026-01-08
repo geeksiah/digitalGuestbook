@@ -154,6 +154,22 @@ export default function CheckInPage() {
   };
 
   const handleCodeChange = (index: number, value: string) => {
+    // Handle pasted multi-digit input
+    if (value.length > 1) {
+      const digits = value.replace(/\D/g, '').slice(0, 6).split('');
+      const newCode = [...accessCode];
+      digits.forEach((digit, i) => {
+        if (index + i < 6) newCode[index + i] = digit;
+      });
+      setAccessCode(newCode);
+      const nextIndex = Math.min(index + digits.length, 5);
+      document.getElementById(`code-${nextIndex}`)?.focus();
+      if (newCode.every(d => d) && newCode.join('').length === 6) {
+        handleCheckIn(newCode.join(''), undefined);
+      }
+      return;
+    }
+
     if (!/^\d*$/.test(value)) return;
     
     const newCode = [...accessCode];
@@ -176,6 +192,20 @@ export default function CheckInPage() {
     if (e.key === 'Backspace' && !accessCode[index] && index > 0) {
       const prevInput = document.getElementById(`code-${index - 1}`);
       prevInput?.focus();
+    }
+  };
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length > 0) {
+      const newCode = pasted.split('').concat(new Array(6 - pasted.length).fill(''));
+      setAccessCode(newCode.slice(0, 6));
+      if (pasted.length === 6) {
+        handleCheckIn(pasted, undefined);
+      } else {
+        document.getElementById(`code-${pasted.length}`)?.focus();
+      }
     }
   };
 
@@ -376,7 +406,7 @@ export default function CheckInPage() {
                 <h2 className="text-xl sm:text-2xl font-display font-bold text-white mb-2">Enter Access Code</h2>
                 <p className="text-surface-400 mb-6 sm:mb-8 text-sm sm:text-base">Enter your 6-digit invitation code</p>
 
-                <div className="flex justify-center gap-2 sm:gap-3 mb-6">
+                <div className="flex justify-center gap-2 sm:gap-3 mb-6" onPaste={handleCodePaste}>
                   {accessCode.map((digit, index) => (
                     <input
                       key={index}
@@ -384,10 +414,11 @@ export default function CheckInPage() {
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      maxLength={1}
+                      maxLength={6}
                       value={digit}
                       onChange={(e) => handleCodeChange(index, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(index, e)}
+                      onPaste={handleCodePaste}
                       className={cn(
                         'w-11 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-bold rounded-xl border-2 bg-white/10 text-white',
                         'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
