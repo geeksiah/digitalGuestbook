@@ -1,0 +1,25 @@
+# Render deployment configuration
+# This file configures automatic deployment on Render.com
+
+services:
+  - type: web
+    name: digital-event-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        value: file:./prod.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false  # Set this to your Netlify frontend URL
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1
+
