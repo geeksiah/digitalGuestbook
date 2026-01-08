@@ -72,7 +72,10 @@ interface MediaAsset {
   type: 'VIDEO' | 'AUDIO' | 'PHOTO';
   guestName: string | null;
   filePath: string;
+  fileName: string;
+  fileSize?: number;
   duration: number | null;
+  thumbnailPath: string | null;
   createdAt: string;
 }
 

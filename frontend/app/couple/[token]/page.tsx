@@ -41,7 +41,10 @@ interface MediaAsset {
   type: 'VIDEO' | 'AUDIO' | 'PHOTO';
   guestName: string | null;
   filePath: string;
+  fileName: string;
+  fileSize?: number;
   duration: number | null;
+  thumbnailPath: string | null;
   createdAt: string;
 }
 
@@ -217,9 +220,9 @@ export default function CouplePortalPage() {
           <div className="w-14 h-14 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-4 text-red-500">{Icons.close}</div>
           <h1 className="text-xl font-semibold text-navy-900 mb-2">Access Denied</h1>
           <p className="text-surface-500">{error}</p>
-        </div>
       </div>
-    );
+    </div>
+  );
   }
 
   if (!event) return null;
@@ -280,7 +283,7 @@ export default function CouplePortalPage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Dashboard */}
         {activeTab === 'dashboard' && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: 'Total RSVPs', value: event._count.rsvps, icon: Icons.rsvp },
               { label: 'Approved', value: event._count.invitations, icon: Icons.users },
@@ -299,7 +302,7 @@ export default function CouplePortalPage() {
             ))}
 
             <div className="sm:col-span-2 lg:col-span-4 bg-white rounded-xl border border-surface-200 p-5">
-              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium text-navy-900">Recent Messages</h3>
                 <button onClick={() => setActiveTab('media')} className="text-sm text-surface-500 hover:text-navy-900 transition-colors">View all</button>
               </div>
@@ -307,17 +310,17 @@ export default function CouplePortalPage() {
                 <p className="text-surface-400 text-center py-8">No messages yet</p>
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                  {media.slice(0, 6).map(m => (
+                    {media.slice(0, 6).map(m => (
                     <div key={m.id} onClick={() => setActiveTab('media')} className="aspect-square bg-surface-100 rounded-lg cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center overflow-hidden">
                       {m.type === 'PHOTO' ? (
                         <img src={`${API_BASE_URL}${m.filePath}`} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="text-surface-400">{m.type === 'VIDEO' ? Icons.video : Icons.audio}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           </div>
         )}
@@ -327,12 +330,12 @@ export default function CouplePortalPage() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex gap-1 bg-white rounded-lg p-1 border border-surface-200">
-                {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
+              {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
                   <button key={s} onClick={() => { setRsvpFilter(s); fetchRsvps(); }} className={cn(
                     'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                     rsvpFilter === s ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-50'
                   )}>
-                    {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+                  {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
                   </button>
                 ))}
               </div>
@@ -345,8 +348,8 @@ export default function CouplePortalPage() {
                     {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(f => (
                       <button key={f} onClick={() => exportRsvps(f)} className="w-full px-4 py-2 text-left text-sm hover:bg-surface-50 transition-colors">
                         {f === 'all' ? 'All RSVPs' : f.charAt(0) + f.slice(1).toLowerCase()}
-                      </button>
-                    ))}
+                </button>
+              ))}
                   </div>
                 )}
               </div>
