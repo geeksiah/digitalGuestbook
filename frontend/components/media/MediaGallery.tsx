@@ -125,35 +125,66 @@ export default function MediaGallery({
   const handleDownload = async (item: MediaAsset, e?: React.MouseEvent) => {
     e?.stopPropagation();
     try {
+      toast.loading('Downloading...', { id: `dl-${item.id}` });
+      
+      // Fetch the file as blob to handle cross-origin
+      const response = await fetch(`${API_BASE_URL}${item.filePath}`);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
       const link = document.createElement('a');
-      link.href = `${API_BASE_URL}${item.filePath}`;
+      link.href = url;
       link.download = item.fileName || `media-${item.id}`;
-      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast.success('Download started');
-    } catch {
+      
+      // Clean up blob URL
+      URL.revokeObjectURL(url);
+      
+      toast.dismiss(`dl-${item.id}`);
+      toast.success('Downloaded!');
+    } catch (error) {
+      toast.dismiss(`dl-${item.id}`);
       toast.error('Failed to download');
+      console.error('Download error:', error);
     }
   };
 
   const handleDownloadAll = async () => {
     try {
-      toast.loading('Preparing download...', { id: 'download' });
-      const response = await mediaApi.downloadAll(eventId);
-      const blob = new Blob([response.data], { type: 'application/zip' });
+      toast.loading('Preparing ZIP archive...', { id: 'download-all' });
+      
+      // Get auth token for protected endpoint
+      const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+      
+      const response = await fetch(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Download failed' }));
+        throw new Error(error.error || 'Download failed');
+      }
+      
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${eventSlug || eventId}-media.zip`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.dismiss('download');
-      toast.success('Download started');
-    } catch {
-      toast.dismiss('download');
-      toast.error('Failed to download');
+      
+      toast.dismiss('download-all');
+      toast.success('Download started!');
+    } catch (error: any) {
+      toast.dismiss('download-all');
+      toast.error(error.message || 'Failed to download');
+      console.error('Download all error:', error);
     }
   };
 

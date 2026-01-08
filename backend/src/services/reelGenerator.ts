@@ -143,7 +143,11 @@ const processReel = async (jobId: string, eventId: string, outputName: string, m
 
   for (let i = 0; i < videos.length; i++) {
     const video = videos[i];
-    const videoPath = path.join(baseDir, video.filePath);
+    // Remove leading slash for proper path joining
+    const relativePath = video.filePath.startsWith('/') 
+      ? video.filePath.slice(1) 
+      : video.filePath;
+    const videoPath = path.join(baseDir, relativePath);
     
     if (!fs.existsSync(videoPath)) {
       console.warn(`[ReelGenerator] Video file not found: ${videoPath}`);

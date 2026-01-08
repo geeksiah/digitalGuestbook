@@ -79,12 +79,19 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
     throw new AppError('Media asset not found', 404);
   }
 
-  const filePath = path.join(__dirname, '../..', mediaAsset.filePath);
+  // Remove leading slash from filePath for proper path joining
+  const relativePath = mediaAsset.filePath.startsWith('/') 
+    ? mediaAsset.filePath.slice(1) 
+    : mediaAsset.filePath;
+  const filePath = path.join(__dirname, '../..', relativePath);
   
   if (!fs.existsSync(filePath)) {
-    throw new AppError('File not found', 404);
+    console.error(`[Media] File not found: ${filePath}`);
+    throw new AppError('File not found on server', 404);
   }
 
+  // Set headers for proper download
+  res.setHeader('Content-Disposition', `attachment; filename="${mediaAsset.fileName}"`);
   res.download(filePath, mediaAsset.fileName);
 }));
 
@@ -129,7 +136,11 @@ router.get('/event/:eventId/download-all', authenticateAdmin, asyncHandler(async
 
   // Add files to archive organized by type
   for (const asset of mediaAssets) {
-    const filePath = path.join(__dirname, '../..', asset.filePath);
+    // Remove leading slash from filePath for proper path joining
+    const relativePath = asset.filePath.startsWith('/') 
+      ? asset.filePath.slice(1) 
+      : asset.filePath;
+    const filePath = path.join(__dirname, '../..', relativePath);
     
     if (fs.existsSync(filePath)) {
       const folder = asset.type.toLowerCase();
@@ -138,6 +149,8 @@ router.get('/event/:eventId/download-all', authenticateAdmin, asyncHandler(async
         : asset.fileName;
       
       archive.file(filePath, { name: `${folder}/${fileName}` });
+    } else {
+      console.warn(`[Media] ZIP: File not found: ${filePath}`);
     }
   }
 
@@ -158,14 +171,20 @@ router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
   }
 
   // Delete file from disk
-  const filePath = path.join(__dirname, '../..', mediaAsset.filePath);
+  const relativePath = mediaAsset.filePath.startsWith('/') 
+    ? mediaAsset.filePath.slice(1) 
+    : mediaAsset.filePath;
+  const filePath = path.join(__dirname, '../..', relativePath);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
 
   // Delete thumbnail if exists
   if (mediaAsset.thumbnailPath) {
-    const thumbPath = path.join(__dirname, '../..', mediaAsset.thumbnailPath);
+    const thumbRelativePath = mediaAsset.thumbnailPath.startsWith('/') 
+      ? mediaAsset.thumbnailPath.slice(1) 
+      : mediaAsset.thumbnailPath;
+    const thumbPath = path.join(__dirname, '../..', thumbRelativePath);
     if (fs.existsSync(thumbPath)) {
       fs.unlinkSync(thumbPath);
     }
