@@ -6,11 +6,29 @@ import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type ViewState = 'welcome' | 'menu' | 'video' | 'audio' | 'photo' | 'success';
-type RecordingState = 'idle' | 'ready' | 'recording' | 'preview' | 'uploading';
+type ViewState = 'welcome' | 'menu' | 'video' | 'audio' | 'photo' | 'photo-preview' | 'success';
+type RecordingState = 'idle' | 'countdown' | 'ready' | 'recording' | 'preview' | 'uploading';
 type PermissionState = 'checking' | 'granted' | 'denied';
 
-const AUTO_RESET_SECONDS = 8;
+const AUTO_RESET_SECONDS = 10;
+const SHUTTER_COUNTDOWN = 3;
+
+interface BoothConfig {
+  eventId: string;
+  eventName: string;
+  maxRecordingDuration: number;
+  minRecordingDuration: number;
+  maxPhotosPerSession: number;
+  primaryColor: string;
+  secondaryColor: string;
+  template?: {
+    id: string;
+    name: string;
+    htmlContent: string;
+    cssContent?: string;
+    jsContent?: string;
+  } | null;
+}
 
 export default function BoothPage() {
   const params = useParams();
@@ -21,7 +39,7 @@ export default function BoothPage() {
   const [error, setError] = useState<string | null>(null);
   const [eventName, setEventName] = useState('');
   const [eventId, setEventId] = useState<string | null>(null);
-  const [config, setConfig] = useState<any>(null);
+  const [config, setConfig] = useState<BoothConfig | null>(null);
   const [primaryColor, setPrimaryColor] = useState('#6366f1');
   const [secondaryColor, setSecondaryColor] = useState('#e0e7ff');
 
@@ -33,11 +51,13 @@ export default function BoothPage() {
   const [permissionState, setPermissionState] = useState<PermissionState>('checking');
   const [resetCountdown, setResetCountdown] = useState(AUTO_RESET_SECONDS);
 
-  // Photo upload state
-  const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
-  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
+  // Photo capture state
+  const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]); // base64 data URLs
+  const [capturedBlobs, setCapturedBlobs] = useState<Blob[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number[]>([]);
   const [currentUploadIndex, setCurrentUploadIndex] = useState(-1);
+  const [shutterCountdown, setShutterCountdown] = useState(0);
+  const [flashActive, setFlashActive] = useState(false);
 
   // Audio visualization state
   const [audioWaveform, setAudioWaveform] = useState<number[]>(new Array(50).fill(0));
@@ -45,16 +65,17 @@ export default function BoothPage() {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const photoCanvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const recordedBlobRef = useRef<Blob | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize
   useEffect(() => {
@@ -71,15 +92,15 @@ export default function BoothPage() {
       }
     };
     document.addEventListener('keydown', preventKeyboard);
-
+    
     return () => {
-      cleanup();
       document.removeEventListener('contextmenu', preventContextMenu);
       document.removeEventListener('keydown', preventKeyboard);
+      cleanup();
     };
-  }, [slug]);
+  }, []);
 
-  // Auto-reset countdown when on success screen
+  // Auto-reset after success
   useEffect(() => {
     if (viewState === 'success') {
       setResetCountdown(AUTO_RESET_SECONDS);
@@ -92,30 +113,29 @@ export default function BoothPage() {
           return prev - 1;
         });
       }, 1000);
-    } else {
+    }
+    return () => {
       if (resetTimerRef.current) {
         clearInterval(resetTimerRef.current);
         resetTimerRef.current = null;
       }
-    }
-
-    return () => {
-      if (resetTimerRef.current) {
-        clearInterval(resetTimerRef.current);
-      }
     };
   }, [viewState]);
 
-  const cleanup = useCallback(() => {
-    stopStream();
+  // Cleanup function
+  const cleanup = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (resetTimerRef.current) clearInterval(resetTimerRef.current);
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close();
-    }
-    photoPreviewUrls.forEach(url => URL.revokeObjectURL(url));
-  }, [photoPreviewUrls]);
+    if (audioContextRef.current) audioContextRef.current.close();
+    stopStream();
+    
+    // Clean up photo URLs
+    capturedPhotos.forEach(url => {
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+    });
+  };
 
   const stopStream = () => {
     if (streamRef.current) {
@@ -130,10 +150,11 @@ export default function BoothPage() {
     setGuestName('');
     setRecordingState('idle');
     setPermissionState('checking');
-    setSelectedPhotos([]);
-    setPhotoPreviewUrls([]);
+    setCapturedPhotos([]);
+    setCapturedBlobs([]);
     setUploadProgress([]);
     setCurrentUploadIndex(-1);
+    setShutterCountdown(0);
     recordedBlobRef.current = null;
     chunksRef.current = [];
     setRecordingTime(0);
@@ -172,54 +193,28 @@ export default function BoothPage() {
   };
 
   // Permission handling
-  const requestMediaPermission = async (type: 'video' | 'audio'): Promise<boolean> => {
+  const requestMediaPermission = async (type: 'video' | 'audio' | 'photo'): Promise<boolean> => {
     setPermissionState('checking');
 
     try {
-      const constraints = type === 'video'
+      const constraints = type === 'video' || type === 'photo'
         ? { 
             video: { 
               facingMode: 'user',
-              width: { min: 1280, ideal: 1920, max: 3840 },
-              height: { min: 720, ideal: 1080, max: 2160 },
-              frameRate: { min: 24, ideal: 30, max: 60 },
-              aspectRatio: { ideal: 16/9 }
+              width: { ideal: 1920, min: 1280 },
+              height: { ideal: 1080, min: 720 },
+              frameRate: { ideal: 30 }
             }, 
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              sampleRate: 44100
-            }
+            audio: type === 'video' 
           }
-        : { 
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              sampleRate: 44100
-            }
-          };
+        : { audio: true };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       setPermissionState('granted');
       return true;
-    } catch (err: any) {
+    } catch (err) {
       console.error('Permission error:', err);
-      // Fallback to lower quality if HD not available
-      if (type === 'video') {
-        try {
-          const fallbackStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: true
-          });
-          streamRef.current = fallbackStream;
-          setPermissionState('granted');
-          return true;
-        } catch {
-          setPermissionState('denied');
-          return false;
-        }
-      }
       setPermissionState('denied');
       return false;
     }
@@ -229,10 +224,11 @@ export default function BoothPage() {
   const initializeVideo = async () => {
     setViewState('video');
     setRecordingState('idle');
-    recordedBlobRef.current = null;
+    
+    const granted = await requestMediaPermission('video');
+    if (!granted) return;
 
-    const hasPermission = await requestMediaPermission('video');
-    if (hasPermission && videoRef.current && streamRef.current) {
+    if (videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
       await videoRef.current.play();
       setRecordingState('ready');
@@ -242,42 +238,38 @@ export default function BoothPage() {
   const startVideoRecording = () => {
     if (!streamRef.current) return;
 
-    // Use VP9 for better quality, fallback to VP8
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-      ? 'video/webm;codecs=vp9,opus'
-      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-      ? 'video/webm;codecs=vp8,opus'
-      : 'video/webm';
-    
-    // High quality video bitrate (8 Mbps for HD)
-    const mediaRecorder = new MediaRecorder(streamRef.current, { 
-      mimeType,
-      videoBitsPerSecond: 8000000, // 8 Mbps for HD quality
-      audioBitsPerSecond: 128000   // 128 kbps for audio
-    });
-    mediaRecorderRef.current = mediaRecorder;
     chunksRef.current = [];
+    setRecordingTime(0);
+    setRecordingState('recording');
+
+    const mediaRecorder = new MediaRecorder(streamRef.current, {
+      mimeType: 'video/webm;codecs=vp9',
+    });
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
 
     mediaRecorder.onstop = () => {
-      recordedBlobRef.current = new Blob(chunksRef.current, { type: 'video/webm' });
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+      recordedBlobRef.current = blob;
+      
       if (previewVideoRef.current) {
-        previewVideoRef.current.src = URL.createObjectURL(recordedBlobRef.current);
+        previewVideoRef.current.src = URL.createObjectURL(blob);
       }
+      
+      stopStream();
       setRecordingState('preview');
     };
 
+    mediaRecorderRef.current = mediaRecorder;
     mediaRecorder.start(1000);
-    setRecordingState('recording');
-    setRecordingTime(0);
 
+    const maxDuration = config?.maxRecordingDuration || 120;
     timerRef.current = setInterval(() => {
       setRecordingTime(prev => {
         const newTime = prev + 1;
-        if (config && newTime >= config.maxRecordingDuration) {
+        if (newTime >= maxDuration) {
           stopVideoRecording();
         }
         return newTime;
@@ -292,7 +284,6 @@ export default function BoothPage() {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      stopStream();
     }
   };
 
@@ -300,87 +291,70 @@ export default function BoothPage() {
   const initializeAudio = async () => {
     setViewState('audio');
     setRecordingState('idle');
-    recordedBlobRef.current = null;
-    setAudioWaveform(new Array(50).fill(0));
+    
+    const granted = await requestMediaPermission('audio');
+    if (!granted) return;
 
-    const hasPermission = await requestMediaPermission('audio');
-    if (hasPermission && streamRef.current) {
-      setupAudioVisualization(streamRef.current);
-      setRecordingState('ready');
+    // Set up audio visualization
+    audioContextRef.current = new AudioContext();
+    analyserRef.current = audioContextRef.current.createAnalyser();
+    analyserRef.current.fftSize = 128;
+    
+    if (streamRef.current) {
+      const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
+      source.connect(analyserRef.current);
     }
+
+    setRecordingState('ready');
+    visualizeAudio();
   };
 
-  const setupAudioVisualization = (stream: MediaStream) => {
-    try {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 128;
-      analyserRef.current.smoothingTimeConstant = 0.8;
+  const visualizeAudio = () => {
+    if (!analyserRef.current) return;
 
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
-
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-
-      const updateVisualization = () => {
-        if (!analyserRef.current) return;
-
-        analyserRef.current.getByteFrequencyData(dataArray);
-
-        const bars = 50;
-        const step = Math.floor(dataArray.length / bars);
-        const waveformData = [];
-        for (let i = 0; i < bars; i++) {
-          const value = dataArray[i * step] / 255;
-          waveformData.push(value);
-        }
-        setAudioWaveform(waveformData);
-
-        animationRef.current = requestAnimationFrame(updateVisualization);
-      };
-
-      updateVisualization();
-    } catch (err) {
-      console.error('Audio visualization error:', err);
-    }
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    
+    const update = () => {
+      analyserRef.current?.getByteFrequencyData(dataArray);
+      const normalized = Array.from(dataArray.slice(0, 50)).map(v => v / 255);
+      setAudioWaveform(normalized);
+      animationRef.current = requestAnimationFrame(update);
+    };
+    
+    update();
   };
 
   const startAudioRecording = () => {
     if (!streamRef.current) return;
 
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm';
-    
-    // High quality audio (192 kbps)
-    const mediaRecorder = new MediaRecorder(streamRef.current, { 
-      mimeType,
-      audioBitsPerSecond: 192000 // 192 kbps for high quality audio
-    });
-    mediaRecorderRef.current = mediaRecorder;
     chunksRef.current = [];
+    setRecordingTime(0);
+    setRecordingState('recording');
+
+    const mediaRecorder = new MediaRecorder(streamRef.current, {
+      mimeType: 'audio/webm',
+    });
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
 
     mediaRecorder.onstop = () => {
-      recordedBlobRef.current = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      recordedBlobRef.current = blob;
+      stopStream();
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       setRecordingState('preview');
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
     };
 
+    mediaRecorderRef.current = mediaRecorder;
     mediaRecorder.start(1000);
-    setRecordingState('recording');
-    setRecordingTime(0);
 
+    const maxDuration = config?.maxRecordingDuration || 120;
     timerRef.current = setInterval(() => {
       setRecordingTime(prev => {
         const newTime = prev + 1;
-        if (config && newTime >= config.maxRecordingDuration) {
+        if (newTime >= maxDuration) {
           stopAudioRecording();
         }
         return newTime;
@@ -400,44 +374,100 @@ export default function BoothPage() {
   };
 
   // ==================== PHOTO FUNCTIONS ====================
-  const initializePhoto = () => {
+  const initializePhoto = async () => {
     setViewState('photo');
     setRecordingState('idle');
-    setSelectedPhotos([]);
-    setPhotoPreviewUrls([]);
+    setCapturedPhotos([]);
+    setCapturedBlobs([]);
     setUploadProgress([]);
     setCurrentUploadIndex(-1);
+    
+    const granted = await requestMediaPermission('photo');
+    if (!granted) return;
+
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      await videoRef.current.play();
+      setRecordingState('ready');
+    }
   };
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  const startShutterCountdown = () => {
+    setShutterCountdown(SHUTTER_COUNTDOWN);
+    setRecordingState('countdown');
+    
+    countdownTimerRef.current = setInterval(() => {
+      setShutterCountdown(prev => {
+        if (prev <= 1) {
+          if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+          }
+          capturePhoto();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-    // Booth mode allows unlimited photos (or a high limit)
-    const maxPhotos = 20;
-    const remainingSlots = maxPhotos - selectedPhotos.length;
-    const newFiles = files.slice(0, remainingSlots);
-
-    if (files.length > remainingSlots) {
-      toast.error(`Maximum ${maxPhotos} photos per session`);
+  const cancelCountdown = () => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
+    setShutterCountdown(0);
+    setRecordingState('ready');
+  };
 
-    const newUrls = newFiles.map(file => URL.createObjectURL(file));
+  const capturePhoto = () => {
+    if (!videoRef.current || !photoCanvasRef.current) return;
 
-    setSelectedPhotos(prev => [...prev, ...newFiles]);
-    setPhotoPreviewUrls(prev => [...prev, ...newUrls]);
-    setUploadProgress(prev => [...prev, ...new Array(newFiles.length).fill(0)]);
+    const video = videoRef.current;
+    const canvas = photoCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    // Set canvas to high resolution
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Mirror the image (selfie mode)
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // Flash effect
+    setFlashActive(true);
+    setTimeout(() => setFlashActive(false), 150);
+
+    // Get high quality image
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+          setCapturedPhotos(prev => [...prev, dataUrl]);
+          setCapturedBlobs(prev => [...prev, blob]);
+          setUploadProgress(prev => [...prev, 0]);
+          setRecordingState('ready');
+        }
+      },
+      'image/jpeg',
+      0.95
+    );
   };
 
   const removePhoto = (index: number) => {
-    URL.revokeObjectURL(photoPreviewUrls[index]);
-    setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
-    setPhotoPreviewUrls(prev => prev.filter((_, i) => i !== index));
+    setCapturedPhotos(prev => prev.filter((_, i) => i !== index));
+    setCapturedBlobs(prev => prev.filter((_, i) => i !== index));
     setUploadProgress(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const goToPhotoPreview = () => {
+    stopStream();
+    setViewState('photo-preview');
   };
 
   // ==================== UPLOAD FUNCTIONS ====================
@@ -469,16 +499,20 @@ export default function BoothPage() {
   };
 
   const uploadPhotos = async () => {
-    if (selectedPhotos.length === 0 || !config) return;
+    if (capturedBlobs.length === 0 || !config) return;
 
     setRecordingState('uploading');
     const newProgress = [...uploadProgress];
 
-    for (let i = 0; i < selectedPhotos.length; i++) {
+    for (let i = 0; i < capturedBlobs.length; i++) {
       setCurrentUploadIndex(i);
       try {
+        const file = new File([capturedBlobs[i]], `booth-photo-${i + 1}.jpg`, {
+          type: 'image/jpeg'
+        });
+
         const formData = new FormData();
-        formData.append('media', selectedPhotos[i]);
+        formData.append('media', file);
         formData.append('type', 'PHOTO');
         formData.append('guestName', guestName || 'Booth Guest');
         formData.append('captureMode', 'BOOTH');
@@ -500,7 +534,7 @@ export default function BoothPage() {
       setTimeout(() => setViewState('success'), 500);
     } else {
       toast.error('Upload failed. Please try again.');
-      setRecordingState('idle');
+      setRecordingState('preview');
     }
   };
 
@@ -517,10 +551,26 @@ export default function BoothPage() {
     }
   };
 
+  const retakePhotos = async () => {
+    setCapturedPhotos([]);
+    setCapturedBlobs([]);
+    setUploadProgress([]);
+    await initializePhoto();
+  };
+
   const startNewSession = () => {
     setViewState('menu');
     setGuestName('');
   };
+
+  const cancelSession = () => {
+    cleanup();
+    resetToWelcome();
+  };
+
+  // Max photos for session
+  const maxPhotosPerSession = config?.maxPhotosPerSession || 10;
+  const canTakeMorePhotos = capturedPhotos.length < maxPhotosPerSession;
 
   // ==================== RENDER STATES ====================
 
@@ -552,7 +602,7 @@ export default function BoothPage() {
   }
 
   // Permission denied
-  if (permissionState === 'denied' && (viewState === 'video' || viewState === 'audio')) {
+  if (permissionState === 'denied' && (viewState === 'video' || viewState === 'audio' || viewState === 'photo')) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
         <div className="text-center max-w-lg">
@@ -563,203 +613,143 @@ export default function BoothPage() {
           </div>
           <h2 className="text-3xl font-bold text-white mb-4">Camera Access Required</h2>
           <p className="text-white/60 text-lg mb-8">
-            Please allow camera and microphone access to record your message.
+            Please allow camera and microphone access to use the booth.
           </p>
-          <button
-            onClick={resetToWelcome}
-            className="px-12 py-4 bg-white text-slate-900 rounded-full text-xl font-bold hover:bg-white/90 transition-all active:scale-95"
-          >
-            Start Over
-          </button>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={cancelSession}
+              className="px-8 py-4 bg-white/10 text-white rounded-full text-lg font-bold hover:bg-white/20 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (viewState === 'video') initializeVideo();
+                else if (viewState === 'audio') initializeAudio();
+                else if (viewState === 'photo') initializePhoto();
+              }}
+              className="px-8 py-4 bg-white text-slate-900 rounded-full text-lg font-bold hover:bg-white/90 transition-all"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // WELCOME SCREEN
+  // ==================== MAIN RENDERS ====================
+
+  // Welcome Screen
   if (viewState === 'welcome') {
     return (
       <div 
-        className="fixed inset-0 flex items-center justify-center p-8 overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${primaryColor}22 0%, #1a1a2e 50%, ${secondaryColor}22 100%)` }}
+        className="fixed inset-0 flex flex-col items-center justify-center p-8 touch-none select-none"
+        style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${secondaryColor}40, ${primaryColor}20)` }}
       >
-        {/* Animated background */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div 
-            className="absolute -top-1/2 -left-1/2 w-full h-full rounded-full blur-3xl animate-pulse" 
-            style={{ background: `radial-gradient(circle, ${primaryColor}40 0%, transparent 70%)` }}
-          />
-          <div 
-            className="absolute -bottom-1/2 -right-1/2 w-full h-full rounded-full blur-3xl animate-pulse" 
-            style={{ background: `radial-gradient(circle, ${secondaryColor}40 0%, transparent 70%)`, animationDelay: '1s' }}
-          />
-        </div>
-
-        <div className="relative text-center max-w-2xl">
-          {/* Event name */}
-          <div className="mb-8">
-            <p className="text-xl uppercase tracking-widest mb-2" style={{ color: primaryColor }}>Digital Guestbook</p>
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 leading-tight">{eventName}</h1>
-          </div>
-
-          {/* Call to action */}
-          <div className="mb-12">
-            <p className="text-white/70 text-2xl md:text-3xl">Tap below to leave a special message</p>
-          </div>
-
-          {/* Start button */}
-          <button
-            onClick={startNewSession}
-            className="group relative px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:bg-white/90 transition-all active:scale-95 shadow-2xl"
-            style={{ boxShadow: `0 25px 50px -12px ${primaryColor}40` }}
-          >
-            <span className="relative z-10 flex items-center gap-3">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Start Recording
-            </span>
-            <div 
-              className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl" 
-              style={{ background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})` }}
-            />
-          </button>
-
-          {/* Decorative icons */}
-          <div className="absolute -left-20 top-1/2 -translate-y-1/2 opacity-20">
-            <svg className="w-40 h-40 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={0.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <div className="absolute -right-20 top-1/2 -translate-y-1/2 opacity-20">
-            <svg className="w-40 h-40 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={0.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // SUCCESS SCREEN
-  if (viewState === 'success') {
-    return (
-      <div className="fixed inset-0 bg-gradient-to-br from-green-900 via-emerald-900 to-teal-900 flex items-center justify-center p-8">
-        {/* Animated particles */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-2 h-2 bg-white/30 rounded-full animate-bounce"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`,
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="relative text-center max-w-lg">
-          {/* Success icon */}
-          <div className="w-32 h-32 mx-auto rounded-full bg-white/20 flex items-center justify-center mb-8 animate-in zoom-in duration-500">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/90 via-purple-900/80 to-slate-900/90" />
+        
+        <div className="relative z-10 text-center max-w-2xl">
+          <div className="w-32 h-32 mx-auto rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center mb-8 animate-pulse">
             <svg className="w-16 h-16 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </div>
-
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4">Thank You!</h1>
-          <p className="text-white/80 text-2xl mb-12">Your message has been saved</p>
-
-          {/* Auto-reset countdown */}
-          <div className="bg-white/10 backdrop-blur rounded-2xl p-6 mb-8">
-            <p className="text-white/70 text-lg mb-2">Screen will reset in</p>
-            <div className="text-6xl font-bold text-white font-mono">{resetCountdown}</div>
-            <p className="text-white/50 text-sm mt-2">seconds</p>
-          </div>
-
-          {/* Manual reset button */}
+          
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4">
+            {eventName || 'Welcome'}
+          </h1>
+          
+          <p className="text-2xl text-white/70 mb-12">
+            Tap to leave a special message
+          </p>
+          
           <button
-            onClick={resetToWelcome}
-            className="px-12 py-4 bg-white text-emerald-900 rounded-full text-xl font-bold hover:bg-white/90 transition-all active:scale-95"
+            onClick={() => setViewState('menu')}
+            className="px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:scale-105 transition-transform active:scale-95 shadow-2xl"
           >
-            Record Another Message
+            Start
           </button>
         </div>
       </div>
     );
   }
 
-  // MENU SCREEN
+  // Menu Screen
   if (viewState === 'menu') {
     return (
-      <div 
-        className="fixed inset-0 flex items-center justify-center p-8"
-        style={{ background: `linear-gradient(135deg, ${primaryColor}22 0%, #1a1a2e 50%, ${secondaryColor}22 100%)` }}
-      >
-        <div className="w-full max-w-4xl">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <p className="text-lg uppercase tracking-widest mb-2" style={{ color: primaryColor }}>{eventName}</p>
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Choose Your Message Type</h1>
-          </div>
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col p-8">
+        {/* Cancel Button */}
+        <div className="absolute top-6 left-6 z-20">
+          <button
+            onClick={cancelSession}
+            className="px-6 py-3 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-all flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </button>
+        </div>
 
-          {/* Name input */}
-          <div className="max-w-md mx-auto mb-12">
-            <label className="block text-white/70 text-lg mb-3 text-center">Your Name (optional)</label>
+        <div className="flex-1 flex flex-col items-center justify-center">
+          {/* Guest Name Input */}
+          <div className="w-full max-w-md mb-12">
+            <label className="block text-white/60 text-lg mb-3 text-center">Your Name (Optional)</label>
             <input
               type="text"
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               placeholder="Enter your name"
-              className="w-full px-6 py-4 bg-white/10 border-2 border-white/20 rounded-2xl text-white text-xl text-center placeholder:text-white/40 focus:outline-none focus:border-purple-400 transition-colors"
+              className="w-full px-6 py-5 bg-white/10 border border-white/20 rounded-2xl text-white text-xl text-center placeholder-white/40 focus:outline-none focus:border-white/40 focus:bg-white/15"
             />
           </div>
 
-          {/* Options */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-10">Choose Your Message Type</h2>
+
+          {/* Options Grid - Tablet Optimized */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
             {/* Video */}
             <button
               onClick={initializeVideo}
-              className="group p-8 bg-white/5 hover:bg-red-500/20 border-2 border-white/10 hover:border-red-400 rounded-3xl transition-all active:scale-95"
+              className="group p-10 bg-white/10 hover:bg-red-500/20 rounded-3xl transition-all hover:scale-105 active:scale-95 border border-white/10 hover:border-red-400/50"
             >
-              <div className="w-24 h-24 mx-auto rounded-2xl bg-red-500/20 group-hover:bg-red-500/40 flex items-center justify-center mb-6 transition-colors">
-                <svg className="w-12 h-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-20 h-20 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-6 group-hover:bg-red-500/30 transition-colors">
+                <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Video Message</h3>
-              <p className="text-white/60">Record up to {config?.maxRecordingDuration || 120}s</p>
+              <p className="text-white/60 text-lg">Record a video</p>
             </button>
 
             {/* Audio */}
             <button
               onClick={initializeAudio}
-              className="group p-8 bg-white/5 hover:bg-purple-500/20 border-2 border-white/10 hover:border-purple-400 rounded-3xl transition-all active:scale-95"
+              className="group p-10 bg-white/10 hover:bg-blue-500/20 rounded-3xl transition-all hover:scale-105 active:scale-95 border border-white/10 hover:border-blue-400/50"
             >
-              <div className="w-24 h-24 mx-auto rounded-2xl bg-purple-500/20 group-hover:bg-purple-500/40 flex items-center justify-center mb-6 transition-colors">
-                <svg className="w-12 h-12 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center mb-6 group-hover:bg-blue-500/30 transition-colors">
+                <svg className="w-10 h-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Audio Message</h3>
-              <p className="text-white/60">Record up to {config?.maxRecordingDuration || 120}s</p>
+              <p className="text-white/60 text-lg">Record your voice</p>
             </button>
 
-            {/* Photo */}
+            {/* Take Photos */}
             <button
               onClick={initializePhoto}
-              className="group p-8 bg-white/5 hover:bg-green-500/20 border-2 border-white/10 hover:border-green-400 rounded-3xl transition-all active:scale-95"
+              className="group p-10 bg-white/10 hover:bg-green-500/20 rounded-3xl transition-all hover:scale-105 active:scale-95 border border-white/10 hover:border-green-400/50"
             >
-              <div className="w-24 h-24 mx-auto rounded-2xl bg-green-500/20 group-hover:bg-green-500/40 flex items-center justify-center mb-6 transition-colors">
-                <svg className="w-12 h-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <div className="w-20 h-20 mx-auto rounded-full bg-green-500/20 flex items-center justify-center mb-6 group-hover:bg-green-500/30 transition-colors">
+                <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Upload Photos</h3>
-              <p className="text-white/60">Share your favorite moments</p>
+              <h3 className="text-2xl font-bold text-white mb-2">Take Photos</h3>
+              <p className="text-white/60 text-lg">Capture memories</p>
             </button>
           </div>
         </div>
@@ -767,320 +757,461 @@ export default function BoothPage() {
     );
   }
 
-  // VIDEO RECORDING SCREEN
+  // Video Recording Screen
   if (viewState === 'video') {
     return (
       <div className="fixed inset-0 bg-black flex flex-col">
-        {/* Video preview */}
+        {/* Cancel Button */}
+        <div className="absolute top-6 left-6 z-20">
+          <button
+            onClick={cancelSession}
+            className="px-6 py-3 bg-black/50 text-white rounded-full font-semibold hover:bg-black/70 transition-all flex items-center gap-2 backdrop-blur-sm"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </button>
+        </div>
+
+        {/* Video Preview */}
         <div className="flex-1 relative">
-          {recordingState !== 'preview' ? (
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-full object-cover"
-              autoPlay
-              muted
-              playsInline
-            />
-          ) : (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={cn(
+              "absolute inset-0 w-full h-full object-cover",
+              recordingState === 'preview' && "hidden"
+            )}
+            style={{ transform: 'scaleX(-1)' }}
+          />
+          
+          {/* Preview Video */}
+          {recordingState === 'preview' && (
             <video
               ref={previewVideoRef}
-              className="absolute inset-0 w-full h-full object-cover"
               controls
-              playsInline
+              className="absolute inset-0 w-full h-full object-contain bg-black"
             />
           )}
 
-          {/* Recording indicator */}
+          {/* Recording Indicator */}
           {recordingState === 'recording' && (
-            <div className="absolute top-8 left-8 flex items-center gap-3 bg-red-600 text-white px-6 py-3 rounded-full animate-pulse">
-              <span className="w-4 h-4 rounded-full bg-white animate-pulse" />
-              <span className="text-xl font-bold">REC</span>
+            <div className="absolute top-6 right-6 flex items-center gap-3 bg-black/50 px-5 py-3 rounded-full backdrop-blur-sm">
+              <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-white text-xl font-mono">{formatDuration(recordingTime)}</span>
             </div>
           )}
-
-          {/* Loading overlay */}
-          {(recordingState === 'idle' || permissionState === 'checking') && (
-            <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-white text-xl">Accessing camera...</p>
-              </div>
-            </div>
-          )}
-
-          {/* Timer overlay */}
-          <div className="absolute top-8 right-8 bg-black/50 backdrop-blur px-6 py-3 rounded-full">
-            <span className="text-4xl font-mono font-bold text-white">{formatDuration(recordingTime)}</span>
-            <span className="text-white/60 text-xl ml-2">/ {formatDuration(config?.maxRecordingDuration || 120)}</span>
-          </div>
         </div>
 
         {/* Controls */}
-        <div className="bg-black/90 backdrop-blur p-8">
-          <div className="flex justify-center items-center gap-8">
+        <div className="bg-gradient-to-t from-black/90 to-transparent p-8">
+          <div className="flex items-center justify-center gap-8">
             {recordingState === 'ready' && (
               <button
                 onClick={startVideoRecording}
-                className="w-28 h-28 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-2xl"
+                className="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors active:scale-95 shadow-2xl"
               >
-                <div className="w-12 h-12 rounded-full bg-white" />
+                <div className="w-10 h-10 bg-white rounded-full" />
               </button>
             )}
 
             {recordingState === 'recording' && (
               <button
                 onClick={stopVideoRecording}
-                className="w-28 h-28 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all active:scale-95 shadow-2xl animate-pulse"
+                className="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors active:scale-95 shadow-2xl animate-pulse"
               >
-                <div className="w-12 h-12 rounded bg-white" />
+                <div className="w-10 h-10 bg-white rounded-md" />
               </button>
             )}
 
             {recordingState === 'preview' && (
               <>
-                <button onClick={retake} className="px-10 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95">
+                <button
+                  onClick={retake}
+                  className="px-10 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95"
+                >
                   Retake
                 </button>
-                <button onClick={() => uploadMedia('VIDEO')} className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95">
+                <button
+                  onClick={() => uploadMedia('VIDEO')}
+                  className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95"
+                >
                   Submit
                 </button>
               </>
             )}
 
             {recordingState === 'uploading' && (
-              <div className="flex items-center gap-4 text-white text-xl">
-                <svg className="animate-spin h-8 w-8" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <span className="font-medium">Uploading your video...</span>
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+                <span className="text-white text-xl">Uploading...</span>
               </div>
             )}
           </div>
 
+          {/* Duration hint */}
           {recordingState === 'ready' && (
-            <p className="text-center text-white/60 text-lg mt-6">Tap the button to start recording</p>
+            <p className="text-center text-white/60 mt-4 text-lg">
+              Tap to start recording (max {config?.maxRecordingDuration || 120}s)
+            </p>
           )}
         </div>
       </div>
     );
   }
 
-  // AUDIO RECORDING SCREEN
+  // Audio Recording Screen
   if (viewState === 'audio') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-slate-900 to-purple-900 flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-2xl text-center">
-          <h2 className="text-3xl font-bold text-white mb-8">Audio Message</h2>
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex flex-col">
+        {/* Cancel Button */}
+        <div className="absolute top-6 left-6 z-20">
+          <button
+            onClick={cancelSession}
+            className="px-6 py-3 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-all flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </button>
+        </div>
 
-          {/* Waveform visualizer */}
-          <div className="bg-black/30 backdrop-blur rounded-3xl p-8 mb-8">
-            <div className="flex items-end justify-center gap-1 h-40">
-              {audioWaveform.map((value, index) => (
-                <div
-                  key={index}
-                  className={cn(
-                    'w-2 rounded-full transition-all duration-75',
-                    recordingState === 'recording' ? 'bg-purple-400' : 'bg-white/30'
-                  )}
-                  style={{ height: `${Math.max(8, value * 100)}%` }}
-                />
-              ))}
-            </div>
+        {/* Visualization */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="flex items-end justify-center gap-1 h-64">
+            {audioWaveform.map((value, i) => (
+              <div
+                key={i}
+                className="w-2 md:w-3 bg-blue-400 rounded-full transition-all duration-75"
+                style={{ 
+                  height: `${Math.max(8, value * 250)}px`,
+                  opacity: recordingState === 'recording' ? 0.8 + value * 0.2 : 0.3
+                }}
+              />
+            ))}
           </div>
+        </div>
 
-          {/* Timer */}
-          <div className="mb-8">
-            <span className="text-6xl font-mono font-bold text-white">{formatDuration(recordingTime)}</span>
-            <span className="text-white/60 text-2xl ml-3">/ {formatDuration(config?.maxRecordingDuration || 120)}</span>
+        {/* Timer */}
+        {(recordingState === 'recording' || recordingState === 'preview') && (
+          <div className="text-center pb-4">
+            <span className="text-white text-5xl font-mono">{formatDuration(recordingTime)}</span>
           </div>
+        )}
 
-          {/* Controls */}
-          <div className="flex justify-center items-center gap-8">
-            {(recordingState === 'idle' || permissionState === 'checking') && (
-              <div className="flex items-center gap-4 text-white/60 text-xl">
-                <svg className="animate-spin h-8 w-8" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <span>Accessing microphone...</span>
-              </div>
-            )}
-
+        {/* Controls */}
+        <div className="p-8">
+          <div className="flex items-center justify-center gap-8">
             {recordingState === 'ready' && (
               <button
                 onClick={startAudioRecording}
-                className="w-28 h-28 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-2xl"
+                className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors active:scale-95 shadow-2xl"
               >
-                <div className="w-12 h-12 rounded-full bg-white" />
+                <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
               </button>
             )}
 
             {recordingState === 'recording' && (
               <button
                 onClick={stopAudioRecording}
-                className="w-28 h-28 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center transition-all active:scale-95 shadow-2xl animate-pulse"
+                className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors active:scale-95 shadow-2xl animate-pulse"
               >
-                <div className="w-12 h-12 rounded bg-white" />
+                <div className="w-10 h-10 bg-white rounded-md" />
               </button>
             )}
 
             {recordingState === 'preview' && (
               <>
-                <button onClick={retake} className="px-10 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95">
+                <button
+                  onClick={retake}
+                  className="px-10 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95"
+                >
                   Retake
                 </button>
-                <button onClick={() => uploadMedia('AUDIO')} className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95">
+                <button
+                  onClick={() => uploadMedia('AUDIO')}
+                  className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95"
+                >
                   Submit
                 </button>
               </>
             )}
 
             {recordingState === 'uploading' && (
-              <div className="flex items-center gap-4 text-white text-xl">
-                <svg className="animate-spin h-8 w-8" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <span className="font-medium">Uploading your audio...</span>
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+                <span className="text-white text-xl">Uploading...</span>
               </div>
             )}
           </div>
 
           {recordingState === 'ready' && (
-            <p className="text-white/60 text-lg mt-6">Tap the button to start recording</p>
+            <p className="text-center text-white/60 mt-4 text-lg">
+              Tap to start recording (max {config?.maxRecordingDuration || 120}s)
+            </p>
           )}
         </div>
       </div>
     );
   }
 
-  // PHOTO UPLOAD SCREEN
+  // Photo Capture Screen
   if (viewState === 'photo') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-green-900 via-slate-900 to-green-900 flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-4xl">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-white mb-2">Upload Photos</h2>
-            <p className="text-white/60 text-xl">{selectedPhotos.length} photo(s) selected</p>
+      <div className="fixed inset-0 bg-black flex flex-col">
+        {/* Flash Effect */}
+        {flashActive && (
+          <div className="absolute inset-0 bg-white z-50 animate-flash" />
+        )}
+
+        {/* Hidden Canvas for Capture */}
+        <canvas ref={photoCanvasRef} className="hidden" />
+
+        {/* Cancel Button */}
+        <div className="absolute top-6 left-6 z-20">
+          <button
+            onClick={cancelSession}
+            className="px-6 py-3 bg-black/50 text-white rounded-full font-semibold hover:bg-black/70 transition-all flex items-center gap-2 backdrop-blur-sm"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </button>
+        </div>
+
+        {/* Photo Count */}
+        <div className="absolute top-6 right-6 z-20">
+          <div className="px-5 py-3 bg-black/50 text-white rounded-full font-semibold backdrop-blur-sm text-lg">
+            {capturedPhotos.length} / {maxPhotosPerSession}
+          </div>
+        </div>
+
+        {/* Camera Preview */}
+        <div className="flex-1 relative">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
+          />
+
+          {/* Countdown Overlay */}
+          {recordingState === 'countdown' && shutterCountdown > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+              <div className="text-[200px] font-bold text-white animate-pulse">
+                {shutterCountdown}
+              </div>
+            </div>
+          )}
+
+          {/* Thumbnail Strip */}
+          {capturedPhotos.length > 0 && (
+            <div className="absolute bottom-4 left-4 right-4 z-10">
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {capturedPhotos.map((photo, i) => (
+                  <div key={i} className="relative flex-shrink-0">
+                    <img
+                      src={photo}
+                      alt={`Captured ${i + 1}`}
+                      className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-xl border-2 border-white/50"
+                    />
+                    <button
+                      onClick={() => removePhoto(i)}
+                      className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-sm font-bold hover:bg-red-600"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Controls */}
+        <div className="bg-gradient-to-t from-black/90 to-transparent p-8">
+          <div className="flex items-center justify-center gap-8">
+            {/* Shutter Button */}
+            {recordingState === 'ready' && canTakeMorePhotos && (
+              <button
+                onClick={startShutterCountdown}
+                className="w-24 h-24 bg-white rounded-full flex items-center justify-center hover:bg-white/90 transition-colors active:scale-95 shadow-2xl border-4 border-white/30"
+              >
+                <div className="w-16 h-16 bg-white rounded-full border-4 border-gray-300" />
+              </button>
+            )}
+
+            {/* Cancel Countdown Button */}
+            {recordingState === 'countdown' && (
+              <button
+                onClick={cancelCountdown}
+                className="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors active:scale-95 shadow-2xl"
+              >
+                <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+
+            {/* Done Button (when photos taken) */}
+            {recordingState === 'ready' && capturedPhotos.length > 0 && (
+              <button
+                onClick={goToPhotoPreview}
+                className="px-12 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95"
+              >
+                Done ({capturedPhotos.length})
+              </button>
+            )}
           </div>
 
-          {/* Photo grid */}
-          {selectedPhotos.length > 0 && (
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-4 mb-8">
-              {photoPreviewUrls.map((url, index) => (
-                <div key={index} className="relative aspect-square rounded-2xl overflow-hidden bg-black/30">
-                  <img src={url} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
-
-                  {/* Upload progress overlay */}
-                  {recordingState === 'uploading' && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      {uploadProgress[index] === 100 ? (
-                        <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
-                          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                      ) : uploadProgress[index] === -1 ? (
-                        <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center">
-                          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </div>
-                      ) : currentUploadIndex === index ? (
-                        <svg className="animate-spin h-10 w-10 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                      ) : null}
-                    </div>
-                  )}
-
-                  {/* Remove button */}
-                  {recordingState !== 'uploading' && (
-                    <button
-                      onClick={() => removePhoto(index)}
-                      className="absolute top-2 right-2 w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg transition-colors"
-                    >
-                      <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
-
-              {/* Add more button */}
-              {recordingState !== 'uploading' && selectedPhotos.length < 20 && (
-                <label className="aspect-square rounded-2xl border-2 border-dashed border-white/30 hover:border-green-400 cursor-pointer flex flex-col items-center justify-center transition-colors bg-white/5 hover:bg-green-500/10">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handlePhotoSelect}
-                  />
-                  <svg className="w-12 h-12 text-white/50 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="text-white/50">Add More</span>
-                </label>
-              )}
-            </div>
+          {recordingState === 'ready' && canTakeMorePhotos && (
+            <p className="text-center text-white/60 mt-4 text-lg">
+              Tap the button to take a photo ({3} second countdown)
+            </p>
           )}
 
-          {/* Empty state */}
-          {selectedPhotos.length === 0 && (
-            <label className="block border-2 border-dashed border-white/30 hover:border-green-400 rounded-3xl p-16 text-center cursor-pointer transition-colors bg-white/5 hover:bg-green-500/10 mb-8">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handlePhotoSelect}
-              />
-              <div className="w-24 h-24 mx-auto rounded-full bg-white/10 flex items-center justify-center mb-6">
-                <svg className="w-12 h-12 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+          {!canTakeMorePhotos && (
+            <p className="text-center text-amber-400 mt-4 text-lg">
+              Maximum photos reached. Tap Done to continue.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Photo Preview Screen
+  if (viewState === 'photo-preview') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-green-900 to-slate-900 flex flex-col p-8">
+        {/* Cancel Button */}
+        <div className="absolute top-6 left-6 z-20">
+          <button
+            onClick={cancelSession}
+            className="px-6 py-3 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-all flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </button>
+        </div>
+
+        <h2 className="text-3xl font-bold text-white text-center mt-8 mb-8">
+          Review Your Photos ({capturedPhotos.length})
+        </h2>
+
+        {/* Photo Grid */}
+        <div className="flex-1 overflow-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
+            {capturedPhotos.map((photo, i) => (
+              <div key={i} className="relative aspect-square">
+                <img
+                  src={photo}
+                  alt={`Photo ${i + 1}`}
+                  className="w-full h-full object-cover rounded-2xl"
+                />
+                {recordingState !== 'uploading' && (
+                  <button
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-2 right-2 w-10 h-10 bg-red-500/90 text-white rounded-full flex items-center justify-center text-xl font-bold hover:bg-red-600"
+                  >
+                    ×
+                  </button>
+                )}
+                {/* Upload Progress */}
+                {uploadProgress[i] === 100 && (
+                  <div className="absolute inset-0 bg-green-500/30 rounded-2xl flex items-center justify-center">
+                    <svg className="w-16 h-16 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+                {uploadProgress[i] === -1 && (
+                  <div className="absolute inset-0 bg-red-500/30 rounded-2xl flex items-center justify-center">
+                    <svg className="w-16 h-16 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                )}
+                {currentUploadIndex === i && (
+                  <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
+                    <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
-              <p className="text-2xl font-bold text-white mb-2">Tap to Select Photos</p>
-              <p className="text-white/60 text-lg">or drag and drop your images</p>
-            </label>
-          )}
+            ))}
+          </div>
+        </div>
 
-          {/* Upload button */}
-          {selectedPhotos.length > 0 && (
-            <div className="flex justify-center gap-6">
-              {recordingState !== 'uploading' && (
-                <button
-                  onClick={resetToWelcome}
-                  className="px-10 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95"
-                >
-                  Cancel
-                </button>
-              )}
+        {/* Controls */}
+        <div className="flex justify-center gap-6 mt-8">
+          {recordingState !== 'uploading' && (
+            <>
+              <button
+                onClick={retakePhotos}
+                className="px-10 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95"
+              >
+                Retake All
+              </button>
               <button
                 onClick={uploadPhotos}
-                disabled={recordingState === 'uploading'}
+                disabled={capturedPhotos.length === 0}
                 className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {recordingState === 'uploading' ? (
-                  <span className="flex items-center gap-3">
-                    <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Uploading {currentUploadIndex + 1} / {selectedPhotos.length}
-                  </span>
-                ) : (
-                  `Upload ${selectedPhotos.length} Photo${selectedPhotos.length !== 1 ? 's' : ''}`
-                )}
+                Submit Photos
               </button>
+            </>
+          )}
+
+          {recordingState === 'uploading' && (
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+              <span className="text-white text-xl">
+                Uploading {currentUploadIndex + 1} of {capturedBlobs.length}...
+              </span>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // Success Screen
+  if (viewState === 'success') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-green-900 to-slate-900 flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-32 h-32 mx-auto rounded-full bg-green-500/20 flex items-center justify-center mb-8 animate-bounce">
+            <svg className="w-16 h-16 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          
+          <h2 className="text-5xl font-bold text-white mb-4">Thank You!</h2>
+          <p className="text-2xl text-white/70 mb-12">Your message has been recorded</p>
+          
+          <div className="space-y-4">
+            <button
+              onClick={startNewSession}
+              className="block w-full px-12 py-5 bg-white text-slate-900 rounded-full text-xl font-bold hover:bg-white/90 transition-all active:scale-95"
+            >
+              Leave Another Message
+            </button>
+            
+            <p className="text-white/50 text-lg">
+              Resetting in {resetCountdown}s...
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1088,4 +1219,3 @@ export default function BoothPage() {
 
   return null;
 }
-
