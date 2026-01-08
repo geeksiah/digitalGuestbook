@@ -124,7 +124,7 @@ export default function EventDetailPage() {
   const [selectedTemplates, setSelectedTemplates] = useState({
     invitationTemplateId: '', rsvpTemplateId: '', guestbookTemplateId: '',
     guestbookVideoTemplateId: '', guestbookAudioTemplateId: '', guestbookPhotoTemplateId: '',
-    thankYouTemplateId: '',
+    boothTemplateId: '', thankYouTemplateId: '',
   });
 
   useEffect(() => { fetchEvent(); fetchTemplates(); }, [eventId]);
@@ -144,6 +144,7 @@ export default function EventDetailPage() {
         guestbookVideoTemplateId: (event as any).guestbookVideoTemplateId || '',
         guestbookAudioTemplateId: (event as any).guestbookAudioTemplateId || '',
         guestbookPhotoTemplateId: (event as any).guestbookPhotoTemplateId || '',
+        boothTemplateId: (event as any).boothTemplateId || '',
         thankYouTemplateId: event.thankYouTemplateId || '',
       });
       const d = new Date(event.date);
@@ -193,6 +194,7 @@ export default function EventDetailPage() {
         guestbookVideoTemplateId: selectedTemplates.guestbookVideoTemplateId || null,
         guestbookAudioTemplateId: selectedTemplates.guestbookAudioTemplateId || null,
         guestbookPhotoTemplateId: selectedTemplates.guestbookPhotoTemplateId || null,
+        boothTemplateId: selectedTemplates.boothTemplateId || null,
         thankYouTemplateId: selectedTemplates.thankYouTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
@@ -493,6 +495,7 @@ export default function EventDetailPage() {
               { t: 'GUESTBOOK_VIDEO', l: 'Video Recording', f: 'guestbookVideoTemplateId', e: event.guestbookEnabled },
               { t: 'GUESTBOOK_AUDIO', l: 'Audio Recording', f: 'guestbookAudioTemplateId', e: event.guestbookEnabled },
               { t: 'GUESTBOOK_PHOTO', l: 'Photo Upload', f: 'guestbookPhotoTemplateId', e: event.guestbookEnabled },
+              { t: 'BOOTH', l: 'Booth/Kiosk', f: 'boothTemplateId', e: event.guestbookEnabled },
               { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true },
             ].map(x => (
               <div key={x.t} className={cn(!x.e && 'opacity-50')}>

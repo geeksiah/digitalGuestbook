@@ -233,6 +233,10 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
     invitationTemplateId,
     rsvpTemplateId,
     guestbookTemplateId,
+    guestbookVideoTemplateId,
+    guestbookAudioTemplateId,
+    guestbookPhotoTemplateId,
+    boothTemplateId,
     thankYouTemplateId,
   } = req.body;
 
@@ -247,46 +251,46 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
   // Validate template IDs and types
   const templateAssignments: any = {};
 
-  if (invitationTemplateId) {
-    if (!event.invitationEnabled) {
-      throw new AppError('Cannot assign invitation template - invitation service is disabled', 400);
+  // Helper to validate and add template
+  const validateAndAdd = async (
+    templateId: string | null | undefined, 
+    fieldName: string, 
+    expectedType: string, 
+    requiresService?: { enabled: boolean; name: string }
+  ) => {
+    if (templateId === null) {
+      // Explicitly set to null to remove assignment
+      templateAssignments[fieldName] = null;
+      return;
     }
-    const template = await prisma.template.findUnique({ where: { id: invitationTemplateId } });
-    if (!template || template.type !== 'INVITATION') {
-      throw new AppError('Invalid invitation template', 400);
+    if (!templateId) return;
+    
+    if (requiresService && !requiresService.enabled) {
+      throw new AppError(`Cannot assign ${expectedType} template - ${requiresService.name} service is disabled`, 400);
     }
-    templateAssignments.invitationTemplateId = invitationTemplateId;
-  }
+    
+    const template = await prisma.template.findUnique({ where: { id: templateId } });
+    if (!template || template.type !== expectedType) {
+      throw new AppError(`Invalid ${expectedType} template`, 400);
+    }
+    templateAssignments[fieldName] = templateId;
+  };
 
-  if (rsvpTemplateId) {
-    if (!event.rsvpEnabled) {
-      throw new AppError('Cannot assign RSVP template - RSVP service is disabled', 400);
-    }
-    const template = await prisma.template.findUnique({ where: { id: rsvpTemplateId } });
-    if (!template || template.type !== 'RSVP') {
-      throw new AppError('Invalid RSVP template', 400);
-    }
-    templateAssignments.rsvpTemplateId = rsvpTemplateId;
-  }
-
-  if (guestbookTemplateId) {
-    if (!event.guestbookEnabled) {
-      throw new AppError('Cannot assign guestbook template - guestbook service is disabled', 400);
-    }
-    const template = await prisma.template.findUnique({ where: { id: guestbookTemplateId } });
-    if (!template || template.type !== 'GUESTBOOK') {
-      throw new AppError('Invalid guestbook template', 400);
-    }
-    templateAssignments.guestbookTemplateId = guestbookTemplateId;
-  }
-
-  if (thankYouTemplateId) {
-    const template = await prisma.template.findUnique({ where: { id: thankYouTemplateId } });
-    if (!template || template.type !== 'THANK_YOU') {
-      throw new AppError('Invalid thank-you template', 400);
-    }
-    templateAssignments.thankYouTemplateId = thankYouTemplateId;
-  }
+  await validateAndAdd(invitationTemplateId, 'invitationTemplateId', 'INVITATION', 
+    { enabled: event.invitationEnabled, name: 'invitation' });
+  await validateAndAdd(rsvpTemplateId, 'rsvpTemplateId', 'RSVP', 
+    { enabled: event.rsvpEnabled, name: 'RSVP' });
+  await validateAndAdd(guestbookTemplateId, 'guestbookTemplateId', 'GUESTBOOK', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(guestbookVideoTemplateId, 'guestbookVideoTemplateId', 'GUESTBOOK_VIDEO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(guestbookAudioTemplateId, 'guestbookAudioTemplateId', 'GUESTBOOK_AUDIO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(guestbookPhotoTemplateId, 'guestbookPhotoTemplateId', 'GUESTBOOK_PHOTO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(boothTemplateId, 'boothTemplateId', 'BOOTH', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
 
   const updatedEvent = await prisma.event.update({
     where: { id: eventId },
@@ -295,6 +299,10 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
       invitationTemplate: true,
       rsvpTemplate: true,
       guestbookTemplate: true,
+      guestbookVideoTemplate: true,
+      guestbookAudioTemplate: true,
+      guestbookPhotoTemplate: true,
+      boothTemplate: true,
       thankYouTemplate: true,
     },
   });

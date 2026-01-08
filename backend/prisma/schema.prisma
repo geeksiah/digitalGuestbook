@@ -73,6 +73,7 @@ model Event {
   guestbookVideoTemplateId String?
   guestbookAudioTemplateId String?
   guestbookPhotoTemplateId String?
+  boothTemplateId      String?
   thankYouTemplateId   String?
   
   // Couple Portal Access
@@ -106,6 +107,7 @@ model Event {
   guestbookVideoTemplate   Template? @relation("GuestbookVideoTemplate", fields: [guestbookVideoTemplateId], references: [id])
   guestbookAudioTemplate   Template? @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
   guestbookPhotoTemplate   Template? @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
+  boothTemplate      Template? @relation("BoothTemplate", fields: [boothTemplateId], references: [id])
   thankYouTemplate   Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
   
   rsvps       RSVP[]
@@ -148,6 +150,7 @@ model Template {
   eventsAsGuestbookVideo Event[] @relation("GuestbookVideoTemplate")
   eventsAsGuestbookAudio Event[] @relation("GuestbookAudioTemplate")
   eventsAsGuestbookPhoto Event[] @relation("GuestbookPhotoTemplate")
+  eventsAsBooth      Event[] @relation("BoothTemplate")
   eventsAsThankYou   Event[] @relation("ThankYouTemplate")
 }
 

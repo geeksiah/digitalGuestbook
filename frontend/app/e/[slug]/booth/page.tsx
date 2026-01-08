@@ -22,6 +22,8 @@ export default function BoothPage() {
   const [eventName, setEventName] = useState('');
   const [eventId, setEventId] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
+  const [primaryColor, setPrimaryColor] = useState('#6366f1');
+  const [secondaryColor, setSecondaryColor] = useState('#e0e7ff');
 
   // UI state
   const [viewState, setViewState] = useState<ViewState>('welcome');
@@ -155,7 +157,13 @@ export default function BoothPage() {
 
       // Fetch booth config
       const configRes = await guestbookApi.getBoothConfig(event.id);
-      setConfig(configRes.data.booth);
+      const boothConfig = configRes.data.booth;
+      setConfig(boothConfig);
+      
+      // Set event colors for theming
+      if (boothConfig.primaryColor) setPrimaryColor(boothConfig.primaryColor);
+      if (boothConfig.secondaryColor) setSecondaryColor(boothConfig.secondaryColor);
+      
       setLoading(false);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load booth');
@@ -169,8 +177,27 @@ export default function BoothPage() {
 
     try {
       const constraints = type === 'video'
-        ? { video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true }
-        : { audio: true };
+        ? { 
+            video: { 
+              facingMode: 'user',
+              width: { min: 1280, ideal: 1920, max: 3840 },
+              height: { min: 720, ideal: 1080, max: 2160 },
+              frameRate: { min: 24, ideal: 30, max: 60 },
+              aspectRatio: { ideal: 16/9 }
+            }, 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              sampleRate: 44100
+            }
+          }
+        : { 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              sampleRate: 44100
+            }
+          };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
@@ -178,6 +205,21 @@ export default function BoothPage() {
       return true;
     } catch (err: any) {
       console.error('Permission error:', err);
+      // Fallback to lower quality if HD not available
+      if (type === 'video') {
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
+          });
+          streamRef.current = fallbackStream;
+          setPermissionState('granted');
+          return true;
+        } catch {
+          setPermissionState('denied');
+          return false;
+        }
+      }
       setPermissionState('denied');
       return false;
     }
@@ -200,10 +242,19 @@ export default function BoothPage() {
   const startVideoRecording = () => {
     if (!streamRef.current) return;
 
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
+    // Use VP9 for better quality, fallback to VP8
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+      ? 'video/webm;codecs=vp8,opus'
       : 'video/webm';
-    const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+    
+    // High quality video bitrate (8 Mbps for HD)
+    const mediaRecorder = new MediaRecorder(streamRef.current, { 
+      mimeType,
+      videoBitsPerSecond: 8000000, // 8 Mbps for HD quality
+      audioBitsPerSecond: 128000   // 128 kbps for audio
+    });
     mediaRecorderRef.current = mediaRecorder;
     chunksRef.current = [];
 
@@ -297,8 +348,15 @@ export default function BoothPage() {
   const startAudioRecording = () => {
     if (!streamRef.current) return;
 
-    const mimeType = 'audio/webm';
-    const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm';
+    
+    // High quality audio (192 kbps)
+    const mediaRecorder = new MediaRecorder(streamRef.current, { 
+      mimeType,
+      audioBitsPerSecond: 192000 // 192 kbps for high quality audio
+    });
     mediaRecorderRef.current = mediaRecorder;
     chunksRef.current = [];
 
@@ -521,17 +579,26 @@ export default function BoothPage() {
   // WELCOME SCREEN
   if (viewState === 'welcome') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8 overflow-hidden">
+      <div 
+        className="fixed inset-0 flex items-center justify-center p-8 overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${primaryColor}22 0%, #1a1a2e 50%, ${secondaryColor}22 100%)` }}
+      >
         {/* Animated background */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-purple-500/20 to-transparent rounded-full blur-3xl animate-pulse" />
-          <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-br from-pink-500/20 to-transparent rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div 
+            className="absolute -top-1/2 -left-1/2 w-full h-full rounded-full blur-3xl animate-pulse" 
+            style={{ background: `radial-gradient(circle, ${primaryColor}40 0%, transparent 70%)` }}
+          />
+          <div 
+            className="absolute -bottom-1/2 -right-1/2 w-full h-full rounded-full blur-3xl animate-pulse" 
+            style={{ background: `radial-gradient(circle, ${secondaryColor}40 0%, transparent 70%)`, animationDelay: '1s' }}
+          />
         </div>
 
         <div className="relative text-center max-w-2xl">
           {/* Event name */}
           <div className="mb-8">
-            <p className="text-purple-300 text-xl uppercase tracking-widest mb-2">Digital Guestbook</p>
+            <p className="text-xl uppercase tracking-widest mb-2" style={{ color: primaryColor }}>Digital Guestbook</p>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 leading-tight">{eventName}</h1>
           </div>
 
@@ -543,7 +610,8 @@ export default function BoothPage() {
           {/* Start button */}
           <button
             onClick={startNewSession}
-            className="group relative px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:bg-white/90 transition-all active:scale-95 shadow-2xl shadow-white/20"
+            className="group relative px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:bg-white/90 transition-all active:scale-95 shadow-2xl"
+            style={{ boxShadow: `0 25px 50px -12px ${primaryColor}40` }}
           >
             <span className="relative z-10 flex items-center gap-3">
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -552,7 +620,10 @@ export default function BoothPage() {
               </svg>
               Start Recording
             </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl" />
+            <div 
+              className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-xl" 
+              style={{ background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})` }}
+            />
           </button>
 
           {/* Decorative icons */}
@@ -624,11 +695,14 @@ export default function BoothPage() {
   // MENU SCREEN
   if (viewState === 'menu') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
+      <div 
+        className="fixed inset-0 flex items-center justify-center p-8"
+        style={{ background: `linear-gradient(135deg, ${primaryColor}22 0%, #1a1a2e 50%, ${secondaryColor}22 100%)` }}
+      >
         <div className="w-full max-w-4xl">
           {/* Header */}
           <div className="text-center mb-12">
-            <p className="text-purple-300 text-lg uppercase tracking-widest mb-2">{eventName}</p>
+            <p className="text-lg uppercase tracking-widest mb-2" style={{ color: primaryColor }}>{eventName}</p>
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Choose Your Message Type</h1>
           </div>
 

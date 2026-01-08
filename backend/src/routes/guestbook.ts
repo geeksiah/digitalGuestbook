@@ -74,6 +74,8 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
         { slug: req.params.eventId },
       ],
     },
+    // Include booth template for booth mode
+    include: !requireAccessCode ? { boothTemplate: true } : undefined,
   });
 
   if (!event) {
@@ -305,6 +307,18 @@ router.get('/:eventId/booth', verifyBoothAccess, asyncHandler(async (req, res) =
       minRecordingDuration: event.minRecordingDuration,
       // Booth mode allows unlimited photos from the kiosk
       unlimitedPhotos: true,
+      // Event branding colors
+      primaryColor: event.primaryColor || '#6366f1',
+      secondaryColor: event.secondaryColor || '#e0e7ff',
+      // Template data for custom styling
+      template: event.boothTemplate ? {
+        id: event.boothTemplate.id,
+        name: event.boothTemplate.name,
+        htmlContent: event.boothTemplate.htmlContent,
+        cssContent: event.boothTemplate.cssContent,
+        jsContent: event.boothTemplate.jsContent,
+        variables: event.boothTemplate.variables,
+      } : null,
     },
   });
 }));
