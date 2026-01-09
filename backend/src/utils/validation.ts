@@ -55,6 +55,17 @@ export const updateEventSchema = z.object({
   timezone: z.string().optional(),
   venue: z.string().optional().nullable(),
   
+  // Couple Contact Info
+  coupleName1: z.string().optional().nullable(),
+  coupleName2: z.string().optional().nullable(),
+  coupleEmail: z.string().email().optional().nullable().or(z.literal('')),
+  couplePhone: z.string().optional().nullable(),
+  
+  // Event Styling
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  accentColor: z.string().optional(),
+  
   // Service Flags
   invitationEnabled: z.boolean().optional(),
   rsvpEnabled: z.boolean().optional(),
@@ -62,10 +73,31 @@ export const updateEventSchema = z.object({
   checkInEnabled: z.boolean().optional(),
   invitationOnly: z.boolean().optional(),
   
+  // Template Assignments
+  invitationTemplateId: z.string().optional().nullable(),
+  rsvpTemplateId: z.string().optional().nullable(),
+  guestbookTemplateId: z.string().optional().nullable(),
+  guestbookVideoTemplateId: z.string().optional().nullable(),
+  guestbookAudioTemplateId: z.string().optional().nullable(),
+  guestbookPhotoTemplateId: z.string().optional().nullable(),
+  boothTemplateId: z.string().optional().nullable(),
+  boothVideoTemplateId: z.string().optional().nullable(),
+  boothAudioTemplateId: z.string().optional().nullable(),
+  boothPhotoTemplateId: z.string().optional().nullable(),
+  thankYouTemplateId: z.string().optional().nullable(),
+  
   // Guestbook Settings
   maxRecordingDuration: z.number().min(30).max(300).optional(),
   minRecordingDuration: z.number().min(5).max(60).optional(),
   maxPhotosPerGuest: z.number().min(1).max(50).optional(),
+  
+  // Booth Settings
+  maxPhotosPerBoothSession: z.number().min(1).max(50).optional(),
+  boothShutterCountdown: z.number().min(1).max(10).optional(),
+  
+  // RSVP/Ticketing Mode
+  rsvpMode: z.enum(['rsvp', 'ticketing', 'both']).optional(),
+  requireApproval: z.boolean().optional(),
   
   // Notification Settings
   notifyOnRsvp: z.boolean().optional(),
@@ -89,7 +121,19 @@ export const updateEventSchema = z.object({
 export const createTemplateSchema = z.object({
   name: z.string().min(2, 'Template name must be at least 2 characters'),
   description: z.string().optional(),
-  type: z.enum(['INVITATION', 'RSVP', 'GUESTBOOK', 'THANK_YOU']),
+  type: z.enum([
+    'INVITATION', 
+    'RSVP', 
+    'GUESTBOOK', 
+    'GUESTBOOK_VIDEO',
+    'GUESTBOOK_AUDIO',
+    'GUESTBOOK_PHOTO',
+    'BOOTH',
+    'BOOTH_VIDEO',
+    'BOOTH_AUDIO',
+    'BOOTH_PHOTO',
+    'THANK_YOU'
+  ]),
   htmlContent: z.string().min(1, 'HTML content is required'),
   cssContent: z.string().optional(),
   jsContent: z.string().optional(),
@@ -114,6 +158,13 @@ export const createRsvpSchema = z.object({
   mealPreference: z.string().optional(),
   dietaryNotes: z.string().optional(),
   note: z.string().max(500, 'Note must be under 500 characters').optional(),
+  
+  // Custom fields (JSON object)
+  customFields: z.record(z.any()).optional(),
+  
+  // Ticketing fields
+  ticketType: z.string().optional(),
+  ticketQuantity: z.number().int().min(1).optional(),
   
   submissionChannel: z.enum(['EMAIL', 'SMS', 'WHATSAPP', 'WEB']).default('WEB'),
 });
