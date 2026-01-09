@@ -20,7 +20,7 @@ interface Event {
   currentPhase: string;
   phaseOverride: boolean;
   invitationOnly: boolean;
-  coupleAccessToken: string;
+  ownerAccessToken: string;
   invitationEnabled: boolean;
   rsvpEnabled: boolean;
   guestbookEnabled: boolean;
@@ -43,11 +43,11 @@ interface Event {
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;
-  // Couple info
-  coupleName1?: string;
-  coupleName2?: string;
-  coupleEmail?: string;
-  couplePhone?: string;
+  // Event Owner info
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  organizationName?: string;
   _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number };
 }
 
@@ -130,7 +130,7 @@ export default function EventDetailPage() {
     notifyOnRsvp: true, notifyOnCheckIn: false, notifyOnGuestbook: false,
     emailNotifications: true, smsNotifications: false, whatsappNotifications: false,
     primaryColor: '#FFD700', secondaryColor: '#1a1a2e', accentColor: '#ffffff',
-    coupleName1: '', coupleName2: '', coupleEmail: '', couplePhone: '',
+    ownerName: '', ownerEmail: '', ownerPhone: '', organizationName: '',
   });
 
   const [selectedTemplates, setSelectedTemplates] = useState({
@@ -168,7 +168,7 @@ export default function EventDetailPage() {
         venue: event.venue || '', timezone: event.timezone, invitationOnly: event.invitationOnly,
         reelEnabled: event.reelEnabled || false,
         primaryColor: event.primaryColor || '#FFD700', secondaryColor: event.secondaryColor || '#1a1a2e', accentColor: event.accentColor || '#ffffff',
-        coupleName1: event.coupleName1 || '', coupleName2: event.coupleName2 || '', coupleEmail: event.coupleEmail || '', couplePhone: event.couplePhone || '',
+        ownerName: event.ownerName || '', ownerEmail: event.ownerEmail || '', ownerPhone: event.ownerPhone || '', organizationName: event.organizationName || '',
         maxRecordingDuration: event.maxRecordingDuration, minRecordingDuration: event.minRecordingDuration, maxPhotosPerGuest: event.maxPhotosPerGuest,
         notifyOnRsvp: event.notifyOnRsvp ?? true, notifyOnCheckIn: event.notifyOnCheckIn ?? false, notifyOnGuestbook: event.notifyOnGuestbook ?? false,
         emailNotifications: event.emailNotifications ?? true, smsNotifications: event.smsNotifications ?? false, whatsappNotifications: event.whatsappNotifications ?? false,
@@ -229,7 +229,7 @@ export default function EventDetailPage() {
         notifyOnRsvp: eventSettings.notifyOnRsvp, notifyOnCheckIn: eventSettings.notifyOnCheckIn, notifyOnGuestbook: eventSettings.notifyOnGuestbook,
         emailNotifications: eventSettings.emailNotifications, smsNotifications: eventSettings.smsNotifications, whatsappNotifications: eventSettings.whatsappNotifications,
         primaryColor: eventSettings.primaryColor, secondaryColor: eventSettings.secondaryColor, accentColor: eventSettings.accentColor,
-        coupleName1: eventSettings.coupleName1 || null, coupleName2: eventSettings.coupleName2 || null, coupleEmail: eventSettings.coupleEmail || null, couplePhone: eventSettings.couplePhone || null,
+        ownerName: eventSettings.ownerName || null, ownerEmail: eventSettings.ownerEmail || null, ownerPhone: eventSettings.ownerPhone || null, organizationName: eventSettings.organizationName || null,
       });
       toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -364,7 +364,7 @@ export default function EventDetailPage() {
                   { l: 'RSVP Form', p: `/e/${event.slug}/rsvp` },
                   { l: 'Guestbook', p: `/e/${event.slug}/guestbook` },
                   { l: 'Check-In', p: `/e/${event.slug}/checkin` },
-                  { l: 'Couple Portal', p: `/couple/${event.coupleAccessToken}` },
+                  { l: 'Owner Portal', p: `/event-owner/${event.ownerAccessToken}` },
                 ].map(x => (
                   <button 
                     key={x.p} 
@@ -556,13 +556,13 @@ export default function EventDetailPage() {
               </div>
               
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Couple Contact Information</h4>
+                <h4 className="font-medium text-navy-900 mb-4">Event Owner Contact Information</h4>
                 <p className="text-sm text-surface-500 mb-4">Notifications will be sent to this contact for RSVPs, check-ins, and guestbook entries.</p>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <div><label className="label">Couple Name 1</label><input type="text" className="input" placeholder="e.g., Sarah" value={eventSettings.coupleName1} onChange={e => setEventSettings({ ...eventSettings, coupleName1: e.target.value })} /></div>
-                  <div><label className="label">Couple Name 2</label><input type="text" className="input" placeholder="e.g., John" value={eventSettings.coupleName2} onChange={e => setEventSettings({ ...eventSettings, coupleName2: e.target.value })} /></div>
-                  <div><label className="label">Email</label><input type="email" className="input" placeholder="couple@example.com" value={eventSettings.coupleEmail} onChange={e => setEventSettings({ ...eventSettings, coupleEmail: e.target.value })} /></div>
-                  <div><label className="label">Phone</label><input type="tel" className="input" placeholder="+1234567890" value={eventSettings.couplePhone} onChange={e => setEventSettings({ ...eventSettings, couplePhone: e.target.value })} /></div>
+                  <div><label className="label">Owner Name</label><input type="text" className="input" placeholder="e.g., John Smith" value={eventSettings.ownerName} onChange={e => setEventSettings({ ...eventSettings, ownerName: e.target.value })} /></div>
+                  <div><label className="label">Organization</label><input type="text" className="input" placeholder="e.g., Smith Events" value={eventSettings.organizationName} onChange={e => setEventSettings({ ...eventSettings, organizationName: e.target.value })} /></div>
+                  <div><label className="label">Email</label><input type="email" className="input" placeholder="owner@example.com" value={eventSettings.ownerEmail} onChange={e => setEventSettings({ ...eventSettings, ownerEmail: e.target.value })} /></div>
+                  <div><label className="label">Phone</label><input type="tel" className="input" placeholder="+1234567890" value={eventSettings.ownerPhone} onChange={e => setEventSettings({ ...eventSettings, ownerPhone: e.target.value })} /></div>
                 </div>
               </div>
 

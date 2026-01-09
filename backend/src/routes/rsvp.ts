@@ -9,14 +9,14 @@ import { sendRsvpConfirmation, sendInvitationEmail, sendEmail, sendSMS, sendWhat
 
 const router = Router();
 
-// Send notification to couple about new RSVP
-async function notifyCoupleAboutRsvp(eventId: string, rsvpData: { primaryName: string; attendance: string; guestCount: number }) {
+// Send notification to event owner about new RSVP
+async function notifyOwnerAboutRsvp(eventId: string, rsvpData: { primaryName: string; attendance: string; guestCount: number }) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
       name: true,
-      coupleEmail: true,
-      couplePhone: true,
+      ownerEmail: true,
+      ownerPhone: true,
       notifyOnRsvp: true,
       emailNotifications: true,
       smsNotifications: true,
@@ -28,9 +28,9 @@ async function notifyCoupleAboutRsvp(eventId: string, rsvpData: { primaryName: s
 
   const message = `New RSVP for ${event.name}: ${rsvpData.primaryName} - ${rsvpData.attendance} (${rsvpData.guestCount} guests)`;
 
-  if (event.coupleEmail && event.emailNotifications) {
+  if (event.ownerEmail && event.emailNotifications) {
     await sendEmail(
-      event.coupleEmail,
+      event.ownerEmail,
       `New RSVP - ${event.name}`,
       `<div style="font-family: sans-serif;">
         <h2>New RSVP Received</h2>
@@ -41,12 +41,12 @@ async function notifyCoupleAboutRsvp(eventId: string, rsvpData: { primaryName: s
     );
   }
 
-  if (event.couplePhone && event.smsNotifications) {
-    await sendSMS(event.couplePhone, message);
+  if (event.ownerPhone && event.smsNotifications) {
+    await sendSMS(event.ownerPhone, message);
   }
 
-  if (event.couplePhone && event.whatsappNotifications) {
-    await sendWhatsApp(event.couplePhone, message);
+  if (event.ownerPhone && event.whatsappNotifications) {
+    await sendWhatsApp(event.ownerPhone, message);
   }
 }
 
@@ -124,11 +124,11 @@ router.post('/:eventSlug', asyncHandler(async (req, res) => {
   });
 
   // Send notifications (async - don't wait)
-  notifyCoupleAboutRsvp(event.id, {
+  notifyOwnerAboutRsvp(event.id, {
     primaryName: data.primaryName,
     attendance: data.attendance,
     guestCount: data.guestCount,
-  }).catch(err => console.error('[Notification] Failed to notify couple:', err));
+  }).catch(err => console.error('[Notification] Failed to notify owner:', err));
 
   // Send confirmation to guest if email provided
   if (rsvp.email) {

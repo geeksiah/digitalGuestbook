@@ -8,14 +8,14 @@ import { sendEmail, sendSMS, sendWhatsApp } from '../services/notifications.js';
 
 const router = Router();
 
-// Notify couple about check-in
-async function notifyCoupleAboutCheckIn(eventId: string, guestName: string, guestCount: number) {
+// Notify event owner about check-in
+async function notifyOwnerAboutCheckIn(eventId: string, guestName: string, guestCount: number) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
       name: true,
-      coupleEmail: true,
-      couplePhone: true,
+      ownerEmail: true,
+      ownerPhone: true,
       notifyOnCheckIn: true,
       emailNotifications: true,
       smsNotifications: true,
@@ -27,9 +27,9 @@ async function notifyCoupleAboutCheckIn(eventId: string, guestName: string, gues
 
   const message = `Guest checked in: ${guestName} (${guestCount} guests) - ${event.name}`;
 
-  if (event.coupleEmail && event.emailNotifications) {
+  if (event.ownerEmail && event.emailNotifications) {
     await sendEmail(
-      event.coupleEmail,
+      event.ownerEmail,
       `Guest Checked In - ${event.name}`,
       `<div style="font-family: sans-serif;">
         <h2>Guest Checked In</h2>
@@ -40,12 +40,12 @@ async function notifyCoupleAboutCheckIn(eventId: string, guestName: string, gues
     );
   }
 
-  if (event.couplePhone && event.smsNotifications) {
-    await sendSMS(event.couplePhone, message);
+  if (event.ownerPhone && event.smsNotifications) {
+    await sendSMS(event.ownerPhone, message);
   }
 
-  if (event.couplePhone && event.whatsappNotifications) {
-    await sendWhatsApp(event.couplePhone, message);
+  if (event.ownerPhone && event.whatsappNotifications) {
+    await sendWhatsApp(event.ownerPhone, message);
   }
 }
 
@@ -164,9 +164,9 @@ router.post('/:eventId', optionalAdminAuth, asyncHandler(async (req, res) => {
       },
     });
 
-    // Notify couple (async - don't wait)
-    notifyCoupleAboutCheckIn(eventId, invitation.guestName, invitation.guestCount)
-      .catch(err => console.error('[Notification] Failed to notify couple about check-in:', err));
+    // Notify event owner (async - don't wait)
+    notifyOwnerAboutCheckIn(eventId, invitation.guestName, invitation.guestCount)
+      .catch(err => console.error('[Notification] Failed to notify owner about check-in:', err));
   }
 
   // Response

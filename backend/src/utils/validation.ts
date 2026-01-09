@@ -55,11 +55,11 @@ export const updateEventSchema = z.object({
   timezone: z.string().optional(),
   venue: z.string().optional().nullable(),
   
-  // Couple Contact Info
-  coupleName1: z.string().optional().nullable(),
-  coupleName2: z.string().optional().nullable(),
-  coupleEmail: z.string().email().optional().nullable().or(z.literal('')),
-  couplePhone: z.string().optional().nullable(),
+  // Event Owner Contact Info
+  ownerName: z.string().optional().nullable(),
+  ownerEmail: z.string().email().optional().nullable().or(z.literal('')),
+  ownerPhone: z.string().optional().nullable(),
+  organizationName: z.string().optional().nullable(),
   
   // Event Styling
   primaryColor: z.string().optional(),

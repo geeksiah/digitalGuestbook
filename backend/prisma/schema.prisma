@@ -41,11 +41,11 @@ model Event {
   timezone    String   @default("UTC")
   venue       String?
   
-  // Couple Contact Information
-  coupleName1       String?
-  coupleName2       String?
-  coupleEmail       String?
-  couplePhone       String?
+  // Event Owner Contact Information
+  ownerName         String?
+  ownerEmail        String?
+  ownerPhone        String?
+  organizationName  String?
   
   // Event Styling
   primaryColor      String   @default("#FFD700")  // Gold
@@ -76,8 +76,8 @@ model Event {
   boothTemplateId      String?
   thankYouTemplateId   String?
   
-  // Couple Portal Access
-  coupleAccessToken String @unique @default(uuid())
+  // Event Owner Portal Access
+  ownerAccessToken String @unique @default(uuid())
   
   // Guestbook Settings
   maxRecordingDuration Int @default(120) // seconds (30-120 per SRS)
@@ -135,6 +135,116 @@ model Event {
   formFields     EventFormField[]
   ticketTypes    TicketType[]
   paymentGateway PaymentGateway?
+  payoutWallet   PayoutWallet?
+  transactions   Transaction[]
+  payoutRequests PayoutRequest[]
+}
+
+// ============================================
+// EVENT OWNER PAYOUT SYSTEM
+// ============================================
+
+// Payout Wallet Configuration per Event
+model PayoutWallet {
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  
+  // Bank Account Details
+  bankName        String?
+  accountName     String?
+  accountNumber   String?
+  routingNumber   String?   // For US banks
+  swiftCode       String?   // For international
+  
+  // Mobile Money (Africa)
+  mobileProvider  String?   // mpesa | mtn | airtel
+  mobileNumber    String?
+  
+  // Digital Wallets
+  paypalEmail     String?
+  stripeAccountId String?   // Stripe Connect account
+  paystackSubaccount String?
+  
+  // Payout Preferences
+  preferredMethod String   @default("bank")  // bank | mobile | paypal | stripe | paystack
+  currency        String   @default("USD")
+  autoPayoutEnabled Boolean @default(false)
+  autoPayoutThreshold Float @default(100)  // Minimum balance to trigger auto-payout
+  
+  // Verification
+  isVerified      Boolean  @default(false)
+  verifiedAt      DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Sales Transactions
+model Transaction {
+  id        String   @id @default(uuid())
+  eventId   String
+  rsvpId    String?
+  
+  // Transaction Type
+  type            String   // ticket_sale | refund | fee | payout
+  
+  // Amount Details
+  grossAmount     Float    // Total amount charged
+  platformFee     Float    // Platform's cut
+  processingFee   Float    // Payment processor fee
+  netAmount       Float    // Amount to event owner
+  currency        String   @default("USD")
+  
+  // Payment Info
+  paymentMethod   String?  // stripe | paystack | paypal | cash
+  paymentRef      String?  // External payment reference
+  
+  // Ticket Info
+  ticketTypeName  String?
+  ticketQuantity  Int      @default(1)
+  buyerName       String?
+  buyerEmail      String?
+  
+  // Status
+  status          String   @default("pending")  // pending | completed | refunded | failed
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Payout Requests from Event Owners
+model PayoutRequest {
+  id        String   @id @default(uuid())
+  eventId   String
+  
+  // Request Details
+  requestedAmount Float
+  currency        String   @default("USD")
+  payoutMethod    String   // bank | mobile | paypal | stripe | paystack
+  
+  // Status
+  status          String   @default("pending")  // pending | processing | completed | rejected
+  
+  // Processing Info
+  processedAt     DateTime?
+  processedBy     String?   // Admin ID
+  transactionRef  String?   // External payout reference
+  rejectionReason String?
+  
+  // Notes
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 // ============================================

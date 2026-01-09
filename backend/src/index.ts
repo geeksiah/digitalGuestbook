@@ -64,6 +64,8 @@ async function initializeDatabase() {
           date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           timezone: 'America/New_York',
           venue: 'The Grand Ballroom',
+          ownerName: 'Sarah & Michael',
+          ownerEmail: 'events@example.com',
           invitationOnly: true,
           invitationEnabled: true,
           rsvpEnabled: true,
@@ -72,7 +74,7 @@ async function initializeDatabase() {
         },
       });
       console.log('✅ Sample event created: ' + event.slug);
-      console.log('   Couple Portal: /couple/' + event.coupleAccessToken);
+      console.log('   Event Owner Portal: /event-owner/' + event.ownerAccessToken);
     }
   } catch (error) {
     console.error('Database initialization error:', error);
@@ -92,7 +94,7 @@ import invitationRoutes from './routes/invitations.js';
 import checkInRoutes from './routes/checkin.js';
 import guestbookRoutes from './routes/guestbook.js';
 import mediaRoutes from './routes/media.js';
-import coupleRoutes from './routes/couple.js';
+import eventOwnerRoutes from './routes/event-owner.js';
 import publicRoutes from './routes/public.js';
 import settingsRoutes from './routes/settings.js';
 import ticketingRoutes from './routes/ticketing.js';
@@ -140,7 +142,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token'],
 }));
 
 // Rate Limiting (Non-Functional: Stable during high usage)
@@ -224,8 +226,8 @@ app.use('/api/guestbook', guestbookRoutes);
 // Media Management
 app.use('/api/media', mediaRoutes);
 
-// Couple Portal
-app.use('/api/couple', coupleRoutes);
+// Event Owner Portal
+app.use('/api/event-owner', eventOwnerRoutes);
 
 // Public Event Pages
 app.use('/api/public', publicRoutes);

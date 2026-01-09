@@ -25,7 +25,7 @@ interface MediaGalleryProps {
   reelEnabled?: boolean;
   onRefresh?: () => void;
   isAdmin?: boolean;
-  coupleToken?: string; // For couple portal auth
+  ownerToken?: string; // For event owner portal auth
 }
 
 // Icons
@@ -54,7 +54,7 @@ export default function MediaGallery({
   reelEnabled = false, 
   onRefresh,
   isAdmin = true,
-  coupleToken,
+  ownerToken,
 }: MediaGalleryProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('folders');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -149,8 +149,8 @@ export default function MediaGallery({
       if (isAdmin) {
         const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
         if (token) headers['Authorization'] = `Bearer ${token}`;
-      } else if (coupleToken) {
-        headers['X-Couple-Token'] = coupleToken;
+      } else if (ownerToken) {
+        headers['X-Owner-Token'] = ownerToken;
       }
       
       const response = await fetch(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, { headers });
@@ -202,9 +202,9 @@ export default function MediaGallery({
     
     if (adminToken) {
       headers['Authorization'] = `Bearer ${adminToken}`;
-    } else if (coupleToken) {
+    } else if (ownerToken) {
       // Use couple portal endpoint
-      endpoint = `${API_BASE_URL}/api/couple/${coupleToken}/generate-reel`;
+      endpoint = `${API_BASE_URL}/api/event-owner/${ownerToken}/generate-reel`;
     } else {
       toast.error('Authentication required');
       return;
@@ -233,7 +233,7 @@ export default function MediaGallery({
       // Determine status endpoint based on context
       const statusEndpoint = adminToken 
         ? `${API_BASE_URL}/api/media/reel/${jobId}/status`
-        : `${API_BASE_URL}/api/couple/${coupleToken}/reel/${jobId}/status`;
+        : `${API_BASE_URL}/api/event-owner/${ownerToken}/reel/${jobId}/status`;
 
       // Poll for status
       const pollInterval = setInterval(async () => {

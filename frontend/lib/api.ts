@@ -53,7 +53,7 @@ export const eventsApi = {
     api.post(`/events/${id}/phase`, { phase, override }),
   archive: (id: string) => api.post(`/events/${id}/archive`),
   unarchive: (id: string) => api.post(`/events/${id}/unarchive`),
-  regenerateCoupleToken: (id: string) => api.post(`/events/${id}/regenerate-couple-token`),
+  regenerateOwnerToken: (id: string) => api.post(`/events/${id}/regenerate-owner-token`),
   stats: (id: string) => api.get(`/events/${id}/stats`),
 };
 
@@ -127,16 +127,38 @@ export const guestbookApi = {
     ),
 };
 
-// Couple Portal API
-export const coupleApi = {
-  getEvent: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}`),
-  getRsvps: (token: string, params?: any) => axios.get(`${API_BASE_URL}/api/couple/${token}/rsvps`, { params }),
+// Event Owner Portal API
+export const eventOwnerApi = {
+  getEvent: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}`),
+  getRsvps: (token: string, params?: any) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/rsvps`, { params }),
   reviewRsvp: (token: string, rsvpId: string, status: 'APPROVED' | 'REJECTED') =>
-    axios.post(`${API_BASE_URL}/api/couple/${token}/rsvps/${rsvpId}/review`, { status }),
-  getMedia: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/media`),
-  getCheckIns: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/checkins`),
-  downloadMedia: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/media/download`, { responseType: 'blob' }),
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/rsvps/${rsvpId}/review`, { status }),
+  getMedia: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/media`),
+  getCheckIns: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/checkins`),
+  downloadMedia: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/media/download`, { responseType: 'blob' }),
+  generateReel: (token: string, maxDuration?: number) => 
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/generate-reel`, { maxDuration }),
+  getReelStatus: (token: string, jobId: string) => 
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/reel/${jobId}/status`),
+  
+  // Sales & Transactions
+  getSales: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/sales`),
+  getSalesByTicket: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/sales/by-ticket`),
+  
+  // Payout Wallet
+  getWallet: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/wallet`),
+  updateWallet: (token: string, data: any) => axios.post(`${API_BASE_URL}/api/event-owner/${token}/wallet`, data),
+  
+  // Payout Requests
+  getPayouts: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/payouts`),
+  requestPayout: (token: string, amount: number, notes?: string) => 
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/payouts/request`, { amount, notes }),
+  getPayoutDetails: (token: string, payoutId: string) => 
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/payouts/${payoutId}`),
+  cancelPayout: (token: string, payoutId: string) => 
+    axios.delete(`${API_BASE_URL}/api/event-owner/${token}/payouts/${payoutId}`),
 };
+
 
 // System Settings API (admin only)
 export const settingsApi = {

@@ -14,7 +14,7 @@ declare global {
         role: string;
       };
       event?: any;
-      coupleToken?: string;
+      ownerToken?: string;
     }
   }
 }
@@ -86,21 +86,21 @@ export const authenticateAdmin = async (
   }
 };
 
-// Couple Portal Authentication (Token-based)
-export const authenticateCouple = async (
+// Event Owner Portal Authentication (Token-based)
+export const authenticateOwner = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const coupleToken = req.headers['x-couple-token'] as string;
+    const ownerToken = req.headers['x-owner-token'] as string;
     
-    if (!coupleToken || coupleToken === 'null' || coupleToken === 'undefined') {
+    if (!ownerToken || ownerToken === 'null' || ownerToken === 'undefined') {
       throw new AppError('Access token required', 401);
     }
 
     const event = await prisma.event.findUnique({
-      where: { coupleAccessToken: coupleToken },
+      where: { ownerAccessToken: ownerToken },
       select: {
         id: true,
         name: true,
@@ -119,16 +119,19 @@ export const authenticateCouple = async (
     }
 
     req.event = event;
-    req.coupleToken = coupleToken;
+    req.ownerToken = ownerToken;
     next();
   } catch (error) {
     if (error instanceof AppError) {
       return next(error);
     }
-    console.error('[Auth] Couple authentication error:', error);
+    console.error('[Auth] Owner authentication error:', error);
     next(new AppError('Authentication failed', 401));
   }
 };
+
+// Alias for backward compatibility
+export const authenticateCouple = authenticateOwner;
 
 // Optional Admin Auth (for routes that work with or without auth)
 export const optionalAdminAuth = async (

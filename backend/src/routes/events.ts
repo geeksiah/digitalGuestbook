@@ -111,7 +111,7 @@ router.post('/', asyncHandler(async (req, res) => {
       ...data,
       date: new Date(data.date),
       endDate: data.endDate ? new Date(data.endDate) : null,
-      coupleAccessToken: uuidv4(),
+      ownerAccessToken: crypto.randomUUID(),
     },
   });
 
@@ -337,13 +337,13 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /api/events/:id/regenerate-couple-token
- * Regenerate couple access token
+ * POST /api/events/:id/regenerate-owner-token
+ * Regenerate event owner access token
  */
-router.post('/:id/regenerate-couple-token', asyncHandler(async (req, res) => {
+router.post('/:id/regenerate-owner-token', asyncHandler(async (req, res) => {
   const event = await prisma.event.update({
     where: { id: req.params.id },
-    data: { coupleAccessToken: uuidv4() },
+    data: { ownerAccessToken: crypto.randomUUID() },
   });
 
   if (!event) {
@@ -351,8 +351,8 @@ router.post('/:id/regenerate-couple-token', asyncHandler(async (req, res) => {
   }
 
   res.json({ 
-    coupleAccessToken: event.coupleAccessToken,
-    couplePortalUrl: `/couple/${event.coupleAccessToken}`,
+    ownerAccessToken: event.ownerAccessToken,
+    ownerPortalUrl: `/event-owner/${event.ownerAccessToken}`,
   });
 }));
 
