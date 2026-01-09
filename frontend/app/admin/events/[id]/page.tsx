@@ -126,17 +126,25 @@ export default function EventDetailPage() {
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
     venue: '', timezone: '', invitationOnly: false, reelEnabled: false,
+    // Feature toggles
+    invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
+    // Limits
     maxRecordingDuration: 120, minRecordingDuration: 30, maxPhotosPerGuest: 5,
+    maxPhotosPerBoothSession: 10, boothShutterCountdown: 3,
+    // Notifications
     notifyOnRsvp: true, notifyOnCheckIn: false, notifyOnGuestbook: false,
     emailNotifications: true, smsNotifications: false, whatsappNotifications: false,
+    // Colors
     primaryColor: '#FFD700', secondaryColor: '#1a1a2e', accentColor: '#ffffff',
+    // Owner
     ownerName: '', ownerEmail: '', ownerPhone: '', organizationName: '',
   });
 
   const [selectedTemplates, setSelectedTemplates] = useState({
     invitationTemplateId: '', rsvpTemplateId: '', guestbookTemplateId: '',
     guestbookVideoTemplateId: '', guestbookAudioTemplateId: '', guestbookPhotoTemplateId: '',
-    boothTemplateId: '', thankYouTemplateId: '',
+    boothTemplateId: '', boothVideoTemplateId: '', boothAudioTemplateId: '', boothPhotoTemplateId: '',
+    thankYouTemplateId: '',
   });
 
   useEffect(() => { fetchEvent(); fetchTemplates(); }, [eventId]);
@@ -157,6 +165,9 @@ export default function EventDetailPage() {
         guestbookAudioTemplateId: (event as any).guestbookAudioTemplateId || '',
         guestbookPhotoTemplateId: (event as any).guestbookPhotoTemplateId || '',
         boothTemplateId: (event as any).boothTemplateId || '',
+        boothVideoTemplateId: (event as any).boothVideoTemplateId || '',
+        boothAudioTemplateId: (event as any).boothAudioTemplateId || '',
+        boothPhotoTemplateId: (event as any).boothPhotoTemplateId || '',
         thankYouTemplateId: event.thankYouTemplateId || '',
       });
       const d = new Date(event.date);
@@ -167,9 +178,20 @@ export default function EventDetailPage() {
         endDate: ed ? ed.toISOString().split('T')[0] : '', endTime: ed ? ed.toTimeString().slice(0, 5) : '',
         venue: event.venue || '', timezone: event.timezone, invitationOnly: event.invitationOnly,
         reelEnabled: event.reelEnabled || false,
-        primaryColor: event.primaryColor || '#FFD700', secondaryColor: event.secondaryColor || '#1a1a2e', accentColor: event.accentColor || '#ffffff',
-        ownerName: event.ownerName || '', ownerEmail: event.ownerEmail || '', ownerPhone: event.ownerPhone || '', organizationName: event.organizationName || '',
+        // Feature toggles
+        invitationEnabled: event.invitationEnabled ?? true,
+        rsvpEnabled: event.rsvpEnabled ?? true,
+        guestbookEnabled: event.guestbookEnabled ?? true,
+        checkInEnabled: event.checkInEnabled ?? true,
+        // Limits
         maxRecordingDuration: event.maxRecordingDuration, minRecordingDuration: event.minRecordingDuration, maxPhotosPerGuest: event.maxPhotosPerGuest,
+        maxPhotosPerBoothSession: (event as any).maxPhotosPerBoothSession ?? 10,
+        boothShutterCountdown: (event as any).boothShutterCountdown ?? 3,
+        // Colors
+        primaryColor: event.primaryColor || '#FFD700', secondaryColor: event.secondaryColor || '#1a1a2e', accentColor: event.accentColor || '#ffffff',
+        // Owner
+        ownerName: event.ownerName || '', ownerEmail: event.ownerEmail || '', ownerPhone: event.ownerPhone || '', organizationName: event.organizationName || '',
+        // Notifications
         notifyOnRsvp: event.notifyOnRsvp ?? true, notifyOnCheckIn: event.notifyOnCheckIn ?? false, notifyOnGuestbook: event.notifyOnGuestbook ?? false,
         emailNotifications: event.emailNotifications ?? true, smsNotifications: event.smsNotifications ?? false, whatsappNotifications: event.whatsappNotifications ?? false,
       });
@@ -225,10 +247,20 @@ export default function EventDetailPage() {
         venue: eventSettings.venue || null, timezone: eventSettings.timezone,
         invitationOnly: eventSettings.invitationOnly,
         reelEnabled: eventSettings.reelEnabled,
+        // Feature toggles
+        invitationEnabled: eventSettings.invitationEnabled,
+        rsvpEnabled: eventSettings.rsvpEnabled,
+        guestbookEnabled: eventSettings.guestbookEnabled,
+        checkInEnabled: eventSettings.checkInEnabled,
+        // Limits
         maxRecordingDuration: eventSettings.maxRecordingDuration, minRecordingDuration: eventSettings.minRecordingDuration, maxPhotosPerGuest: eventSettings.maxPhotosPerGuest,
+        maxPhotosPerBoothSession: eventSettings.maxPhotosPerBoothSession, boothShutterCountdown: eventSettings.boothShutterCountdown,
+        // Notifications
         notifyOnRsvp: eventSettings.notifyOnRsvp, notifyOnCheckIn: eventSettings.notifyOnCheckIn, notifyOnGuestbook: eventSettings.notifyOnGuestbook,
         emailNotifications: eventSettings.emailNotifications, smsNotifications: eventSettings.smsNotifications, whatsappNotifications: eventSettings.whatsappNotifications,
+        // Colors
         primaryColor: eventSettings.primaryColor, secondaryColor: eventSettings.secondaryColor, accentColor: eventSettings.accentColor,
+        // Owner
         ownerName: eventSettings.ownerName || null, ownerEmail: eventSettings.ownerEmail || null, ownerPhone: eventSettings.ownerPhone || null, organizationName: eventSettings.organizationName || null,
       });
       toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
@@ -507,7 +539,10 @@ export default function EventDetailPage() {
               { t: 'GUESTBOOK_VIDEO', l: 'Video Recording', f: 'guestbookVideoTemplateId', e: event.guestbookEnabled },
               { t: 'GUESTBOOK_AUDIO', l: 'Audio Recording', f: 'guestbookAudioTemplateId', e: event.guestbookEnabled },
               { t: 'GUESTBOOK_PHOTO', l: 'Photo Upload', f: 'guestbookPhotoTemplateId', e: event.guestbookEnabled },
-              { t: 'BOOTH', l: 'Booth/Kiosk', f: 'boothTemplateId', e: event.guestbookEnabled },
+              { t: 'BOOTH', l: 'Booth Menu', f: 'boothTemplateId', e: event.guestbookEnabled },
+              { t: 'BOOTH', l: 'Booth Video', f: 'boothVideoTemplateId', e: event.guestbookEnabled },
+              { t: 'BOOTH', l: 'Booth Audio', f: 'boothAudioTemplateId', e: event.guestbookEnabled },
+              { t: 'BOOTH', l: 'Booth Photo', f: 'boothPhotoTemplateId', e: event.guestbookEnabled },
               { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true },
             ].map(x => (
               <div key={x.t} className={cn(!x.e && 'opacity-50')}>
@@ -600,7 +635,30 @@ export default function EventDetailPage() {
               </div>
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Access & Features</h4>
+                <h4 className="font-medium text-navy-900 mb-4">Event Features</h4>
+                <p className="text-sm text-surface-500 mb-4">Enable or disable specific event features.</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.invitationEnabled} onChange={e => setEventSettings({ ...eventSettings, invitationEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-navy-900">Invitations</span><p className="text-xs text-surface-500">Digital invitation passes</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.rsvpEnabled} onChange={e => setEventSettings({ ...eventSettings, rsvpEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-navy-900">RSVP</span><p className="text-xs text-surface-500">Guest response collection</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.guestbookEnabled} onChange={e => setEventSettings({ ...eventSettings, guestbookEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-navy-900">Guestbook</span><p className="text-xs text-surface-500">Video, audio, photo messages</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.checkInEnabled} onChange={e => setEventSettings({ ...eventSettings, checkInEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-navy-900">Check-in</span><p className="text-xs text-surface-500">Guest arrival tracking</p></div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-navy-900 mb-4">Access & Options</h4>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
                     <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.invitationOnly} onChange={e => setEventSettings({ ...eventSettings, invitationOnly: e.target.checked })} />
@@ -663,6 +721,15 @@ export default function EventDetailPage() {
                   <div><label className="label">Min Recording (sec)</label><input type="number" min="10" max="60" className="input" value={eventSettings.minRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, minRecordingDuration: parseInt(e.target.value) })} /></div>
                   <div><label className="label">Max Recording (sec)</label><input type="number" min="30" max="300" className="input" value={eventSettings.maxRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, maxRecordingDuration: parseInt(e.target.value) })} /></div>
                   <div><label className="label">Max Photos/Guest</label><input type="number" min="1" max="20" className="input" value={eventSettings.maxPhotosPerGuest} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerGuest: parseInt(e.target.value) })} /></div>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-navy-900 mb-4">Booth/Kiosk Settings</h4>
+                <p className="text-sm text-surface-500 mb-4">Configure the photo booth experience for guests.</p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div><label className="label">Max Photos Per Session</label><input type="number" min="1" max="50" className="input" value={eventSettings.maxPhotosPerBoothSession} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerBoothSession: parseInt(e.target.value) || 10 })} /></div>
+                  <div><label className="label">Shutter Countdown (sec)</label><input type="number" min="1" max="10" className="input" value={eventSettings.boothShutterCountdown} onChange={e => setEventSettings({ ...eventSettings, boothShutterCountdown: parseInt(e.target.value) || 3 })} /></div>
                 </div>
               </div>
             </div>

@@ -70,8 +70,13 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
         { slug: req.params.eventId },
       ],
     },
-    // Include booth template for booth mode
-    include: !requireAccessCode ? { boothTemplate: true } : undefined,
+    // Include booth templates for booth mode
+    include: !requireAccessCode ? {
+      boothTemplate: true,
+      boothVideoTemplate: true,
+      boothAudioTemplate: true,
+      boothPhotoTemplate: true,
+    } : undefined,
   });
 
   if (!event) {
@@ -270,28 +275,35 @@ router.get('/:eventId/quota', verifyGuestbookAccess, asyncHandler(async (req, re
 router.get('/:eventId/booth', verifyBoothAccess, asyncHandler(async (req, res) => {
   const event = (req as any).event;
 
+  // Helper to format template data
+  const formatTemplate = (template: any) => template ? {
+    id: template.id,
+    name: template.name,
+    htmlContent: template.htmlContent,
+    cssContent: template.cssContent,
+    jsContent: template.jsContent,
+    variables: template.variables,
+  } : null;
+
   res.json({
     booth: {
       eventId: event.id,
       eventName: event.name,
       maxRecordingDuration: event.maxRecordingDuration,
       minRecordingDuration: event.minRecordingDuration,
-      // NEW: Booth-specific photo limit per session (falls back to 10 if not set)
+      // Booth-specific photo limit per session
       maxPhotosPerSession: event.maxPhotosPerBoothSession || 10,
-      // NEW: Shutter countdown timer (falls back to 3 if not set)
+      // Shutter countdown timer
       shutterCountdown: event.boothShutterCountdown || 3,
       // Event branding colors
       primaryColor: event.primaryColor || '#6366f1',
       secondaryColor: event.secondaryColor || '#e0e7ff',
-      // Template data for custom styling
-      template: event.boothTemplate ? {
-        id: event.boothTemplate.id,
-        name: event.boothTemplate.name,
-        htmlContent: event.boothTemplate.htmlContent,
-        cssContent: event.boothTemplate.cssContent,
-        jsContent: event.boothTemplate.jsContent,
-        variables: event.boothTemplate.variables,
-      } : null,
+      // Main booth template (for menu/welcome screens)
+      template: formatTemplate(event.boothTemplate),
+      // Specific page templates
+      videoTemplate: formatTemplate(event.boothVideoTemplate),
+      audioTemplate: formatTemplate(event.boothAudioTemplate),
+      photoTemplate: formatTemplate(event.boothPhotoTemplate),
     },
   });
 }));

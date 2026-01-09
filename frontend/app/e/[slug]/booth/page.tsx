@@ -13,21 +13,27 @@ type PermissionState = 'checking' | 'granted' | 'denied';
 const AUTO_RESET_SECONDS = 10;
 const SHUTTER_COUNTDOWN = 3;
 
+interface TemplateData {
+  id: string;
+  name: string;
+  htmlContent: string;
+  cssContent?: string;
+  jsContent?: string;
+}
+
 interface BoothConfig {
   eventId: string;
   eventName: string;
   maxRecordingDuration: number;
   minRecordingDuration: number;
   maxPhotosPerSession: number;
+  shutterCountdown: number;
   primaryColor: string;
   secondaryColor: string;
-  template?: {
-    id: string;
-    name: string;
-    htmlContent: string;
-    cssContent?: string;
-    jsContent?: string;
-  } | null;
+  template?: TemplateData | null;        // Main booth template
+  videoTemplate?: TemplateData | null;   // Video recording page
+  audioTemplate?: TemplateData | null;   // Audio recording page
+  photoTemplate?: TemplateData | null;   // Photo capture page
 }
 
 export default function BoothPage() {
