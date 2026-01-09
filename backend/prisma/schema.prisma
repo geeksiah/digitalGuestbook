@@ -99,6 +99,15 @@ model Event {
   smsNotifications     Boolean @default(false)
   whatsappNotifications Boolean @default(false)
   
+  // RSVP/Ticketing Mode
+  rsvpMode             String   @default("rsvp")  // rsvp | ticketing | both
+  requireApproval      Boolean  @default(true)    // Auto-approve if false
+  
+  // Booth/Kiosk Template IDs (for video/audio/photo pages)
+  boothVideoTemplateId  String?
+  boothAudioTemplateId  String?
+  boothPhotoTemplateId  String?
+  
   // Metadata
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -112,14 +121,20 @@ model Event {
   guestbookAudioTemplate   Template? @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
   guestbookPhotoTemplate   Template? @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
   boothTemplate      Template? @relation("BoothTemplate", fields: [boothTemplateId], references: [id])
+  boothVideoTemplate  Template? @relation("BoothVideoTemplate", fields: [boothVideoTemplateId], references: [id])
+  boothAudioTemplate  Template? @relation("BoothAudioTemplate", fields: [boothAudioTemplateId], references: [id])
+  boothPhotoTemplate  Template? @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
   thankYouTemplate   Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
   
-  rsvps       RSVP[]
-  invitations Invitation[]
-  checkIns    CheckIn[]
-  mediaAssets MediaAsset[]
-  broadcasts  Broadcast[]
-  auditLogs   AuditLog[]
+  rsvps          RSVP[]
+  invitations    Invitation[]
+  checkIns       CheckIn[]
+  mediaAssets    MediaAsset[]
+  broadcasts     Broadcast[]
+  auditLogs      AuditLog[]
+  formFields     EventFormField[]
+  ticketTypes    TicketType[]
+  paymentGateway PaymentGateway?
 }
 
 // ============================================
@@ -155,6 +170,9 @@ model Template {
   eventsAsGuestbookAudio Event[] @relation("GuestbookAudioTemplate")
   eventsAsGuestbookPhoto Event[] @relation("GuestbookPhotoTemplate")
   eventsAsBooth      Event[] @relation("BoothTemplate")
+  eventsAsBoothVideo  Event[] @relation("BoothVideoTemplate")
+  eventsAsBoothAudio  Event[] @relation("BoothAudioTemplate")
+  eventsAsBoothPhoto  Event[] @relation("BoothPhotoTemplate")
   eventsAsThankYou   Event[] @relation("ThankYouTemplate")
 }
 
@@ -179,12 +197,25 @@ model RSVP {
   dietaryNotes   String?
   note          String?
   
+  // Custom Fields Data (JSON - flexible per-event fields)
+  customFields  String?  // JSON object with custom field responses
+  
   // RSVP Status (Critical - SRS Section 4.3)
   // Values: PENDING | APPROVED | REJECTED
   status        String   @default("PENDING")
   
   // Channel used for submission (for rejection notification)
   submissionChannel String? // EMAIL | SMS | WHATSAPP | WEB
+  
+  // Payment/Ticket Info (if event uses ticketing)
+  ticketType      String?   // Ticket type purchased
+  ticketQuantity  Int?      // Number of tickets
+  amountPaid      Float?    // Amount paid in cents
+  currency        String?   // USD, NGN, etc.
+  paymentStatus   String?   // PENDING | PAID | REFUNDED | FAILED
+  paymentMethod   String?   // stripe | paystack | cash | free
+  paymentRef      String?   // External payment reference
+  paymentDate     DateTime?
   
   // Timestamps
   submittedAt   DateTime @default(now())
@@ -197,6 +228,105 @@ model RSVP {
   // Relations
   event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   invitation Invitation?
+}
+
+// Custom RSVP/Ticket Fields per Event
+model EventFormField {
+  id        String   @id @default(uuid())
+  eventId   String
+  
+  // Field Configuration
+  fieldName     String   // Internal name (e.g., "company_name")
+  label         String   // Display label (e.g., "Company Name")
+  type          String   // text | email | phone | number | select | checkbox | radio | textarea | date
+  placeholder   String?
+  helpText      String?
+  
+  // Options for select/radio/checkbox (JSON array)
+  options       String?  // ["Option 1", "Option 2", "Option 3"]
+  
+  // Validation
+  required      Boolean  @default(false)
+  minLength     Int?
+  maxLength     Int?
+  pattern       String?  // Regex pattern
+  
+  // Display Order
+  sortOrder     Int      @default(0)
+  
+  // Visibility
+  isActive      Boolean  @default(true)
+  showOnConfirmation Boolean @default(true)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Ticket Types for Paid Events
+model TicketType {
+  id        String   @id @default(uuid())
+  eventId   String
+  
+  name          String   // "General Admission", "VIP", "Early Bird"
+  description   String?
+  price         Float    // Price in smallest currency unit (cents)
+  currency      String   @default("USD")
+  
+  // Availability
+  quantityTotal   Int      @default(0)  // 0 = unlimited
+  quantitySold    Int      @default(0)
+  maxPerOrder     Int      @default(10)
+  
+  // Sales Window
+  saleStartDate   DateTime?
+  saleEndDate     DateTime?
+  
+  // Display
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Payment Gateway Configuration per Event
+model PaymentGateway {
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  
+  // Gateway Selection
+  gateway         String   // stripe | paystack | flutterwave | paypal | free
+  isLive          Boolean  @default(false)  // Test vs Live mode
+  
+  // Stripe Configuration
+  stripePublicKey   String?
+  stripeSecretKey   String?
+  stripeWebhookSecret String?
+  
+  // Paystack Configuration
+  paystackPublicKey String?
+  paystackSecretKey String?
+  
+  // Flutterwave Configuration
+  flutterwavePublicKey String?
+  flutterwaveSecretKey String?
+  
+  // Common Settings
+  currency          String   @default("USD")
+  successUrl        String?
+  cancelUrl         String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 // ============================================
