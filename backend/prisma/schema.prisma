@@ -690,7 +690,7 @@ model EmailProvider {
 model SmsProvider {
   id          String   @id @default(uuid())
   name        String   // Display name
-  provider    String   // twilio | vonage | africastalking | termii
+  provider    String   // twilio | vonage | africastalking | termii | arkesel
   isActive    Boolean  @default(true)
   isDefault   Boolean  @default(false)
   
@@ -699,10 +699,10 @@ model SmsProvider {
   authToken   String?
   phoneNumber String?
   
-  // API-based providers
-  apiKey      String?
-  apiSecret   String?
-  senderId    String?  // For some providers
+  // API-based providers (Termii, Arkesel, Africa's Talking, etc.)
+  apiKey      String?  // API key for Arkesel, Termii, Africa's Talking
+  apiSecret   String?  // API secret (for some providers)
+  senderId    String?  // Sender ID / From number (required for Arkesel, Termii)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

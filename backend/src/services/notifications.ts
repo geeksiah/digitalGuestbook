@@ -110,7 +110,7 @@ export async function sendSmsWithProvider(
   provider: SmsProvider,
   to: string,
   message: string
-) {
+): Promise<{ success: boolean; sid?: string; messageId?: string; balance?: number; error?: string }> {
   try {
     if (provider.provider === 'twilio' && provider.accountSid && provider.authToken) {
       const twilio = await import('twilio');
@@ -176,9 +176,125 @@ export async function sendSmsWithProvider(
       }
     }
     
+    if (provider.provider === 'arkesel' && provider.apiKey) {
+      // Arkesel SMS API - Text/Plain SMS
+      // Format: https://sms.arkesel.com/sms/api?action=send-sms&api_key=XXX&to=PhoneNumber&from=SenderID&sms=Message
+      
+      // Validate sender ID (required for Arkesel)
+      if (!provider.senderId) {
+        throw new Error('Sender ID is required for Arkesel SMS provider. Please configure senderId in provider settings.');
+      }
+      
+      const apiUrl = new URL('https://sms.arkesel.com/sms/api');
+      apiUrl.searchParams.append('action', 'send-sms');
+      apiUrl.searchParams.append('api_key', provider.apiKey);
+      apiUrl.searchParams.append('to', to.replace(/^\+/, '')); // Remove leading + if present
+      apiUrl.searchParams.append('from', provider.senderId); // Sender ID (required, already validated)
+      apiUrl.searchParams.append('sms', message);
+      
+      const response = await fetch(apiUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const result = await response.json() as { 
+          status?: string;
+          message?: string;
+          data?: { 
+            status?: string;
+            message?: string;
+            message_id?: string;
+            balance?: number;
+          };
+        };
+        
+        // Arkesel response format: { status: "success", data: { status: "sent", message_id: "...", balance: ... } }
+        // Sometimes response is: { status: "success", message: "SMS sent", data: { ... } }
+        if (result.status === 'success' && (result.data?.status === 'sent' || result.message?.toLowerCase().includes('sent'))) {
+          console.log('[SMS] Sent via Arkesel to:', to, 'Message ID:', result.data?.message_id, 'Balance:', result.data?.balance);
+          return { 
+            success: true, 
+            messageId: result.data?.message_id,
+            balance: result.data?.balance, // Return balance if available
+          };
+        } else {
+          // Handle error response from Arkesel
+          const errorMsg = result.message || result.data?.message || JSON.stringify(result);
+          throw new Error(`Arkesel SMS failed: ${errorMsg}`);
+        }
+      } else {
+        const errorText = await response.text();
+        let errorData: any;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+        throw new Error(`Arkesel API error (${response.status}): ${errorData.message || errorText}`);
+      }
+    }
+    
     return { success: false, error: `Unsupported SMS provider: ${provider.provider}` };
   } catch (error: any) {
     console.error('[SMS] Failed to send via', provider.name, ':', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check Arkesel SMS balance
+ */
+export async function checkArkeselBalance(apiKey: string): Promise<{ success: boolean; balance?: number; error?: string }> {
+  try {
+    const apiUrl = new URL('https://sms.arkesel.com/sms/api');
+    apiUrl.searchParams.append('action', 'check-balance');
+    apiUrl.searchParams.append('api_key', apiKey);
+    apiUrl.searchParams.append('response', 'json');
+    
+    const response = await fetch(apiUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const result = await response.json() as { 
+        status?: string;
+        balance?: number | string;
+        data?: { balance?: number | string };
+        message?: string;
+      };
+      
+      // Arkesel returns balance in different formats:
+      // Format 1: { status: "success", balance: 95.50 }
+      // Format 2: { status: "success", data: { balance: 95.50 } }
+      // Format 3: { balance: 95.50 }
+      const balanceValue = result.balance ?? result.data?.balance;
+      const balance = typeof balanceValue === 'string' ? parseFloat(balanceValue) : balanceValue;
+      
+      if (balance !== undefined && !isNaN(balance)) {
+        console.log('[SMS] Arkesel balance checked:', balance);
+        return { success: true, balance };
+      } else {
+        const errorMsg = result.message || 'Balance not found in response';
+        return { success: false, error: errorMsg };
+      }
+    } else {
+      const error = await response.text();
+      let errorData: any;
+      try {
+        errorData = JSON.parse(error);
+      } catch {
+        errorData = { message: error };
+      }
+      throw new Error(`Arkesel balance check error (${response.status}): ${errorData.message || error}`);
+    }
+  } catch (error: any) {
+    console.error('[SMS] Failed to check Arkesel balance:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -526,6 +642,7 @@ export default {
   sendEmailWithProvider,
   sendSmsWithProvider,
   sendWhatsappWithProvider,
+  checkArkeselBalance,
   sendBroadcast,
   sendRsvpConfirmation,
   sendInvitationEmail,

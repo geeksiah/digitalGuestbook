@@ -1,34 +1,16 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { mediaUploadSchema } from '../utils/validation.js';
 import { calculateEventPhase, canAccessGuestbook } from '../utils/phase.js';
+import { uploadToSupabase, BUCKETS, getPublicUrl } from '../services/supabaseStorage.js';
 
 const router = Router();
 
-// Configure multer for media uploads
-const uploadsDir = path.join(process.cwd(), 'uploads/media');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const eventDir = path.join(uploadsDir, req.params.eventId || 'unknown');
-    if (!fs.existsSync(eventDir)) {
-      fs.mkdirSync(eventDir, { recursive: true });
-    }
-    cb(null, eventDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-  },
-});
+// Configure multer to use memory storage (we'll upload directly to Supabase)
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -183,53 +165,78 @@ router.post(
       });
 
       if (uploadedPhotos >= event.maxPhotosPerGuest) {
-        // Delete the uploaded file
-        fs.unlinkSync(file.path);
         throw new AppError(`Maximum ${event.maxPhotosPerGuest} photos allowed per device`, 400);
       }
     }
 
-    // Create media asset record
-    const mediaAsset = await prisma.mediaAsset.create({
-      data: {
-        eventId: event.id,
-        type: metadata.type,
-        guestName: metadata.guestName,
-        guestEmail: metadata.guestEmail,
-        fileName: file.originalname,
-        filePath: `/uploads/media/${event.id}/${file.filename}`,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        duration: metadata.duration,
-        captureMode: metadata.captureMode || 'PERSONAL',
-        deviceId: metadata.deviceId,
-        status: 'READY',
-      },
-    });
+    // Generate unique filename
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    const fileName = `media-${uniqueSuffix}${ext}`;
+    const storagePath = `${event.id}/${fileName}`;
 
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        eventId: event.id,
-        action: 'GUESTBOOK_UPLOAD',
-        entityType: 'MEDIA',
-        entityId: mediaAsset.id,
-        details: JSON.stringify({
+    try {
+      // Upload to Supabase Storage
+      const { path: storedPath, publicUrl } = await uploadToSupabase(
+        BUCKETS.MEDIA,
+        storagePath,
+        file.buffer,
+        {
+          contentType: file.mimetype,
+          metadata: {
+            eventId: event.id,
+            type: metadata.type,
+            guestName: metadata.guestName || '',
+            originalName: file.originalname,
+          },
+        }
+      );
+
+      // Create media asset record
+      const mediaAsset = await prisma.mediaAsset.create({
+        data: {
+          eventId: event.id,
           type: metadata.type,
           guestName: metadata.guestName,
-          captureMode: metadata.captureMode,
-        }),
-      },
-    });
+          guestEmail: metadata.guestEmail,
+          fileName: file.originalname,
+          filePath: storedPath, // Store Supabase path
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          duration: metadata.duration,
+          captureMode: metadata.captureMode || 'PERSONAL',
+          deviceId: metadata.deviceId,
+          status: 'READY',
+        },
+      });
 
-    res.status(201).json({
-      message: 'Thank you for your message.',
-      mediaAsset: {
-        id: mediaAsset.id,
-        type: mediaAsset.type,
-        status: mediaAsset.status,
-      },
-    });
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          eventId: event.id,
+          action: 'GUESTBOOK_UPLOAD',
+          entityType: 'MEDIA',
+          entityId: mediaAsset.id,
+          details: JSON.stringify({
+            type: metadata.type,
+            guestName: metadata.guestName,
+            captureMode: metadata.captureMode,
+          }),
+        },
+      });
+
+      res.status(201).json({
+        message: 'Thank you for your message.',
+        mediaAsset: {
+          id: mediaAsset.id,
+          type: mediaAsset.type,
+          status: mediaAsset.status,
+        },
+      });
+    } catch (error: any) {
+      console.error('[Guestbook Upload] Supabase upload error:', error);
+      throw new AppError(`Failed to upload file: ${error.message}`, 500);
+    }
   })
 );
 

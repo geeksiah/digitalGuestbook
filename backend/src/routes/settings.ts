@@ -312,31 +312,65 @@ router.delete('/sms-providers/:id', authenticateAdmin, asyncHandler(async (req: 
 router.post('/sms-providers/:id/test', authenticateAdmin, asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { phone } = req.body;
-  
+
   if (!phone) {
     return res.status(400).json({ error: 'Phone number required' });
   }
-  
+
   const provider = await prisma.smsProvider.findUnique({
     where: { id },
   });
-  
+
   if (!provider) {
     return res.status(404).json({ error: 'Provider not found' });
   }
-  
+
   const { sendSmsWithProvider } = await import('../services/notifications.js');
-  
+
   const result = await sendSmsWithProvider(
     provider,
     phone,
     `Test SMS from Digital Event Platform using ${provider.name}. Your configuration is working!`
   );
-  
+
   if (result.success) {
-    res.json({ success: true, message: 'Test SMS sent successfully' });
+    const response: any = { success: true, message: 'Test SMS sent successfully' };
+    // Include balance for Arkesel if available
+    if (provider.provider === 'arkesel' && (result as any).balance !== undefined) {
+      response.balance = (result as any).balance;
+    }
+    res.json(response);
   } else {
     res.status(500).json({ success: false, error: result.error });
+  }
+}));
+
+/**
+ * GET /api/settings/sms-providers/:id/balance
+ * Check SMS provider balance (for supported providers like Arkesel)
+ */
+router.get('/sms-providers/:id/balance', authenticateAdmin, asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const provider = await prisma.smsProvider.findUnique({
+    where: { id },
+  });
+
+  if (!provider) {
+    return res.status(404).json({ error: 'Provider not found' });
+  }
+
+  if (provider.provider === 'arkesel' && provider.apiKey) {
+    const { checkArkeselBalance } = await import('../services/notifications.js');
+    const result = await checkArkeselBalance(provider.apiKey);
+
+    if (result.success) {
+      res.json({ success: true, balance: result.balance, currency: 'GHS' }); // Arkesel uses Ghana Cedis
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } else {
+    res.status(400).json({ error: 'Balance check is only supported for Arkesel provider' });
   }
 }));
 
