@@ -39,6 +39,7 @@ const SMS_PROVIDERS = [
   { id: 'twilio', name: 'Twilio', description: 'Cloud communications' },
   { id: 'termii', name: 'Termii', description: 'African SMS provider' },
   { id: 'africastalking', name: "Africa's Talking", description: 'African communications' },
+  { id: 'arkesel', name: 'Arkesel', description: 'Ghana SMS provider' },
   { id: 'vonage', name: 'Vonage (Nexmo)', description: 'Global SMS provider' },
   { id: 'messagebird', name: 'MessageBird', description: 'Omnichannel messaging' },
   { id: 'custom', name: 'Custom API', description: 'Custom HTTP endpoint' },
@@ -423,7 +424,7 @@ export default function AdminSettingsPage() {
                 </div>
               </>
             )}
-            {(providerForm.provider === 'termii' || providerForm.provider === 'africastalking' || providerForm.provider === 'vonage' || providerForm.provider === 'messagebird') && (
+            {(providerForm.provider === 'termii' || providerForm.provider === 'africastalking' || providerForm.provider === 'arkesel' || providerForm.provider === 'vonage' || providerForm.provider === 'messagebird') && (
               <>
                 <div>
                   <label className="label">API Key</label>
@@ -437,7 +438,10 @@ export default function AdminSettingsPage() {
                 )}
                 <div>
                   <label className="label">Sender ID / Phone</label>
-                  <input type="text" className="input" value={providerForm.senderId || ''} onChange={(e) => setProviderForm({ ...providerForm, senderId: e.target.value })} placeholder="EventApp" />
+                  <input type="text" className="input" value={providerForm.senderId || ''} onChange={(e) => setProviderForm({ ...providerForm, senderId: e.target.value })} placeholder={providerForm.provider === 'arkesel' ? 'Must be registered with Arkesel' : 'EventApp'} />
+                  {providerForm.provider === 'arkesel' && (
+                    <p className="text-xs text-surface-500 mt-1">Sender ID must be registered with Arkesel before use</p>
+                  )}
                 </div>
               </>
             )}
