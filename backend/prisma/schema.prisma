@@ -100,8 +100,14 @@ model Event {
   whatsappNotifications Boolean @default(false)
   
   // RSVP/Ticketing Mode
-  rsvpMode             String   @default("rsvp")  // rsvp | ticketing | both
+  rsvpMode             String   @default("free")  // free | paid
   requireApproval      Boolean  @default(true)    // Auto-approve if false
+  
+  // Ticketing Settings (only used when rsvpMode = "paid")
+  ticketingEnabled     Boolean  @default(false)
+  platformFeePercent   Float    @default(5.0)     // Platform fee percentage
+  processingFeePercent Float    @default(2.9)     // Payment processing fee %
+  processingFeeFixed   Float    @default(0.30)    // Fixed processing fee per txn
   
   // Booth/Kiosk Template IDs (for video/audio/photo pages)
   boothVideoTemplateId  String?
@@ -138,6 +144,42 @@ model Event {
   payoutWallet   PayoutWallet?
   transactions   Transaction[]
   payoutRequests PayoutRequest[]
+  reelJobs       ReelJob[]
+}
+
+// ============================================
+// REEL GENERATION
+// ============================================
+
+model ReelJob {
+  id        String   @id @default(uuid())
+  eventId   String
+  
+  // Job Status
+  status      String   @default("pending")  // pending | processing | completed | failed
+  progress    Int      @default(0)          // 0-100 percentage
+  
+  // Configuration
+  maxDuration Int      @default(300)        // Max reel duration in seconds
+  
+  // Output
+  outputPath  String?                       // Path to generated reel
+  outputSize  Int?                          // File size in bytes
+  duration    Int?                          // Actual duration in seconds
+  
+  // Error Handling
+  errorMessage String?
+  retryCount   Int      @default(0)
+  
+  // Metadata
+  videoCount   Int      @default(0)         // Number of videos included
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 // ============================================

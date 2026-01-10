@@ -140,6 +140,8 @@ export const eventOwnerApi = {
     axios.post(`${API_BASE_URL}/api/event-owner/${token}/generate-reel`, { maxDuration }),
   getReelStatus: (token: string, jobId: string) => 
     axios.get(`${API_BASE_URL}/api/event-owner/${token}/reel/${jobId}/status`),
+  getReels: (token: string) => 
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/reels`),
   
   // Sales & Transactions
   getSales: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/sales`),
@@ -167,6 +169,33 @@ export const settingsApi = {
   testEmail: (email: string) => api.post('/settings/test-email', { email }),
   testSMS: (phone: string) => api.post('/settings/test-sms', { phone }),
   testWhatsApp: (phone: string) => api.post('/settings/test-whatsapp', { phone }),
+};
+
+// Admin API
+export const adminApi = {
+  // Dashboard
+  getDashboard: () => api.get('/admin/dashboard'),
+  
+  // Audit Logs
+  getAuditLogs: (params?: { page?: number; limit?: number; eventId?: string; action?: string }) =>
+    api.get('/admin/audit-logs', { params }),
+  
+  // Payout Management
+  getPayouts: (status?: string, eventId?: string, page?: number, limit?: number) =>
+    api.get('/admin/payouts', { params: { status, eventId, page, limit } }),
+  getPayoutDetails: (id: string) => api.get(`/admin/payouts/${id}`),
+  processPayout: (id: string, transactionRef?: string, notes?: string) =>
+    api.post(`/admin/payouts/${id}/process`, { transactionRef, notes }),
+  rejectPayout: (id: string, reason: string) =>
+    api.post(`/admin/payouts/${id}/reject`, { reason }),
+  
+  // Wallet Management
+  getWallets: () => api.get('/admin/wallets'),
+  verifyWallet: (id: string) => api.put(`/admin/wallets/${id}/verify`),
+  
+  // Reel Jobs
+  getReelJobs: (status?: string, eventId?: string) =>
+    api.get('/admin/reel-jobs', { params: { status, eventId } }),
 };
 
 export default api;

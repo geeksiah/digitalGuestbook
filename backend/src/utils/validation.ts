@@ -96,7 +96,11 @@ export const updateEventSchema = z.object({
   boothShutterCountdown: z.number().min(1).max(10).optional(),
   
   // RSVP/Ticketing Mode
-  rsvpMode: z.enum(['rsvp', 'ticketing', 'both']).optional(),
+  rsvpMode: z.enum(['free', 'paid']).optional(),
+  ticketingEnabled: z.boolean().optional(),
+  platformFeePercent: z.number().min(0).max(100).optional(),
+  processingFeePercent: z.number().min(0).max(100).optional(),
+  processingFeeFixed: z.number().min(0).optional(),
   requireApproval: z.boolean().optional(),
   
   // Notification Settings

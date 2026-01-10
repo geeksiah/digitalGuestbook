@@ -373,7 +373,7 @@ router.get('/reel/:jobId/status', authenticateAdmin, asyncHandler(async (req, re
   const { jobId } = req.params;
 
   const { getReelJobStatus } = await import('../services/reelGenerator.js');
-  const status = getReelJobStatus(jobId);
+  const status = await getReelJobStatus(jobId);
 
   if (!status) {
     throw new AppError('Job not found', 404);

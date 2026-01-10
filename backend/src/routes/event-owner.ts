@@ -53,6 +53,8 @@ router.get('/:token', validateOwnerToken, async (req: Request, res: Response) =>
         phaseOverride: true,
         invitationOnly: true,
         reelEnabled: true,
+        rsvpMode: true,
+        ticketingEnabled: true,
         ownerName: true,
         ownerEmail: true,
         ownerPhone: true,
@@ -350,7 +352,7 @@ router.get('/:token/reel/:jobId/status', validateOwnerToken, async (req: Request
     const { jobId } = req.params;
 
     const { getReelJobStatus } = await import('../services/reelGenerator.js');
-    const status = getReelJobStatus(jobId);
+    const status = await getReelJobStatus(jobId);
 
     if (!status) {
       return res.status(404).json({ error: 'Reel job not found' });
@@ -360,6 +362,36 @@ router.get('/:token/reel/:jobId/status', validateOwnerToken, async (req: Request
   } catch (error) {
     console.error('Error fetching reel status:', error);
     res.status(500).json({ error: 'Failed to fetch reel status' });
+  }
+});
+
+// GET /api/event-owner/:token/reels - Get all reels for the event
+router.get('/:token/reels', validateOwnerToken, async (req: Request, res: Response) => {
+  try {
+    const eventId = (req as any).eventId;
+
+    const reels = await prisma.reelJob.findMany({
+      where: { eventId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        progress: true,
+        outputPath: true,
+        outputSize: true,
+        duration: true,
+        videoCount: true,
+        errorMessage: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ reels });
+  } catch (error) {
+    console.error('Error fetching reels:', error);
+    res.status(500).json({ error: 'Failed to fetch reels' });
   }
 });
 

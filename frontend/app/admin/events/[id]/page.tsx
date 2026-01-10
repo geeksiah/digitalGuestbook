@@ -26,6 +26,11 @@ interface Event {
   guestbookEnabled: boolean;
   checkInEnabled: boolean;
   reelEnabled: boolean;
+  rsvpMode: 'free' | 'paid';
+  ticketingEnabled: boolean;
+  platformFeePercent: number;
+  processingFeePercent: number;
+  processingFeeFixed: number;
   maxRecordingDuration: number;
   minRecordingDuration: number;
   maxPhotosPerGuest: number;
@@ -128,6 +133,9 @@ export default function EventDetailPage() {
     venue: '', timezone: '', invitationOnly: false, reelEnabled: false,
     // Feature toggles
     invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
+    // RSVP Mode & Ticketing
+    rsvpMode: 'free' as 'free' | 'paid', ticketingEnabled: false,
+    platformFeePercent: 5, processingFeePercent: 2.9, processingFeeFixed: 0.30,
     // Limits
     maxRecordingDuration: 120, minRecordingDuration: 30, maxPhotosPerGuest: 5,
     maxPhotosPerBoothSession: 10, boothShutterCountdown: 3,
@@ -183,6 +191,12 @@ export default function EventDetailPage() {
         rsvpEnabled: event.rsvpEnabled ?? true,
         guestbookEnabled: event.guestbookEnabled ?? true,
         checkInEnabled: event.checkInEnabled ?? true,
+        // RSVP Mode & Ticketing
+        rsvpMode: (event.rsvpMode as 'free' | 'paid') || 'free',
+        ticketingEnabled: event.ticketingEnabled ?? false,
+        platformFeePercent: event.platformFeePercent ?? 5,
+        processingFeePercent: event.processingFeePercent ?? 2.9,
+        processingFeeFixed: event.processingFeeFixed ?? 0.30,
         // Limits
         maxRecordingDuration: event.maxRecordingDuration, minRecordingDuration: event.minRecordingDuration, maxPhotosPerGuest: event.maxPhotosPerGuest,
         maxPhotosPerBoothSession: (event as any).maxPhotosPerBoothSession ?? 10,
@@ -252,6 +266,12 @@ export default function EventDetailPage() {
         rsvpEnabled: eventSettings.rsvpEnabled,
         guestbookEnabled: eventSettings.guestbookEnabled,
         checkInEnabled: eventSettings.checkInEnabled,
+        // RSVP Mode & Ticketing
+        rsvpMode: eventSettings.rsvpMode,
+        ticketingEnabled: eventSettings.ticketingEnabled,
+        platformFeePercent: eventSettings.platformFeePercent,
+        processingFeePercent: eventSettings.processingFeePercent,
+        processingFeeFixed: eventSettings.processingFeeFixed,
         // Limits
         maxRecordingDuration: eventSettings.maxRecordingDuration, minRecordingDuration: eventSettings.minRecordingDuration, maxPhotosPerGuest: eventSettings.maxPhotosPerGuest,
         maxPhotosPerBoothSession: eventSettings.maxPhotosPerBoothSession, boothShutterCountdown: eventSettings.boothShutterCountdown,
@@ -656,6 +676,73 @@ export default function EventDetailPage() {
                   </label>
                 </div>
               </div>
+
+              {/* RSVP Mode */}
+              {eventSettings.rsvpEnabled && (
+                <div className="border-t border-surface-100 pt-6">
+                  <h4 className="font-medium text-navy-900 mb-4">RSVP Mode</h4>
+                  <p className="text-sm text-surface-500 mb-4">Choose whether RSVPs are free or require ticket purchases.</p>
+                  <div className="grid sm:grid-cols-2 gap-3 mb-4">
+                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'free' ? 'border-navy-900 bg-navy-50' : 'border-surface-200 hover:bg-surface-50'}`}>
+                      <input type="radio" name="rsvpMode" value="free" checked={eventSettings.rsvpMode === 'free'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'free' })} className="sr-only" />
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'free' ? 'border-navy-900' : 'border-surface-300'}`}>
+                        {eventSettings.rsvpMode === 'free' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
+                      </div>
+                      <div>
+                        <span className="font-medium text-navy-900">Free RSVP</span>
+                        <p className="text-xs text-surface-500">Guests can RSVP without payment</p>
+                      </div>
+                    </label>
+                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'paid' ? 'border-navy-900 bg-navy-50' : 'border-surface-200 hover:bg-surface-50'}`}>
+                      <input type="radio" name="rsvpMode" value="paid" checked={eventSettings.rsvpMode === 'paid'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'paid', ticketingEnabled: true })} className="sr-only" />
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'paid' ? 'border-navy-900' : 'border-surface-300'}`}>
+                        {eventSettings.rsvpMode === 'paid' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
+                      </div>
+                      <div>
+                        <span className="font-medium text-navy-900">Paid RSVP (Ticketing)</span>
+                        <p className="text-xs text-surface-500">Guests purchase tickets to RSVP</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Ticketing Settings - shown when paid mode selected */}
+                  {eventSettings.rsvpMode === 'paid' && (
+                    <div className="bg-surface-50 rounded-lg p-4 space-y-4">
+                      <h5 className="font-medium text-navy-900 text-sm">Ticketing Fees</h5>
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-surface-600 mb-1">Platform Fee (%)</label>
+                          <input
+                            type="number" step="0.1" min="0" max="100"
+                            value={eventSettings.platformFeePercent}
+                            onChange={e => setEventSettings({ ...eventSettings, platformFeePercent: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-surface-600 mb-1">Processing Fee (%)</label>
+                          <input
+                            type="number" step="0.1" min="0" max="100"
+                            value={eventSettings.processingFeePercent}
+                            onChange={e => setEventSettings({ ...eventSettings, processingFeePercent: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-surface-600 mb-1">Fixed Fee ($)</label>
+                          <input
+                            type="number" step="0.01" min="0"
+                            value={eventSettings.processingFeeFixed}
+                            onChange={e => setEventSettings({ ...eventSettings, processingFeeFixed: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-surface-500">Manage ticket types in the Ticketing section after saving.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="border-t border-surface-100 pt-6">
                 <h4 className="font-medium text-navy-900 mb-4">Access & Options</h4>

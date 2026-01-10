@@ -17,6 +17,7 @@ interface Event {
   currentPhase: string;
   invitationOnly: boolean;
   reelEnabled?: boolean;
+  rsvpMode?: 'free' | 'paid';
   _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number };
 }
 
@@ -54,7 +55,21 @@ interface CheckIn {
   checkedInAt: string;
 }
 
-type Tab = 'dashboard' | 'rsvps' | 'media' | 'checkins' | 'sales' | 'wallet';
+type Tab = 'dashboard' | 'rsvps' | 'media' | 'reels' | 'checkins' | 'sales' | 'wallet';
+
+interface ReelJob {
+  id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  outputPath: string | null;
+  outputSize: number | null;
+  duration: number | null;
+  videoCount: number;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
 
 interface SalesSummary {
   totalGross: number;
@@ -161,6 +176,8 @@ export default function EventOwnerPortalPage() {
   const [wallet, setWallet] = useState<PayoutWallet | null>(null);
   const [walletConfigured, setWalletConfigured] = useState(false);
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
+  const [reels, setReels] = useState<ReelJob[]>([]);
+  const [activeReelJob, setActiveReelJob] = useState<ReelJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -192,15 +209,37 @@ export default function EventOwnerPortalPage() {
       fetchEvent(true);
       if (activeTab === 'rsvps') fetchRsvps(true);
       if (activeTab === 'media') fetchMedia(true);
+      if (activeTab === 'reels') fetchReels(true);
       if (activeTab === 'checkins') fetchCheckIns(true);
     }, 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [token]);
 
+  // Poll for active reel job progress more frequently
+  useEffect(() => {
+    if (!activeReelJob || (activeReelJob.status !== 'pending' && activeReelJob.status !== 'processing')) return;
+    
+    const reelPoll = setInterval(async () => {
+      try {
+        const response = await eventOwnerApi.getReelStatus(token, activeReelJob.id);
+        const status = response.data.status;
+        if (status.status === 'completed' || status.status === 'failed') {
+          setActiveReelJob(null);
+          fetchReels();
+        } else {
+          setActiveReelJob(prev => prev ? { ...prev, progress: status.progress, status: status.status } : null);
+        }
+      } catch { /* ignore polling errors */ }
+    }, 2000);
+    
+    return () => clearInterval(reelPoll);
+  }, [activeReelJob?.id]);
+
   useEffect(() => {
     if (event) {
       if (activeTab === 'rsvps') fetchRsvps();
       if (activeTab === 'media') fetchMedia();
+      if (activeTab === 'reels') fetchReels();
       if (activeTab === 'checkins') fetchCheckIns();
       if (activeTab === 'sales') fetchSales();
       if (activeTab === 'wallet') { fetchWallet(); fetchPayouts(); }
@@ -271,6 +310,16 @@ export default function EventOwnerPortalPage() {
       const response = await eventOwnerApi.getPayouts(token);
       setPayouts(response.data.payouts);
     } catch { if (!silent) toast.error('Failed to load payouts'); }
+  };
+
+  const fetchReels = async (silent = false) => {
+    try {
+      const response = await eventOwnerApi.getReels(token);
+      setReels(response.data.reels);
+      // Check for any active processing jobs
+      const processingJob = response.data.reels.find((r: ReelJob) => r.status === 'processing' || r.status === 'pending');
+      setActiveReelJob(processingJob || null);
+    } catch { if (!silent) toast.error('Failed to load reels'); }
   };
 
   const handleSaveWallet = async () => {
@@ -418,9 +467,16 @@ export default function EventOwnerPortalPage() {
               { id: 'dashboard', label: 'Overview', icon: Icons.rsvp },
               { id: 'rsvps', label: 'RSVPs', icon: Icons.users, badge: pendingCount },
               { id: 'media', label: 'Media', icon: Icons.message },
+              // Reels tab only visible when reel generation is enabled
+              ...(event?.reelEnabled ? [
+                { id: 'reels' as Tab, label: 'Reels', icon: Icons.reel },
+              ] : []),
               { id: 'checkins', label: 'Check-ins', icon: Icons.checkin },
-              { id: 'sales', label: 'Sales', icon: Icons.sales },
-              { id: 'wallet', label: 'Wallet', icon: Icons.wallet },
+              // Sales & Wallet tabs only visible for paid RSVP events
+              ...(event?.rsvpMode === 'paid' ? [
+                { id: 'sales' as Tab, label: 'Sales', icon: Icons.sales },
+                { id: 'wallet' as Tab, label: 'Wallet', icon: Icons.wallet },
+              ] : []),
             ] as { id: Tab; label: string; icon: JSX.Element; badge?: number }[]).map(tab => (
               <button
                 key={tab.id}
@@ -608,6 +664,104 @@ export default function EventOwnerPortalPage() {
             isAdmin={false}
             ownerToken={token as string}
           />
+        )}
+
+        {/* Reels */}
+        {activeTab === 'reels' && event.reelEnabled && (
+          <div className="space-y-6">
+            {/* Active Job Progress */}
+            {activeReelJob && (activeReelJob.status === 'pending' || activeReelJob.status === 'processing') && (
+              <div className="bg-navy-50 border border-navy-200 rounded-xl p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-navy-100 flex items-center justify-center animate-pulse">
+                    {Icons.reel}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-navy-900">Generating Reel...</h3>
+                    <p className="text-sm text-surface-600">
+                      {activeReelJob.videoCount} video{activeReelJob.videoCount !== 1 ? 's' : ''} being processed
+                    </p>
+                  </div>
+                  <span className="text-2xl font-bold text-navy-900">{activeReelJob.progress}%</span>
+                </div>
+                <div className="w-full bg-surface-200 rounded-full h-2">
+                  <div
+                    className="bg-navy-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${activeReelJob.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Completed Reels */}
+            <div>
+              <h3 className="text-lg font-semibold text-navy-900 mb-4">Your Reels</h3>
+              {reels.filter(r => r.status === 'completed').length === 0 ? (
+                <div className="text-center py-12 bg-surface-50 rounded-xl">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface-100 flex items-center justify-center text-surface-400">
+                    {Icons.reel}
+                  </div>
+                  <p className="text-surface-600 mb-2">No reels generated yet</p>
+                  <p className="text-sm text-surface-400">Go to the Media tab to generate a reel from your videos</p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reels.filter(r => r.status === 'completed').map(reel => (
+                    <div key={reel.id} className="bg-white rounded-xl border border-surface-200 overflow-hidden group">
+                      <div className="aspect-video bg-surface-100 relative">
+                        <video
+                          src={`${API_BASE_URL}${reel.outputPath}`}
+                          className="w-full h-full object-cover"
+                          controls
+                          preload="metadata"
+                        />
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-navy-900">
+                            {reel.duration ? `${Math.floor(reel.duration / 60)}:${String(reel.duration % 60).padStart(2, '0')}` : 'Unknown duration'}
+                          </span>
+                          <span className="text-xs text-surface-500">
+                            {reel.videoCount} video{reel.videoCount !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-surface-400 mb-3">
+                          Created {formatDate(reel.completedAt || reel.createdAt)}
+                        </p>
+                        <a
+                          href={`${API_BASE_URL}${reel.outputPath}`}
+                          download
+                          className="w-full btn-primary text-sm py-2 flex items-center justify-center gap-2"
+                        >
+                          {Icons.export} Download Reel
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Failed Jobs */}
+            {reels.filter(r => r.status === 'failed').length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-surface-600 mb-3">Failed Attempts</h4>
+                <div className="space-y-2">
+                  {reels.filter(r => r.status === 'failed').map(reel => (
+                    <div key={reel.id} className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                        {Icons.x}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm text-red-800">{reel.errorMessage || 'Unknown error'}</p>
+                        <p className="text-xs text-red-600">{formatDate(reel.createdAt)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Check-ins */}

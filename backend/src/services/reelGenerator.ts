@@ -29,8 +29,7 @@ interface ReelStatus {
   completedAt?: Date;
 }
 
-// In-memory job tracking (use Redis in production for multi-instance)
-const reelJobs = new Map<string, ReelStatus>();
+// Database-backed job tracking for persistence
 
 // Check if ffmpeg is available
 export const checkFfmpegAvailable = async (): Promise<boolean> => {
@@ -77,27 +76,38 @@ const createConcatFile = async (videos: { path: string; duration: number }[], ou
   return concatFilePath;
 };
 
-// Generate reel using ffmpeg
+// Generate reel using ffmpeg - creates a persistent database job
 export const generateReel = async (options: ReelOptions): Promise<string> => {
-  const jobId = generateJobId();
   const { eventId, outputName, maxDuration = 300, eventDetails } = options;
 
-  // Initialize job status
-  reelJobs.set(jobId, {
-    id: jobId,
-    status: 'pending',
-    progress: 0,
-    createdAt: new Date(),
+  // Count videos first
+  const videoCount = await prisma.mediaAsset.count({
+    where: { eventId, type: 'VIDEO' },
   });
 
+  // Create persistent job in database
+  const job = await prisma.reelJob.create({
+    data: {
+      eventId,
+      status: 'pending',
+      progress: 0,
+      maxDuration,
+      videoCount,
+    },
+  });
+
+  const jobId = job.id;
+
   // Start async processing
-  processReel(jobId, eventId, outputName || `reel-${eventId}`, maxDuration, eventDetails).catch((error) => {
+  processReel(jobId, eventId, outputName || `reel-${eventId}`, maxDuration, eventDetails).catch(async (error) => {
     console.error(`[ReelGenerator] Job ${jobId} failed:`, error);
-    const job = reelJobs.get(jobId);
-    if (job) {
-      job.status = 'failed';
-      job.error = error.message;
-    }
+    await prisma.reelJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'failed',
+        errorMessage: error.message,
+      },
+    });
   });
 
   return jobId;
@@ -140,6 +150,29 @@ const generateTitleCard = async (
   });
 };
 
+// Helper to update job progress in database
+const updateJobProgress = async (jobId: string, progress: number, status?: string) => {
+  await prisma.reelJob.update({
+    where: { id: jobId },
+    data: {
+      progress,
+      ...(status && { status }),
+      ...(status === 'processing' && !progress && { startedAt: new Date() }),
+    },
+  });
+};
+
+const updateJobStatus = async (jobId: string, status: string, data?: { outputPath?: string; outputSize?: number; duration?: number; errorMessage?: string }) => {
+  await prisma.reelJob.update({
+    where: { id: jobId },
+    data: {
+      status,
+      ...data,
+      ...(status === 'completed' && { completedAt: new Date() }),
+    },
+  });
+};
+
 // Actual processing function (runs async)
 const processReel = async (
   jobId: string, 
@@ -148,21 +181,16 @@ const processReel = async (
   maxDuration: number,
   eventDetails?: EventDetails
 ): Promise<void> => {
-  const job = reelJobs.get(jobId);
-  if (!job) return;
-
-  job.status = 'processing';
-  job.progress = 5;
+  await updateJobProgress(jobId, 5, 'processing');
 
   // Check ffmpeg availability
   const ffmpegAvailable = await checkFfmpegAvailable();
   if (!ffmpegAvailable) {
-    job.status = 'failed';
-    job.error = 'FFmpeg not installed. Please install FFmpeg to generate reels.';
+    await updateJobStatus(jobId, 'failed', { errorMessage: 'FFmpeg not installed. Please install FFmpeg to generate reels.' });
     return;
   }
 
-  job.progress = 10;
+  await updateJobProgress(jobId, 10);
 
   // Get all videos for the event
   const videos = await prisma.mediaAsset.findMany({
@@ -171,12 +199,11 @@ const processReel = async (
   });
 
   if (videos.length === 0) {
-    job.status = 'failed';
-    job.error = 'No videos found for this event';
+    await updateJobStatus(jobId, 'failed', { errorMessage: 'No videos found for this event' });
     return;
   }
 
-  job.progress = 15;
+  await updateJobProgress(jobId, 15);
 
   // Prepare video list with durations
   const baseDir = process.cwd();
@@ -212,16 +239,15 @@ const processReel = async (
     videoList.push({ path: videoPath, duration });
     totalDuration += duration;
 
-    job.progress = 15 + Math.floor((i / videos.length) * 15);
+    await updateJobProgress(jobId, 15 + Math.floor((i / videos.length) * 15));
   }
 
   if (videoList.length === 0) {
-    job.status = 'failed';
-    job.error = 'No valid video files found';
+    await updateJobStatus(jobId, 'failed', { errorMessage: 'No valid video files found' });
     return;
   }
 
-  job.progress = 30;
+  await updateJobProgress(jobId, 30);
 
   // Generate intro and outro cards if event details provided
   const primaryColor = eventDetails?.primaryColor || '#FFD700';
@@ -262,19 +288,19 @@ const processReel = async (
       );
       videoList.push({ path: outroPath, duration: 3 });
 
-      job.progress = 40;
+      await updateJobProgress(jobId, 40);
     } catch (error) {
       console.warn('[ReelGenerator] Failed to generate title cards, continuing without them:', error);
     }
   }
 
-  job.progress = 45;
+  await updateJobProgress(jobId, 45);
 
   // Create concat file with fade transitions
   const concatFile = await createConcatFile(videoList, outputDir);
   const outputPath = path.join(outputDir, `${outputName}-${Date.now()}.mp4`);
 
-  job.progress = 50;
+  await updateJobProgress(jobId, 50);
 
   // Run ffmpeg concatenation with crossfade between clips
   // Using a more sophisticated filter for professional look
@@ -297,13 +323,17 @@ const processReel = async (
 
     const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
-    ffmpeg.stderr.on('data', (data) => {
+    ffmpeg.stderr.on('data', async (data) => {
       const output = data.toString();
       // Parse progress from ffmpeg output
       const timeMatch = output.match(/time=(\d+):(\d+):(\d+)/);
       if (timeMatch && totalDuration > 0) {
         const seconds = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
-        job.progress = 50 + Math.floor((seconds / totalDuration) * 45);
+        const progress = 50 + Math.floor((seconds / totalDuration) * 45);
+        // Throttle db updates to avoid too many writes
+        if (Math.random() < 0.1) { // Update ~10% of the time
+          await updateJobProgress(jobId, progress).catch(() => {});
+        }
       }
     });
 
@@ -328,11 +358,19 @@ const processReel = async (
     });
   });
 
-  // Success
-  job.status = 'completed';
-  job.progress = 100;
-  job.outputPath = `/generated/reels/${eventId}/${path.basename(outputPath)}`;
-  job.completedAt = new Date();
+  // Get file stats
+  const stats = fs.statSync(outputPath);
+  const reelOutputPath = `/generated/reels/${eventId}/${path.basename(outputPath)}`;
+
+  // Success - update database
+  await updateJobStatus(jobId, 'completed', {
+    outputPath: reelOutputPath,
+    outputSize: stats.size,
+    duration: Math.round(totalDuration),
+  });
+
+  // Update progress to 100%
+  await updateJobProgress(jobId, 100);
 
   // Log to database
   await prisma.auditLog.create({
@@ -344,29 +382,59 @@ const processReel = async (
         jobId,
         videoCount: videoList.length,
         totalDuration,
-        outputPath: job.outputPath,
+        outputPath: reelOutputPath,
         hasIntroOutro: !!eventDetails,
       }),
     },
   });
 };
 
-// Get job status
-export const getReelJobStatus = (jobId: string): ReelStatus | null => {
-  return reelJobs.get(jobId) || null;
-};
-
-// Clean up old jobs (call periodically)
-export const cleanupOldJobs = (): void => {
-  const oneHourAgo = Date.now() - (60 * 60 * 1000);
+// Get job status from database
+export const getReelJobStatus = async (jobId: string): Promise<ReelStatus | null> => {
+  const job = await prisma.reelJob.findUnique({
+    where: { id: jobId },
+  });
   
-  for (const [jobId, job] of reelJobs.entries()) {
-    if (job.createdAt.getTime() < oneHourAgo && (job.status === 'completed' || job.status === 'failed')) {
-      reelJobs.delete(jobId);
-    }
-  }
+  if (!job) return null;
+  
+  return {
+    id: job.id,
+    status: job.status as 'pending' | 'processing' | 'completed' | 'failed',
+    progress: job.progress,
+    outputPath: job.outputPath || undefined,
+    error: job.errorMessage || undefined,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt || undefined,
+  };
 };
 
-// Clean up every hour
-setInterval(cleanupOldJobs, 60 * 60 * 1000);
+// Get all reel jobs for an event
+export const getEventReelJobs = async (eventId: string): Promise<ReelStatus[]> => {
+  const jobs = await prisma.reelJob.findMany({
+    where: { eventId },
+    orderBy: { createdAt: 'desc' },
+  });
+  
+  return jobs.map(job => ({
+    id: job.id,
+    status: job.status as 'pending' | 'processing' | 'completed' | 'failed',
+    progress: job.progress,
+    outputPath: job.outputPath || undefined,
+    error: job.errorMessage || undefined,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt || undefined,
+  }));
+};
+
+// Clean up old failed jobs (keep completed ones)
+export const cleanupOldJobs = async (): Promise<void> => {
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  
+  await prisma.reelJob.deleteMany({
+    where: {
+      status: 'failed',
+      createdAt: { lt: oneWeekAgo },
+    },
+  });
+};
 
