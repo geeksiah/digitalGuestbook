@@ -245,10 +245,10 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
         htmlContent,
         cssContent: cssContent || null,
         jsContent: jsContent || null,
-        assetsPath: assetsPathRel,
-        thumbnailPath: thumbnailPathRel,
+        assetsPath: assetsPathRel || null,
+        thumbnailPath: thumbnailPathRel || null,
         isDefault: req.body.isDefault === 'true' || req.body.isDefault === true,
-      },
+      } as any, // Temporary type assertion until Prisma client is regenerated
     });
 
     // Clean up uploaded ZIP
