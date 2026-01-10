@@ -2,31 +2,29 @@
 
 ## Production Migration Approach (Idempotent)
 
-For production PostgreSQL/Supabase, we use **Prisma Migrate Deploy** which is:
-- ✅ **Idempotent**: Only runs pending migrations that haven't been applied yet
-- ✅ **Safe**: Checks `_prisma_migrations` table to track applied migrations
-- ✅ **Fast**: Skips migrations that are already applied (no database work on subsequent deploys)
-- ✅ **One-time setup**: Uses `db push` only once on first deploy, then switches to migrations
+For production PostgreSQL/Supabase, we currently use **Prisma DB Push** which is:
+- ✅ **Idempotent**: Compares schema with database, only applies changes when needed
+- ✅ **Safe**: Won't re-apply changes if schema already matches database
+- ✅ **Fast**: Completes quickly when schema matches (no unnecessary work)
+- ✅ **Reliable**: Works on fresh databases without requiring migration history
+
+**Note**: Once we have proper PostgreSQL migrations, we can switch to `prisma migrate deploy` for better migration tracking.
 
 ## Migration Flow
 
-### First Deploy (Fresh Database - Happens ONCE)
-1. `prisma migrate deploy` attempts to run
-2. If migrations table doesn't exist or migrations incompatible → Falls back to `prisma db push`
-3. `db push` creates all tables from current schema (one-time bootstrap)
-4. **This only happens once on first deploy**
-
-### Subsequent Deploys (All Future Deploys)
-1. `prisma migrate deploy` checks `_prisma_migrations` table
-2. Only applies migrations that haven't been applied yet
-3. If no pending migrations → Completes instantly (no database changes)
-4. **This is idempotent - no work if already up to date**
+### Every Deploy (Idempotent)
+1. `prisma db push` compares `schema.prisma` with current database state
+2. Only applies changes if schema differs from database
+3. If schema matches → Completes in <1 second (no changes needed)
+4. If schema differs → Applies only the necessary changes
+5. **This is idempotent - no work if already up to date**
 
 ## Performance
 
-- **First deploy**: ~5-10 seconds (creates all tables via `db push`)
-- **Subsequent deploys**: <1 second (checks for pending migrations, exits if none)
-- **No re-running**: Migrations are tracked, never re-applied
+- **First deploy**: ~5-10 seconds (creates all tables from schema)
+- **Subsequent deploys (no schema changes)**: <1 second (detects schema matches, no work)
+- **Subsequent deploys (with schema changes)**: ~2-5 seconds (applies only changed parts)
+- **No re-running**: Schema comparison is idempotent, won't re-apply existing structures
 
 ## Creating New Migrations
 
