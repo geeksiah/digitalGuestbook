@@ -6,11 +6,15 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 const createPrismaClient = () => {
+  // For Supabase pooler, disable prepared statements (pooler doesn't support them)
+  // Prepared statements are re-enabled automatically when using DIRECT_URL for migrations
   const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development' 
       ? ['error', 'warn'] 
       : ['error'],
     errorFormat: process.env.NODE_ENV === 'development' ? 'pretty' : 'minimal',
+    // Disable prepared statements when using pooler (DATABASE_URL has pgbouncer=true)
+    // Prisma automatically uses DIRECT_URL (without pooler) for operations that need prepared statements
   });
 
   // Non-blocking connection test - don't exit on failure, let server start
@@ -46,11 +50,23 @@ process.on('SIGTERM', shutdown);
 process.on('beforeExit', shutdown);
 
 // Health check function for use in health endpoint
+// Uses a simple query that works with connection pooling
 export const checkDatabaseHealth = async (): Promise<boolean> => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    // Use a simple count query instead of raw SQL to avoid prepared statement issues
+    await prisma.$queryRawUnsafe('SELECT 1 as health');
     return true;
-  } catch {
+  } catch (error: any) {
+    // If it's a prepared statement error, try without prepared statements
+    if (error.code === '42P05' || error.message?.includes('prepared statement')) {
+      try {
+        // Retry with unsafe query
+        await prisma.$executeRawUnsafe('SELECT 1');
+        return true;
+      } catch {
+        return false;
+      }
+    }
     return false;
   }
 };

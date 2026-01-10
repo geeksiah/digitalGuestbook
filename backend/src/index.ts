@@ -15,9 +15,13 @@ dotenv.config();
 async function initializeDatabase() {
   try {
     // Check if database is accessible and tables exist
+    // Use unsafe query to avoid prepared statement issues with pooler
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await prisma.$queryRawUnsafe('SELECT 1 as health');
     } catch (dbError: any) {
+      if (dbError.code === '42P05' || dbError.message?.includes('prepared statement')) {
+        console.warn('[Database] Prepared statement issue detected (pooler limitation)');
+      }
       console.warn('[Database] Connection test failed, tables may not exist yet:', dbError.message);
       console.warn('[Database] Waiting for schema sync...');
       // Wait a bit for prisma db push to complete if it's still running
