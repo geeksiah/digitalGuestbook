@@ -18,15 +18,29 @@ This guide will help you migrate from SQLite to Supabase PostgreSQL for persiste
 
 1. In your Supabase project dashboard, go to **Settings** → **Database**
 2. Scroll down to **Connection string**
-3. Select **Connection pooling** (transaction mode) for `DATABASE_URL`
-4. Copy the connection string - it looks like:
+3. **For Render.com (IPv4-only platform)**, you need to use **Session Pooler**:
+   - Select **Connection pooling** 
+   - Choose **Session mode** (NOT Transaction mode)
+   - Session Pooler uses port **5432** and supports schema operations
+   - Transaction Pooler (port 6543) does NOT support schema operations
+
+4. **DATABASE_URL** - Use Session Pooler URL:
    ```
-   postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
+   postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
    ```
-5. For `DIRECT_URL` (used for migrations), use the **Direct connection** string:
+   Note: Port **5432** for Session mode, **6543** for Transaction mode
+
+5. **DIRECT_URL** - Also use Session Pooler URL (IPv4-compatible):
    ```
-   postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+   postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
    ```
+   **Important**: Direct Connection (`db.*.supabase.co`) requires IPv6 and doesn't work on Render.com, Vercel, GitHub Actions, etc.
+
+**Why Session Pooler?**
+- ✅ Works on IPv4-only platforms (Render.com, Vercel, etc.)
+- ✅ Supports schema operations (DDL) unlike Transaction Pooler
+- ✅ Supports prepared statements
+- ✅ Supports migrations via Prisma
 
 ## Step 3: Update Environment Variables
 
@@ -38,9 +52,15 @@ This guide will help you migrate from SQLite to Supabase PostgreSQL for persiste
 4. **CRITICAL**: Add BOTH environment variables:
 
 ```env
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
 ```
+
+**Important Notes**:
+- Use **port 5432** for Session Pooler (supports schema operations)
+- **NOT port 6543** (Transaction Pooler - doesn't support DDL)
+- Both URLs use the **same Session Pooler connection** (IPv4-compatible)
+- The format is identical, both can use the same value
 
 **Important**: 
 - `DATABASE_URL`: Use **Connection pooling** URL (for app queries) - port 6543
@@ -59,11 +79,13 @@ DIRECT_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/po
 Create/update `.env` file in `backend/` directory:
 
 ```env
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
 JWT_SECRET=your-secret-key-here
 NODE_ENV=development
 ```
+
+**Note**: Both use Session Pooler (port 5432) for IPv4 compatibility
 
 ## Step 4: Update Prisma Schema
 

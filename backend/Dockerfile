@@ -71,8 +71,9 @@ ENV NODE_ENV=production
 
 # Start the application
 # Production-grade: Use db push for now (idempotent, safe, fast)
-# IMPORTANT: Prisma uses DIRECT_URL for schema operations (db push)
-# If DIRECT_URL is not set, it will use DATABASE_URL (which should use pooler for app queries)
+# IMPORTANT: For Render.com (IPv4-only), use Session Pooler for both DATABASE_URL and DIRECT_URL
+# Session Pooler (port 5432) supports schema operations, unlike Transaction Pooler (port 6543)
+# Direct Connection (db.*.supabase.co) requires IPv6 and doesn't work on Render.com
 # db push only applies changes when schema differs (idempotent)
 # Increased timeout to 90s for large schemas or slow connections
-CMD ["sh", "-c", "echo '🔄 Syncing database schema (idempotent - only changes if needed)...'; if [ -z \"$DIRECT_URL\" ]; then echo '⚠️ DIRECT_URL not set - using DATABASE_URL (ensure it is NOT a pooler URL for schema ops)'; fi; timeout 90 npx prisma db push --accept-data-loss --skip-generate 2>&1 && echo '✅ Schema synced (already up to date if no changes)' || (echo '⚠️ Schema sync timeout/error - verify DIRECT_URL is set with direct Supabase connection'; echo '💡 For Supabase: Use direct connection (db.*.supabase.co:5432) for DIRECT_URL, pooler for DATABASE_URL'); echo '🚀 Starting server...'; exec node dist/index.js"]
+CMD ["sh", "-c", "echo '🔄 Syncing database schema (idempotent - only changes if needed)...'; if [ -z \"$DIRECT_URL\" ]; then echo '⚠️ DIRECT_URL not set - using DATABASE_URL (both should use Session Pooler port 5432)'; fi; timeout 90 npx prisma db push --accept-data-loss --skip-generate 2>&1 && echo '✅ Schema synced (already up to date if no changes)' || (echo '⚠️ Schema sync timeout/error - verify URLs use Session Pooler (port 5432)'; echo '💡 For Render.com: Use Session Pooler for both URLs (IPv4-compatible)'); echo '🚀 Starting server...'; exec node dist/index.js"]

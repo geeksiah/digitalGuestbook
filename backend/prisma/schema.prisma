@@ -9,11 +9,13 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-  // For Supabase:
-  // DATABASE_URL: Use connection pooling URL (for app queries)
-  //   Format: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
-  // DIRECT_URL: Use direct connection URL (for migrations/schema operations)
-  //   Format: postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+  // For Supabase on Render.com (IPv4-only platforms):
+  // DATABASE_URL: Use Session Pooler (for app queries) - IPv4 compatible, supports prepared statements
+  //   Format: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
+  // DIRECT_URL: Use Session Pooler (for migrations/schema operations) - IPv4 compatible, supports DDL
+  //   Format: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
+  // Note: Use Session Pooler (port 5432) NOT Transaction Pooler (port 6543) for schema operations
+  // Note: Direct Connection (db.*.supabase.co) requires IPv6 and doesn't work on Render.com
 }
 
 // ============================================

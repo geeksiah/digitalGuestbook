@@ -16,7 +16,7 @@ The database schema sync is failing with one of these errors:
 4. Add/Update these environment variables:
 
 ```
-DIRECT_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres.[YOUR-PROJECT-REF]:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?pgbouncer=true
 ```
 
 **Where to find these values:**
@@ -24,9 +24,17 @@ DIRECT_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.
 - Select your project
 - Go to **Settings** → **Database**
 - Scroll to **Connection string**
-- Copy the **Direct connection** URL (NOT the pooling URL)
+- **IMPORTANT**: Select **Connection pooling** → **Session mode** (NOT Transaction mode)
+- Copy the connection string (port should be **5432**, NOT 6543)
 - Replace `[YOUR-PASSWORD]` with your actual database password
-- Replace `[YOUR-PROJECT-REF]` with your project reference (visible in the URL)
+- Replace `[YOUR-PROJECT-REF]` with your project reference
+- Replace `[REGION]` with your region (e.g., `eu-west-1`)
+
+**Why Session Pooler?**
+- ✅ Works on Render.com (IPv4-only platform)
+- ✅ Supports schema operations (unlike Transaction Pooler on port 6543)
+- ✅ Free with Supabase (no extra cost)
+- ✅ Direct Connection requires IPv6 which Render.com doesn't support
 
 5. **CRITICAL**: Allow Render.com IPs in Supabase:
    - Go to [Supabase Dashboard](https://supabase.com/dashboard)
@@ -56,17 +64,16 @@ If you can't set DIRECT_URL immediately, you can manually push the schema once:
    npx prisma db push
    ```
 
-### Option 3: Temporarily Use Direct Connection for Both
+### Option 3: Use Same Session Pooler URL for Both (Recommended)
 
-If you just need to get it working quickly:
+For simplicity, use the same Session Pooler URL for both:
 
-1. In Render.com Environment tab, set:
+1. In Render.com Environment tab, set both to the same Session Pooler URL:
    ```
-   DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+   DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?pgbouncer=true
+   DIRECT_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?pgbouncer=true
    ```
-   (Use direct connection URL for both - not ideal for production but works)
-
-2. Remove or leave DIRECT_URL empty (Prisma will use DATABASE_URL)
+   (Both use Session Pooler on port 5432 - this is the recommended setup for Render.com)
 
 ## Verify Fix
 
@@ -79,13 +86,13 @@ After setting DIRECT_URL, check deployment logs for:
 ```
 
 If you still see connection errors, check:
-- ✅ DIRECT_URL uses port **5432** (not 6543) - this is the direct connection port
-- ✅ DIRECT_URL format: `postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres`
+- ✅ DIRECT_URL uses port **5432** (Session Pooler) - NOT 6543 (Transaction Pooler)
+- ✅ DIRECT_URL format: `postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true`
+- ✅ **Session mode** is selected in Supabase (NOT Transaction mode)
+- ✅ Username format: `postgres.[ref]` (NOT just `postgres`)
 - ✅ Password is correct (URL-encode special characters if needed)
-- ✅ Supabase project is active and accessible
-- ✅ **IP allowlisting is disabled OR Render.com IPs are allowed** (most common issue!)
-- ✅ Direct connection is enabled in Supabase settings
-- ✅ Database password hasn't been reset (would break connection)
+- ✅ Supabase project is active and not paused
+- ✅ Both URLs use Session Pooler (IPv4-compatible for Render.com)
 
 ## Expected Behavior After Fix
 
