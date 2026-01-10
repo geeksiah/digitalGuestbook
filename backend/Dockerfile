@@ -71,7 +71,8 @@ ENV NODE_ENV=production
 
 # Start the application
 # Production-grade: Use db push for now (idempotent, safe, fast)
+# IMPORTANT: Prisma uses DIRECT_URL for schema operations (db push)
+# If DIRECT_URL is not set, it will use DATABASE_URL (which should use pooler for app queries)
 # db push only applies changes when schema differs (idempotent)
-# Future: Once we have proper PostgreSQL migrations, switch to migrate deploy
-# For now, db push is safe and won't hang (unlike migrate deploy with SQLite migrations)
-CMD ["sh", "-c", "echo '🔄 Syncing database schema (idempotent - only changes if needed)...'; timeout 45 npx prisma db push --accept-data-loss --skip-generate && echo '✅ Schema synced (already up to date if no changes)' || echo '⚠️ Schema sync had issues (non-fatal, server will start)'; echo '🚀 Starting server...'; exec node dist/index.js"]
+# Increased timeout to 90s for large schemas or slow connections
+CMD ["sh", "-c", "echo '🔄 Syncing database schema (idempotent - only changes if needed)...'; if [ -z \"$DIRECT_URL\" ]; then echo '⚠️ DIRECT_URL not set - using DATABASE_URL (ensure it is NOT a pooler URL for schema ops)'; fi; timeout 90 npx prisma db push --accept-data-loss --skip-generate 2>&1 && echo '✅ Schema synced (already up to date if no changes)' || (echo '⚠️ Schema sync timeout/error - verify DIRECT_URL is set with direct Supabase connection'; echo '💡 For Supabase: Use direct connection (db.*.supabase.co:5432) for DIRECT_URL, pooler for DATABASE_URL'); echo '🚀 Starting server...'; exec node dist/index.js"]

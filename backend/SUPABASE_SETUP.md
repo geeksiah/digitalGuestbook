@@ -35,14 +35,24 @@ This guide will help you migrate from SQLite to Supabase PostgreSQL for persiste
 1. Go to your Render.com dashboard
 2. Select your backend service
 3. Go to **Environment** tab
-4. Update these variables:
+4. **CRITICAL**: Add BOTH environment variables:
 
 ```env
 DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
 DIRECT_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
 ```
 
-**Important**: Replace `[project-ref]`, `[password]`, and `[region]` with your actual values.
+**Important**: 
+- `DATABASE_URL`: Use **Connection pooling** URL (for app queries) - port 6543
+- `DIRECT_URL`: Use **Direct connection** URL (for migrations/schema ops) - port 5432
+- **DIRECT_URL is REQUIRED** for `prisma db push` to work (pooler doesn't support DDL operations)
+- Replace `[project-ref]`, `[password]`, and `[region]` with your actual values from Supabase
+
+**Why two URLs?**
+- Supabase pooler (DATABASE_URL) is optimized for queries but doesn't support schema changes
+- Direct connection (DIRECT_URL) is needed for migrations but has connection limits
+- Prisma automatically uses DIRECT_URL for `db push` and `migrate deploy`
+- Prisma uses DATABASE_URL for regular queries
 
 ### For Local Development:
 
