@@ -60,11 +60,11 @@ COPY --from=builder /app/dist ./dist
 RUN mkdir -p uploads/media generated/reels templates/archives templates/events
 
 # Expose port
-EXPOSE 3001
+EXPOSE 10000
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=10000
 
 # DATABASE_URL and DIRECT_URL should be set via environment variables (Supabase)
 # No default value - must be provided for production
