@@ -430,8 +430,8 @@ router.get('/:token/sales/by-ticket', validateOwnerToken, async (req: Request, r
         id: true,
         name: true,
         price: true,
-        quantity: true,
-        isAvailable: true,
+        quantityTotal: true,
+        isActive: true,
       },
     });
 
@@ -453,9 +453,9 @@ router.get('/:token/sales/by-ticket', validateOwnerToken, async (req: Request, r
         return {
           ...ticket,
           sold,
-          remaining: ticket.quantity - sold,
+          remaining: ticket.quantityTotal > 0 ? ticket.quantityTotal - sold : null,
           revenue,
-          percentSold: ticket.quantity > 0 ? Math.round((sold / ticket.quantity) * 100) : 0,
+          percentSold: ticket.quantityTotal > 0 ? Math.round((sold / ticket.quantityTotal) * 100) : 0,
         };
       })
     );
