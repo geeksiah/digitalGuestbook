@@ -71,10 +71,10 @@ export const templatesApi = {
 
 // RSVP API
 export const rsvpApi = {
-  list: (eventId: string, params?: any) => api.get(`/events/${eventId}/rsvps`, { params }),
-  get: (id: string) => api.get(`/rsvps/${id}`),
-  submit: (eventId: string, data: any) => api.post(`/events/${eventId}/rsvps`, data),
-  review: (id: string, status: 'APPROVED' | 'REJECTED') => api.post(`/rsvps/${id}/review`, { status }),
+  list: (eventId: string, params?: any) => api.get(`/rsvp/event/${eventId}`, { params }),
+  get: (id: string) => api.get(`/rsvp/${id}`),
+  submit: (eventSlug: string, data: any) => axios.post(`${API_BASE_URL}/api/rsvp/${eventSlug}`, data),
+  review: (id: string, status: 'APPROVED' | 'REJECTED') => api.post(`/rsvp/${id}/review`, { status }),
 };
 
 // Media API
