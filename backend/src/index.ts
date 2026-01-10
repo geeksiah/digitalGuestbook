@@ -14,7 +14,30 @@ dotenv.config();
 // Auto-seed database on startup (creates admin if not exists)
 async function initializeDatabase() {
   try {
-    const adminCount = await prisma.admin.count();
+    // Check if database is accessible and tables exist
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError: any) {
+      console.warn('[Database] Connection test failed, tables may not exist yet:', dbError.message);
+      console.warn('[Database] Waiting for schema sync...');
+      // Wait a bit for prisma db push to complete if it's still running
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    // Try to check if admin table exists by attempting a count
+    let adminCount = 0;
+    try {
+      adminCount = await prisma.admin.count();
+    } catch (error: any) {
+      if (error.code === 'P2021') {
+        // Table doesn't exist yet - schema sync is likely still running
+        console.warn('[Database] Admin table does not exist yet. Schema may still be syncing.');
+        console.warn('[Database] Skipping seed data initialization for now.');
+        return;
+      }
+      throw error;
+    }
+
     if (adminCount === 0) {
       console.log('🌱 No admin found, creating default admin...');
       const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 12);

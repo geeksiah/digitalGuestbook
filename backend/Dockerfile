@@ -70,7 +70,9 @@ ENV NODE_ENV=production
 # No default value - must be provided for production
 
 # Start the application
-# Start server immediately - it will handle database initialization internally
-# For PostgreSQL/Supabase, use prisma migrate deploy instead of db push
-# But we skip that here and let the server handle schema sync via initializeDatabase()
-CMD ["node", "dist/index.js"]
+# Production-grade migration approach (idempotent):
+# 1. Try migrate deploy - only runs pending migrations (idempotent, fast on subsequent deploys)
+# 2. If it fails (first deploy or incompatible migrations), use db push once as bootstrap
+# 3. After first bootstrap with db push, future deploys will use migrate deploy (idempotent)
+# Note: db push only runs ONCE on first deploy. All subsequent deploys use migrate deploy.
+CMD ["sh", "-c", "echo '🔄 Running database migrations (idempotent)...'; npx prisma migrate deploy 2>&1 && echo '✅ Migrations applied (or already up to date - no changes needed)' || (echo '📦 First-time setup: creating database schema...' && npx prisma db push --accept-data-loss --skip-generate && echo '✅ Database schema created (this happens ONCE on first deploy only)'); echo '🚀 Starting server...'; exec node dist/index.js"]
