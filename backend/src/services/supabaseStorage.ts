@@ -14,7 +14,8 @@ const getSupabaseClient = (): SupabaseClient => {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for storage operations');
+    console.warn('[Supabase Storage] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY not set - storage operations will fail');
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for storage operations. Please configure these in your environment variables.');
   }
 
   supabaseClient = createClient(supabaseUrl, supabaseKey, {
@@ -29,12 +30,18 @@ const getSupabaseClient = (): SupabaseClient => {
 
 /**
  * Storage bucket configuration
+ * 
+ * Bucket Naming Guidelines:
+ * - Use lowercase letters, numbers, and hyphens only
+ * - Keep names descriptive but concise
+ * - Must be unique within your Supabase project
+ * - Cannot be changed after creation (need to recreate)
  */
 export const BUCKETS = {
-  MEDIA: 'media-assets',      // Event media (photos, videos, audio)
-  REELS: 'generated-reels',   // Generated video reels
-  TEMPLATES: 'templates',     // Template files
-  PDFS: 'invitation-pdfs',    // Generated PDFs
+  MEDIA: 'media-assets',      // Event media (photos, videos, audio) - PUBLIC for direct access
+  REELS: 'generated-reels',   // Generated video reels - PRIVATE (require authentication)
+  TEMPLATES: 'templates',     // Template files - PRIVATE (admin only)
+  PDFS: 'invitation-pdfs',    // Generated PDF invitations - PRIVATE (sensitive data)
 } as const;
 
 export type BucketName = typeof BUCKETS[keyof typeof BUCKETS];
@@ -287,21 +294,49 @@ export const ensureBucketExists = async (bucket: BucketName): Promise<void> => {
   if (!bucketExists) {
     console.log(`[Supabase Storage] Creating bucket: ${bucket}`);
 
-    // Determine if bucket should be public based on type
-    const publicBuckets: BucketName[] = [BUCKETS.MEDIA]; // Media bucket can be public for easy access
+    // Determine if bucket should be public based on type and security requirements
+    // PUBLIC buckets: Direct URL access without authentication (use for public content)
+    // PRIVATE buckets: Require signed URLs or authentication (use for sensitive data)
+    const publicBuckets: BucketName[] = [BUCKETS.MEDIA]; // Media is public (event photos/videos for guests to view)
     const isPublic = publicBuckets.includes(bucket);
+    
+    // Security note:
+    // - MEDIA: Public (event photos/videos are meant to be shared)
+    // - REELS: Private (generated content, may contain sensitive moments)
+    // - TEMPLATES: Private (admin assets, intellectual property)
+    // - PDFS: Private (invitations contain access codes, personal info)
 
-    const { error: createError } = await supabase.storage.createBucket(bucket, {
+    // Configure bucket-specific settings
+    const bucketConfig: {
+      public: boolean;
+      fileSizeLimit?: number;
+      allowedMimeTypes?: string[];
+    } = {
       public: isPublic,
-      fileSizeLimit: 50 * 1024 * 1024, // 50MB per file
-      allowedMimeTypes: [
-        'image/*',
-        'video/*',
-        'audio/*',
-        'application/pdf',
+    };
+
+    // Set file size limits and MIME types per bucket
+    if (bucket === BUCKETS.MEDIA) {
+      bucketConfig.fileSizeLimit = 50 * 1024 * 1024; // 50MB for media files
+      bucketConfig.allowedMimeTypes = ['image/*', 'video/*', 'audio/*'];
+    } else if (bucket === BUCKETS.REELS) {
+      // No size limit for reels (can be large)
+      bucketConfig.allowedMimeTypes = ['video/*'];
+    } else if (bucket === BUCKETS.TEMPLATES) {
+      bucketConfig.fileSizeLimit = 50 * 1024 * 1024; // 50MB for templates
+      bucketConfig.allowedMimeTypes = [
         'application/zip',
-      ],
-    });
+        'text/html',
+        'text/css',
+        'application/javascript',
+        'application/json',
+      ];
+    } else if (bucket === BUCKETS.PDFS) {
+      bucketConfig.fileSizeLimit = 10 * 1024 * 1024; // 10MB for PDFs
+      bucketConfig.allowedMimeTypes = ['application/pdf'];
+    }
+
+    const { error: createError } = await supabase.storage.createBucket(bucket, bucketConfig);
 
     if (createError) {
       // Bucket might already exist (race condition), check again

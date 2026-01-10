@@ -359,8 +359,7 @@ router.post(
       const maxPhotosPerSession = event.maxPhotosPerBoothSession || 10;
       
       if (photosInSession >= maxPhotosPerSession) {
-        // Delete the uploaded file
-        fs.unlinkSync(file.path);
+        // With memory storage, no file to delete - just throw error
         throw new AppError(
           `Maximum ${maxPhotosPerSession} photos per session. Please start a new session.`,
           400
@@ -368,48 +367,76 @@ router.post(
       }
     }
 
-    // Create media asset record
-    const mediaAsset = await prisma.mediaAsset.create({
-      data: {
-        eventId: event.id,
-        type: metadata.type,
-        guestName: metadata.guestName || 'Booth Guest',
-        guestEmail: metadata.guestEmail,
-        fileName: file.originalname,
-        filePath: `/uploads/media/${event.id}/${file.filename}`,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        duration: metadata.duration,
-        captureMode: 'BOOTH',
-        deviceId: metadata.deviceId,
-        status: 'READY',
-      },
-    });
+    // Generate unique filename
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    const fileName = `booth-${uniqueSuffix}${ext}`;
+    const storagePath = `${event.id}/${fileName}`;
 
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        eventId: event.id,
-        action: 'GUESTBOOK_UPLOAD',
-        entityType: 'MEDIA',
-        entityId: mediaAsset.id,
-        details: JSON.stringify({
+    try {
+      // Upload to Supabase Storage
+      const { path: storedPath } = await uploadToSupabase(
+        BUCKETS.MEDIA,
+        storagePath,
+        file.buffer,
+        {
+          contentType: file.mimetype,
+          metadata: {
+            eventId: event.id,
+            type: metadata.type,
+            guestName: metadata.guestName || 'Booth Guest',
+            originalName: file.originalname,
+            captureMode: 'BOOTH',
+          },
+        }
+      );
+
+      // Create media asset record
+      const mediaAsset = await prisma.mediaAsset.create({
+        data: {
+          eventId: event.id,
           type: metadata.type,
+          guestName: metadata.guestName || 'Booth Guest',
+          guestEmail: metadata.guestEmail,
+          fileName: file.originalname,
+          filePath: storedPath, // Store Supabase path
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          duration: metadata.duration,
           captureMode: 'BOOTH',
-          guestName: metadata.guestName,
           deviceId: metadata.deviceId,
-        }),
-      },
-    });
+          status: 'READY',
+        },
+      });
 
-    res.status(201).json({
-      message: 'Media uploaded successfully',
-      mediaAsset: {
-        id: mediaAsset.id,
-        type: mediaAsset.type,
-        status: mediaAsset.status,
-      },
-    });
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          eventId: event.id,
+          action: 'GUESTBOOK_UPLOAD',
+          entityType: 'MEDIA',
+          entityId: mediaAsset.id,
+          details: JSON.stringify({
+            type: metadata.type,
+            captureMode: 'BOOTH',
+            guestName: metadata.guestName,
+            deviceId: metadata.deviceId,
+          }),
+        },
+      });
+
+      res.status(201).json({
+        message: 'Media uploaded successfully',
+        mediaAsset: {
+          id: mediaAsset.id,
+          type: mediaAsset.type,
+          status: mediaAsset.status,
+        },
+      });
+    } catch (error: any) {
+      console.error('[Booth Upload] Supabase upload error:', error);
+      throw new AppError(`Failed to upload file: ${error.message}`, 500);
+    }
   })
 );
 
