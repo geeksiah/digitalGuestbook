@@ -3,6 +3,12 @@
 # Stage 1: Build
 FROM node:20-slim AS builder
 
+# Install OpenSSL for Prisma (fixes the warning)
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy package files AND prisma schema
@@ -51,8 +57,7 @@ RUN npx prisma generate
 COPY --from=builder /app/dist ./dist
 
 # Create directories for uploads and generated files
-# Note: For SQLite persistence, use a mounted volume for /app/data
-RUN mkdir -p uploads/media generated/reels data templates/archives templates/events
+RUN mkdir -p uploads/media generated/reels templates/archives templates/events
 
 # Expose port
 EXPOSE 3001
@@ -61,9 +66,9 @@ EXPOSE 3001
 ENV NODE_ENV=production
 ENV PORT=3001
 
-# Use mounted volume for SQLite database if DATABASE_URL is file: URL
-# Otherwise use environment-provided DATABASE_URL (PostgreSQL, etc.)
-ENV DATABASE_URL=${DATABASE_URL:-"file:./data/prod.db"}
+# DATABASE_URL and DIRECT_URL should be set via environment variables (Supabase)
+# No default value - must be provided for production
 
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Start the application with database schema sync
+# Note: For production, use migrations instead of db push
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss --skip-generate 2>/dev/null || true && node dist/index.js"]

@@ -13,13 +13,12 @@ services:
       - key: PORT
         value: 3001
       - key: DATABASE_URL
-        value: file:/app/data/prod.db
+        sync: false  # Set this in Render dashboard from Supabase (Connection pooling URL)
+      - key: DIRECT_URL
+        sync: false  # Set this in Render dashboard from Supabase (Direct connection URL)
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
         sync: false  # Set this to your Netlify frontend URL
-    disk:
-      name: data
-      mountPath: /app/data
-      sizeGB: 1
+    # Note: No disk needed - using Supabase PostgreSQL instead of SQLite
 

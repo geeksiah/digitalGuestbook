@@ -342,17 +342,50 @@ const processReel = async (
 
     const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
+    let lastProgressUpdate = 50;
+    let lastUpdateTime = Date.now();
+    const PROGRESS_UPDATE_INTERVAL = 2000; // Update every 2 seconds
+
     ffmpeg.stderr.on('data', async (data) => {
       const output = data.toString();
-      // Parse progress from ffmpeg output
-      const timeMatch = output.match(/time=(\d+):(\d+):(\d+)/);
+      
+      // Parse progress from ffmpeg output - handle multiple time formats
+      // Format 1: time=00:01:23.45
+      // Format 2: time=00:01:23
+      let timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+      if (!timeMatch) {
+        timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})/);
+      }
+      
       if (timeMatch && totalDuration > 0) {
-        const seconds = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
-        const progress = 50 + Math.floor((seconds / totalDuration) * 45);
-        // Throttle db updates to avoid too many writes
-        if (Math.random() < 0.1) { // Update ~10% of the time
-          await updateJobProgress(jobId, progress).catch(() => {});
+        const hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2], 10);
+        const secs = parseInt(timeMatch[3], 10);
+        const seconds = hours * 3600 + minutes * 60 + secs;
+        
+        // Calculate progress: 50% (before FFmpeg) + 45% (during encoding) = 95%
+        // Reserve 5% for finalization
+        const encodingProgress = Math.min(seconds / totalDuration, 1);
+        const progress = Math.min(50 + Math.floor(encodingProgress * 45), 95);
+        
+        // Update progress only if it increased significantly and enough time has passed
+        const now = Date.now();
+        if (progress > lastProgressUpdate && (now - lastUpdateTime) >= PROGRESS_UPDATE_INTERVAL) {
+          lastProgressUpdate = progress;
+          lastUpdateTime = now;
+          
+          try {
+            await updateJobProgress(jobId, progress);
+            console.log(`[ReelGenerator] [${jobId}] Progress: ${progress}% (${seconds}s / ${totalDuration}s)`);
+          } catch (error) {
+            console.error(`[ReelGenerator] [${jobId}] Failed to update progress:`, error);
+          }
         }
+      }
+      
+      // Log FFmpeg errors/warnings
+      if (output.includes('error') || output.includes('Error')) {
+        console.error(`[ReelGenerator] [${jobId}] FFmpeg error: ${output.substring(0, 200)}`);
       }
     });
 
@@ -363,6 +396,13 @@ const processReel = async (
       try { if (eventDetails && fs.existsSync(outroPath)) fs.unlinkSync(outroPath); } catch {}
 
       if (code === 0) {
+        // Update progress to 95% when FFmpeg completes successfully
+        try {
+          await updateJobProgress(jobId, 95);
+          console.log(`[ReelGenerator] [${jobId}] FFmpeg encoding completed successfully`);
+        } catch (error) {
+          console.error(`[ReelGenerator] [${jobId}] Failed to update progress after encoding:`, error);
+        }
         resolve();
       } else {
         console.error(`[ReelGenerator] [${jobId}] FFmpeg exited with code ${code}`);
@@ -381,6 +421,9 @@ const processReel = async (
     });
   });
 
+  // Update progress to 97% - finalizing
+  await updateJobProgress(jobId, 97).catch(() => {});
+
   // Verify output file exists
   if (!fs.existsSync(outputPath)) {
     await updateJobStatus(jobId, 'failed', { errorMessage: 'Reel generation completed but output file not found' });
@@ -392,17 +435,26 @@ const processReel = async (
   const stats = fs.statSync(outputPath);
   const reelOutputPath = `/generated/reels/${eventId}/${path.basename(outputPath)}`;
 
+  // Update progress to 99% - saving to database
+  await updateJobProgress(jobId, 99).catch(() => {});
+
   // Success - update database
-  await updateJobStatus(jobId, 'completed', {
-    outputPath: reelOutputPath,
-    outputSize: stats.size,
-    duration: Math.round(totalDuration),
-  });
+  try {
+    await updateJobStatus(jobId, 'completed', {
+      outputPath: reelOutputPath,
+      outputSize: stats.size,
+      duration: Math.round(totalDuration),
+    });
 
-  console.log(`[ReelGenerator] [${jobId}] Reel generated successfully: ${reelOutputPath} (${(stats.size / 1024 / 1024).toFixed(2)}MB, ${Math.round(totalDuration)}s)`);
+    // Update progress to 100%
+    await updateJobProgress(jobId, 100);
 
-  // Update progress to 100%
-  await updateJobProgress(jobId, 100);
+    console.log(`[ReelGenerator] [${jobId}] Reel generated successfully: ${reelOutputPath} (${(stats.size / 1024 / 1024).toFixed(2)}MB, ${Math.round(totalDuration)}s)`);
+  } catch (error) {
+    console.error(`[ReelGenerator] [${jobId}] Failed to save job status:`, error);
+    await updateJobStatus(jobId, 'failed', { errorMessage: `Failed to save job status: ${(error as Error).message}` });
+    throw error;
+  }
 
   // Log to database
   await prisma.auditLog.create({
