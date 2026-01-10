@@ -107,7 +107,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3001
+        value: 10000
       - key: DATABASE_URL
         sync: false  # Set this in Render dashboard from Supabase
       - key: DIRECT_URL

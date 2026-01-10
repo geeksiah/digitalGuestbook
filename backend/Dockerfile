@@ -59,12 +59,12 @@ COPY --from=builder /app/dist ./dist
 # Create directories for uploads and generated files
 RUN mkdir -p uploads/media generated/reels templates/archives templates/events
 
-# Expose port
+# Expose port (Render.com will set PORT dynamically, but we expose a default)
 EXPOSE 10000
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=10000
+# PORT will be set by Render.com at runtime - don't set a default here
 
 # DATABASE_URL and DIRECT_URL should be set via environment variables (Supabase)
 # No default value - must be provided for production

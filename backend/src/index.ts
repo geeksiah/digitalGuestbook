@@ -82,9 +82,6 @@ async function initializeDatabase() {
   }
 }
 
-// Initialize database
-initializeDatabase();
-
 // Routes
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
@@ -106,7 +103,9 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { authenticateAdmin } from './middleware/auth.js';
 
 const app = express();
-const PORT = Number(process.env.PORT) || 10000;
+// Render.com sets PORT=10000 by default for web services
+// Follow Render.com recommendation: use process.env.PORT with fallback
+const port = Number(process.env.PORT) || 10000;
 
 // Security Middleware
 app.use(helmet({
@@ -171,6 +170,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request Logging
 app.use(requestLogger);
+
+// Simple root endpoint for Render.com port detection
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    service: 'Digital Event Platform API',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Static Files (uploads, generated PDFs, templates)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -291,7 +299,7 @@ app.get('/health/detailed', authenticateAdmin, async (req, res) => {
       },
       environment: {
         nodeEnv: process.env.NODE_ENV,
-        port: PORT,
+        port: port,
       },
       resources: process.memoryUsage(),
       uptime: process.uptime(),
@@ -353,8 +361,16 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start Server
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+// Render.com recommendation: bind to PORT, Render will auto-detect
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Initialize database after server starts (non-blocking)
+  initializeDatabase().catch((error) => {
+    console.error('Database initialization failed:', error);
+    // Don't crash the server if initialization fails
+  });
 });
 
 export default app;
