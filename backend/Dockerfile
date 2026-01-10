@@ -69,6 +69,8 @@ ENV NODE_ENV=production
 # DATABASE_URL and DIRECT_URL should be set via environment variables (Supabase)
 # No default value - must be provided for production
 
-# Start the application with database schema sync
-# Note: For production, use migrations instead of db push
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss --skip-generate 2>/dev/null || true && node dist/index.js"]
+# Start the application
+# Start server immediately - it will handle database initialization internally
+# For PostgreSQL/Supabase, use prisma migrate deploy instead of db push
+# But we skip that here and let the server handle schema sync via initializeDatabase()
+CMD ["node", "dist/index.js"]

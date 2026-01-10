@@ -13,16 +13,16 @@ const createPrismaClient = () => {
     errorFormat: process.env.NODE_ENV === 'development' ? 'pretty' : 'minimal',
   });
 
-  // Connection test
+  // Non-blocking connection test - don't exit on failure, let server start
+  // The server will check connection health via health endpoint
   client.$connect()
     .then(() => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Database] Connected successfully');
-      }
+      console.log('[Database] Prisma Client initialized and connected');
     })
     .catch((error) => {
-      console.error('[Database] Connection failed:', error.message);
-      process.exit(1);
+      console.warn('[Database] Prisma Client initialization warning:', error.message);
+      console.warn('[Database] Server will start, but database may not be available');
+      // Don't exit - let server start and handle DB errors gracefully
     });
 
   return client;

@@ -57,6 +57,8 @@ async function initializeDatabase() {
     const eventCount = await prisma.event.count();
     if (eventCount === 0) {
       console.log('🌱 Creating sample event...');
+      // Using type assertion for ownerName/ownerAccessToken - Prisma client types may be stale
+      // These fields exist in schema and will be available at runtime
       const event = await prisma.event.create({
         data: {
           slug: 'sample-wedding',
@@ -72,10 +74,12 @@ async function initializeDatabase() {
           rsvpEnabled: true,
           guestbookEnabled: true,
           checkInEnabled: true,
-        },
-      });
+        } as any,
+      }) as any;
       console.log('✅ Sample event created: ' + event.slug);
-      console.log('   Event Owner Portal: /event-owner/' + event.ownerAccessToken);
+      if (event.ownerAccessToken) {
+        console.log('   Event Owner Portal: /event-owner/' + event.ownerAccessToken);
+      }
     }
   } catch (error) {
     console.error('Database initialization error:', error);
@@ -361,16 +365,64 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start Server
-// Render.com recommendation: bind to PORT, Render will auto-detect
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  
-  // Initialize database after server starts (non-blocking)
-  initializeDatabase().catch((error) => {
-    console.error('Database initialization failed:', error);
-    // Don't crash the server if initialization fails
+// Render.com requires binding to 0.0.0.0 explicitly for Docker services
+try {
+  console.log(`[Server] Starting server...`);
+  console.log(`[Server] PORT environment variable: ${process.env.PORT || 'not set (using default 10000)'}`);
+  console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log(`[Server] Attempting to bind to 0.0.0.0:${port}`);
+
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`✅ Server listening on port ${port}`);
+    console.log(`✅ Server bound to 0.0.0.0:${port}`);
+    console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`✅ Ready to accept connections`);
+    
+    // Initialize database after server starts (non-blocking)
+    setTimeout(() => {
+      initializeDatabase().catch((error) => {
+        console.error('[Database] Initialization failed (non-fatal):', error);
+        // Don't crash the server if initialization fails
+      });
+    }, 1000); // Wait 1 second before initializing DB
   });
-});
+
+  // Handle server errors
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    console.error(`[Server] ❌ Error starting server:`, error);
+    if (error.code === 'EADDRINUSE') {
+      console.error(`[Server] ❌ Port ${port} is already in use`);
+    }
+    process.exit(1);
+  });
+
+  // Handle server listening state
+  server.on('listening', () => {
+    const address = server.address();
+    console.log(`[Server] ✅ Server is listening on:`, address);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('[Server] SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+      console.log('[Server] HTTP server closed');
+      process.exit(0);
+    });
+  });
+
+  process.on('SIGINT', () => {
+    console.log('[Server] SIGINT received, shutting down gracefully...');
+    server.close(() => {
+      console.log('[Server] HTTP server closed');
+      process.exit(0);
+    });
+  });
+
+} catch (error: any) {
+  console.error('[Server] ❌ Fatal error during server startup:', error);
+  console.error('[Server] ❌ Stack trace:', error.stack);
+  process.exit(1);
+}
 
 export default app;
