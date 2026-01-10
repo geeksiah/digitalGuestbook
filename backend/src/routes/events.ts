@@ -337,6 +337,137 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/events/:id/templates
+ * Assign templates to an event (with per-event asset isolation)
+ */
+router.post('/:id/templates', asyncHandler(async (req, res) => {
+  const { id: eventId } = req.params;
+  const {
+    invitationTemplateId,
+    rsvpTemplateId,
+    guestbookTemplateId,
+    guestbookVideoTemplateId,
+    guestbookAudioTemplateId,
+    guestbookPhotoTemplateId,
+    boothTemplateId,
+    boothVideoTemplateId,
+    boothAudioTemplateId,
+    boothPhotoTemplateId,
+    thankYouTemplateId,
+  } = req.body;
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  // Import template assignment logic
+  const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
+  
+  // Validate template IDs and types
+  const templateAssignments: any = {};
+
+  // Helper to validate and add template
+  const validateAndAdd = async (
+    templateId: string | null | undefined, 
+    fieldName: string, 
+    expectedType: string, 
+    requiresService?: { enabled: boolean; name: string }
+  ) => {
+    if (templateId === null) {
+      templateAssignments[fieldName] = null;
+      return;
+    }
+    if (!templateId) return;
+    
+    if (requiresService && !requiresService.enabled) {
+      throw new AppError(`Cannot assign ${expectedType} template - ${requiresService.name} service is disabled`, 400);
+    }
+    
+    const template = await prisma.template.findUnique({ where: { id: templateId } });
+    if (!template || template.type !== expectedType) {
+      throw new AppError(`Invalid ${expectedType} template. Expected type: ${expectedType}, got: ${template?.type || 'none'}`, 400);
+    }
+    templateAssignments[fieldName] = templateId;
+  };
+
+  await validateAndAdd(invitationTemplateId, 'invitationTemplateId', 'INVITATION', 
+    { enabled: event.invitationEnabled, name: 'invitation' });
+  await validateAndAdd(rsvpTemplateId, 'rsvpTemplateId', 'RSVP', 
+    { enabled: event.rsvpEnabled, name: 'RSVP' });
+  await validateAndAdd(guestbookTemplateId, 'guestbookTemplateId', 'GUESTBOOK', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(guestbookVideoTemplateId, 'guestbookVideoTemplateId', 'GUESTBOOK_VIDEO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(guestbookAudioTemplateId, 'guestbookAudioTemplateId', 'GUESTBOOK_AUDIO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(guestbookPhotoTemplateId, 'guestbookPhotoTemplateId', 'GUESTBOOK_PHOTO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook' });
+  await validateAndAdd(boothTemplateId, 'boothTemplateId', 'BOOTH', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(boothVideoTemplateId, 'boothVideoTemplateId', 'BOOTH_VIDEO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(boothAudioTemplateId, 'boothAudioTemplateId', 'BOOTH_AUDIO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
+
+  // Copy template assets to event-specific directory for isolation
+  // This ensures Event A's templates don't leak into Event B
+  await copyTemplateAssetsForEvent(eventId, {
+    invitationTemplateId,
+    rsvpTemplateId,
+    guestbookTemplateId,
+    guestbookVideoTemplateId,
+    guestbookAudioTemplateId,
+    guestbookPhotoTemplateId,
+    boothTemplateId,
+    boothVideoTemplateId,
+    boothAudioTemplateId,
+    boothPhotoTemplateId,
+    thankYouTemplateId,
+  });
+
+  const updatedEvent = await prisma.event.update({
+    where: { id: eventId },
+    data: templateAssignments,
+    include: {
+      invitationTemplate: true,
+      rsvpTemplate: true,
+      guestbookTemplate: true,
+      guestbookVideoTemplate: true,
+      guestbookAudioTemplate: true,
+      guestbookPhotoTemplate: true,
+      boothTemplate: true,
+      boothVideoTemplate: true,
+      boothAudioTemplate: true,
+      boothPhotoTemplate: true,
+      thankYouTemplate: true,
+    },
+  });
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'TEMPLATES_ASSIGNED',
+      entityType: 'EVENT',
+      entityId: eventId,
+      details: JSON.stringify(templateAssignments),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    },
+  });
+
+  res.json({ event: updatedEvent, message: 'Templates assigned and assets copied successfully' });
+}));
+
+/**
  * POST /api/events/:id/regenerate-owner-token
  * Regenerate event owner access token
  */

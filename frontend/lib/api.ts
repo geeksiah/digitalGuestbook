@@ -63,6 +63,15 @@ export const templatesApi = {
     api.get('/templates', { params: { type, includeContent: includeContent ? 'true' : undefined } }),
   get: (id: string) => api.get(`/templates/${id}`),
   create: (data: any) => api.post('/templates', data),
+  upload: (formData: FormData) => {
+    const token = localStorage.getItem('admin_token');
+    return axios.post(`${API_BASE_URL}/api/templates/upload`, formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   update: (id: string, data: any) => api.put(`/templates/${id}`, data),
   delete: (id: string) => api.delete(`/templates/${id}`),
   duplicate: (id: string) => api.post(`/templates/${id}/duplicate`),

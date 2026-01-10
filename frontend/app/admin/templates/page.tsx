@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { templatesApi } from '@/lib/api';
+import { templatesApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,8 @@ interface Template {
   usageCount: number;
   htmlContent?: string;
   cssContent?: string;
+  thumbnailPath?: string | null;
+  assetsPath?: string | null;
 }
 
 const typeLabels: Record<string, string> = {
@@ -384,11 +386,32 @@ export default function TemplatesPage() {
                 className="relative h-36 bg-surface-100 overflow-hidden cursor-pointer group"
                 onClick={() => handlePreview(template)}
               >
-                <div className="absolute inset-0 overflow-hidden">
-                  <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
-                    <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin" title={template.name} />
+                {template.thumbnailPath ? (
+                  <>
+                    <img 
+                      src={`${API_BASE_URL}/${template.thumbnailPath}`}
+                      alt={template.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to preview if thumbnail fails
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.parentElement?.querySelector('.preview-fallback') as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
+                    />
+                    <div className="preview-fallback hidden absolute inset-0 overflow-hidden">
+                      <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
+                        <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin" title={template.name} />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
+                      <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin" title={template.name} />
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/60 transition-colors flex items-center justify-center">
                   <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white font-medium">Preview</span>
                 </div>

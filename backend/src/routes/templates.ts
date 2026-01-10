@@ -129,14 +129,51 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
 
   const { name, description, type } = req.body;
   
-  if (!name || !type) {
-    throw new AppError('Name and type are required', 400);
+  if (!name || !name.trim()) {
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    throw new AppError('Template name is required', 400);
+  }
+
+  if (!type) {
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    throw new AppError('Template type is required', 400);
+  }
+
+  // Validate template type
+  const validTypes = ['INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 'THANK_YOU'];
+  if (!validTypes.includes(type)) {
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    throw new AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);
   }
 
   try {
+    // Verify ZIP file is valid
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(req.file.path);
+      const zipEntries = zip.getEntries();
+      if (zipEntries.length === 0) {
+        throw new Error('ZIP file is empty');
+      }
+    } catch (zipError: any) {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      throw new AppError(`Invalid ZIP file: ${zipError.message}`, 400);
+    }
+
     // Extract ZIP
-    const zip = new AdmZip(req.file.path);
     const extractPath = path.join(templatesDir, 'archives', req.file.filename);
+    if (fs.existsSync(extractPath)) {
+      fs.rmSync(extractPath, { recursive: true, force: true });
+    }
+    fs.mkdirSync(extractPath, { recursive: true });
     zip.extractAllTo(extractPath, true);
 
     // Look for template files
@@ -357,8 +394,8 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /api/events/:eventId/templates
- * Assign templates to an event
+ * POST /api/templates/assign/:eventId
+ * Assign templates to an event (with per-event asset isolation)
  */
 router.post('/assign/:eventId', asyncHandler(async (req, res) => {
   const { eventId } = req.params;
@@ -370,6 +407,9 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
     guestbookAudioTemplateId,
     guestbookPhotoTemplateId,
     boothTemplateId,
+    boothVideoTemplateId,
+    boothAudioTemplateId,
+    boothPhotoTemplateId,
     thankYouTemplateId,
   } = req.body;
 
@@ -423,7 +463,29 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
     { enabled: event.guestbookEnabled, name: 'guestbook' });
   await validateAndAdd(boothTemplateId, 'boothTemplateId', 'BOOTH', 
     { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(boothVideoTemplateId, 'boothVideoTemplateId', 'BOOTH_VIDEO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(boothAudioTemplateId, 'boothAudioTemplateId', 'BOOTH_AUDIO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
+  await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', 
+    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
   await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
+
+  // Copy template assets to event-specific directory for isolation using service
+  const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
+  await copyTemplateAssetsForEvent(eventId, {
+    invitationTemplateId,
+    rsvpTemplateId,
+    guestbookTemplateId,
+    guestbookVideoTemplateId,
+    guestbookAudioTemplateId,
+    guestbookPhotoTemplateId,
+    boothTemplateId,
+    boothVideoTemplateId,
+    boothAudioTemplateId,
+    boothPhotoTemplateId,
+    thankYouTemplateId,
+  });
 
   const updatedEvent = await prisma.event.update({
     where: { id: eventId },
@@ -436,11 +498,28 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
       guestbookAudioTemplate: true,
       guestbookPhotoTemplate: true,
       boothTemplate: true,
+      boothVideoTemplate: true,
+      boothAudioTemplate: true,
+      boothPhotoTemplate: true,
       thankYouTemplate: true,
     },
   });
 
-  res.json({ event: updatedEvent });
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'TEMPLATES_ASSIGNED',
+      entityType: 'EVENT',
+      entityId: eventId,
+      details: JSON.stringify(templateAssignments),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    },
+  });
+
+  res.json({ event: updatedEvent, message: 'Templates assigned and assets copied successfully' });
 }));
 
 export default router;

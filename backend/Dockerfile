@@ -33,18 +33,16 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and Prisma schema
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install only production dependencies
+# Install production dependencies (Prisma Client is a regular dependency)
 RUN npm ci --omit=dev
 
-# Generate Prisma client in production image
+# Generate Prisma client in production stage
+# Using npx ensures Prisma CLI is available (downloads temporarily if needed)
 RUN npx prisma generate
-
-# Copy built files from builder stage
-COPY --from=builder /app/dist ./dist
 
 # Create directories for uploads and generated files
 # Note: For SQLite persistence, use a mounted volume for /app/data

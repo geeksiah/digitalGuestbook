@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import prisma from './utils/prisma.js';
 
@@ -102,6 +103,7 @@ import ticketingRoutes from './routes/ticketing.js';
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { authenticateAdmin } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -170,30 +172,134 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request Logging
 app.use(requestLogger);
 
-// Static Files (uploads, generated PDFs)
+// Static Files (uploads, generated PDFs, templates)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use('/generated', express.static(path.join(process.cwd(), 'generated')));
+app.use('/templates', express.static(path.join(process.cwd(), 'templates')));
 
-// Health Check with database status
+// Enhanced Health Check with comprehensive status
 app.get('/health', async (req, res) => {
+  const healthStatus: any = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    services: {},
+    checks: {},
+  };
+
+  try {
+    // Database Health Check
+    const { checkDatabaseHealth } = await import('./utils/prisma.js');
+    const startDbCheck = Date.now();
+    const dbHealthy = await checkDatabaseHealth();
+    const dbCheckTime = Date.now() - startDbCheck;
+    
+    healthStatus.services.database = dbHealthy ? 'connected' : 'disconnected';
+    healthStatus.checks.database = {
+      status: dbHealthy ? 'pass' : 'fail',
+      responseTime: `${dbCheckTime}ms`,
+    };
+
+    // File System Health Check
+    const fsChecks: any = {};
+    const requiredDirs = ['uploads/media', 'generated/reels', 'templates/archives', 'data'];
+    for (const dir of requiredDirs) {
+      const dirPath = path.join(process.cwd(), dir);
+      try {
+        fs.accessSync(dirPath, fs.constants.F_OK | fs.constants.W_OK);
+        fsChecks[dir] = { status: 'pass', writable: true };
+      } catch {
+        try {
+          fs.mkdirSync(dirPath, { recursive: true });
+          fsChecks[dir] = { status: 'pass', writable: true, created: true };
+        } catch {
+          fsChecks[dir] = { status: 'fail', writable: false };
+        }
+      }
+    }
+    healthStatus.checks.filesystem = fsChecks;
+
+    // FFmpeg Check (for reel generation)
+    try {
+      const { spawn } = await import('child_process');
+      const ffmpegCheck = spawn('ffmpeg', ['-version']);
+      await new Promise<void>((resolve, reject) => {
+        ffmpegCheck.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error('FFmpeg not available'));
+        });
+        ffmpegCheck.on('error', reject);
+        setTimeout(() => reject(new Error('FFmpeg check timeout')), 2000);
+      });
+      healthStatus.services.ffmpeg = 'available';
+      healthStatus.checks.ffmpeg = { status: 'pass' };
+    } catch {
+      healthStatus.services.ffmpeg = 'unavailable';
+      healthStatus.checks.ffmpeg = { status: 'fail', message: 'FFmpeg not installed' };
+    }
+
+    // Memory Usage
+    const memUsage = process.memoryUsage();
+    healthStatus.resources = {
+      memory: {
+        heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+      },
+      uptime: `${Math.round(process.uptime())}s`,
+    };
+
+    // Determine overall status
+    const allChecks = Object.values(healthStatus.checks).flat();
+    const hasFailures = allChecks.some((check: any) => check.status === 'fail');
+    healthStatus.status = hasFailures ? (dbHealthy ? 'degraded' : 'unhealthy') : 'healthy';
+
+    const statusCode = healthStatus.status === 'healthy' ? 200 : healthStatus.status === 'degraded' ? 200 : 503;
+    res.status(statusCode).json(healthStatus);
+  } catch (error: any) {
+    healthStatus.status = 'unhealthy';
+    healthStatus.error = error.message;
+    res.status(503).json(healthStatus);
+  }
+});
+
+// Detailed Health Check (for internal monitoring)
+app.get('/health/detailed', authenticateAdmin, async (req, res) => {
   try {
     const { checkDatabaseHealth } = await import('./utils/prisma.js');
     const dbHealthy = await checkDatabaseHealth();
-    
-    res.json({ 
+
+    // Database stats
+    const [eventCount, rsvpCount, mediaCount, templateCount] = await Promise.all([
+      prisma.event.count(),
+      prisma.rSVP.count(),
+      prisma.mediaAsset.count(),
+      prisma.template.count(),
+    ]).catch(() => [0, 0, 0, 0]);
+
+    res.json({
       status: dbHealthy ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      services: {
-        database: dbHealthy ? 'connected' : 'disconnected',
-        api: 'running',
-      }
+      database: {
+        connected: dbHealthy,
+        stats: {
+          events: eventCount,
+          rsvps: rsvpCount,
+          media: mediaCount,
+          templates: templateCount,
+        },
+      },
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        port: PORT,
+      },
+      resources: process.memoryUsage(),
+      uptime: process.uptime(),
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(503).json({
       status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: 'Health check failed',
+      error: error.message,
     });
   }
 });

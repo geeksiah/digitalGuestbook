@@ -12,57 +12,104 @@ export class AppError extends Error {
   }
 }
 
+const logError = (err: Error | AppError, req: Request, statusCode: number) => {
+  const timestamp = new Date().toISOString();
+  const errorDetails = {
+    timestamp,
+    level: statusCode >= 500 ? 'ERROR' : 'WARN',
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    path: req.path,
+    method: req.method,
+    statusCode,
+    ip: req.ip || req.socket.remoteAddress,
+    userAgent: req.get('user-agent'),
+    body: req.method !== 'GET' ? JSON.stringify(req.body).substring(0, 500) : undefined,
+    query: Object.keys(req.query).length > 0 ? JSON.stringify(req.query) : undefined,
+  };
+
+  if (statusCode >= 500) {
+    console.error('[ERROR]', JSON.stringify(errorDetails, null, 2));
+  } else {
+    console.warn('[WARN]', JSON.stringify(errorDetails, null, 2));
+  }
+
+  // In production, consider logging to external service (Sentry, LogRocket, etc.)
+  if (process.env.NODE_ENV === 'production' && statusCode >= 500) {
+    // TODO: Integrate with external logging service
+  }
+};
+
 export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
   _next: NextFunction
 ) => {
-  console.error('Error:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    path: req.path,
-    method: req.method,
-  });
+  let statusCode = 500;
+  let errorMessage = 'Internal server error';
+  let errorDetails: any = undefined;
 
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      error: err.message,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-    });
+    statusCode = err.statusCode;
+    errorMessage = err.message;
   }
-
   // Prisma Errors
-  if (err.name === 'PrismaClientKnownRequestError') {
-    return res.status(400).json({
-      error: 'Database operation failed',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
-    });
+  else if (err.name === 'PrismaClientKnownRequestError') {
+    statusCode = 400;
+    errorMessage = 'Database operation failed';
+    errorDetails = process.env.NODE_ENV === 'development' ? (err as any).meta : undefined;
   }
-
+  // Prisma Validation Errors
+  else if (err.name === 'PrismaClientValidationError') {
+    statusCode = 400;
+    errorMessage = 'Invalid data provided';
+    errorDetails = process.env.NODE_ENV === 'development' ? err.message : undefined;
+  }
   // Validation Errors (Zod)
-  if (err.name === 'ZodError') {
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: JSON.parse(err.message),
-    });
+  else if (err.name === 'ZodError') {
+    statusCode = 400;
+    errorMessage = 'Validation failed';
+    try {
+      errorDetails = (err as any).issues || JSON.parse(err.message);
+    } catch {
+      errorDetails = err.message;
+    }
   }
-
   // JWT Errors
-  if (err.name === 'JsonWebTokenError') {
-    return res.status(401).json({ error: 'Invalid token' });
+  else if (err.name === 'JsonWebTokenError') {
+    statusCode = 401;
+    errorMessage = 'Invalid authentication token';
+  }
+  else if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    errorMessage = 'Authentication token expired';
+  }
+  // Multer Errors (File Upload)
+  else if ((err as any).code === 'LIMIT_FILE_SIZE') {
+    statusCode = 400;
+    errorMessage = 'File size too large';
+  }
+  else if ((err as any).code === 'LIMIT_FILE_COUNT') {
+    statusCode = 400;
+    errorMessage = 'Too many files uploaded';
+  }
+  // ENOENT Errors (File not found)
+  else if ((err as any).code === 'ENOENT') {
+    statusCode = 404;
+    errorMessage = 'Resource not found';
   }
 
-  if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({ error: 'Token expired' });
-  }
+  // Log the error
+  logError(err, req, statusCode);
 
-  // Default error
-  res.status(500).json({
-    error: 'Internal server error',
+  // Send error response
+  res.status(statusCode).json({
+    error: errorMessage,
+    ...(errorDetails && { details: errorDetails }),
     ...(process.env.NODE_ENV === 'development' && { 
-      message: err.message,
-      stack: err.stack 
+      stack: err.stack,
+      name: err.name,
     }),
   });
 };
