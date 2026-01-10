@@ -18,8 +18,11 @@ RUN npx prisma generate
 # Copy source code
 COPY . .
 
-# Build TypeScript
-RUN npm run build
+# Build TypeScript (fail on error)
+RUN npm run build || (echo "Build failed!" && exit 1)
+
+# Verify build output exists
+RUN test -f dist/index.js || (echo "dist/index.js not found after build!" && ls -la dist/ && exit 1)
 
 # Stage 2: Production
 FROM node:20-slim
@@ -44,9 +47,12 @@ RUN npm ci --omit=dev
 # Using npx ensures Prisma CLI is available (downloads temporarily if needed)
 RUN npx prisma generate
 
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+
 # Create directories for uploads and generated files
 # Note: For SQLite persistence, use a mounted volume for /app/data
-RUN mkdir -p uploads/media generated/reels data templates/archives
+RUN mkdir -p uploads/media generated/reels data templates/archives templates/events
 
 # Expose port
 EXPOSE 3001
