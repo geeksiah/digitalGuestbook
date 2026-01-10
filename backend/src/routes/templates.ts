@@ -1,4 +1,8 @@
 import { Router } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import AdmZip from 'adm-zip';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
@@ -94,9 +98,138 @@ router.get('/:id', asyncHandler(async (req, res) => {
   res.json({ template });
 }));
 
+// Configure multer for template ZIP uploads
+const templatesDir = path.join(process.cwd(), 'templates');
+if (!fs.existsSync(templatesDir)) {
+  fs.mkdirSync(templatesDir, { recursive: true });
+}
+
+const upload = multer({
+  dest: path.join(templatesDir, 'uploads'),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only ZIP files are allowed'));
+    }
+  },
+});
+
+/**
+ * POST /api/templates/upload
+ * Upload template as ZIP file and extract
+ */
+router.post('/upload', upload.single('template'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError('No file uploaded', 400);
+  }
+
+  const { name, description, type } = req.body;
+  
+  if (!name || !type) {
+    throw new AppError('Name and type are required', 400);
+  }
+
+  try {
+    // Extract ZIP
+    const zip = new AdmZip(req.file.path);
+    const extractPath = path.join(templatesDir, 'archives', req.file.filename);
+    zip.extractAllTo(extractPath, true);
+
+    // Look for template files
+    const indexPath = path.join(extractPath, 'index.html');
+    const cssPath = path.join(extractPath, 'styles.css');
+    const jsPath = path.join(extractPath, 'script.js');
+    const thumbnailPath = path.join(extractPath, 'thumbnail.png');
+
+    let htmlContent = '<div>Template content</div>';
+    let cssContent = '';
+    let jsContent = '';
+    let thumbnailPathRel = null;
+
+    if (fs.existsSync(indexPath)) {
+      htmlContent = fs.readFileSync(indexPath, 'utf-8');
+    } else {
+      // Try to find HTML file
+      const files = fs.readdirSync(extractPath);
+      const htmlFile = files.find(f => f.endsWith('.html'));
+      if (htmlFile) {
+        htmlContent = fs.readFileSync(path.join(extractPath, htmlFile), 'utf-8');
+      }
+    }
+
+    if (fs.existsSync(cssPath)) {
+      cssContent = fs.readFileSync(cssPath, 'utf-8');
+    } else {
+      const files = fs.readdirSync(extractPath);
+      const cssFile = files.find(f => f.endsWith('.css'));
+      if (cssFile) {
+        cssContent = fs.readFileSync(path.join(extractPath, cssFile), 'utf-8');
+      }
+    }
+
+    if (fs.existsSync(jsPath)) {
+      jsContent = fs.readFileSync(jsPath, 'utf-8');
+    } else {
+      const files = fs.readdirSync(extractPath);
+      const jsFile = files.find(f => f.endsWith('.js'));
+      if (jsFile) {
+        jsContent = fs.readFileSync(path.join(extractPath, jsFile), 'utf-8');
+      }
+    }
+
+    // Check for thumbnail
+    const imageFiles = fs.readdirSync(extractPath).filter(f => 
+      /\.(png|jpg|jpeg|gif|webp)$/i.test(f)
+    );
+    if (imageFiles.length > 0) {
+      thumbnailPathRel = `templates/archives/${req.file.filename}/${imageFiles[0]}`;
+    }
+
+    // Relative path from project root
+    const assetsPathRel = `templates/archives/${req.file.filename}`;
+
+    // If setting as default, unset other defaults of same type
+    if (req.body.isDefault === 'true' || req.body.isDefault === true) {
+      await prisma.template.updateMany({
+        where: { type, isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    const template = await prisma.template.create({
+      data: {
+        name,
+        description: description || null,
+        type,
+        htmlContent,
+        cssContent: cssContent || null,
+        jsContent: jsContent || null,
+        assetsPath: assetsPathRel,
+        thumbnailPath: thumbnailPathRel,
+        isDefault: req.body.isDefault === 'true' || req.body.isDefault === true,
+      },
+    });
+
+    // Clean up uploaded ZIP
+    fs.unlinkSync(req.file.path);
+
+    res.status(201).json({ template, message: 'Template uploaded and extracted successfully' });
+  } catch (error: any) {
+    // Clean up on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    throw new AppError(`Failed to process template: ${error.message}`, 400);
+  }
+}));
+
 /**
  * POST /api/templates
- * Create new template
+ * Create new template (manual HTML/CSS/JS input)
  */
 router.post('/', asyncHandler(async (req, res) => {
   const data = createTemplateSchema.parse(req.body);

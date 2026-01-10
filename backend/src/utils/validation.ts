@@ -141,6 +141,8 @@ export const createTemplateSchema = z.object({
   htmlContent: z.string().min(1, 'HTML content is required'),
   cssContent: z.string().optional(),
   jsContent: z.string().optional(),
+  assetsPath: z.string().optional(),
+  thumbnailPath: z.string().optional(),
   variables: z.string().optional(), // JSON string
   isDefault: z.boolean().default(false),
 });

@@ -298,13 +298,17 @@ model Template {
   name        String
   description String?
   
-  // Template Type: INVITATION | RSVP | GUESTBOOK | GUESTBOOK_VIDEO | GUESTBOOK_AUDIO | GUESTBOOK_PHOTO | THANK_YOU
+  // Template Type: INVITATION | RSVP | GUESTBOOK | GUESTBOOK_VIDEO | GUESTBOOK_AUDIO | GUESTBOOK_PHOTO | THANK_YOU | BOOTH | BOOTH_VIDEO | BOOTH_AUDIO | BOOTH_PHOTO
   type        String
   
   // Template Content (HTML/CSS/JS bundle)
   htmlContent String
   cssContent  String?
   jsContent   String?
+  
+  // Template Assets (for ZIP-based templates)
+  assetsPath  String?  // Directory path where template assets are stored (for ZIP uploads)
+  thumbnailPath String? // Thumbnail/preview image path
   
   // Template Variables (JSON schema for injection)
   variables   String? // JSON string of available variables
