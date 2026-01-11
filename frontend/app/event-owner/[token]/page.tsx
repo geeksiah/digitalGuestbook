@@ -179,6 +179,7 @@ export default function EventOwnerPortalPage() {
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [reels, setReels] = useState<ReelJob[]>([]);
   const [activeReelJob, setActiveReelJob] = useState<ReelJob | null>(null);
+  const [dismissedFailedReels, setDismissedFailedReels] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -210,7 +211,7 @@ export default function EventOwnerPortalPage() {
       fetchEvent(true);
       if (activeTab === 'rsvps') fetchRsvps(true);
       if (activeTab === 'media') fetchMedia(true);
-      if (activeTab === 'reels') fetchReels(true);
+      // if (activeTab === 'reels') fetchReels(true); // Reels feature hidden
       if (activeTab === 'checkins') fetchCheckIns(true);
     }, 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -240,7 +241,7 @@ export default function EventOwnerPortalPage() {
     if (event) {
       if (activeTab === 'rsvps') fetchRsvps();
       if (activeTab === 'media') fetchMedia();
-      if (activeTab === 'reels') fetchReels();
+      // if (activeTab === 'reels') fetchReels(); // Reels feature hidden
       if (activeTab === 'checkins') fetchCheckIns();
       if (activeTab === 'sales') fetchSales();
       if (activeTab === 'wallet') { fetchWallet(); fetchPayouts(); }
@@ -468,10 +469,10 @@ export default function EventOwnerPortalPage() {
               { id: 'dashboard', label: 'Overview', icon: Icons.rsvp },
               { id: 'rsvps', label: 'RSVPs', icon: Icons.users, badge: pendingCount },
               { id: 'media', label: 'Media', icon: Icons.message },
-              // Reels tab only visible when reel generation is enabled
-              ...(event?.reelEnabled ? [
-                { id: 'reels' as Tab, label: 'Reels', icon: Icons.reel },
-              ] : []),
+              // Reels tab - HIDDEN for now (feature under development)
+              // ...(event?.reelEnabled ? [
+              //   { id: 'reels' as Tab, label: 'Reels', icon: Icons.reel },
+              // ] : []),
               { id: 'checkins', label: 'Check-ins', icon: Icons.checkin },
               // Sales & Wallet tabs only visible for paid RSVP events
               ...(event?.rsvpMode === 'paid' ? [
@@ -667,8 +668,8 @@ export default function EventOwnerPortalPage() {
           />
         )}
 
-        {/* Reels */}
-        {activeTab === 'reels' && event.reelEnabled && (
+        {/* Reels - HIDDEN for now (feature under development) */}
+        {false && activeTab === 'reels' && event.reelEnabled && (
           <div className="space-y-6">
             {/* Active Job Progress */}
             {activeReelJob && (activeReelJob.status === 'pending' || activeReelJob.status === 'processing') && (
@@ -744,26 +745,15 @@ export default function EventOwnerPortalPage() {
             </div>
 
             {/* Failed Jobs */}
-            {reels.filter(r => r.status === 'failed').length > 0 && (
+            {reels.filter(r => r.status === 'failed' && !dismissedFailedReels.has(r.id)).length > 0 && (
               <div className="mt-6">
                 <h4 className="text-sm font-medium text-surface-600 mb-3">Failed Attempts</h4>
                 <div className="space-y-2">
-                  {reels.filter(r => r.status === 'failed').map(reel => {
+                  {reels.filter(r => r.status === 'failed' && !dismissedFailedReels.has(r.id)).map(reel => {
                     const errorMsg = reel.errorMessage || 'No valid video files found';
-                    // Auto-dismiss failed attempt notification after 5 seconds
-                    setTimeout(() => {
-                      const element = document.getElementById(`failed-reel-${reel.id}`);
-                      if (element) {
-                        element.style.opacity = '0';
-                        element.style.transition = 'opacity 0.3s';
-                        setTimeout(() => element.remove(), 300);
-                      }
-                    }, 5000);
-                    
                     return (
                       <div 
                         key={reel.id} 
-                        id={`failed-reel-${reel.id}`}
                         className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3"
                       >
                         <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
@@ -774,8 +764,8 @@ export default function EventOwnerPortalPage() {
                           <p className="text-xs text-red-600">{formatDate(reel.createdAt)}</p>
                         </div>
                         <button
-                          onClick={(e) => {
-                            e.currentTarget.closest('[id^="failed-reel-"]')?.remove();
+                          onClick={() => {
+                            setDismissedFailedReels(prev => new Set([...prev, reel.id]));
                           }}
                           className="ml-2 p-1 rounded text-red-600 hover:bg-red-100 flex-shrink-0"
                           aria-label="Close"

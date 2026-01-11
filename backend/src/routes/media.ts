@@ -139,16 +139,40 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
  * GET /api/media/event/:eventId/download-all
  * Download all media as ZIP
  * Per SRS Section 10
+ * Supports both admin auth and owner token via header
  */
-router.get('/event/:eventId/download-all', authenticateAdmin, asyncHandler(async (req, res) => {
+router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
   const { eventId } = req.params;
-
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-  });
-
-  if (!event) {
-    throw new AppError('Event not found', 404);
+  
+  // Support both admin token and owner token
+  const authHeader = req.headers.authorization;
+  const ownerToken = req.headers['x-owner-token'] as string | undefined;
+  
+  let event;
+  if (ownerToken) {
+    // If owner token, verify it matches this event
+    event = await prisma.event.findFirst({
+      where: { id: eventId, ownerAccessToken: ownerToken },
+    });
+    if (!event) {
+      throw new AppError('Unauthorized', 401);
+    }
+  } else if (authHeader && authHeader.startsWith('Bearer ')) {
+    // Verify admin token using middleware pattern
+    const jwt = await import('jsonwebtoken');
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+      jwt.verify(token, jwtSecret);
+    } catch {
+      throw new AppError('Unauthorized', 401);
+    }
+    event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      throw new AppError('Event not found', 404);
+    }
+  } else {
+    throw new AppError('Unauthorized', 401);
   }
 
   const mediaAssets = await prisma.mediaAsset.findMany({
@@ -440,15 +464,19 @@ router.get('/reel/:jobId/download', authenticateAdmin, asyncHandler(async (req, 
     throw new AppError('Reel is not ready', 400);
   }
 
-  // Get signed URL for private bucket
-  const { getSignedUrl, BUCKETS } = await import('../services/supabaseStorage.js');
+  // Download file and serve directly
+  const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
   
   try {
-    const signedUrl = await getSignedUrl(BUCKETS.REELS, reelJob.outputPath, 3600); // 1 hour expiry
-    res.redirect(signedUrl);
+    const fileBuffer = await downloadFile(BUCKETS.REELS, reelJob.outputPath);
+    
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="reel-${jobId}.mp4"`);
+    res.setHeader('Content-Length', fileBuffer.length.toString());
+    res.send(fileBuffer);
   } catch (error: any) {
-    console.error('[Media] Error generating signed URL for reel:', error);
-    throw new AppError('Failed to generate download link', 500);
+    console.error('[Media] Error downloading reel:', error);
+    throw new AppError('Failed to download reel', 500);
   }
 }));
 

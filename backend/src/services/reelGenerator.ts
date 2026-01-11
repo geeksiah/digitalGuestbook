@@ -311,34 +311,111 @@ const processReel = async (
 
   await updateJobProgress(jobId, 45);
 
-  // Create concat file with fade transitions
-  const concatFile = await createConcatFile(videoList, outputDir);
   const outputPath = path.join(outputDir, `${outputName}-${Date.now()}.mp4`);
+  const transitionDuration = 0.5; // 0.5 second transitions
 
   await updateJobProgress(jobId, 50);
 
-  // Run ffmpeg concatenation with crossfade between clips
-  // Using a more sophisticated filter for professional look
+  // Use filter_complex with xfade for smooth transitions between clips
   await new Promise<void>((resolve, reject) => {
     // Capture tempVideoPaths in closure for cleanup
     const tempFilesToCleanup = [...tempVideoPaths];
-    const ffmpegArgs = [
-      '-y',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', concatFile,
-      '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', '20', // Higher quality
-      '-c:a', 'aac',
-      '-b:a', '256k', // Higher audio bitrate
-      '-ar', '48000', // Audio sample rate
-      '-movflags', '+faststart',
-      '-pix_fmt', 'yuv420p', // Compatibility
-      outputPath
-    ];
+    
+    if (videoList.length === 1) {
+      // Single video - just copy with title cards
+      const ffmpegArgs = [
+        '-y',
+        '-i', videoList[0].path,
+        '-c:v', 'libx264',
+        '-preset', 'medium',
+        '-crf', '20',
+        '-c:a', 'aac',
+        '-b:a', '256k',
+        '-ar', '48000',
+        '-movflags', '+faststart',
+        '-pix_fmt', 'yuv420p',
+        outputPath
+      ];
 
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+      handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], eventDetails ? [introPath, outroPath] : []);
+    } else {
+      // Multiple videos - use xfade for smooth transitions
+      // Build filter_complex with xfade transitions
+      const filterParts: string[] = [];
+      const inputArgs: string[] = [];
+      
+      // Add all video inputs
+      videoList.forEach((_, idx) => {
+        inputArgs.push('-i', videoList[idx].path);
+      });
+      
+      // Normalize all videos first (scale to 1920x1080, set fps to 30)
+      videoList.forEach((_, idx) => {
+        filterParts.push(`[${idx}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${idx}]`);
+        filterParts.push(`[${idx}:a]aformat=sample_rates=48000:channel_layouts=stereo[a${idx}]`);
+      });
+      
+      // Build xfade chain
+      let currentVideo = 'v0';
+      let currentAudio = 'a0';
+      let offset = 0;
+      
+      for (let i = 0; i < videoList.length - 1; i++) {
+        const nextVideo = `v${i + 1}`;
+        const nextAudio = `a${i + 1}`;
+        const outputVideo = i === videoList.length - 2 ? '[vout]' : `[v${i}x]`;
+        const outputAudio = i === videoList.length - 2 ? '[aout]' : `[a${i}x]`;
+        
+        // Calculate transition offset (start transition 0.5s before video ends)
+        const videoDuration = videoList[i].duration;
+        const transitionStart = Math.max(0, videoDuration - transitionDuration);
+        
+        // Video xfade transition
+        filterParts.push(`${currentVideo}${nextVideo}xfade=transition=fade:duration=${transitionDuration}:offset=${transitionStart}${outputVideo}`);
+        
+        // Audio crossfade
+        filterParts.push(`${currentAudio}${nextAudio}acrossfade=d=${transitionDuration}${outputAudio}`);
+        
+        currentVideo = outputVideo.replace(/[\[\]]/g, '');
+        currentAudio = outputAudio.replace(/[\[\]]/g, '');
+        offset += videoDuration - transitionDuration;
+      }
+      
+      const filterComplex = filterParts.join(';');
+      
+      const ffmpegArgs = [
+        '-y',
+        ...inputArgs,
+        '-filter_complex', filterComplex,
+        '-map', '[vout]',
+        '-map', '[aout]',
+        '-c:v', 'libx264',
+        '-preset', 'medium',
+        '-crf', '20',
+        '-c:a', 'aac',
+        '-b:a', '256k',
+        '-ar', '48000',
+        '-movflags', '+faststart',
+        '-pix_fmt', 'yuv420p',
+        outputPath
+      ];
+
+      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+      handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], eventDetails ? [introPath, outroPath] : []);
+    }
+
+    // Helper function to handle ffmpeg process
+    function handleFfmpegProcess(
+      ffmpeg: any,
+      jobId: string,
+      totalDuration: number,
+      resolve: () => void,
+      reject: (err: Error) => void,
+      tempFilesToCleanup: string[],
+      concatFile: string[],
+      titleCards: string[]
+    ) {
 
     let lastProgressUpdate = 50;
     let lastUpdateTime = Date.now();

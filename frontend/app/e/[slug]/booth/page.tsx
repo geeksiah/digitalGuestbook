@@ -439,11 +439,8 @@ export default function BoothPage() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // Mirror the image (selfie mode)
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
+    // Draw image directly (no mirroring - cameras handle their own orientation)
     ctx.drawImage(video, 0, 0);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // Flash effect
     setFlashActive(true);
@@ -791,7 +788,7 @@ export default function BoothPage() {
               "absolute inset-0 w-full h-full object-cover",
               recordingState === 'preview' && "hidden"
             )}
-            style={{ transform: 'scaleX(-1)' }}
+            style={{ transform: 'none' }}
           />
           
           {/* Preview Video */}
@@ -1007,7 +1004,7 @@ export default function BoothPage() {
             playsInline
             muted
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
+            style={{ transform: 'none' }}
           />
 
           {/* Countdown Overlay */}

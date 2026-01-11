@@ -21,7 +21,7 @@ export function getOptimalVideoConstraints(facingMode: 'user' | 'environment' = 
       facingMode,
       width: { ideal: 1920, max: 3840 }, // 1080p ideal, 4K max
       height: { ideal: 1080, max: 2160 },
-      frameRate: { ideal: 30, min: 24 }, // High FPS for smooth video
+      frameRate: { ideal: 60, min: 30 }, // High FPS for smooth video (60fps ideal)
       aspectRatio: { ideal: 16 / 9 },
     },
     audio: {
@@ -43,7 +43,7 @@ export function getOptimalPhotoConstraints(facingMode: 'user' | 'environment' = 
       facingMode,
       width: { ideal: 3840, max: 7680 }, // Higher resolution for photos
       height: { ideal: 2160, max: 4320 },
-      frameRate: { ideal: 30, min: 24 },
+      frameRate: { ideal: 60, min: 30 },
       aspectRatio: { ideal: 4 / 3 }, // Common photo aspect ratio
     },
   };
@@ -138,7 +138,7 @@ export async function initializeCamera(
             facingMode: constraints.video.facingMode,
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            frameRate: { ideal: 30 },
+            frameRate: { ideal: 60, min: 30 },
           },
         };
         const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
@@ -178,13 +178,7 @@ export function capturePhoto(videoElement: HTMLVideoElement, quality: number = 0
         return;
       }
 
-      // Apply mirror if needed (for front camera)
-      const isMirrored = videoElement.style.transform === 'scaleX(-1)';
-      if (isMirrored) {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-      }
-
+      // Draw image directly (no mirroring - cameras handle their own orientation)
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
       // Convert to blob with high quality

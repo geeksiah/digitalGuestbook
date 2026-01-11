@@ -50,6 +50,7 @@ interface Event {
   secondaryColor?: string;
   accentColor?: string;
   // Event Owner info
+  ownerId?: string | null;
   ownerName?: string;
   ownerEmail?: string;
   ownerPhone?: string;

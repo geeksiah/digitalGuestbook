@@ -168,7 +168,7 @@ export default function OptimizedCamera({
         muted
         className="w-full h-full object-cover rounded-lg"
         style={{
-          transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+          transform: 'none', // Mirroring removed - cameras handle their own orientation
         }}
       />
       

@@ -417,11 +417,14 @@ router.get('/:token/reel/:jobId/download', validateOwnerToken, async (req: Reque
       return res.status(400).json({ error: 'Reel is not ready' });
     }
 
-    // Get signed URL for private bucket
-    const { getSignedUrl, BUCKETS } = await import('../services/supabaseStorage.js');
-    const signedUrl = await getSignedUrl(BUCKETS.REELS, reelJob.outputPath, 3600); // 1 hour expiry
+    // Download file and serve directly
+    const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
+    const fileBuffer = await downloadFile(BUCKETS.REELS, reelJob.outputPath);
     
-    res.redirect(signedUrl);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="reel-${jobId}.mp4"`);
+    res.setHeader('Content-Length', fileBuffer.length.toString());
+    res.send(fileBuffer);
   } catch (error: any) {
     console.error('[Event Owner] Error generating signed URL for reel:', error);
     res.status(500).json({ error: 'Failed to generate download link' });
