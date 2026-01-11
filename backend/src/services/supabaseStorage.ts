@@ -5,6 +5,13 @@ import path from 'path';
 // Supabase client singleton
 let supabaseClient: SupabaseClient | null = null;
 
+/**
+ * Check if Supabase is configured
+ */
+export const isSupabaseConfigured = (): boolean => {
+  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+};
+
 const getSupabaseClient = (): SupabaseClient => {
   if (supabaseClient) {
     return supabaseClient;

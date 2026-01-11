@@ -6,6 +6,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { mediaUploadSchema } from '../utils/validation.js';
 import { calculateEventPhase, canAccessGuestbook } from '../utils/phase.js';
 import { uploadToSupabase, BUCKETS, getPublicUrl } from '../services/supabaseStorage.js';
+import { generateVideoThumbnailFromBuffer } from '../services/thumbnailGenerator.js';
 
 const router = Router();
 
@@ -192,6 +193,26 @@ router.post(
         }
       );
 
+      // Generate thumbnail for videos
+      let thumbnailPath: string | null = null;
+      if (metadata.type === 'VIDEO') {
+        try {
+          const thumbnailFileName = `thumb-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+          const thumbnailStoragePath = `${event.id}/${thumbnailFileName}`;
+          
+          thumbnailPath = await generateVideoThumbnailFromBuffer(
+            file.buffer,
+            thumbnailStoragePath,
+            1 // Extract frame at 1 second
+          );
+          
+          console.log(`[Guestbook] Generated thumbnail for video: ${thumbnailPath}`);
+        } catch (thumbError: any) {
+          console.error('[Guestbook] Failed to generate video thumbnail:', thumbError.message);
+          // Continue without thumbnail - video will still be uploaded
+        }
+      }
+
       // Create media asset record
       const mediaAsset = await prisma.mediaAsset.create({
         data: {
@@ -206,6 +227,7 @@ router.post(
           duration: metadata.duration,
           captureMode: metadata.captureMode || 'PERSONAL',
           deviceId: metadata.deviceId,
+          thumbnailPath: thumbnailPath,
           status: 'READY',
         },
       });
@@ -391,6 +413,26 @@ router.post(
         }
       );
 
+      // Generate thumbnail for videos
+      let thumbnailPath: string | null = null;
+      if (metadata.type === 'VIDEO') {
+        try {
+          const thumbnailFileName = `thumb-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+          const thumbnailStoragePath = `${event.id}/${thumbnailFileName}`;
+          
+          thumbnailPath = await generateVideoThumbnailFromBuffer(
+            file.buffer,
+            thumbnailStoragePath,
+            1 // Extract frame at 1 second
+          );
+          
+          console.log(`[Booth] Generated thumbnail for video: ${thumbnailPath}`);
+        } catch (thumbError: any) {
+          console.error('[Booth] Failed to generate video thumbnail:', thumbError.message);
+          // Continue without thumbnail - video will still be uploaded
+        }
+      }
+
       // Create media asset record
       const mediaAsset = await prisma.mediaAsset.create({
         data: {
@@ -405,6 +447,7 @@ router.post(
           duration: metadata.duration,
           captureMode: 'BOOTH',
           deviceId: metadata.deviceId,
+          thumbnailPath: thumbnailPath,
           status: 'READY',
         },
       });

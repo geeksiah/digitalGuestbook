@@ -410,9 +410,21 @@ export default function MediaGallery({
                 className="aspect-square bg-surface-100 flex items-center justify-center relative cursor-pointer overflow-hidden"
               >
                 {item.type === 'PHOTO' ? (
-                  <img src={`${API_BASE_URL}${item.filePath}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img 
+                    src={item.filePath.startsWith('http://') || item.filePath.startsWith('https://') 
+                      ? item.filePath 
+                      : `${API_BASE_URL}${item.filePath.startsWith('/') ? '' : '/'}${item.filePath}`} 
+                    alt="" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                  />
                 ) : item.type === 'VIDEO' && item.thumbnailPath ? (
-                  <img src={`${API_BASE_URL}${item.thumbnailPath}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img 
+                    src={item.thumbnailPath.startsWith('http://') || item.thumbnailPath.startsWith('https://') 
+                      ? item.thumbnailPath 
+                      : `${API_BASE_URL}${item.thumbnailPath.startsWith('/') ? '' : '/'}${item.thumbnailPath}`} 
+                    alt="" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                  />
                 ) : (
                   <div className={cn('w-16 h-16 rounded-full flex items-center justify-center', item.type === 'VIDEO' ? 'bg-rose-100 text-rose-500' : 'bg-violet-100 text-violet-500')}>
                     {item.type === 'VIDEO' ? Icons.video : Icons.audio}
@@ -500,7 +512,9 @@ export default function MediaGallery({
           <div className="absolute inset-0 flex items-center justify-center p-2 pt-14 pb-20 sm:p-4 sm:pt-16 sm:pb-24 md:p-8 md:pt-20 md:pb-28">
             {previewMedia.type === 'PHOTO' && (
               <img 
-                src={`${API_BASE_URL}${previewMedia.filePath}`} 
+                src={previewMedia.filePath.startsWith('http://') || previewMedia.filePath.startsWith('https://') 
+                  ? previewMedia.filePath 
+                  : `${API_BASE_URL}${previewMedia.filePath.startsWith('/') ? '' : '/'}${previewMedia.filePath}`} 
                 alt="" 
                 className="max-h-full max-w-full object-contain rounded-lg cursor-zoom-out"
                 onClick={() => setPreviewIndex(null)}
@@ -509,7 +523,9 @@ export default function MediaGallery({
             {previewMedia.type === 'VIDEO' && (
               <video 
                 key={previewMedia.id} 
-                src={`${API_BASE_URL}${previewMedia.filePath}`} 
+                src={previewMedia.filePath.startsWith('http://') || previewMedia.filePath.startsWith('https://') 
+                  ? previewMedia.filePath 
+                  : `${API_BASE_URL}${previewMedia.filePath.startsWith('/') ? '' : '/'}${previewMedia.filePath}`} 
                 controls 
                 autoPlay 
                 playsInline
@@ -523,7 +539,15 @@ export default function MediaGallery({
                   <svg className="w-8 h-8 sm:w-12 sm:h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                 </div>
                 <p className="text-center font-medium text-navy-900 mb-4 text-sm sm:text-base">{previewMedia.guestName || 'Anonymous'}</p>
-                <audio key={previewMedia.id} src={`${API_BASE_URL}${previewMedia.filePath}`} controls autoPlay className="w-full" />
+                <audio 
+                  key={previewMedia.id} 
+                  src={previewMedia.filePath.startsWith('http://') || previewMedia.filePath.startsWith('https://') 
+                    ? previewMedia.filePath 
+                    : `${API_BASE_URL}${previewMedia.filePath.startsWith('/') ? '' : '/'}${previewMedia.filePath}`} 
+                  controls 
+                  autoPlay 
+                  className="w-full" 
+                />
               </div>
             )}
           </div>
@@ -541,9 +565,21 @@ export default function MediaGallery({
                   )}
                 >
                   {item.type === 'PHOTO' ? (
-                    <img src={`${API_BASE_URL}${item.filePath}`} alt="" className="w-full h-full object-cover" />
+                    <img 
+                      src={item.filePath.startsWith('http://') || item.filePath.startsWith('https://') 
+                        ? item.filePath 
+                        : `${API_BASE_URL}${item.filePath.startsWith('/') ? '' : '/'}${item.filePath}`} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                    />
                   ) : item.thumbnailPath ? (
-                    <img src={`${API_BASE_URL}${item.thumbnailPath}`} alt="" className="w-full h-full object-cover" />
+                    <img 
+                      src={item.thumbnailPath.startsWith('http://') || item.thumbnailPath.startsWith('https://') 
+                        ? item.thumbnailPath 
+                        : `${API_BASE_URL}${item.thumbnailPath.startsWith('/') ? '' : '/'}${item.thumbnailPath}`} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                    />
                   ) : (
                     <div className={cn('w-full h-full flex items-center justify-center text-white text-xs', item.type === 'VIDEO' ? 'bg-rose-500' : 'bg-violet-500')}>
                       {item.type === 'VIDEO' ? Icons.video : Icons.audio}

@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import path from 'path';
-import fs from 'fs';
 import archiver from 'archiver';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateCouple } from '../middleware/auth.js';
+import { downloadFile, BUCKETS, getPublicUrl, deleteFromSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
 
@@ -32,8 +31,48 @@ router.get('/event/:eventId', authenticateAdmin, asyncHandler(async (req, res) =
     prisma.mediaAsset.count({ where }),
   ]);
 
+  // Transform media to include proper URLs
+  const mediaWithUrls = media.map(asset => {
+    // If filePath is already a full URL, use it
+    let fileUrl = asset.filePath;
+    if (!asset.filePath.startsWith('http://') && !asset.filePath.startsWith('https://')) {
+      // Check if it's a local storage path
+      if (asset.filePath.startsWith('/storage/')) {
+        fileUrl = asset.filePath; // Will be served as static file
+      } else {
+        // Try to get Supabase URL
+        try {
+          fileUrl = getPublicUrl(BUCKETS.MEDIA, asset.filePath);
+        } catch {
+          // Fallback to local path
+          fileUrl = asset.filePath.startsWith('/') ? asset.filePath : `/${asset.filePath}`;
+        }
+      }
+    }
+
+    // Handle thumbnail URL similarly
+    let thumbnailUrl = asset.thumbnailPath;
+    if (asset.thumbnailPath && !asset.thumbnailPath.startsWith('http://') && !asset.thumbnailPath.startsWith('https://')) {
+      if (asset.thumbnailPath.startsWith('/storage/')) {
+        thumbnailUrl = asset.thumbnailPath;
+      } else {
+        try {
+          thumbnailUrl = getPublicUrl(BUCKETS.MEDIA, asset.thumbnailPath);
+        } catch {
+          thumbnailUrl = asset.thumbnailPath.startsWith('/') ? asset.thumbnailPath : `/${asset.thumbnailPath}`;
+        }
+      }
+    }
+
+    return {
+      ...asset,
+      filePath: fileUrl,
+      thumbnailPath: thumbnailUrl,
+    };
+  });
+
   res.json({
-    media,
+    media: mediaWithUrls,
     pagination: {
       page: parseInt(page as string),
       limit: parseInt(limit as string),
@@ -65,6 +104,7 @@ router.get('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
 /**
  * GET /api/media/:id/download
  * Download a single media file
+ * Handles both Supabase and local filesystem storage
  */
 router.get('/:id/download', asyncHandler(async (req, res) => {
   const mediaAsset = await prisma.mediaAsset.findUnique({
@@ -75,20 +115,24 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
     throw new AppError('Media asset not found', 404);
   }
 
-  // Remove leading slash from filePath for proper path joining
-  const relativePath = mediaAsset.filePath.startsWith('/') 
-    ? mediaAsset.filePath.slice(1) 
-    : mediaAsset.filePath;
-  const filePath = path.join(process.cwd(), relativePath);
-  
-  if (!fs.existsSync(filePath)) {
-    console.error(`[Media] File not found: ${filePath}`);
-    throw new AppError('File not found on server', 404);
+  // Check if filePath is a Supabase URL
+  if (mediaAsset.filePath.startsWith('http://') || mediaAsset.filePath.startsWith('https://')) {
+    // Supabase URL - redirect to the URL
+    res.redirect(mediaAsset.filePath);
+    return;
   }
 
-  // Set headers for proper download
-  res.setHeader('Content-Disposition', `attachment; filename="${mediaAsset.fileName}"`);
-  res.download(filePath, mediaAsset.fileName);
+  // Download from Supabase Storage
+  try {
+    // filePath format from Supabase: "eventId/filename.jpg"
+    const fileBuffer = await downloadFile(BUCKETS.MEDIA, mediaAsset.filePath);
+    res.setHeader('Content-Disposition', `attachment; filename="${mediaAsset.fileName}"`);
+    res.setHeader('Content-Type', mediaAsset.mimeType || 'application/octet-stream');
+    res.send(fileBuffer);
+  } catch (error: any) {
+    console.error('[Media] Failed to download from Supabase:', error.message);
+    throw new AppError('File not found on server', 404);
+  }
 }));
 
 /**
@@ -132,21 +176,19 @@ router.get('/event/:eventId/download-all', authenticateAdmin, asyncHandler(async
 
   // Add files to archive organized by type
   for (const asset of mediaAssets) {
-    // Remove leading slash from filePath for proper path joining
-    const relativePath = asset.filePath.startsWith('/') 
-      ? asset.filePath.slice(1) 
-      : asset.filePath;
-    const filePath = path.join(process.cwd(), relativePath);
-    
-    if (fs.existsSync(filePath)) {
+    try {
+      // Download file from Supabase
+      const fileBuffer = await downloadFile(BUCKETS.MEDIA, asset.filePath);
+      
       const folder = asset.type.toLowerCase();
       const fileName = asset.guestName
         ? `${asset.guestName}-${asset.fileName}`
         : asset.fileName;
       
-      archive.file(filePath, { name: `${folder}/${fileName}` });
-    } else {
-      console.warn(`[Media] ZIP: File not found: ${filePath}`);
+      archive.append(fileBuffer, { name: `${folder}/${fileName}` });
+    } catch (error: any) {
+      console.warn(`[Media] ZIP: Failed to download ${asset.filePath}:`, error.message);
+      // Continue with other files
     }
   }
 
@@ -166,23 +208,19 @@ router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
     throw new AppError('Media asset not found', 404);
   }
 
-  // Delete file from disk
-  const relativePath = mediaAsset.filePath.startsWith('/') 
-    ? mediaAsset.filePath.slice(1) 
-    : mediaAsset.filePath;
-  const filePath = path.join(process.cwd(), relativePath);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  // Delete file from Supabase Storage
+  try {
+    await deleteFromSupabase(BUCKETS.MEDIA, mediaAsset.filePath);
+  } catch (error: any) {
+    console.warn(`[Media] Failed to delete file from Supabase: ${error.message}`);
   }
 
-  // Delete thumbnail if exists
+  // Delete thumbnail from Supabase Storage if exists
   if (mediaAsset.thumbnailPath) {
-    const thumbRelativePath = mediaAsset.thumbnailPath.startsWith('/') 
-      ? mediaAsset.thumbnailPath.slice(1) 
-      : mediaAsset.thumbnailPath;
-    const thumbPath = path.join(process.cwd(), thumbRelativePath);
-    if (fs.existsSync(thumbPath)) {
-      fs.unlinkSync(thumbPath);
+    try {
+      await deleteFromSupabase(BUCKETS.MEDIA, mediaAsset.thumbnailPath);
+    } catch (error: any) {
+      console.warn(`[Media] Failed to delete thumbnail from Supabase: ${error.message}`);
     }
   }
 

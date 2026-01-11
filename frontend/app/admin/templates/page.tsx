@@ -389,7 +389,9 @@ export default function TemplatesPage() {
                 {template.thumbnailPath ? (
                   <>
                     <img 
-                      src={`${API_BASE_URL}/${template.thumbnailPath}`}
+                      src={template.thumbnailPath.startsWith('http://') || template.thumbnailPath.startsWith('https://') 
+                        ? template.thumbnailPath 
+                        : `${API_BASE_URL}${template.thumbnailPath.startsWith('/') ? '' : '/'}${template.thumbnailPath}`}
                       alt={template.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
