@@ -23,13 +23,32 @@ api.interceptors.request.use((config) => {
 // Handle auth errors globally
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      // Token expired or invalid - clear auth and redirect
       const path = window.location.pathname;
+      
+      // Only redirect if we're on an admin page and not already on login
       if (path.startsWith('/admin') && path !== '/admin/login') {
-        localStorage.removeItem('admin_token');
-        window.location.href = '/admin/login';
+        // Check if token exists - if not, it's just a missing token, not expiration
+        const token = localStorage.getItem('admin_token');
+        
+        // Only clear and redirect if we had a token (meaning it expired)
+        // If no token, user might be accessing a public page
+        if (token && token !== 'null' && token !== 'undefined') {
+          // Try to verify token one more time before clearing
+          try {
+            await authApi.verify();
+            // If verify succeeds, it was a temporary network issue, don't clear
+            return Promise.reject(error);
+          } catch (verifyError) {
+            // Token is actually invalid, clear it
+            localStorage.removeItem('admin_token');
+            // Only redirect if we're on a protected admin page
+            if (path !== '/admin/login') {
+              window.location.href = '/admin/login';
+            }
+          }
+        }
       }
     }
     return Promise.reject(error);
@@ -170,6 +189,89 @@ export const eventOwnerApi = {
     axios.delete(`${API_BASE_URL}/api/event-owner/${token}/payouts/${payoutId}`),
 };
 
+// Ticketing API
+export const ticketingApi = {
+  // Ticket Types
+  getTicketTypes: (eventId: string) => api.get(`/ticketing/events/${eventId}/tickets/admin`),
+  createTicketType: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/tickets`, data),
+  updateTicketType: (eventId: string, ticketId: string, data: any) => api.put(`/ticketing/events/${eventId}/tickets/${ticketId}`, data),
+  deleteTicketType: (eventId: string, ticketId: string) => api.delete(`/ticketing/events/${eventId}/tickets/${ticketId}`),
+  
+  // Payment Gateway
+  getPaymentGateway: (eventId: string) => api.get(`/ticketing/events/${eventId}/payment`),
+  updatePaymentGateway: (eventId: string, data: any) => api.put(`/ticketing/events/${eventId}/payment`, data),
+  
+  // Custom Fields
+  getCustomFields: (eventId: string) => api.get(`/ticketing/events/${eventId}/fields`),
+  createCustomField: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/fields`, data),
+  updateCustomField: (eventId: string, fieldId: string, data: any) => api.put(`/ticketing/events/${eventId}/fields/${fieldId}`, data),
+  deleteCustomField: (eventId: string, fieldId: string) => api.delete(`/ticketing/events/${eventId}/fields/${fieldId}`),
+};
+
+// Promo Codes API
+export const promoCodeApi = {
+  getPromoCodes: (eventId: string) => api.get(`/promo-codes/events/${eventId}`),
+  createPromoCode: (eventId: string, data: any) => api.post(`/promo-codes/events/${eventId}`, data),
+  updatePromoCode: (id: string, data: any) => api.put(`/promo-codes/${id}`, data),
+  deletePromoCode: (id: string) => api.delete(`/promo-codes/${id}`),
+  validate: (data: { code: string; eventId: string; ticketTypeId?: string; amount: number }) =>
+    api.post('/promo-codes/validate', data),
+};
+
+// Owners API
+export const ownersApi = {
+  list: (params?: { search?: string; isActive?: boolean }) => api.get('/owners', { params }),
+  get: (id: string) => api.get(`/owners/${id}`),
+  create: (data: { name: string; email: string; phone?: string; company?: string }) => api.post('/owners', data),
+  update: (id: string, data: { name?: string; email?: string; phone?: string; company?: string; isActive?: boolean }) => 
+    api.put(`/owners/${id}`, data),
+  delete: (id: string) => api.delete(`/owners/${id}`),
+};
+
+// Owner Authentication API
+export const ownerAuthApi = {
+  register: (data: { name: string; email: string; password: string; phone?: string; company?: string }) => 
+    axios.post(`${API_BASE_URL}/api/owner-auth/register`, data),
+  login: (email: string, password: string) => 
+    axios.post(`${API_BASE_URL}/api/owner-auth/login`, { email, password }),
+  getMe: () => axios.get(`${API_BASE_URL}/api/owner-auth/me`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+    },
+  }),
+  changePassword: (currentPassword: string, newPassword: string) => 
+    axios.post(`${API_BASE_URL}/api/owner-auth/change-password`, { currentPassword, newPassword }, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+      },
+    }),
+  updateProfile: (data: { name?: string; email?: string; phone?: string; company?: string }) => 
+    axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+      },
+    }),
+};
+
+// Owner Dashboard API
+export const ownerDashboardApi = {
+  getEvents: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+    },
+  }),
+  getEvent: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+    },
+  }),
+  getStats: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/stats`, {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+    },
+  }),
+};
+
 
 // System Settings API (admin only)
 export const settingsApi = {
@@ -182,6 +284,7 @@ export const settingsApi = {
 
 // Admin API
 export const adminApi = {
+  getSales: (params?: any) => api.get('/admin/sales', { params }),
   // Dashboard
   getDashboard: () => api.get('/admin/dashboard'),
   
@@ -190,13 +293,15 @@ export const adminApi = {
     api.get('/admin/audit-logs', { params }),
   
   // Payout Management
-  getPayouts: (status?: string, eventId?: string, page?: number, limit?: number) =>
-    api.get('/admin/payouts', { params: { status, eventId, page, limit } }),
+  getPayouts: (params?: { status?: string; eventId?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) =>
+    api.get('/admin/payouts', { params }),
   getPayoutDetails: (id: string) => api.get(`/admin/payouts/${id}`),
-  processPayout: (id: string, transactionRef?: string, notes?: string) =>
-    api.post(`/admin/payouts/${id}/process`, { transactionRef, notes }),
+  processPayout: (id: string, transactionRef?: string, notes?: string, processedAt?: string) =>
+    api.post(`/admin/payouts/${id}/process`, { transactionRef, notes, processedAt }),
   rejectPayout: (id: string, reason: string) =>
     api.post(`/admin/payouts/${id}/reject`, { reason }),
+  getPayoutAnalytics: (params?: { startDate?: string; endDate?: string; eventId?: string }) =>
+    api.get('/admin/payouts/analytics', { params }),
   
   // Wallet Management
   getWallets: () => api.get('/admin/wallets'),

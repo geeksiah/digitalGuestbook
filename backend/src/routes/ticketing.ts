@@ -225,15 +225,48 @@ router.delete('/events/:eventId/tickets/:ticketId', authenticateAdmin, asyncHand
 // ============================================
 
 const paymentGatewaySchema = z.object({
-  gateway: z.enum(['stripe', 'paystack', 'flutterwave', 'paypal', 'free']),
+  gateway: z.enum([
+    'stripe', 
+    'paystack', 
+    'flutterwave', 
+    'paypal', 
+    'mtn_momo', 
+    'telecel_cash', 
+    'airteltigo_cash', 
+    'custom',
+    'free'
+  ]),
   isLive: z.boolean().default(false),
+  // Stripe
   stripePublicKey: z.string().optional(),
   stripeSecretKey: z.string().optional(),
   stripeWebhookSecret: z.string().optional(),
+  // Paystack
   paystackPublicKey: z.string().optional(),
   paystackSecretKey: z.string().optional(),
+  // Flutterwave
   flutterwavePublicKey: z.string().optional(),
   flutterwaveSecretKey: z.string().optional(),
+  // MTN MoMo
+  mtnMomoApiKey: z.string().optional(),
+  mtnMomoApiSecret: z.string().optional(),
+  mtnMomoSubscriptionKey: z.string().optional(),
+  mtnMomoEnvironment: z.enum(['sandbox', 'production']).optional(),
+  // Telecel Cash
+  telecelCashApiKey: z.string().optional(),
+  telecelCashApiSecret: z.string().optional(),
+  telecelCashMerchantId: z.string().optional(),
+  // Airteltigo Cash
+  airteltigoCashApiKey: z.string().optional(),
+  airteltigoCashApiSecret: z.string().optional(),
+  airteltigoCashMerchantId: z.string().optional(),
+  // Custom Gateway
+  customGatewayName: z.string().optional(),
+  customGatewayApiUrl: z.string().optional(),
+  customGatewayApiKey: z.string().optional(),
+  customGatewayApiSecret: z.string().optional(),
+  customGatewayConfig: z.string().optional(), // JSON string for additional config
+  // Common
   currency: z.string().default('USD'),
   successUrl: z.string().optional(),
   cancelUrl: z.string().optional(),
@@ -256,6 +289,10 @@ router.get('/events/:eventId/payment', authenticateAdmin, asyncHandler(async (re
     if (gateway.stripeWebhookSecret) gateway.stripeWebhookSecret = '****';
     if (gateway.paystackSecretKey) gateway.paystackSecretKey = '****' + gateway.paystackSecretKey.slice(-4);
     if (gateway.flutterwaveSecretKey) gateway.flutterwaveSecretKey = '****' + gateway.flutterwaveSecretKey.slice(-4);
+    if (gateway.mtnMomoApiSecret) gateway.mtnMomoApiSecret = '****' + gateway.mtnMomoApiSecret.slice(-4);
+    if (gateway.telecelCashApiSecret) gateway.telecelCashApiSecret = '****' + gateway.telecelCashApiSecret.slice(-4);
+    if (gateway.airteltigoCashApiSecret) gateway.airteltigoCashApiSecret = '****' + gateway.airteltigoCashApiSecret.slice(-4);
+    if (gateway.customGatewayApiSecret) gateway.customGatewayApiSecret = '****' + gateway.customGatewayApiSecret.slice(-4);
   }
 
   res.json({ gateway });
@@ -273,18 +310,15 @@ router.put('/events/:eventId/payment', authenticateAdmin, asyncHandler(async (re
   const existing = await prisma.paymentGateway.findUnique({ where: { eventId } });
   
   const cleanData = { ...data };
-  if (cleanData.stripeSecretKey?.startsWith('****')) {
-    delete cleanData.stripeSecretKey;
-  }
-  if (cleanData.stripeWebhookSecret === '****') {
-    delete cleanData.stripeWebhookSecret;
-  }
-  if (cleanData.paystackSecretKey?.startsWith('****')) {
-    delete cleanData.paystackSecretKey;
-  }
-  if (cleanData.flutterwaveSecretKey?.startsWith('****')) {
-    delete cleanData.flutterwaveSecretKey;
-  }
+  // Don't overwrite masked secret values
+  if (cleanData.stripeSecretKey?.startsWith('****')) delete cleanData.stripeSecretKey;
+  if (cleanData.stripeWebhookSecret === '****') delete cleanData.stripeWebhookSecret;
+  if (cleanData.paystackSecretKey?.startsWith('****')) delete cleanData.paystackSecretKey;
+  if (cleanData.flutterwaveSecretKey?.startsWith('****')) delete cleanData.flutterwaveSecretKey;
+  if (cleanData.mtnMomoApiSecret?.startsWith('****')) delete cleanData.mtnMomoApiSecret;
+  if (cleanData.telecelCashApiSecret?.startsWith('****')) delete cleanData.telecelCashApiSecret;
+  if (cleanData.airteltigoCashApiSecret?.startsWith('****')) delete cleanData.airteltigoCashApiSecret;
+  if (cleanData.customGatewayApiSecret?.startsWith('****')) delete cleanData.customGatewayApiSecret;
 
   const gateway = await prisma.paymentGateway.upsert({
     where: { eventId },
@@ -297,6 +331,10 @@ router.put('/events/:eventId/payment', authenticateAdmin, asyncHandler(async (re
   if (gateway.stripeWebhookSecret) gateway.stripeWebhookSecret = '****';
   if (gateway.paystackSecretKey) gateway.paystackSecretKey = '****' + gateway.paystackSecretKey.slice(-4);
   if (gateway.flutterwaveSecretKey) gateway.flutterwaveSecretKey = '****' + gateway.flutterwaveSecretKey.slice(-4);
+  if (gateway.mtnMomoApiSecret) gateway.mtnMomoApiSecret = '****' + gateway.mtnMomoApiSecret.slice(-4);
+  if (gateway.telecelCashApiSecret) gateway.telecelCashApiSecret = '****' + gateway.telecelCashApiSecret.slice(-4);
+  if (gateway.airteltigoCashApiSecret) gateway.airteltigoCashApiSecret = '****' + gateway.airteltigoCashApiSecret.slice(-4);
+  if (gateway.customGatewayApiSecret) gateway.customGatewayApiSecret = '****' + gateway.customGatewayApiSecret.slice(-4);
 
   res.json({ gateway });
 }));

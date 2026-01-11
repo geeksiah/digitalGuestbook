@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, templatesApi } from '@/lib/api';
+import { eventsApi, templatesApi, ownersApi } from '@/lib/api';
 import { slugify, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -15,11 +15,31 @@ interface Template {
   description: string | null;
 }
 
+interface Owner {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  isActive: boolean;
+}
+
 export default function NewEventPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [owners, setOwners] = useState<Owner[]>([]);
+  const [loadingOwners, setLoadingOwners] = useState(true);
+  const [ownerMode, setOwnerMode] = useState<'select' | 'create'>('select');
+  const [showCreateOwner, setShowCreateOwner] = useState(false);
+  const [newOwnerData, setNewOwnerData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+  });
+  const [creatingOwner, setCreatingOwner] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -31,6 +51,7 @@ export default function NewEventPage() {
     endTime: '',
     timezone: 'UTC',
     venue: '',
+    ownerId: '',
     invitationOnly: true,
     invitationEnabled: true,
     rsvpEnabled: true,
@@ -51,7 +72,20 @@ export default function NewEventPage() {
 
   useEffect(() => {
     fetchTemplates();
+    fetchOwners();
   }, []);
+
+  const fetchOwners = async () => {
+    try {
+      setLoadingOwners(true);
+      const response = await ownersApi.list({ isActive: true });
+      setOwners(response.data.owners);
+    } catch (error) {
+      toast.error('Failed to load owners');
+    } finally {
+      setLoadingOwners(false);
+    }
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -87,6 +121,36 @@ export default function NewEventPage() {
     });
   };
 
+  const handleCreateOwner = async () => {
+    if (!newOwnerData.name || !newOwnerData.email) {
+      toast.error('Name and email are required');
+      return;
+    }
+
+    setCreatingOwner(true);
+    try {
+      const response = await ownersApi.create({
+        name: newOwnerData.name,
+        email: newOwnerData.email,
+        phone: newOwnerData.phone || undefined,
+        company: newOwnerData.company || undefined,
+      });
+      
+      // Add to owners list and select it
+      const newOwner = response.data.owner;
+      setOwners([...owners, newOwner]);
+      setFormData({ ...formData, ownerId: newOwner.id });
+      setShowCreateOwner(false);
+      setOwnerMode('select');
+      setNewOwnerData({ name: '', email: '', phone: '', company: '' });
+      toast.success('Owner created and selected');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to create owner');
+    } finally {
+      setCreatingOwner(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -105,6 +169,7 @@ export default function NewEventPage() {
         endDate: endDateTime?.toISOString(),
         timezone: formData.timezone,
         venue: formData.venue || undefined,
+        ownerId: formData.ownerId || undefined,
         invitationOnly: formData.invitationOnly,
         invitationEnabled: formData.invitationEnabled,
         rsvpEnabled: formData.rsvpEnabled,
@@ -323,6 +388,139 @@ export default function NewEventPage() {
                 <option value="Africa/Accra">Ghana (GMT)</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* Event Owner */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-navy-900 mb-4">Event Owner</h2>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setOwnerMode('select');
+                  setShowCreateOwner(false);
+                }}
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  ownerMode === 'select'
+                    ? 'bg-navy-900 text-white'
+                    : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
+                )}
+              >
+                Select Existing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOwnerMode('create');
+                  setShowCreateOwner(true);
+                }}
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  ownerMode === 'create'
+                    ? 'bg-navy-900 text-white'
+                    : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
+                )}
+              >
+                Create New
+              </button>
+            </div>
+
+            {ownerMode === 'select' && (
+              <div>
+                <label htmlFor="ownerId" className="label">Owner (Optional)</label>
+                <select
+                  id="ownerId"
+                  className="input"
+                  value={formData.ownerId}
+                  onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+                >
+                  <option value="">-- No owner assigned --</option>
+                  {loadingOwners ? (
+                    <option disabled>Loading owners...</option>
+                  ) : (
+                    owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name} {owner.company ? `(${owner.company})` : ''} - {owner.email}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <p className="text-sm text-surface-500 mt-1">
+                  Select an existing owner/client or create a new one
+                </p>
+              </div>
+            )}
+
+            {ownerMode === 'create' && showCreateOwner && (
+              <div className="p-4 bg-surface-50 rounded-lg border border-surface-200 space-y-4">
+                <div>
+                  <label className="label">Owner Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="input"
+                    placeholder="John Doe"
+                    value={newOwnerData.name}
+                    onChange={(e) => setNewOwnerData({ ...newOwnerData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Email *</label>
+                  <input
+                    type="email"
+                    required
+                    className="input"
+                    placeholder="john@example.com"
+                    value={newOwnerData.email}
+                    onChange={(e) => setNewOwnerData({ ...newOwnerData, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Phone</label>
+                  <input
+                    type="tel"
+                    className="input"
+                    placeholder="+1 (555) 123-4567"
+                    value={newOwnerData.phone}
+                    onChange={(e) => setNewOwnerData({ ...newOwnerData, phone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Company</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Acme Corporation"
+                    value={newOwnerData.company}
+                    onChange={(e) => setNewOwnerData({ ...newOwnerData, company: e.target.value })}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCreateOwner}
+                    disabled={creatingOwner || !newOwnerData.name || !newOwnerData.email}
+                    className="btn-primary flex-1"
+                  >
+                    {creatingOwner ? 'Creating...' : 'Create & Select Owner'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateOwner(false);
+                      setOwnerMode('select');
+                      setNewOwnerData({ name: '', email: '', phone: '', company: '' });
+                    }}
+                    className="btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

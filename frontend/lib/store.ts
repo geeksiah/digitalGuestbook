@@ -65,3 +65,43 @@ export const useCoupleAuthStore = create<CoupleAuthState>()(
     }
   )
 );
+
+// Owner Account Auth Store (for owner dashboard)
+interface Owner {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  company?: string | null;
+  isActive: boolean;
+}
+
+interface OwnerAuthState {
+  token: string | null;
+  owner: Owner | null;
+  isAuthenticated: boolean;
+  setAuth: (token: string, owner: Owner) => void;
+  clearAuth: () => void;
+}
+
+export const useOwnerAuthStore = create<OwnerAuthState>()(
+  persist(
+    (set) => ({
+      token: null,
+      owner: null,
+      isAuthenticated: false,
+      setAuth: (token, owner) => {
+        localStorage.setItem('owner_token', token);
+        set({ token, owner, isAuthenticated: true });
+      },
+      clearAuth: () => {
+        localStorage.removeItem('owner_token');
+        set({ token: null, owner: null, isAuthenticated: false });
+      },
+    }),
+    {
+      name: 'owner-auth-storage',
+      partialize: (state) => ({ token: state.token, owner: state.owner }),
+    }
+  )
+);

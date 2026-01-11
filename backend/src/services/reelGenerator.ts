@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import prisma from '../utils/prisma.js';
+import { downloadFile, uploadFileFromPath, BUCKETS } from './supabaseStorage.js';
 
 interface EventDetails {
   name: string;
@@ -210,40 +211,31 @@ const processReel = async (
   const videoList: { path: string; duration: number }[] = [];
   let totalDuration = 0;
 
+  // Track temporary video files for cleanup
+  const tempVideoPaths: string[] = [];
+
   for (let i = 0; i < videos.length; i++) {
     const video = videos[i];
-    
-    // Normalize filePath - it's stored as `/uploads/media/${eventId}/${filename}`
     let videoPath: string | null = null;
     
-    // Try primary path (from stored filePath)
-    const storedPath = video.filePath.startsWith('/') ? video.filePath.slice(1) : video.filePath;
-    const primaryPath = path.join(baseDir, storedPath);
-    if (fs.existsSync(primaryPath)) {
-      videoPath = primaryPath;
-    } else {
-      // Try alternative paths
-      const altPaths = [
-        path.join(baseDir, 'uploads', 'media', eventId, video.fileName || path.basename(storedPath)),
-        path.join(baseDir, 'uploads', 'media', path.basename(storedPath)),
-        path.join(baseDir, storedPath.replace(/^uploads\/media\//, 'uploads/media/')),
-      ];
+    try {
+      // Download video from Supabase Storage to temporary file
+      const tempDir = process.env.TMPDIR || '/tmp';
+      const tempVideoPath = path.join(tempDir, `reel_${jobId}_${i}_${Date.now()}.mp4`);
+      console.log(`[ReelGenerator] [${jobId}] Downloading video ${i + 1}/${videos.length} from Supabase: ${video.filePath}`);
       
-      for (const altPath of altPaths) {
-        if (fs.existsSync(altPath)) {
-          videoPath = altPath;
-          console.log(`[ReelGenerator] [${jobId}] Found video at alternative path: ${altPath}`);
-          break;
-        }
-      }
+      const videoBuffer = await downloadFile(BUCKETS.MEDIA, video.filePath);
+      fs.writeFileSync(tempVideoPath, videoBuffer);
+      videoPath = tempVideoPath;
+      tempVideoPaths.push(tempVideoPath);
       
-      if (!videoPath) {
-        console.error(`[ReelGenerator] [${jobId}] Video file not found - stored: ${video.filePath}, tried: ${primaryPath}`);
-        continue;
-      }
+      console.log(`[ReelGenerator] [${jobId}] Downloaded video to: ${tempVideoPath}`);
+    } catch (error: any) {
+      console.error(`[ReelGenerator] [${jobId}] Failed to download video ${video.filePath}:`, error.message);
+      continue; // Skip this video and continue with next
     }
 
-    if (!videoPath) {
+    if (!videoPath || !fs.existsSync(videoPath)) {
       await updateJobProgress(jobId, 15 + Math.floor((i / videos.length) * 15));
       continue;
     }
@@ -260,8 +252,12 @@ const processReel = async (
 
     await updateJobProgress(jobId, 15 + Math.floor((i / videos.length) * 15));
   }
-
+  
   if (videoList.length === 0) {
+    // Cleanup temp files before returning
+    for (const tempPath of tempVideoPaths) {
+      try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+    }
     await updateJobStatus(jobId, 'failed', { errorMessage: 'No valid video files found' });
     return;
   }
@@ -324,6 +320,8 @@ const processReel = async (
   // Run ffmpeg concatenation with crossfade between clips
   // Using a more sophisticated filter for professional look
   await new Promise<void>((resolve, reject) => {
+    // Capture tempVideoPaths in closure for cleanup
+    const tempFilesToCleanup = [...tempVideoPaths];
     const ffmpegArgs = [
       '-y',
       '-f', 'concat',
@@ -394,6 +392,10 @@ const processReel = async (
       try { fs.unlinkSync(concatFile); } catch {}
       try { if (eventDetails && fs.existsSync(introPath)) fs.unlinkSync(introPath); } catch {}
       try { if (eventDetails && fs.existsSync(outroPath)) fs.unlinkSync(outroPath); } catch {}
+      // Cleanup temporary video files
+      for (const tempPath of tempFilesToCleanup) {
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+      }
 
       if (code === 0) {
         // Update progress to 95% when FFmpeg completes successfully
@@ -416,6 +418,10 @@ const processReel = async (
       try { fs.unlinkSync(concatFile); } catch {}
       try { if (eventDetails) fs.unlinkSync(introPath); } catch {}
       try { if (eventDetails) fs.unlinkSync(outroPath); } catch {}
+      // Cleanup temporary video files
+      for (const tempPath of tempFilesToCleanup) {
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+      }
       await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg error: ${error.message}` });
       reject(error);
     });
@@ -433,7 +439,47 @@ const processReel = async (
 
   // Get file stats
   const stats = fs.statSync(outputPath);
-  const reelOutputPath = `/generated/reels/${eventId}/${path.basename(outputPath)}`;
+  
+  // Upload to Supabase Storage
+  const reelFileName = `${outputName}-${Date.now()}.mp4`;
+  const reelStoragePath = `${eventId}/${reelFileName}`;
+  
+  console.log(`[ReelGenerator] [${jobId}] Uploading reel to Supabase: ${reelStoragePath}`);
+  
+  // Update progress to 98% - uploading to Supabase
+  await updateJobProgress(jobId, 98).catch(() => {});
+  
+  let supabasePath: string;
+  try {
+    const { path: uploadedPath } = await uploadFileFromPath(
+      BUCKETS.REELS,
+      reelStoragePath,
+      outputPath,
+      {
+        contentType: 'video/mp4',
+        metadata: {
+          eventId,
+          jobId,
+          videoCount: videoList.length.toString(),
+          duration: totalDuration.toString(),
+        },
+      }
+    );
+    supabasePath = uploadedPath;
+    console.log(`[ReelGenerator] [${jobId}] Reel uploaded to Supabase: ${uploadedPath}`);
+    
+    // Cleanup local file after successful upload
+    try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
+  } catch (uploadError: any) {
+    console.error(`[ReelGenerator] [${jobId}] Failed to upload reel to Supabase:`, uploadError.message);
+    // Keep local path if Supabase upload fails
+    supabasePath = `/generated/reels/${eventId}/${path.basename(outputPath)}`;
+  }
+  
+  // Cleanup temporary video files
+  for (const tempPath of tempVideoPaths) {
+    try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+  }
 
   // Update progress to 99% - saving to database
   await updateJobProgress(jobId, 99).catch(() => {});
@@ -441,7 +487,7 @@ const processReel = async (
   // Success - update database
   try {
     await updateJobStatus(jobId, 'completed', {
-      outputPath: reelOutputPath,
+      outputPath: supabasePath,
       outputSize: stats.size,
       duration: Math.round(totalDuration),
     });
@@ -449,7 +495,7 @@ const processReel = async (
     // Update progress to 100%
     await updateJobProgress(jobId, 100);
 
-    console.log(`[ReelGenerator] [${jobId}] Reel generated successfully: ${reelOutputPath} (${(stats.size / 1024 / 1024).toFixed(2)}MB, ${Math.round(totalDuration)}s)`);
+    console.log(`[ReelGenerator] [${jobId}] Reel generated successfully: ${supabasePath} (${(stats.size / 1024 / 1024).toFixed(2)}MB, ${Math.round(totalDuration)}s)`);
   } catch (error) {
     console.error(`[ReelGenerator] [${jobId}] Failed to save job status:`, error);
     await updateJobStatus(jobId, 'failed', { errorMessage: `Failed to save job status: ${(error as Error).message}` });
@@ -466,7 +512,7 @@ const processReel = async (
         jobId,
         videoCount: videoList.length,
         totalDuration,
-        outputPath: reelOutputPath,
+        outputPath: supabasePath,
         hasIntroOutro: !!eventDetails,
       }),
     },

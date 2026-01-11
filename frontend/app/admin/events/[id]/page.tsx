@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
+import TicketsTab from '@/components/tickets/TicketsTab';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -93,7 +94,7 @@ interface CheckIn {
 
 interface Template { id: string; name: string; type: string; isDefault: boolean; }
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'settings';
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'settings';
 
 // SVG Icons
 const Icons = {
@@ -127,6 +128,8 @@ export default function EventDetailPage() {
   const [savingTemplates, setSavingTemplates] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
@@ -221,6 +224,17 @@ export default function EventDetailPage() {
   const fetchRsvps = async () => { try { const p: any = {}; if (rsvpFilter !== 'all') p.status = rsvpFilter; const r = await rsvpApi.list(eventId, p); setRsvps(r.data.rsvps); } catch { toast.error('Failed to load RSVPs'); } };
   const fetchMedia = async () => { try { const r = await mediaApi.list(eventId); setMedia(r.data.media || []); } catch { toast.error('Failed to load media'); } };
   const fetchCheckIns = async () => { try { const r = await checkInApi.list(eventId); setCheckIns(r.data.checkIns || []); } catch { toast.error('Failed to load check-ins'); } };
+  const fetchTickets = async () => {
+    try {
+      setLoadingTickets(true);
+      const r = await ticketingApi.getTicketTypes(eventId);
+      setTickets(r.data.tickets || []);
+    } catch {
+      toast.error('Failed to load tickets');
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
 
   const handlePhaseChange = async (phase: string) => {
     try { await eventsApi.setPhase(eventId, phase, true); toast.success(`Phase: ${getPhaseLabel(phase)}`); fetchEvent(); }
@@ -317,6 +331,7 @@ export default function EventDetailPage() {
     { id: 'checkin', label: 'Check-In', count: event._count.checkIns },
     { id: 'media', label: 'Media', count: event._count.mediaAssets },
     { id: 'templates', label: 'Templates' },
+    { id: 'tickets', label: 'Tickets' },
     { id: 'settings', label: 'Settings' },
   ];
 
@@ -578,6 +593,17 @@ export default function EventDetailPage() {
             <button onClick={handleSaveTemplates} disabled={savingTemplates} className="btn-primary">{savingTemplates ? 'Saving...' : 'Save Changes'}</button>
           </div>
         </div>
+      )}
+
+      {/* Tickets */}
+      {activeTab === 'tickets' && (
+        <TicketsTab
+          eventId={eventId}
+          event={event}
+          tickets={tickets}
+          loading={loadingTickets}
+          onRefresh={fetchTickets}
+        />
       )}
 
       {/* Settings */}

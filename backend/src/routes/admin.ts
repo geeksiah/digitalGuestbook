@@ -5,35 +5,30 @@ import { authenticateAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
-// All routes require admin authentication
-router.use(authenticateAdmin);
+// ============================================
+// DASHBOARD STATS
+// ============================================
 
 /**
- * GET /api/admin/dashboard
- * Get admin dashboard stats
+ * GET /api/admin/dashboard/stats
+ * Get dashboard statistics
  */
-router.get('/dashboard', asyncHandler(async (req, res) => {
+router.get('/dashboard/stats', authenticateAdmin, asyncHandler(async (req, res) => {
   const [
     totalEvents,
     activeEvents,
     totalRsvps,
-    pendingRsvps,
-    totalMedia,
+    totalPayouts,
+    totalPayoutAmount,
   ] = await Promise.all([
-    prisma.event.count({ where: { isArchived: false } }),
-    prisma.event.count({ 
-      where: { 
-        isArchived: false,
-        date: { lte: new Date() },
-        OR: [
-          { endDate: { gte: new Date() } },
-          { endDate: null },
-        ],
-      } 
+    prisma.event.count(),
+    prisma.event.count({ where: { currentPhase: { in: ['PLANNING', 'ACTIVE'] } } }),
+    prisma.rsvp.count(),
+    prisma.payoutRequest.count({ where: { status: 'PENDING' } }),
+    prisma.payoutRequest.aggregate({
+      where: { status: 'PENDING' },
+      _sum: { amount: true },
     }),
-    prisma.rSVP.count(),
-    prisma.rSVP.count({ where: { status: 'PENDING' } }),
-    prisma.mediaAsset.count(),
   ]);
 
   res.json({
@@ -41,72 +36,63 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       totalEvents,
       activeEvents,
       totalRsvps,
-      pendingRsvps,
-      totalMedia,
+      totalPendingPayouts: totalPayouts,
+      totalPendingPayoutAmount: totalPayoutAmount._sum.amount || 0,
     },
   });
 }));
 
+// ============================================
+// SALES MANAGEMENT
+// ============================================
+
 /**
- * GET /api/admin/audit-logs
- * Get audit logs with pagination
+ * GET /api/admin/sales
+ * Get ticket sales across all events
  */
-router.get('/audit-logs', asyncHandler(async (req, res) => {
-  const { page = '1', limit = '50', eventId, action } = req.query;
+router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { eventId, status, startDate, endDate, page = 1, limit = 50 } = req.query;
   
-  const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
-  const take = parseInt(limit as string);
-
-  const where: any = {};
+  const where: any = {
+    ticketType: { not: null },
+    amountPaid: { not: null },
+  };
+  
   if (eventId) where.eventId = eventId;
-  if (action) where.action = action;
-
-  const [logs, total] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take,
-      include: {
-        event: { select: { name: true, slug: true } },
-        admin: { select: { name: true, email: true } },
-      },
-    }),
-    prisma.auditLog.count({ where }),
-  ]);
-
-  res.json({
-    logs,
-    pagination: {
-      page: parseInt(page as string),
-      limit: parseInt(limit as string),
-      total,
-      pages: Math.ceil(total / take),
-    },
-  });
-}));
-
-/**
- * GET /api/admin/admins
- * List all admins (superadmin only)
- */
-router.get('/admins', asyncHandler(async (req, res) => {
-  if (req.admin?.role !== 'superadmin') {
-    throw new AppError('Access denied', 403);
+  if (status) where.paymentStatus = status;
+  if (startDate) where.submittedAt = { gte: new Date(startDate as string) };
+  if (endDate) {
+    where.submittedAt = where.submittedAt || {};
+    where.submittedAt.lte = new Date(endDate as string);
   }
-
-  const admins = await prisma.admin.findMany({
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      createdAt: true,
+  
+  const [rsvps, total] = await Promise.all([
+    prisma.rsvp.findMany({
+      where,
+      include: {
+        event: { select: { id: true, name: true, slug: true } },
+        invitation: { select: { accessCode: true } },
+      },
+      orderBy: { submittedAt: 'desc' },
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
+    }),
+    prisma.rsvp.count({ where }),
+  ]);
+  
+  const sales = rsvps.filter(r => r.ticketType && r.amountPaid);
+  const stats = {
+    totalSales: sales.length,
+    totalRevenue: sales.reduce((sum, s) => sum + (s.amountPaid || 0), 0),
+    byStatus: {
+      PAID: sales.filter(s => s.paymentStatus === 'PAID').length,
+      PENDING: sales.filter(s => s.paymentStatus === 'PENDING').length,
+      FAILED: sales.filter(s => s.paymentStatus === 'FAILED').length,
+      REFUNDED: sales.filter(s => s.paymentStatus === 'REFUNDED').length,
     },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  res.json({ admins });
+  };
+  
+  res.json({ sales, stats, pagination: { page: Number(page), limit: Number(limit), total } });
 }));
 
 // ============================================
@@ -115,77 +101,85 @@ router.get('/admins', asyncHandler(async (req, res) => {
 
 /**
  * GET /api/admin/payouts
- * Get all payout requests with filtering
+ * Get all payout requests with filtering and analytics
  */
-router.get('/payouts', asyncHandler(async (req, res) => {
-  const { status, eventId, page = '1', limit = '20' } = req.query;
-  
-  const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
-  const take = parseInt(limit as string);
+router.get('/payouts', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { status, eventId, startDate, endDate, page = 1, limit = 50 } = req.query;
 
   const where: any = {};
   if (status) where.status = status;
   if (eventId) where.eventId = eventId;
-
-  const [payouts, total] = await Promise.all([
+  if (startDate) where.createdAt = { ...where.createdAt, gte: new Date(startDate as string) };
+  if (endDate) {
+    where.createdAt = where.createdAt || {};
+    where.createdAt.lte = new Date(endDate as string);
+  }
+  
+  const [payouts, total, stats] = await Promise.all([
     prisma.payoutRequest.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take,
       include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
+        event: { 
+          select: { 
+            id: true, 
+            name: true, 
             slug: true,
             ownerName: true,
             ownerEmail: true,
-          },
+          } 
         },
       },
+      orderBy: { createdAt: 'desc' },
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     }),
     prisma.payoutRequest.count({ where }),
-  ]);
-
-  // Get summary stats
-  const [pendingCount, pendingAmount, processedToday] = await Promise.all([
-    prisma.payoutRequest.count({ where: { status: 'pending' } }),
     prisma.payoutRequest.aggregate({
-      where: { status: 'pending' },
-      _sum: { requestedAmount: true },
-    }),
-    prisma.payoutRequest.count({
-      where: {
-        status: 'completed',
-        processedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-      },
+      where: { status: 'PENDING' },
+      _sum: { amount: true },
+      _count: true,
     }),
   ]);
-
-  res.json({
-    payouts,
-    summary: {
-      pendingCount,
-      pendingAmount: pendingAmount._sum.requestedAmount || 0,
-      processedToday,
+  
+  // Calculate additional stats
+  const allPayouts = await prisma.payoutRequest.findMany({ where });
+  const analytics = {
+    totalPending: allPayouts.filter(p => p.status === 'PENDING').length,
+    totalPendingAmount: allPayouts
+      .filter(p => p.status === 'PENDING')
+      .reduce((sum, p) => sum + (p.amount || 0), 0),
+    totalProcessed: allPayouts.filter(p => p.status === 'PROCESSED').length,
+    totalProcessedAmount: allPayouts
+      .filter(p => p.status === 'PROCESSED')
+      .reduce((sum, p) => sum + (p.amount || 0), 0),
+    totalRejected: allPayouts.filter(p => p.status === 'REJECTED').length,
+    totalRejectedAmount: allPayouts
+      .filter(p => p.status === 'REJECTED')
+      .reduce((sum, p) => sum + (p.amount || 0), 0),
+    byStatus: {
+      PENDING: allPayouts.filter(p => p.status === 'PENDING').length,
+      PROCESSED: allPayouts.filter(p => p.status === 'PROCESSED').length,
+      REJECTED: allPayouts.filter(p => p.status === 'REJECTED').length,
+      CANCELLED: allPayouts.filter(p => p.status === 'CANCELLED').length,
     },
-    pagination: {
-      page: parseInt(page as string),
-      limit: parseInt(limit as string),
-      total,
-      pages: Math.ceil(total / take),
-    },
+  };
+  
+  res.json({ 
+    payouts, 
+    analytics,
+    pagination: { page: Number(page), limit: Number(limit), total } 
   });
 }));
 
 /**
  * GET /api/admin/payouts/:id
- * Get payout details with wallet info
+ * Get payout request details
  */
-router.get('/payouts/:id', asyncHandler(async (req, res) => {
+router.get('/payouts/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
   const payout = await prisma.payoutRequest.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: {
       event: {
         select: {
@@ -195,160 +189,44 @@ router.get('/payouts/:id', asyncHandler(async (req, res) => {
           ownerName: true,
           ownerEmail: true,
           ownerPhone: true,
-          payoutWallet: true,
         },
       },
     },
   });
-
+  
   if (!payout) {
     throw new AppError('Payout request not found', 404);
   }
-
-  // Get event balance
-  const transactions = await prisma.transaction.findMany({
-    where: { eventId: payout.eventId },
-  });
-
-  let availableBalance = 0;
-  for (const tx of transactions) {
-    if (tx.type === 'ticket_sale' && tx.status === 'completed') {
-      availableBalance += tx.netAmount;
-    } else if (tx.type === 'refund') {
-      availableBalance -= Math.abs(tx.netAmount);
-    } else if (tx.type === 'payout') {
-      availableBalance -= Math.abs(tx.netAmount);
-    }
-  }
-
-  res.json({ payout, availableBalance });
+  
+  res.json({ payout });
 }));
 
 /**
  * POST /api/admin/payouts/:id/process
- * Process (approve) a payout request
+ * Process a payout request
  */
-router.post('/payouts/:id/process', asyncHandler(async (req, res) => {
-  const { transactionRef, notes } = req.body;
-
-  const payout = await prisma.payoutRequest.findUnique({
-    where: { id: req.params.id },
-    include: { event: { include: { payoutWallet: true } } },
-  });
-
+router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { transactionRef, notes, processedAt } = req.body;
+  
+  const payout = await prisma.payoutRequest.findUnique({ where: { id } });
   if (!payout) {
     throw new AppError('Payout request not found', 404);
   }
-
-  if (payout.status !== 'pending') {
-    throw new AppError('Payout is not in pending status', 400);
+  
+  if (payout.status !== 'PENDING') {
+    throw new AppError('Only pending payouts can be processed', 400);
   }
-
-  // Update payout status
-  const updatedPayout = await prisma.payoutRequest.update({
-    where: { id: req.params.id },
+  
+  const updated = await prisma.payoutRequest.update({
+    where: { id },
     data: {
-      status: 'completed',
-      processedAt: new Date(),
-      processedBy: req.admin?.id,
-      transactionRef,
-      notes: notes || payout.notes,
+      status: 'PROCESSED',
+      processedAt: processedAt ? new Date(processedAt) : new Date(),
+      processedBy: (req as any).adminId,
+      transactionRef: transactionRef || null,
+      notes: notes || null,
     },
-  });
-
-  // Create transaction record for the payout
-  await prisma.transaction.create({
-    data: {
-      eventId: payout.eventId,
-      type: 'payout',
-      grossAmount: payout.requestedAmount,
-      platformFee: 0,
-      processingFee: 0,
-      netAmount: -payout.requestedAmount, // Negative because it's an outflow
-      currency: payout.currency,
-      paymentMethod: payout.payoutMethod,
-      paymentRef: transactionRef,
-      status: 'completed',
-    },
-  });
-
-  // Create audit log
-  await prisma.auditLog.create({
-    data: {
-      eventId: payout.eventId,
-      adminId: req.admin?.id,
-      action: 'PAYOUT_PROCESSED',
-      entityType: 'PAYOUT',
-      entityId: payout.id,
-      details: JSON.stringify({
-        amount: payout.requestedAmount,
-        currency: payout.currency,
-        method: payout.payoutMethod,
-        transactionRef,
-      }),
-    },
-  });
-
-  res.json({ payout: updatedPayout, message: 'Payout processed successfully' });
-}));
-
-/**
- * POST /api/admin/payouts/:id/reject
- * Reject a payout request
- */
-router.post('/payouts/:id/reject', asyncHandler(async (req, res) => {
-  const { reason } = req.body;
-
-  if (!reason) {
-    throw new AppError('Rejection reason is required', 400);
-  }
-
-  const payout = await prisma.payoutRequest.findUnique({
-    where: { id: req.params.id },
-  });
-
-  if (!payout) {
-    throw new AppError('Payout request not found', 404);
-  }
-
-  if (payout.status !== 'pending') {
-    throw new AppError('Payout is not in pending status', 400);
-  }
-
-  const updatedPayout = await prisma.payoutRequest.update({
-    where: { id: req.params.id },
-    data: {
-      status: 'rejected',
-      processedAt: new Date(),
-      processedBy: req.admin?.id,
-      rejectionReason: reason,
-    },
-  });
-
-  // Create audit log
-  await prisma.auditLog.create({
-    data: {
-      eventId: payout.eventId,
-      adminId: req.admin?.id,
-      action: 'PAYOUT_REJECTED',
-      entityType: 'PAYOUT',
-      entityId: payout.id,
-      details: JSON.stringify({
-        amount: payout.requestedAmount,
-        reason,
-      }),
-    },
-  });
-
-  res.json({ payout: updatedPayout, message: 'Payout request rejected' });
-}));
-
-/**
- * GET /api/admin/wallets
- * Get all configured payout wallets
- */
-router.get('/wallets', asyncHandler(async (req, res) => {
-  const wallets = await prisma.payoutWallet.findMany({
     include: {
       event: {
         select: {
@@ -357,64 +235,116 @@ router.get('/wallets', asyncHandler(async (req, res) => {
           slug: true,
           ownerName: true,
           ownerEmail: true,
-          rsvpMode: true,
         },
       },
     },
-    orderBy: { createdAt: 'desc' },
   });
-
-  // Mask sensitive data
-  const maskedWallets = wallets.map(w => ({
-    ...w,
-    accountNumber: w.accountNumber ? `****${w.accountNumber.slice(-4)}` : null,
-    routingNumber: w.routingNumber ? `****${w.routingNumber.slice(-4)}` : null,
-    mobileNumber: w.mobileNumber ? `****${w.mobileNumber.slice(-4)}` : null,
-  }));
-
-  res.json({ wallets: maskedWallets });
+  
+  res.json({ payout: updated });
 }));
 
 /**
- * PUT /api/admin/wallets/:id/verify
- * Verify a payout wallet
+ * POST /api/admin/payouts/:id/reject
+ * Reject a payout request
  */
-router.put('/wallets/:id/verify', asyncHandler(async (req, res) => {
-  const wallet = await prisma.payoutWallet.update({
-    where: { id: req.params.id },
+router.post('/payouts/:id/reject', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  const payout = await prisma.payoutRequest.findUnique({ where: { id } });
+  if (!payout) {
+    throw new AppError('Payout request not found', 404);
+  }
+  
+  if (payout.status !== 'PENDING') {
+    throw new AppError('Only pending payouts can be rejected', 400);
+  }
+  
+  const updated = await prisma.payoutRequest.update({
+    where: { id },
     data: {
-      isVerified: true,
-      verifiedAt: new Date(),
+      status: 'REJECTED',
+      processedAt: new Date(),
+      processedBy: (req as any).adminId,
+      notes: reason || null,
+    },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerName: true,
+          ownerEmail: true,
+        },
+      },
     },
   });
-
-  res.json({ wallet, message: 'Wallet verified successfully' });
+  
+  res.json({ payout: updated });
 }));
 
-// ============================================
-// REEL JOB MANAGEMENT
-// ============================================
-
 /**
- * GET /api/admin/reel-jobs
- * Get all reel generation jobs
+ * GET /api/admin/payouts/analytics
+ * Get payout analytics and statistics
  */
-router.get('/reel-jobs', asyncHandler(async (req, res) => {
-  const { status, eventId } = req.query;
-
+router.get('/payouts/analytics', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { startDate, endDate, eventId } = req.query;
+  
   const where: any = {};
-  if (status) where.status = status;
   if (eventId) where.eventId = eventId;
-
-  const jobs = await prisma.reelJob.findMany({
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) where.createdAt.gte = new Date(startDate as string);
+    if (endDate) where.createdAt.lte = new Date(endDate as string);
+  }
+  
+  const payouts = await prisma.payoutRequest.findMany({
     where,
-    orderBy: { createdAt: 'desc' },
     include: {
-      event: { select: { id: true, name: true, slug: true } },
+      event: {
+    select: {
+      id: true,
+      name: true,
+        },
+      },
     },
   });
-
-  res.json({ jobs });
+  
+  const analytics = {
+    total: payouts.length,
+    byStatus: {
+      PENDING: payouts.filter(p => p.status === 'PENDING').length,
+      PROCESSED: payouts.filter(p => p.status === 'PROCESSED').length,
+      REJECTED: payouts.filter(p => p.status === 'REJECTED').length,
+      CANCELLED: payouts.filter(p => p.status === 'CANCELLED').length,
+    },
+    amounts: {
+      totalPending: payouts
+        .filter(p => p.status === 'PENDING')
+        .reduce((sum, p) => sum + (p.amount || 0), 0),
+      totalProcessed: payouts
+        .filter(p => p.status === 'PROCESSED')
+        .reduce((sum, p) => sum + (p.amount || 0), 0),
+      totalRejected: payouts
+        .filter(p => p.status === 'REJECTED')
+        .reduce((sum, p) => sum + (p.amount || 0), 0),
+    },
+    averagePayout: payouts.length > 0
+      ? payouts.reduce((sum, p) => sum + (p.amount || 0), 0) / payouts.length
+      : 0,
+    byEvent: payouts.reduce((acc, p) => {
+      const eventName = p.event?.name || 'Unknown';
+      if (!acc[eventName]) {
+        acc[eventName] = { count: 0, total: 0 };
+      }
+      acc[eventName].count++;
+      acc[eventName].total += p.amount || 0;
+      return acc;
+    }, {} as Record<string, { count: number; total: number }>),
+  };
+  
+  res.json({ analytics });
 }));
 
 export default router;

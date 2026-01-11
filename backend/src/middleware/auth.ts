@@ -15,6 +15,13 @@ declare global {
       };
       event?: any;
       ownerToken?: string;
+      ownerId?: string;
+      owner?: {
+        id: string;
+        email: string;
+        name: string;
+        isActive: boolean;
+      };
     }
   }
 }
@@ -132,6 +139,64 @@ export const authenticateOwner = async (
 
 // Alias for backward compatibility
 export const authenticateCouple = authenticateOwner;
+
+// Owner Account Authentication (JWT-based)
+export const authenticateOwnerAccount = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError('Authentication required', 401);
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    if (!token || token === 'null' || token === 'undefined') {
+      throw new AppError('Invalid authentication token', 401);
+    }
+
+    let decoded: { ownerId: string; iat: number; exp: number };
+    
+    try {
+      decoded = jwt.verify(token, getJwtSecret()) as typeof decoded;
+    } catch (jwtError) {
+      if (jwtError instanceof jwt.TokenExpiredError) {
+        throw new AppError('Session expired. Please sign in again.', 401);
+      }
+      if (jwtError instanceof jwt.JsonWebTokenError) {
+        throw new AppError('Invalid authentication token', 401);
+      }
+      throw new AppError('Authentication failed', 401);
+    }
+
+    const owner = await prisma.owner.findUnique({
+      where: { id: decoded.ownerId },
+      select: { id: true, email: true, name: true, isActive: true },
+    });
+
+    if (!owner) {
+      throw new AppError('Account not found. Please sign in again.', 401);
+    }
+
+    if (!owner.isActive) {
+      throw new AppError('Account is inactive. Please contact support.', 403);
+    }
+
+    (req as any).ownerId = owner.id;
+    (req as any).owner = owner;
+    next();
+  } catch (error) {
+    if (error instanceof AppError) {
+      return next(error);
+    }
+    console.error('[Auth] Owner account authentication error:', error);
+    next(new AppError('Authentication failed', 401));
+  }
+};
 
 // Optional Admin Auth (for routes that work with or without auth)
 export const optionalAdminAuth = async (

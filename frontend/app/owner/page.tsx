@@ -1,0 +1,254 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ownerDashboardApi } from '@/lib/api';
+import { formatDate, cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
+
+interface Event {
+  id: string;
+  name: string;
+  slug: string;
+  date: string;
+  venue: string | null;
+  currentPhase: string;
+  _count: {
+    rsvps: number;
+    invitations: number;
+    checkIns: number;
+    mediaAssets: number;
+    transactions: number;
+  };
+}
+
+interface Stats {
+  totalEvents: number;
+  totalRsvps: number;
+  totalCheckIns: number;
+  totalMedia: number;
+  revenueByCurrency: Record<string, { gross: number; net: number }>;
+}
+
+const Icons = {
+  events: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  rsvps: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  checkins: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  media: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  revenue: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  arrow: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
+};
+
+export default function OwnerDashboardPage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [eventsResponse, statsResponse] = await Promise.all([
+        ownerDashboardApi.getEvents(),
+        ownerDashboardApi.getStats(),
+      ]);
+      setEvents(eventsResponse.data.events);
+      setStats(statsResponse.data.stats);
+    } catch (error) {
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPhaseStyle = (phase: string) => {
+    switch (phase) {
+      case 'LIVE': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'PRE_EVENT': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'POST_EVENT': return 'bg-surface-50 text-surface-700 border-surface-200';
+      default: return 'bg-surface-50 text-surface-700 border-surface-200';
+    }
+  };
+
+  const getPhaseLabel = (phase: string) => {
+    switch (phase) {
+      case 'LIVE': return 'Live';
+      case 'PRE_EVENT': return 'Upcoming';
+      case 'POST_EVENT': return 'Past';
+      default: return phase;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-navy-900">Dashboard</h1>
+        <p className="text-surface-600 mt-1">Overview of your events and statistics</p>
+      </div>
+
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-surface-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-surface-600">Total Events</p>
+                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalEvents}</p>
+              </div>
+              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                {Icons.events}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-surface-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-surface-600">Total RSVPs</p>
+                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalRsvps}</p>
+              </div>
+              <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                {Icons.rsvps}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-surface-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-surface-600">Check-Ins</p>
+                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalCheckIns}</p>
+              </div>
+              <div className="w-12 h-12 rounded-lg bg-violet-100 flex items-center justify-center text-violet-600">
+                {Icons.checkins}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-surface-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-surface-600">Media Assets</p>
+                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalMedia}</p>
+              </div>
+              <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600">
+                {Icons.media}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revenue Summary */}
+      {stats && Object.keys(stats.revenueByCurrency).length > 0 && (
+        <div className="bg-white rounded-lg border border-surface-200 p-6">
+          <h2 className="text-lg font-semibold text-navy-900 mb-4">Revenue Summary</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
+              <div key={currency} className="border border-surface-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-surface-600 mb-2">{currency}</p>
+                <p className="text-xl font-bold text-navy-900">
+                  {new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: currency,
+                  }).format(amounts.net)}
+                </p>
+                <p className="text-xs text-surface-500 mt-1">
+                  Gross: {new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: currency,
+                  }).format(amounts.gross)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Events */}
+      <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-navy-900">Your Events</h2>
+          <Link href="/owner/events" className="text-sm text-navy-600 hover:text-navy-900 font-medium">
+            View All
+          </Link>
+        </div>
+        {events.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
+              {Icons.events}
+            </div>
+            <p className="text-surface-600">No events yet</p>
+            <p className="text-sm text-surface-500 mt-1">Events will appear here once created</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-surface-200">
+            {events.slice(0, 5).map((event) => (
+              <Link
+                key={event.id}
+                href={`/owner/events/${event.id}`}
+                className="block px-6 py-4 hover:bg-surface-50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-base font-semibold text-navy-900">{event.name}</h3>
+                      <span
+                        className={cn(
+                          'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
+                          getPhaseStyle(event.currentPhase)
+                        )}
+                      >
+                        {getPhaseLabel(event.currentPhase)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-surface-600">
+                      <span className="flex items-center">
+                        {Icons.events}
+                        <span className="ml-1">{formatDate(event.date)}</span>
+                      </span>
+                      {event.venue && (
+                        <span className="flex items-center">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          </svg>
+                          <span className="ml-1">{event.venue}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 ml-4">
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-navy-900">{event._count.rsvps}</p>
+                      <p className="text-xs text-surface-500">RSVPs</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-navy-900">{event._count.checkIns}</p>
+                      <p className="text-xs text-surface-500">Check-ins</p>
+                    </div>
+                    <div className="text-surface-400">
+                      {Icons.arrow}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

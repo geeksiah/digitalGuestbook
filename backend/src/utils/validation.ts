@@ -56,6 +56,7 @@ export const updateEventSchema = z.object({
   venue: z.string().optional().nullable(),
   
   // Event Owner Contact Info
+  ownerId: z.string().uuid().optional().nullable(),
   ownerName: z.string().optional().nullable(),
   ownerEmail: z.string().email().optional().nullable().or(z.literal('')),
   ownerPhone: z.string().optional().nullable(),

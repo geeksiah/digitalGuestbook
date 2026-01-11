@@ -19,6 +19,11 @@ const navigation = [
     icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   },
   {
+    name: 'Owners',
+    href: '/admin/owners',
+    icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+  },
+  {
     name: 'Templates',
     href: '/admin/templates',
     icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" /></svg>,
@@ -49,31 +54,61 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
     
-    // Verify token on mount
+    // Verify token on mount and periodically
     const verifyAuth = async () => {
       const token = localStorage.getItem('admin_token');
       if (!token || token === 'null' || token === 'undefined') {
-        router.push('/admin/login');
+        if (pathname !== '/admin/login') {
+          router.push('/admin/login');
+        }
+        setIsVerifying(false);
         return;
       }
 
       try {
         const response = await authApi.verify();
+        // Update auth state with fresh token and admin data
         setAuth(token, response.data.admin);
-      } catch {
-        localStorage.removeItem('admin_token');
-        router.push('/admin/login');
-      } finally {
+        setIsVerifying(false);
+      } catch (error: any) {
+        // Only clear and redirect if it's actually an auth error
+        if (error.response?.status === 401) {
+          localStorage.removeItem('admin_token');
+          clearAuth();
+          if (pathname !== '/admin/login') {
+            router.push('/admin/login');
+          }
+        }
         setIsVerifying(false);
       }
     };
 
-    if (!isAuthenticated) {
-      verifyAuth();
-    } else {
-      setIsVerifying(false);
-    }
-  }, [pathname, isAuthenticated, router, setAuth]);
+    // Initial verification
+    verifyAuth();
+
+    // Set up periodic token verification (every 5 minutes) to keep session alive
+    const verifyInterval = setInterval(() => {
+      const token = localStorage.getItem('admin_token');
+      if (token && token !== 'null' && token !== 'undefined') {
+        authApi.verify().then((response) => {
+          setAuth(token, response.data.admin);
+        }).catch((error) => {
+          // Only clear if it's a 401 (unauthorized)
+          if (error.response?.status === 401) {
+            localStorage.removeItem('admin_token');
+            clearAuth();
+            if (pathname !== '/admin/login') {
+              router.push('/admin/login');
+            }
+          }
+        });
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => {
+      clearInterval(verifyInterval);
+    };
+  }, [pathname, router, setAuth, clearAuth]);
 
   // Don't show layout on login page
   if (pathname === '/admin/login') {

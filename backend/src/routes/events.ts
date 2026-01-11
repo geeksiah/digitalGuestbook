@@ -160,6 +160,23 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  // Validate ownerId if provided
+  if (data.ownerId !== undefined) {
+    if (data.ownerId === null) {
+      // Allow clearing ownerId
+    } else {
+      const owner = await prisma.owner.findUnique({
+        where: { id: data.ownerId },
+      });
+      if (!owner) {
+        throw new AppError('Owner not found', 404);
+      }
+      if (!owner.isActive) {
+        throw new AppError('Cannot assign event to inactive owner', 400);
+      }
+    }
+  }
+
   const event = await prisma.event.update({
     where: { id: req.params.id },
     data: {
@@ -313,6 +330,104 @@ router.post('/:id/unarchive', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/events/:id/duplicate
+ * Duplicate an event with all its settings
+ */
+router.post('/:id/duplicate', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { name, slug } = req.body;
+
+  const originalEvent = await prisma.event.findUnique({
+    where: { id },
+    include: {
+      formFields: true,
+      ticketTypes: true,
+    },
+  });
+
+  if (!originalEvent) {
+    throw new AppError('Event not found', 404);
+  }
+
+  // Generate new slug if not provided
+  let newSlug = slug || `${originalEvent.slug}-copy-${Date.now()}`;
+  
+  // Ensure slug is unique
+  const existing = await prisma.event.findUnique({ where: { slug: newSlug } });
+  if (existing) {
+    newSlug = `${newSlug}-${Math.random().toString(36).substr(2, 5)}`;
+  }
+
+  // Generate new owner access token
+  const newOwnerToken = uuidv4();
+
+  // Create duplicate event (exclude relations that will be copied separately)
+  const { id: _, createdAt: __, updatedAt: ___, ownerAccessToken: ____, ...eventData } = originalEvent;
+  
+  const duplicatedEvent = await prisma.event.create({
+    data: {
+      ...eventData,
+      slug: newSlug,
+      name: name || `${originalEvent.name} (Copy)`,
+      ownerAccessToken: newOwnerToken,
+      isArchived: false, // Reset archived status
+    },
+  });
+
+  // Copy form fields
+  if (originalEvent.formFields.length > 0) {
+    await prisma.eventFormField.createMany({
+      data: originalEvent.formFields.map(field => ({
+        eventId: duplicatedEvent.id,
+        fieldName: field.fieldName,
+        label: field.label,
+        type: field.type,
+        required: field.required,
+        options: field.options,
+        order: field.order,
+      })),
+    });
+  }
+
+  // Copy ticket types
+  if (originalEvent.ticketTypes.length > 0) {
+    await prisma.ticketType.createMany({
+      data: originalEvent.ticketTypes.map(ticket => ({
+        eventId: duplicatedEvent.id,
+        name: ticket.name,
+        description: ticket.description,
+        price: ticket.price,
+        currency: ticket.currency,
+        quantity: ticket.quantity,
+        maxPerOrder: ticket.maxPerOrder,
+        isActive: ticket.isActive,
+        order: ticket.order,
+      })),
+    });
+  }
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      adminId: req.admin!.id,
+      action: 'EVENT_DUPLICATED',
+      entityType: 'EVENT',
+      entityId: duplicatedEvent.id,
+      details: JSON.stringify({
+        originalEventId: id,
+        newEventId: duplicatedEvent.id,
+        newSlug: newSlug,
+      }),
+    },
+  });
+
+  res.status(201).json({
+    event: duplicatedEvent,
+    message: 'Event duplicated successfully',
+  });
+}));
+
+/**
  * DELETE /api/events/:id
  * Delete event (superadmin only)
  */
@@ -331,6 +446,17 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 
   await prisma.event.delete({
     where: { id: req.params.id },
+  });
+
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      adminId: req.admin!.id,
+      action: 'EVENT_DELETED',
+      entityType: 'EVENT',
+      entityId: req.params.id,
+      details: JSON.stringify({ eventName: event.name, slug: event.slug }),
+    },
   });
 
   res.json({ message: 'Event deleted successfully' });

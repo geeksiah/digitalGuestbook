@@ -127,6 +127,10 @@ import eventOwnerRoutes from './routes/event-owner.js';
 import publicRoutes from './routes/public.js';
 import settingsRoutes from './routes/settings.js';
 import ticketingRoutes from './routes/ticketing.js';
+import promoCodeRoutes from './routes/promo-codes.js';
+import ownerRoutes from './routes/owners.js';
+import ownerAuthRoutes from './routes/owner-auth.js';
+import ownerDashboardRoutes from './routes/owner-dashboard.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -382,6 +386,16 @@ app.use('/api/settings', settingsRoutes);
 
 // Ticketing & Custom Fields
 app.use('/api/ticketing', ticketingRoutes);
+app.use('/api/promo-codes', promoCodeRoutes);
+
+// Owner Management (protected)
+app.use('/api/owners', ownerRoutes);
+
+// Owner Authentication (public routes)
+app.use('/api/owner-auth', ownerAuthRoutes);
+
+// Owner Dashboard (protected)
+app.use('/api/owner-dashboard', ownerDashboardRoutes);
 
 // 404 Handler
 app.use((req, res) => {

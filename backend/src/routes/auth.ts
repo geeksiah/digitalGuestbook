@@ -35,10 +35,10 @@ router.post('/login', asyncHandler(async (req, res) => {
     throw new AppError('Server configuration error', 500);
   }
 
-  // Default to 7 days in seconds
+  // Default to 30 days in seconds (2592000)
   const expiresIn = process.env.JWT_EXPIRES_IN 
-    ? parseInt(process.env.JWT_EXPIRES_IN, 10) || 604800 
-    : 604800;
+    ? parseInt(process.env.JWT_EXPIRES_IN, 10) || 2592000 
+    : 2592000;
   
   const token = jwt.sign(
     { adminId: admin.id },

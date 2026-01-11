@@ -205,13 +205,46 @@ router.get('/:token/media', validateOwnerToken, async (req: Request, res: Respon
         guestName: true,
         fileName: true,
         filePath: true,
+        thumbnailPath: true,
         duration: true,
         createdAt: true,
         status: true,
       },
     });
 
-    res.json({ media });
+    // Transform media to include proper Supabase URLs
+    const { getPublicUrl } = await import('../services/supabaseStorage.js');
+    const { BUCKETS } = await import('../services/supabaseStorage.js');
+    
+    const mediaWithUrls = media.map(asset => {
+      // Transform filePath to Supabase URL
+      let fileUrl = asset.filePath;
+      if (!asset.filePath.startsWith('http://') && !asset.filePath.startsWith('https://')) {
+        try {
+          fileUrl = getPublicUrl(BUCKETS.MEDIA, asset.filePath);
+        } catch {
+          fileUrl = asset.filePath;
+        }
+      }
+      
+      // Transform thumbnailPath to Supabase URL
+      let thumbnailUrl = asset.thumbnailPath;
+      if (asset.thumbnailPath && !asset.thumbnailPath.startsWith('http://') && !asset.thumbnailPath.startsWith('https://')) {
+        try {
+          thumbnailUrl = getPublicUrl(BUCKETS.MEDIA, asset.thumbnailPath);
+        } catch {
+          thumbnailUrl = asset.thumbnailPath;
+        }
+      }
+      
+      return {
+        ...asset,
+        filePath: fileUrl,
+        thumbnailPath: thumbnailUrl,
+      };
+    });
+
+    res.json({ media: mediaWithUrls });
   } catch (error) {
     console.error('Error fetching media:', error);
     res.status(500).json({ error: 'Failed to fetch media' });
