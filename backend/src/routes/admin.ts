@@ -27,7 +27,7 @@ router.get('/dashboard/stats', authenticateAdmin, asyncHandler(async (req, res) 
     prisma.payoutRequest.count({ where: { status: 'PENDING' } }),
     prisma.payoutRequest.aggregate({
       where: { status: 'PENDING' },
-      _sum: { amount: true },
+      _sum: { requestedAmount: true },
     }),
   ]);
 
@@ -37,7 +37,7 @@ router.get('/dashboard/stats', authenticateAdmin, asyncHandler(async (req, res) 
       activeEvents,
       totalRsvps,
       totalPendingPayouts: totalPayouts,
-      totalPendingPayoutAmount: totalPayoutAmount._sum.amount || 0,
+      totalPendingPayoutAmount: totalPayoutAmount._sum.requestedAmount || 0,
     },
   });
 }));
@@ -80,15 +80,15 @@ router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
     prisma.rsvp.count({ where }),
   ]);
   
-  const sales = rsvps.filter(r => r.ticketType && r.amountPaid);
+  const sales = rsvps.filter((r: any) => r.ticketType && r.amountPaid);
   const stats = {
     totalSales: sales.length,
-    totalRevenue: sales.reduce((sum, s) => sum + (s.amountPaid || 0), 0),
+    totalRevenue: sales.reduce((sum: number, s: any) => sum + (s.amountPaid || 0), 0),
     byStatus: {
-      PAID: sales.filter(s => s.paymentStatus === 'PAID').length,
-      PENDING: sales.filter(s => s.paymentStatus === 'PENDING').length,
-      FAILED: sales.filter(s => s.paymentStatus === 'FAILED').length,
-      REFUNDED: sales.filter(s => s.paymentStatus === 'REFUNDED').length,
+      PAID: sales.filter((s: any) => s.paymentStatus === 'PAID').length,
+      PENDING: sales.filter((s: any) => s.paymentStatus === 'PENDING').length,
+      FAILED: sales.filter((s: any) => s.paymentStatus === 'FAILED').length,
+      REFUNDED: sales.filter((s: any) => s.paymentStatus === 'REFUNDED').length,
     },
   };
   
@@ -136,7 +136,7 @@ router.get('/payouts', authenticateAdmin, asyncHandler(async (req, res) => {
     prisma.payoutRequest.count({ where }),
     prisma.payoutRequest.aggregate({
       where: { status: 'PENDING' },
-      _sum: { amount: true },
+      _sum: { requestedAmount: true },
       _count: true,
     }),
   ]);
@@ -144,23 +144,23 @@ router.get('/payouts', authenticateAdmin, asyncHandler(async (req, res) => {
   // Calculate additional stats
   const allPayouts = await prisma.payoutRequest.findMany({ where });
   const analytics = {
-    totalPending: allPayouts.filter(p => p.status === 'PENDING').length,
+    totalPending: allPayouts.filter((p: any) => p.status === 'PENDING').length,
     totalPendingAmount: allPayouts
-      .filter(p => p.status === 'PENDING')
-      .reduce((sum, p) => sum + (p.amount || 0), 0),
-    totalProcessed: allPayouts.filter(p => p.status === 'PROCESSED').length,
+      .filter((p: any) => p.status === 'PENDING')
+      .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
+    totalProcessed: allPayouts.filter((p: any) => p.status === 'PROCESSED').length,
     totalProcessedAmount: allPayouts
-      .filter(p => p.status === 'PROCESSED')
-      .reduce((sum, p) => sum + (p.amount || 0), 0),
-    totalRejected: allPayouts.filter(p => p.status === 'REJECTED').length,
+      .filter((p: any) => p.status === 'PROCESSED')
+      .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
+    totalRejected: allPayouts.filter((p: any) => p.status === 'REJECTED').length,
     totalRejectedAmount: allPayouts
-      .filter(p => p.status === 'REJECTED')
-      .reduce((sum, p) => sum + (p.amount || 0), 0),
+      .filter((p: any) => p.status === 'REJECTED')
+      .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
     byStatus: {
-      PENDING: allPayouts.filter(p => p.status === 'PENDING').length,
-      PROCESSED: allPayouts.filter(p => p.status === 'PROCESSED').length,
-      REJECTED: allPayouts.filter(p => p.status === 'REJECTED').length,
-      CANCELLED: allPayouts.filter(p => p.status === 'CANCELLED').length,
+      PENDING: allPayouts.filter((p: any) => p.status === 'PENDING').length,
+      PROCESSED: allPayouts.filter((p: any) => p.status === 'PROCESSED').length,
+      REJECTED: allPayouts.filter((p: any) => p.status === 'REJECTED').length,
+      CANCELLED: allPayouts.filter((p: any) => p.status === 'CANCELLED').length,
     },
   };
   

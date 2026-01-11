@@ -29,6 +29,7 @@ const updatePromoCodeSchema = promoCodeSchema.partial();
 
 const validatePromoCodeSchema = z.object({
   code: z.string().min(1),
+  eventId: z.string().uuid(),
   ticketTypeId: z.string().uuid().optional(),
   amount: z.number().min(0),
 });

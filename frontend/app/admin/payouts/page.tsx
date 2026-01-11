@@ -9,7 +9,7 @@ import Link from 'next/link';
 interface Payout {
   id: string;
   eventId: string;
-  amount: number;
+  requestedAmount: number;
   currency: string;
   status: 'PENDING' | 'PROCESSED' | 'REJECTED' | 'CANCELLED';
   requestedAt: string;
@@ -171,7 +171,7 @@ export default function PayoutsPage() {
       formatDate(payout.requestedAt, 'yyyy-MM-dd HH:mm'),
       payout.event.name,
       payout.event.ownerName || payout.event.ownerEmail || '',
-      payout.amount.toString(),
+      payout.requestedAmount.toString(),
       payout.currency,
       payout.status,
       payout.transactionRef || '',
@@ -342,7 +342,7 @@ export default function PayoutsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-navy-900">
-                        {formatCurrency(payout.amount, payout.currency)}
+                        {formatCurrency(payout.requestedAmount, payout.currency)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -404,7 +404,7 @@ export default function PayoutsPage() {
                 </p>
                 <p className="text-sm text-surface-600 mb-2">
                   Amount: <span className="font-medium text-navy-900">
-                    {formatCurrency(selectedPayout.amount, selectedPayout.currency)}
+                    {formatCurrency(selectedPayout.requestedAmount, selectedPayout.currency)}
                   </span>
                 </p>
               </div>
@@ -464,7 +464,7 @@ export default function PayoutsPage() {
                 </p>
                 <p className="text-sm text-surface-600 mb-2">
                   Amount: <span className="font-medium text-navy-900">
-                    {formatCurrency(selectedPayout.amount, selectedPayout.currency)}
+                    {formatCurrency(selectedPayout.requestedAmount, selectedPayout.currency)}
                   </span>
                 </p>
               </div>

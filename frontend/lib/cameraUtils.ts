@@ -23,12 +23,6 @@ export function getOptimalVideoConstraints(facingMode: 'user' | 'environment' = 
       height: { ideal: 1080, max: 2160 },
       frameRate: { ideal: 30, min: 24 }, // High FPS for smooth video
       aspectRatio: { ideal: 16 / 9 },
-      // Advanced constraints for quality
-      advanced: [
-        { focusMode: 'continuous' }, // Auto-focus
-        { whiteBalanceMode: 'continuous' }, // Auto white balance
-        { exposureMode: 'continuous' }, // Auto exposure
-      ],
     },
     audio: {
       echoCancellation: true,
@@ -51,11 +45,6 @@ export function getOptimalPhotoConstraints(facingMode: 'user' | 'environment' = 
       height: { ideal: 2160, max: 4320 },
       frameRate: { ideal: 30, min: 24 },
       aspectRatio: { ideal: 4 / 3 }, // Common photo aspect ratio
-      advanced: [
-        { focusMode: 'single-shot' }, // Single focus for photos
-        { whiteBalanceMode: 'continuous' },
-        { exposureMode: 'continuous' },
-      ],
     },
   };
 }

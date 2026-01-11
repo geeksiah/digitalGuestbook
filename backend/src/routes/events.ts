@@ -384,7 +384,7 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
         type: field.type,
         required: field.required,
         options: field.options,
-        order: field.order,
+        sortOrder: field.sortOrder,
       })),
     });
   }
@@ -398,10 +398,10 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
         description: ticket.description,
         price: ticket.price,
         currency: ticket.currency,
-        quantity: ticket.quantity,
+        quantityTotal: ticket.quantityTotal,
         maxPerOrder: ticket.maxPerOrder,
         isActive: ticket.isActive,
-        order: ticket.order,
+        sortOrder: ticket.sortOrder,
       })),
     });
   }
