@@ -135,10 +135,23 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
             <div className="flex items-center">
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-navy-900 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">O</span>
+              <img 
+                src="/img/logo-dark.svg" 
+                alt="EventPeepo" 
+                className="h-8 w-auto"
+                onError={(e) => {
+                  // Fallback to text if logo fails to load
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback');
+                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                }}
+              />
+              <div className="logo-fallback hidden items-center ml-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-navy-900 flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">O</span>
+                </div>
+                <span className="ml-3 text-lg font-semibold text-navy-900">Owner Portal</span>
               </div>
-              <span className="ml-3 text-lg font-semibold text-navy-900">Owner Portal</span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}

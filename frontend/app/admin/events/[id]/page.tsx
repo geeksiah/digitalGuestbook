@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
@@ -122,6 +122,10 @@ export default function EventDetailPage() {
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [owners, setOwners] = useState<any[]>([]);
+  const [loadingOwners, setLoadingOwners] = useState(false);
+  const [showNewOwnerForm, setShowNewOwnerForm] = useState(false);
+  const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '', company: '' });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
@@ -148,7 +152,7 @@ export default function EventDetailPage() {
     // Colors
     primaryColor: '#FFD700', secondaryColor: '#1a1a2e', accentColor: '#ffffff',
     // Owner
-    ownerName: '', ownerEmail: '', ownerPhone: '', organizationName: '',
+    ownerId: '', ownerName: '', ownerEmail: '', ownerPhone: '', organizationName: '',
   });
 
   const [selectedTemplates, setSelectedTemplates] = useState({
@@ -158,7 +162,7 @@ export default function EventDetailPage() {
     thankYouTemplateId: '',
   });
 
-  useEffect(() => { fetchEvent(); fetchTemplates(); }, [eventId]);
+  useEffect(() => { fetchEvent(); fetchTemplates(); fetchOwners(); }, [eventId]);
   
   useEffect(() => {
     if (activeTab === 'rsvps') fetchRsvps();
@@ -207,7 +211,7 @@ export default function EventDetailPage() {
         // Colors
         primaryColor: event.primaryColor || '#FFD700', secondaryColor: event.secondaryColor || '#1a1a2e', accentColor: event.accentColor || '#ffffff',
         // Owner
-        ownerName: event.ownerName || '', ownerEmail: event.ownerEmail || '', ownerPhone: event.ownerPhone || '', organizationName: event.organizationName || '',
+        ownerId: (event as any).ownerId || '', ownerName: event.ownerName || '', ownerEmail: event.ownerEmail || '', ownerPhone: event.ownerPhone || '', organizationName: event.organizationName || '',
         // Notifications
         notifyOnRsvp: event.notifyOnRsvp ?? true, notifyOnCheckIn: event.notifyOnCheckIn ?? false, notifyOnGuestbook: event.notifyOnGuestbook ?? false,
         emailNotifications: event.emailNotifications ?? true, smsNotifications: event.smsNotifications ?? false, whatsappNotifications: event.whatsappNotifications ?? false,
@@ -221,6 +225,33 @@ export default function EventDetailPage() {
     finally { setLoading(false); }
   };
   const fetchTemplates = async () => { try { const r = await templatesApi.list(); setTemplates(r.data.templates); } catch {} };
+  const fetchOwners = async () => { 
+    try { 
+      setLoadingOwners(true);
+      const r = await ownersApi.list({ isActive: true }); 
+      setOwners(r.data.owners || []); 
+    } catch { 
+      toast.error('Failed to load owners'); 
+    } finally {
+      setLoadingOwners(false);
+    }
+  };
+  const handleCreateOwner = async () => {
+    if (!newOwner.name || !newOwner.email) {
+      toast.error('Name and email are required');
+      return;
+    }
+    try {
+      const r = await ownersApi.create(newOwner);
+      toast.success('Owner created');
+      setOwners([...owners, r.data.owner]);
+      setEventSettings({ ...eventSettings, ownerId: r.data.owner.id, ownerName: r.data.owner.name, ownerEmail: r.data.owner.email, ownerPhone: r.data.owner.phone || '', organizationName: r.data.owner.company || '' });
+      setNewOwner({ name: '', email: '', phone: '', company: '' });
+      setShowNewOwnerForm(false);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to create owner');
+    }
+  };
   const fetchRsvps = async () => { try { const p: any = {}; if (rsvpFilter !== 'all') p.status = rsvpFilter; const r = await rsvpApi.list(eventId, p); setRsvps(r.data.rsvps); } catch { toast.error('Failed to load RSVPs'); } };
   const fetchMedia = async () => { try { const r = await mediaApi.list(eventId); setMedia(r.data.media || []); } catch { toast.error('Failed to load media'); } };
   const fetchCheckIns = async () => { try { const r = await checkInApi.list(eventId); setCheckIns(r.data.checkIns || []); } catch { toast.error('Failed to load check-ins'); } };
@@ -295,7 +326,7 @@ export default function EventDetailPage() {
         // Colors
         primaryColor: eventSettings.primaryColor, secondaryColor: eventSettings.secondaryColor, accentColor: eventSettings.accentColor,
         // Owner
-        ownerName: eventSettings.ownerName || null, ownerEmail: eventSettings.ownerEmail || null, ownerPhone: eventSettings.ownerPhone || null, organizationName: eventSettings.organizationName || null,
+        ownerId: eventSettings.ownerId || null, ownerName: eventSettings.ownerName || null, ownerEmail: eventSettings.ownerEmail || null, ownerPhone: eventSettings.ownerPhone || null, organizationName: eventSettings.organizationName || null,
       });
       toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -561,36 +592,176 @@ export default function EventDetailPage() {
 
       {/* Templates */}
       {activeTab === 'templates' && (
-        <div className="bg-white rounded-xl border border-surface-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div><h3 className="text-lg font-semibold text-navy-900">Page Templates</h3><p className="text-sm text-surface-500">Customize each page's appearance</p></div>
-            <Link href="/admin/templates" className="text-sm text-surface-600 hover:text-navy-900 transition-colors">Manage Templates</Link>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { t: 'INVITATION', l: 'Invitation Page', f: 'invitationTemplateId', e: event.invitationEnabled },
-              { t: 'RSVP', l: 'RSVP Form', f: 'rsvpTemplateId', e: event.rsvpEnabled },
-              { t: 'GUESTBOOK', l: 'Guestbook Menu', f: 'guestbookTemplateId', e: event.guestbookEnabled },
-              { t: 'GUESTBOOK_VIDEO', l: 'Video Recording', f: 'guestbookVideoTemplateId', e: event.guestbookEnabled },
-              { t: 'GUESTBOOK_AUDIO', l: 'Audio Recording', f: 'guestbookAudioTemplateId', e: event.guestbookEnabled },
-              { t: 'GUESTBOOK_PHOTO', l: 'Photo Upload', f: 'guestbookPhotoTemplateId', e: event.guestbookEnabled },
-              { t: 'BOOTH', l: 'Booth Menu', f: 'boothTemplateId', e: event.guestbookEnabled },
-              { t: 'BOOTH', l: 'Booth Video', f: 'boothVideoTemplateId', e: event.guestbookEnabled },
-              { t: 'BOOTH', l: 'Booth Audio', f: 'boothAudioTemplateId', e: event.guestbookEnabled },
-              { t: 'BOOTH', l: 'Booth Photo', f: 'boothPhotoTemplateId', e: event.guestbookEnabled },
-              { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true },
-            ].map(x => (
-              <div key={x.t} className={cn(!x.e && 'opacity-50')}>
-                <label className="label">{x.l}</label>
-                <select className="input" value={(selectedTemplates as any)[x.f] || ''} onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })} disabled={!x.e}>
-                  <option value="">Default</option>
-                  {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
-                </select>
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl p-6 text-white">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-bold mb-2">Template Assignment</h3>
+                <p className="text-white/80 text-sm">Customize the appearance of each page for this event</p>
               </div>
-            ))}
+              <Link href="/admin/templates" className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors backdrop-blur-sm">
+                Manage Templates →
+              </Link>
+            </div>
           </div>
-          <div className="flex justify-end mt-6 pt-6 border-t border-surface-100">
-            <button onClick={handleSaveTemplates} disabled={savingTemplates} className="btn-primary">{savingTemplates ? 'Saving...' : 'Save Changes'}</button>
+
+          {/* Template Categories */}
+          <div className="space-y-6">
+            {/* Main Pages */}
+            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+              <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
+                <h4 className="font-semibold text-navy-900 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Main Pages
+                </h4>
+                <p className="text-sm text-surface-500 mt-1">Core event pages</p>
+              </div>
+              <div className="p-6 grid sm:grid-cols-2 gap-4">
+                {[
+                  { t: 'INVITATION', l: 'Invitation Page', f: 'invitationTemplateId', e: event.invitationEnabled, icon: '🎫', desc: 'Digital invitation pass' },
+                  { t: 'RSVP', l: 'RSVP Form', f: 'rsvpTemplateId', e: event.rsvpEnabled, icon: '✋', desc: 'Guest response form' },
+                  { t: 'GUESTBOOK', l: 'Guestbook Menu', f: 'guestbookTemplateId', e: event.guestbookEnabled, icon: '📖', desc: 'Guestbook landing page' },
+                  { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true, icon: '🙏', desc: 'Post-submission page' },
+                ].map(x => (
+                  <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-navy-300 hover:shadow-md')}>
+                    <div className="flex items-start gap-3">
+                      <div className="text-2xl flex-shrink-0">{x.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-sm font-semibold text-navy-900 mb-1">{x.l}</label>
+                        <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
+                        <select 
+                          className={cn('w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500 transition-all', !x.e && 'cursor-not-allowed bg-surface-100')} 
+                          value={(selectedTemplates as any)[x.f] || ''} 
+                          onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })} 
+                          disabled={!x.e}
+                        >
+                          <option value="">Default Template</option>
+                          {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {!x.e && (
+                      <div className="absolute top-2 right-2 px-2 py-1 bg-surface-200 text-surface-600 text-xs font-medium rounded">
+                        Disabled
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Guestbook Subpages */}
+            {event.guestbookEnabled && (
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
+                  <h4 className="font-semibold text-navy-900 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Guestbook Recording Pages
+                  </h4>
+                  <p className="text-sm text-surface-500 mt-1">Media collection pages</p>
+                </div>
+                <div className="p-6 grid sm:grid-cols-3 gap-4">
+                  {[
+                    { t: 'GUESTBOOK_VIDEO', l: 'Video Recording', f: 'guestbookVideoTemplateId', icon: '🎥', desc: 'Video messages' },
+                    { t: 'GUESTBOOK_AUDIO', l: 'Audio Recording', f: 'guestbookAudioTemplateId', icon: '🎤', desc: 'Audio messages' },
+                    { t: 'GUESTBOOK_PHOTO', l: 'Photo Upload', f: 'guestbookPhotoTemplateId', icon: '📷', desc: 'Photo uploads' },
+                  ].map(x => (
+                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-navy-300 hover:shadow-md transition-all">
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl flex-shrink-0">{x.icon}</div>
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-sm font-semibold text-navy-900 mb-1">{x.l}</label>
+                          <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
+                          <select 
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500 transition-all" 
+                            value={(selectedTemplates as any)[x.f] || ''} 
+                            onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })}
+                          >
+                            <option value="">Default Template</option>
+                            {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Booth Pages */}
+            {event.guestbookEnabled && (
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
+                  <h4 className="font-semibold text-navy-900 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                    Photo Booth Pages
+                  </h4>
+                  <p className="text-sm text-surface-500 mt-1">Kiosk and booth interfaces</p>
+                </div>
+                <div className="p-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { t: 'BOOTH', l: 'Booth Menu', f: 'boothTemplateId', icon: '🖼️', desc: 'Main menu' },
+                    { t: 'BOOTH', l: 'Booth Video', f: 'boothVideoTemplateId', icon: '📹', desc: 'Video capture' },
+                    { t: 'BOOTH', l: 'Booth Audio', f: 'boothAudioTemplateId', icon: '🎙️', desc: 'Audio capture' },
+                    { t: 'BOOTH', l: 'Booth Photo', f: 'boothPhotoTemplateId', icon: '📸', desc: 'Photo capture' },
+                  ].map(x => (
+                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-navy-300 hover:shadow-md transition-all">
+                      <div className="flex flex-col items-center text-center">
+                        <div className="text-3xl mb-2">{x.icon}</div>
+                        <label className="block text-sm font-semibold text-navy-900 mb-1">{x.l}</label>
+                        <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
+                        <select 
+                          className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500 transition-all" 
+                          value={(selectedTemplates as any)[x.f] || ''} 
+                          onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })}
+                        >
+                          <option value="">Default Template</option>
+                          {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Save Button */}
+          <div className="flex justify-end">
+            <button 
+              onClick={handleSaveTemplates} 
+              disabled={savingTemplates} 
+              className={cn(
+                'px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2',
+                savingTemplates 
+                  ? 'bg-surface-200 text-surface-500 cursor-not-allowed' 
+                  : 'bg-navy-900 text-white hover:bg-navy-800 shadow-lg hover:shadow-xl'
+              )}
+            >
+              {savingTemplates ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Save Template Assignments
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
@@ -637,8 +808,68 @@ export default function EventDetailPage() {
               </div>
               
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Event Owner Contact Information</h4>
-                <p className="text-sm text-surface-500 mb-4">Notifications will be sent to this contact for RSVPs, check-ins, and guestbook entries.</p>
+                <h4 className="font-medium text-navy-900 mb-4">Event Owner</h4>
+                <p className="text-sm text-surface-500 mb-4">Assign an owner account or enter contact information. Notifications will be sent to this contact.</p>
+                
+                <div className="mb-4">
+                  <label className="label">Select Owner Account</label>
+                  <div className="flex gap-2">
+                    <select 
+                      className="input flex-1" 
+                      value={eventSettings.ownerId || ''} 
+                      onChange={e => {
+                        const ownerId = e.target.value;
+                        if (ownerId) {
+                          const owner = owners.find(o => o.id === ownerId);
+                          if (owner) {
+                            setEventSettings({ 
+                              ...eventSettings, 
+                              ownerId, 
+                              ownerName: owner.name, 
+                              ownerEmail: owner.email, 
+                              ownerPhone: owner.phone || '', 
+                              organizationName: owner.company || '' 
+                            });
+                          }
+                        } else {
+                          setEventSettings({ ...eventSettings, ownerId: '' });
+                        }
+                      }}
+                    >
+                      <option value="">No owner account (use contact info below)</option>
+                      {owners.map(o => (
+                        <option key={o.id} value={o.id}>{o.name} {o.email && `(${o.email})`}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewOwnerForm(!showNewOwnerForm)}
+                      className="px-4 py-2 bg-surface-100 hover:bg-surface-200 text-surface-700 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {showNewOwnerForm ? 'Cancel' : '+ New Owner'}
+                    </button>
+                  </div>
+                </div>
+
+                {showNewOwnerForm && (
+                  <div className="mb-4 p-4 bg-surface-50 rounded-lg border border-surface-200">
+                    <h5 className="font-medium text-navy-900 mb-3">Create New Owner</h5>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div><label className="label text-xs">Name *</label><input type="text" className="input text-sm" placeholder="John Smith" value={newOwner.name} onChange={e => setNewOwner({ ...newOwner, name: e.target.value })} /></div>
+                      <div><label className="label text-xs">Email *</label><input type="email" className="input text-sm" placeholder="owner@example.com" value={newOwner.email} onChange={e => setNewOwner({ ...newOwner, email: e.target.value })} /></div>
+                      <div><label className="label text-xs">Phone</label><input type="tel" className="input text-sm" placeholder="+1234567890" value={newOwner.phone} onChange={e => setNewOwner({ ...newOwner, phone: e.target.value })} /></div>
+                      <div><label className="label text-xs">Company</label><input type="text" className="input text-sm" placeholder="Company Name" value={newOwner.company} onChange={e => setNewOwner({ ...newOwner, company: e.target.value })} /></div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCreateOwner}
+                      className="mt-3 px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Create Owner
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div><label className="label">Owner Name</label><input type="text" className="input" placeholder="e.g., John Smith" value={eventSettings.ownerName} onChange={e => setEventSettings({ ...eventSettings, ownerName: e.target.value })} /></div>
                   <div><label className="label">Organization</label><input type="text" className="input" placeholder="e.g., Smith Events" value={eventSettings.organizationName} onChange={e => setEventSettings({ ...eventSettings, organizationName: e.target.value })} /></div>

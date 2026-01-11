@@ -398,6 +398,36 @@ router.get('/:token/reel/:jobId/status', validateOwnerToken, async (req: Request
   }
 });
 
+// GET /api/event-owner/:token/reel/:jobId/download - Download/serve a generated reel
+router.get('/:token/reel/:jobId/download', validateOwnerToken, async (req: Request, res: Response) => {
+  try {
+    const { jobId } = req.params;
+    const eventId = (req as any).eventId;
+
+    // Verify reel belongs to this event
+    const reelJob = await prisma.reelJob.findFirst({
+      where: { id: jobId, eventId },
+    });
+
+    if (!reelJob || !reelJob.outputPath) {
+      return res.status(404).json({ error: 'Reel not found' });
+    }
+
+    if (reelJob.status !== 'completed') {
+      return res.status(400).json({ error: 'Reel is not ready' });
+    }
+
+    // Get signed URL for private bucket
+    const { getSignedUrl, BUCKETS } = await import('../services/supabaseStorage.js');
+    const signedUrl = await getSignedUrl(BUCKETS.REELS, reelJob.outputPath, 3600); // 1 hour expiry
+    
+    res.redirect(signedUrl);
+  } catch (error: any) {
+    console.error('[Event Owner] Error generating signed URL for reel:', error);
+    res.status(500).json({ error: 'Failed to generate download link' });
+  }
+});
+
 // GET /api/event-owner/:token/reels - Get all reels for the event
 router.get('/:token/reels', validateOwnerToken, async (req: Request, res: Response) => {
   try {

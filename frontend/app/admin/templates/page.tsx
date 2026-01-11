@@ -394,23 +394,30 @@ export default function TemplatesPage() {
                         : `${API_BASE_URL}${template.thumbnailPath.startsWith('/') ? '' : '/'}${template.thumbnailPath}`}
                       alt={template.name}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                       onError={(e) => {
                         // Fallback to preview if thumbnail fails
-                        e.currentTarget.style.display = 'none';
-                        const fallback = e.currentTarget.parentElement?.querySelector('.preview-fallback') as HTMLElement;
-                        if (fallback) fallback.style.display = 'block';
+                        const target = e.currentTarget;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        const fallback = parent?.querySelector('.preview-fallback') as HTMLElement;
+                        if (fallback) {
+                          fallback.style.display = 'block';
+                          fallback.style.position = 'absolute';
+                          fallback.style.inset = '0';
+                        }
                       }}
                     />
-                    <div className="preview-fallback hidden absolute inset-0 overflow-hidden">
+                    <div className="preview-fallback hidden absolute inset-0 overflow-hidden bg-surface-100">
                       <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
-                        <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin" title={template.name} />
+                        <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin allow-scripts" title={template.name} />
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="absolute inset-0 overflow-hidden">
+                  <div className="absolute inset-0 overflow-hidden bg-surface-100">
                     <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
-                      <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin" title={template.name} />
+                      <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin allow-scripts" title={template.name} />
                     </div>
                   </div>
                 )}
@@ -545,7 +552,7 @@ export default function TemplatesPage() {
 
       {/* Preview Modal */}
       {previewTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={closePreview}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closePreview}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-3 border-b border-surface-200 flex-shrink-0">
               <div>

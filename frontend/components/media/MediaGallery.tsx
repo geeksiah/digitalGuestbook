@@ -454,7 +454,7 @@ export default function MediaGallery({
 
       {/* ============ LIGHTBOX ============ */}
       {previewMedia && previewIndex !== null && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm" onClick={() => setPreviewIndex(null)}>
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm" onClick={() => setPreviewIndex(null)}>
           {/* Top bar - responsive */}
           <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-2 sm:p-4 bg-gradient-to-b from-black/80 to-transparent safe-area-top">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -509,7 +509,7 @@ export default function MediaGallery({
           )}
 
           {/* Media Content - click anywhere on background to close */}
-          <div className="absolute inset-0 flex items-center justify-center p-2 pt-14 pb-20 sm:p-4 sm:pt-16 sm:pb-24 md:p-8 md:pt-20 md:pb-28">
+          <div className="absolute inset-0 flex items-center justify-center p-2 pb-20 sm:p-4 sm:pb-24 md:p-8 md:pb-28">
             {previewMedia.type === 'PHOTO' && (
               <img 
                 src={previewMedia.filePath.startsWith('http://') || previewMedia.filePath.startsWith('https://') 

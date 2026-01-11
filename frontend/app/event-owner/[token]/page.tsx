@@ -659,7 +659,7 @@ export default function EventOwnerPortalPage() {
           <MediaGallery
             eventId={event.id}
             eventSlug={event.slug}
-            media={media.map(m => ({ ...m, fileName: m.filePath.split('/').pop() || '', thumbnailPath: null, fileSize: undefined }))}
+            media={media.map(m => ({ ...m, fileName: m.filePath.split('/').pop() || '', fileSize: undefined }))}
             reelEnabled={event.reelEnabled}
             onRefresh={fetchMedia}
             isAdmin={false}
@@ -711,7 +711,7 @@ export default function EventOwnerPortalPage() {
                     <div key={reel.id} className="bg-white rounded-xl border border-surface-200 overflow-hidden group">
                       <div className="aspect-video bg-surface-100 relative">
                         <video
-                          src={`${API_BASE_URL}${reel.outputPath}`}
+                          src={`${API_BASE_URL}/api/event-owner/${token}/reel/${reel.id}/download`}
                           className="w-full h-full object-cover"
                           controls
                           preload="metadata"
@@ -730,7 +730,7 @@ export default function EventOwnerPortalPage() {
                           Created {formatDate(reel.completedAt || reel.createdAt)}
                         </p>
                         <a
-                          href={`${API_BASE_URL}${reel.outputPath}`}
+                          href={`${API_BASE_URL}/api/event-owner/${token}/reel/${reel.id}/download`}
                           download
                           className="w-full btn-primary text-sm py-2 flex items-center justify-center gap-2"
                         >
@@ -748,17 +748,45 @@ export default function EventOwnerPortalPage() {
               <div className="mt-6">
                 <h4 className="text-sm font-medium text-surface-600 mb-3">Failed Attempts</h4>
                 <div className="space-y-2">
-                  {reels.filter(r => r.status === 'failed').map(reel => (
-                    <div key={reel.id} className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600">
-                        {Icons.x}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-sm text-red-800">{reel.errorMessage || 'Unknown error'}</p>
-                        <p className="text-xs text-red-600">{formatDate(reel.createdAt)}</p>
+                  {reels.filter(r => r.status === 'failed').map(reel => {
+                    const errorMsg = reel.errorMessage || 'No valid video files found';
+                    // Auto-dismiss failed attempt notification after 5 seconds
+                    setTimeout(() => {
+                      const element = document.getElementById(`failed-reel-${reel.id}`);
+                      if (element) {
+                        element.style.opacity = '0';
+                        element.style.transition = 'opacity 0.3s';
+                        setTimeout(() => element.remove(), 300);
+                      }
+                    }, 5000);
+                    
+                    return (
+                      <div 
+                        key={reel.id} 
+                        id={`failed-reel-${reel.id}`}
+                        className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3"
+                      >
+                        <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                          {Icons.x}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-sm text-red-800">{errorMsg}</p>
+                          <p className="text-xs text-red-600">{formatDate(reel.createdAt)}</p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.currentTarget.closest('[id^="failed-reel-"]')?.remove();
+                          }}
+                          className="ml-2 p-1 rounded text-red-600 hover:bg-red-100 flex-shrink-0"
+                          aria-label="Close"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

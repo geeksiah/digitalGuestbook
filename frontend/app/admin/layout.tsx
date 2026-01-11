@@ -155,12 +155,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Logo */}
           <div className="flex items-center h-16 px-6">
             <Link href="/admin" className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              <img 
+                src="/img/logo-light.svg" 
+                alt="EventPeepo" 
+                className="h-8 w-auto"
+                onError={(e) => {
+                  // Fallback to text if logo fails to load
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback');
+                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                }}
+              />
+              <div className="logo-fallback hidden items-center space-x-3">
+                <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <span className="font-semibold text-white text-lg">EventPeepo</span>
               </div>
-              <span className="font-semibold text-white text-lg">EventHub</span>
             </Link>
           </div>
 

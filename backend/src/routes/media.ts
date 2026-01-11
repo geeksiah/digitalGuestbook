@@ -420,4 +420,36 @@ router.get('/reel/:jobId/status', authenticateAdmin, asyncHandler(async (req, re
   res.json({ job: status });
 }));
 
+/**
+ * GET /api/media/reel/:jobId/download
+ * Download/serve a generated reel file (authenticated)
+ */
+router.get('/reel/:jobId/download', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { jobId } = req.params;
+
+  // Get reel job to verify it exists and get the output path
+  const reelJob = await prisma.reelJob.findUnique({
+    where: { id: jobId },
+  });
+
+  if (!reelJob || !reelJob.outputPath) {
+    throw new AppError('Reel not found', 404);
+  }
+
+  if (reelJob.status !== 'completed') {
+    throw new AppError('Reel is not ready', 400);
+  }
+
+  // Get signed URL for private bucket
+  const { getSignedUrl, BUCKETS } = await import('../services/supabaseStorage.js');
+  
+  try {
+    const signedUrl = await getSignedUrl(BUCKETS.REELS, reelJob.outputPath, 3600); // 1 hour expiry
+    res.redirect(signedUrl);
+  } catch (error: any) {
+    console.error('[Media] Error generating signed URL for reel:', error);
+    throw new AppError('Failed to generate download link', 500);
+  }
+}));
+
 export default router;
