@@ -143,6 +143,9 @@ const app = express();
 // Follow Render.com recommendation: use process.env.PORT with fallback
 const port = Number(process.env.PORT) || 10000;
 
+// Trust proxy (required for rate limiting behind reverse proxy like Render)
+app.set('trust proxy', true);
+
 // Security Middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -152,6 +155,7 @@ app.use(helmet({
 // CORS Configuration
 const allowedOrigins = [
   'http://localhost:3000',
+  'https://digiguestbook.netlify.app',
   process.env.CORS_ORIGIN,
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
