@@ -27,6 +27,11 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6, 'New password must be at least 6 characters'),
 });
 
+const setupPasswordSchema = z.object({
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  token: z.string().min(1, 'Setup token is required'),
+});
+
 const updateProfileSchema = z.object({
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
