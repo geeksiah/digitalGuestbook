@@ -289,6 +289,9 @@ export default function EventDetailPage() {
         guestbookAudioTemplateId: selectedTemplates.guestbookAudioTemplateId || null,
         guestbookPhotoTemplateId: selectedTemplates.guestbookPhotoTemplateId || null,
         boothTemplateId: selectedTemplates.boothTemplateId || null,
+        boothVideoTemplateId: selectedTemplates.boothVideoTemplateId || null,
+        boothAudioTemplateId: selectedTemplates.boothAudioTemplateId || null,
+        boothPhotoTemplateId: selectedTemplates.boothPhotoTemplateId || null,
         thankYouTemplateId: selectedTemplates.thankYouTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
