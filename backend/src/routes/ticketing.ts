@@ -223,121 +223,9 @@ router.delete('/events/:eventId/tickets/:ticketId', authenticateAdmin, asyncHand
 // ============================================
 // PAYMENT GATEWAY CONFIGURATION
 // ============================================
-
-const paymentGatewaySchema = z.object({
-  gateway: z.enum([
-    'stripe', 
-    'paystack', 
-    'flutterwave', 
-    'paypal', 
-    'mtn_momo', 
-    'telecel_cash', 
-    'airteltigo_cash', 
-    'custom',
-    'free'
-  ]),
-  isLive: z.boolean().default(false),
-  // Stripe
-  stripePublicKey: z.string().optional(),
-  stripeSecretKey: z.string().optional(),
-  stripeWebhookSecret: z.string().optional(),
-  // Paystack
-  paystackPublicKey: z.string().optional(),
-  paystackSecretKey: z.string().optional(),
-  // Flutterwave
-  flutterwavePublicKey: z.string().optional(),
-  flutterwaveSecretKey: z.string().optional(),
-  // MTN MoMo
-  mtnMomoApiKey: z.string().optional(),
-  mtnMomoApiSecret: z.string().optional(),
-  mtnMomoSubscriptionKey: z.string().optional(),
-  mtnMomoEnvironment: z.enum(['sandbox', 'production']).optional(),
-  // Telecel Cash
-  telecelCashApiKey: z.string().optional(),
-  telecelCashApiSecret: z.string().optional(),
-  telecelCashMerchantId: z.string().optional(),
-  // Airteltigo Cash
-  airteltigoCashApiKey: z.string().optional(),
-  airteltigoCashApiSecret: z.string().optional(),
-  airteltigoCashMerchantId: z.string().optional(),
-  // Custom Gateway
-  customGatewayName: z.string().optional(),
-  customGatewayApiUrl: z.string().optional(),
-  customGatewayApiKey: z.string().optional(),
-  customGatewayApiSecret: z.string().optional(),
-  customGatewayConfig: z.string().optional(), // JSON string for additional config
-  // Common
-  currency: z.string().default('USD'),
-  successUrl: z.string().optional(),
-  cancelUrl: z.string().optional(),
-});
-
-/**
- * GET /api/ticketing/events/:eventId/payment
- * Get payment gateway configuration for an event
- */
-router.get('/events/:eventId/payment', authenticateAdmin, asyncHandler(async (req, res) => {
-  const { eventId } = req.params;
-
-  const gateway = await prisma.paymentGateway.findUnique({
-    where: { eventId },
-  });
-
-  // Mask sensitive keys
-  if (gateway) {
-    if (gateway.stripeSecretKey) gateway.stripeSecretKey = '****' + gateway.stripeSecretKey.slice(-4);
-    if (gateway.stripeWebhookSecret) gateway.stripeWebhookSecret = '****';
-    if (gateway.paystackSecretKey) gateway.paystackSecretKey = '****' + gateway.paystackSecretKey.slice(-4);
-    if (gateway.flutterwaveSecretKey) gateway.flutterwaveSecretKey = '****' + gateway.flutterwaveSecretKey.slice(-4);
-    if (gateway.mtnMomoApiSecret) gateway.mtnMomoApiSecret = '****' + gateway.mtnMomoApiSecret.slice(-4);
-    if (gateway.telecelCashApiSecret) gateway.telecelCashApiSecret = '****' + gateway.telecelCashApiSecret.slice(-4);
-    if (gateway.airteltigoCashApiSecret) gateway.airteltigoCashApiSecret = '****' + gateway.airteltigoCashApiSecret.slice(-4);
-    if (gateway.customGatewayApiSecret) gateway.customGatewayApiSecret = '****' + gateway.customGatewayApiSecret.slice(-4);
-  }
-
-  res.json({ gateway });
-}));
-
-/**
- * PUT /api/ticketing/events/:eventId/payment
- * Configure payment gateway for an event
- */
-router.put('/events/:eventId/payment', authenticateAdmin, asyncHandler(async (req, res) => {
-  const { eventId } = req.params;
-  const data = paymentGatewaySchema.parse(req.body);
-
-  // Don't overwrite masked values
-  const existing = await prisma.paymentGateway.findUnique({ where: { eventId } });
-  
-  const cleanData = { ...data };
-  // Don't overwrite masked secret values
-  if (cleanData.stripeSecretKey?.startsWith('****')) delete cleanData.stripeSecretKey;
-  if (cleanData.stripeWebhookSecret === '****') delete cleanData.stripeWebhookSecret;
-  if (cleanData.paystackSecretKey?.startsWith('****')) delete cleanData.paystackSecretKey;
-  if (cleanData.flutterwaveSecretKey?.startsWith('****')) delete cleanData.flutterwaveSecretKey;
-  if (cleanData.mtnMomoApiSecret?.startsWith('****')) delete cleanData.mtnMomoApiSecret;
-  if (cleanData.telecelCashApiSecret?.startsWith('****')) delete cleanData.telecelCashApiSecret;
-  if (cleanData.airteltigoCashApiSecret?.startsWith('****')) delete cleanData.airteltigoCashApiSecret;
-  if (cleanData.customGatewayApiSecret?.startsWith('****')) delete cleanData.customGatewayApiSecret;
-
-  const gateway = await prisma.paymentGateway.upsert({
-    where: { eventId },
-    update: cleanData,
-    create: { eventId, ...cleanData },
-  });
-
-  // Mask sensitive keys in response
-  if (gateway.stripeSecretKey) gateway.stripeSecretKey = '****' + gateway.stripeSecretKey.slice(-4);
-  if (gateway.stripeWebhookSecret) gateway.stripeWebhookSecret = '****';
-  if (gateway.paystackSecretKey) gateway.paystackSecretKey = '****' + gateway.paystackSecretKey.slice(-4);
-  if (gateway.flutterwaveSecretKey) gateway.flutterwaveSecretKey = '****' + gateway.flutterwaveSecretKey.slice(-4);
-  if (gateway.mtnMomoApiSecret) gateway.mtnMomoApiSecret = '****' + gateway.mtnMomoApiSecret.slice(-4);
-  if (gateway.telecelCashApiSecret) gateway.telecelCashApiSecret = '****' + gateway.telecelCashApiSecret.slice(-4);
-  if (gateway.airteltigoCashApiSecret) gateway.airteltigoCashApiSecret = '****' + gateway.airteltigoCashApiSecret.slice(-4);
-  if (gateway.customGatewayApiSecret) gateway.customGatewayApiSecret = '****' + gateway.customGatewayApiSecret.slice(-4);
-
-  res.json({ gateway });
-}));
+// Note: Payment gateway configuration is now system-wide.
+// See /api/payment-gateways for gateway management.
+// See /api/payment-gateways/events/:eventId for event-specific gateway selection.
 
 // ============================================
 // PUBLIC ENDPOINTS FOR RSVP/TICKETING FORM
@@ -365,14 +253,23 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
       },
-      paymentGateway: {
-        select: {
-          gateway: true,
-          currency: true,
-          stripePublicKey: true,
-          paystackPublicKey: true,
-          flutterwavePublicKey: true,
+      eventPaymentGateways: {
+        where: { isActive: true },
+        include: {
+          paymentGateway: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              name: true,
+              gateway: true,
+              currency: true,
+              stripePublicKey: true,
+              paystackPublicKey: true,
+              flutterwavePublicKey: true,
+            },
+          },
         },
+        orderBy: { sortOrder: 'asc' },
       },
     },
   });
@@ -411,17 +308,251 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     requireApproval: event.requireApproval,
     fields,
     tickets: event.rsvpMode === 'rsvp' ? [] : tickets,
-    payment: event.rsvpMode !== 'rsvp' && event.paymentGateway ? {
-      gateway: event.paymentGateway.gateway,
-      currency: event.paymentGateway.currency,
-      publicKey: event.paymentGateway.gateway === 'stripe' 
-        ? event.paymentGateway.stripePublicKey
-        : event.paymentGateway.gateway === 'paystack'
-        ? event.paymentGateway.paystackPublicKey
-        : event.paymentGateway.flutterwavePublicKey,
-    } : null,
+    paymentGateways: event.rsvpMode !== 'rsvp' && event.eventPaymentGateways?.length > 0
+      ? event.eventPaymentGateways.map((eg: any) => {
+          const g = eg.paymentGateway;
+          return {
+            id: g.id,
+            name: g.name,
+            gateway: g.gateway,
+            currency: g.currency,
+            publicKey:
+              g.gateway === 'stripe'
+                ? g.stripePublicKey
+                : g.gateway === 'paystack'
+                ? g.paystackPublicKey
+                : g.gateway === 'flutterwave'
+                ? g.flutterwavePublicKey
+                : null,
+            sortOrder: eg.sortOrder,
+          };
+        })
+      : [],
+  });
+}));
+
+/**
+ * POST /api/ticketing/public/:eventSlug/checkout
+ * Process ticket purchase (create RSVP with payment)
+ */
+const checkoutSchema = z.object({
+  // Personal info
+  primaryName: z.string().min(1),
+  secondaryName: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().min(1),
+  
+  // Ticket selection
+  tickets: z.array(z.object({
+    ticketTypeId: z.string().uuid(),
+    quantity: z.number().min(1),
+  })).min(1),
+  
+  // Promo code (optional)
+  promoCode: z.string().optional(),
+  
+  // Payment
+  paymentGatewayId: z.string().uuid(),
+  paymentMethod: z.string(), // stripe | paystack | flutterwave | etc
+  paymentReference: z.string(), // External payment reference from gateway
+  
+  // Custom form fields
+  customFields: z.record(z.any()).optional(),
+  
+  // Other RSVP fields
+  attendance: z.enum(['YES', 'NO', 'MAYBE']).default('YES'),
+  guestCount: z.number().default(0),
+  mealPreference: z.string().optional(),
+  dietaryNotes: z.string().optional(),
+  note: z.string().optional(),
+  submissionChannel: z.string().optional(),
+});
+
+router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
+  const { eventSlug } = req.params;
+  const data = checkoutSchema.parse(req.body);
+
+  // Find event
+  const event = await prisma.event.findUnique({
+    where: { slug: eventSlug },
+    include: {
+      ticketTypes: true,
+      eventPaymentGateways: {
+        where: { paymentGatewayId: data.paymentGatewayId, isActive: true },
+        include: { paymentGateway: true },
+      },
+    },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (event.rsvpMode !== 'paid') {
+    throw new AppError('This event does not accept paid tickets', 400);
+  }
+
+  // Verify ticket availability and calculate total
+  let totalAmount = 0;
+  const ticketUpdates: Array<{ id: string; quantity: number }> = [];
+
+  for (const selection of data.tickets) {
+    const ticketType = event.ticketTypes.find((t: any) => t.id === selection.ticketTypeId);
+    if (!ticketType) {
+      throw new AppError(`Ticket type ${selection.ticketTypeId} not found`, 404);
+    }
+    if (!ticketType.isActive) {
+      throw new AppError(`Ticket type ${ticketType.name} is not available`, 400);
+    }
+    if (selection.quantity > ticketType.maxPerOrder) {
+      throw new AppError(`Maximum ${ticketType.maxPerOrder} tickets allowed for ${ticketType.name}`, 400);
+    }
+    const available = ticketType.quantityTotal === 0 
+      ? 999 
+      : ticketType.quantityTotal - ticketType.quantitySold;
+    if (selection.quantity > available) {
+      throw new AppError(`Only ${available} tickets available for ${ticketType.name}`, 400);
+    }
+
+    totalAmount += ticketType.price * selection.quantity;
+    ticketUpdates.push({ id: ticketType.id, quantity: selection.quantity });
+  }
+
+  // Apply promo code if provided
+  let discountAmount = 0;
+  let promoCodeRecord = null;
+  if (data.promoCode) {
+    promoCodeRecord = await prisma.promoCode.findFirst({
+      where: {
+        eventId: event.id,
+        code: data.promoCode.toUpperCase(),
+        isActive: true,
+        validFrom: { lte: new Date() },
+        validUntil: { gte: new Date() },
+      },
+    });
+
+    if (promoCodeRecord) {
+      // Check usage limits
+      const usageCount = await prisma.rSVP.count({
+        where: {
+          eventId: event.id,
+          promoCodeId: promoCodeRecord.id,
+        },
+      });
+
+      if (promoCodeRecord.maxUses && usageCount >= promoCodeRecord.maxUses) {
+        throw new AppError('Promo code has reached maximum usage limit', 400);
+      }
+
+      // Calculate discount
+      if (promoCodeRecord.discountType === 'PERCENTAGE') {
+        discountAmount = (totalAmount * promoCodeRecord.discountValue) / 100;
+      } else {
+        discountAmount = promoCodeRecord.discountValue;
+      }
+
+      if (discountAmount > totalAmount) {
+        discountAmount = totalAmount;
+      }
+    } else {
+      throw new AppError('Invalid or expired promo code', 400);
+    }
+  }
+
+  const finalAmount = totalAmount - discountAmount;
+
+  // Calculate fees
+  const platformFee = (finalAmount * (event.platformFeePercent || 0)) / 100;
+  const processingFeePercent = event.processingFeePercent || 0;
+  const processingFeeFixed = event.processingFeeFixed || 0;
+  const processingFee = (finalAmount * processingFeePercent) / 100 + processingFeeFixed;
+  const amountPaid = finalAmount + platformFee + processingFee;
+
+  // Verify payment gateway
+  const eventGateway = event.eventPaymentGateways[0];
+  if (!eventGateway) {
+    throw new AppError('Payment gateway not configured for this event', 400);
+  }
+
+  // Create RSVP with ticket purchase
+  const rsvp = await prisma.rSVP.create({
+    data: {
+      eventId: event.id,
+      primaryName: data.primaryName,
+      secondaryName: data.secondaryName,
+      email: data.email || null,
+      phone: data.phone,
+      attendance: data.attendance,
+      guestCount: data.guestCount,
+      mealPreference: data.mealPreference,
+      dietaryNotes: data.dietaryNotes,
+      note: data.note,
+      submissionChannel: data.submissionChannel || 'web',
+      status: event.requireApproval ? 'PENDING' : 'APPROVED',
+      
+      // Ticket purchase fields
+      ticketTypeId: data.tickets[0].ticketTypeId, // Primary ticket type
+      ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
+      amountPaid: amountPaid,
+      paymentStatus: 'PAID', // Assume paid if payment reference provided
+      paymentMethod: data.paymentMethod,
+      paymentReference: data.paymentReference,
+      promoCodeId: promoCodeRecord?.id,
+    },
+  });
+
+  // Update ticket quantities
+  await Promise.all(
+    ticketUpdates.map((update) =>
+      prisma.ticketType.update({
+        where: { id: update.id },
+        data: {
+          quantitySold: { increment: update.quantity },
+        },
+      })
+    )
+  );
+
+  // Update promo code usage
+  if (promoCodeRecord) {
+    await prisma.promoCode.update({
+      where: { id: promoCodeRecord.id },
+      data: {
+        usageCount: { increment: 1 },
+      },
+    });
+  }
+
+  // Create transaction record
+  await prisma.transaction.create({
+    data: {
+      eventId: event.id,
+      rsvpId: rsvp.id,
+      type: 'ticket_sale',
+      grossAmount: finalAmount,
+      platformFee: platformFee,
+      processingFee: processingFee,
+      netAmount: finalAmount - platformFee,
+      currency: event.ticketTypes[0]?.currency || 'USD',
+      paymentMethod: data.paymentMethod,
+      paymentRef: data.paymentReference,
+      ticketTypeName: event.ticketTypes[0]?.name,
+      ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
+      buyerName: data.primaryName,
+      buyerEmail: data.email,
+      status: 'completed',
+    },
+  });
+
+  res.status(201).json({
+    success: true,
+    rsvp: {
+      id: rsvp.id,
+      status: rsvp.status,
+    },
+    message: 'Ticket purchase successful!',
   });
 }));
 
 export default router;
-

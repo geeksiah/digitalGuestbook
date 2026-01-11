@@ -18,13 +18,18 @@ COPY prisma ./prisma/
 # Install ALL dependencies (including devDependencies for TypeScript)
 RUN npm ci
 
-# Generate Prisma client
-RUN npx prisma generate
-
-# Copy source code
+# Copy source code (before generating Prisma client to ensure schema is latest)
 COPY . .
 
+# Generate Prisma client (must happen after all files are copied and before TypeScript build)
+# This ensures the Prisma client includes all models from the schema
+RUN npx prisma generate || (echo "Prisma generate failed!" && exit 1)
+
+# Verify Prisma client was generated
+RUN test -d node_modules/.prisma/client || (echo "Prisma client not found after generation!" && exit 1)
+
 # Build TypeScript (fail on error)
+# Note: package.json build script also runs prisma generate, but it's idempotent
 RUN npm run build || (echo "Build failed!" && exit 1)
 
 # Verify build output exists

@@ -127,6 +127,7 @@ import eventOwnerRoutes from './routes/event-owner.js';
 import publicRoutes from './routes/public.js';
 import settingsRoutes from './routes/settings.js';
 import ticketingRoutes from './routes/ticketing.js';
+import paymentGatewayRoutes from './routes/payment-gateways.js';
 import promoCodeRoutes from './routes/promo-codes.js';
 import ownerRoutes from './routes/owners.js';
 import ownerAuthRoutes from './routes/owner-auth.js';
@@ -386,6 +387,7 @@ app.use('/api/settings', settingsRoutes);
 
 // Ticketing & Custom Fields
 app.use('/api/ticketing', ticketingRoutes);
+app.use('/api/payment-gateways', paymentGatewayRoutes);
 app.use('/api/promo-codes', promoCodeRoutes);
 
 // Owner Management (protected)

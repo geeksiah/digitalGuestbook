@@ -22,8 +22,8 @@ router.get('/dashboard/stats', authenticateAdmin, asyncHandler(async (req, res) 
     totalPayoutAmount,
   ] = await Promise.all([
     prisma.event.count(),
-    prisma.event.count({ where: { currentPhase: { in: ['PLANNING', 'ACTIVE'] } } }),
-    prisma.rsvp.count(),
+    prisma.event.count({ where: { phase: { in: ['PLANNING', 'ACTIVE'] } } }),
+    prisma.rSVP.count(),
     prisma.payoutRequest.count({ where: { status: 'PENDING' } }),
     prisma.payoutRequest.aggregate({
       where: { status: 'PENDING' },
@@ -67,7 +67,7 @@ router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
   }
   
   const [rsvps, total] = await Promise.all([
-    prisma.rsvp.findMany({
+    prisma.rSVP.findMany({
       where,
       include: {
         event: { select: { id: true, name: true, slug: true } },
@@ -77,7 +77,7 @@ router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
       skip: (Number(page) - 1) * Number(limit),
       take: Number(limit),
     }),
-    prisma.rsvp.count({ where }),
+    prisma.rSVP.count({ where }),
   ]);
   
   const sales = rsvps.filter((r: any) => r.ticketType && r.amountPaid);
@@ -314,32 +314,32 @@ router.get('/payouts/analytics', authenticateAdmin, asyncHandler(async (req, res
   const analytics = {
     total: payouts.length,
     byStatus: {
-      PENDING: payouts.filter(p => p.status === 'PENDING').length,
-      PROCESSED: payouts.filter(p => p.status === 'PROCESSED').length,
-      REJECTED: payouts.filter(p => p.status === 'REJECTED').length,
-      CANCELLED: payouts.filter(p => p.status === 'CANCELLED').length,
+      PENDING: (payouts as any[]).filter((p: any) => p.status === 'PENDING').length,
+      PROCESSED: (payouts as any[]).filter((p: any) => p.status === 'PROCESSED').length,
+      REJECTED: (payouts as any[]).filter((p: any) => p.status === 'REJECTED').length,
+      CANCELLED: (payouts as any[]).filter((p: any) => p.status === 'CANCELLED').length,
     },
     amounts: {
       totalPending: payouts
         .filter(p => p.status === 'PENDING')
-        .reduce((sum, p) => sum + (p.amount || 0), 0),
+        .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
       totalProcessed: payouts
-        .filter(p => p.status === 'PROCESSED')
-        .reduce((sum, p) => sum + (p.amount || 0), 0),
+        .filter((p: any) => p.status === 'PROCESSED')
+        .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
       totalRejected: payouts
-        .filter(p => p.status === 'REJECTED')
-        .reduce((sum, p) => sum + (p.amount || 0), 0),
+        .filter((p: any) => p.status === 'REJECTED')
+        .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
     },
     averagePayout: payouts.length > 0
-      ? payouts.reduce((sum, p) => sum + (p.amount || 0), 0) / payouts.length
+      ? payouts.reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0) / payouts.length
       : 0,
-    byEvent: payouts.reduce((acc, p) => {
+    byEvent: (payouts as any[]).reduce((acc: Record<string, { count: number; total: number }>, p: any) => {
       const eventName = p.event?.name || 'Unknown';
       if (!acc[eventName]) {
         acc[eventName] = { count: 0, total: 0 };
       }
       acc[eventName].count++;
-      acc[eventName].total += p.amount || 0;
+      acc[eventName].total += p.requestedAmount || 0;
       return acc;
     }, {} as Record<string, { count: number; total: number }>),
   };

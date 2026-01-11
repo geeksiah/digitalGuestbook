@@ -362,7 +362,7 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
   const newOwnerToken = uuidv4();
 
   // Create duplicate event (exclude relations that will be copied separately)
-  const { id: _, createdAt: __, updatedAt: ___, ownerAccessToken: ____, ...eventData } = originalEvent;
+  const { id: _, createdAt: __, updatedAt: ___, ownerAccessToken: ____, formFields: _____, ticketTypes: ______, ...eventData } = originalEvent;
   
   const duplicatedEvent = await prisma.event.create({
     data: {

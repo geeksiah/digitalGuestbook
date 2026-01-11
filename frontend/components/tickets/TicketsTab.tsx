@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ticketingApi, promoCodeApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import PaymentGatewaySelector from './PaymentGatewaySelector';
 
 interface TicketType {
   id: string;
@@ -413,9 +414,11 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
         </div>
       )}
 
-      {/* Payment Gateway Configuration */}
+      {/* Payment Gateway Selection */}
       {event.rsvpMode === 'paid' && (
-        <PaymentGatewayConfig eventId={eventId} />
+        <div className="bg-white rounded-xl border border-surface-200 p-6">
+          <PaymentGatewaySelector eventId={eventId} onUpdate={onRefresh} />
+        </div>
       )}
     </div>
   );

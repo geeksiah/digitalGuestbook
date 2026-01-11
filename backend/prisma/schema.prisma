@@ -168,22 +168,22 @@ model Event {
   boothPhotoTemplate     Template? @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
   thankYouTemplate       Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
 
-  rsvps          RSVP[]
-  invitations    Invitation[]
-  checkIns       CheckIn[]
-  mediaAssets    MediaAsset[]
-  broadcasts     Broadcast[]
-  auditLogs      AuditLog[]
-  formFields     EventFormField[]
-  ticketTypes    TicketType[]
-  promoCodes     PromoCode[]
-  paymentGateway PaymentGateway?
-  payoutWallet   PayoutWallet?
-  transactions   Transaction[]
-  payoutRequests PayoutRequest[]
-  reelJobs       ReelJob[]
-  Owner          Owner?           @relation(fields: [ownerId], references: [id])
-  ownerId        String?
+  rsvps              RSVP[]
+  invitations        Invitation[]
+  checkIns           CheckIn[]
+  mediaAssets        MediaAsset[]
+  broadcasts         Broadcast[]
+  auditLogs          AuditLog[]
+  formFields         EventFormField[]
+  ticketTypes        TicketType[]
+  promoCodes         PromoCode[]
+  eventPaymentGateways EventPaymentGateway[]
+  payoutWallet       PayoutWallet?
+  transactions       Transaction[]
+  payoutRequests     PayoutRequest[]
+  reelJobs           ReelJob[]
+  Owner              Owner?           @relation(fields: [ownerId], references: [id])
+  ownerId            String?
 }
 
 // ============================================
@@ -528,13 +528,16 @@ model TicketType {
 }
 
 // Payment Gateway Configuration per Event
+// System-wide Payment Gateway Configuration
+// Admin configures all available payment gateways here
 model PaymentGateway {
-  id      String @id @default(uuid())
-  eventId String @unique
-
-  // Gateway Selection
-  gateway String // stripe | paystack | flutterwave | paypal | free
-  isLive  Boolean @default(false) // Test vs Live mode
+  id          String  @id @default(uuid())
+  name        String  // Display name (e.g., "Stripe Production", "Paystack Test")
+  gateway     String  // stripe | paystack | flutterwave | paypal | mtn_momo | telecel_cash | airteltigo_cash | custom
+  description String? // Optional description
+  
+  isActive    Boolean @default(true) // Enable/disable this gateway
+  isLive      Boolean @default(false) // Test vs Live mode
 
   // Stripe Configuration
   stripePublicKey     String?
@@ -581,7 +584,29 @@ model PaymentGateway {
   updatedAt DateTime @updatedAt
 
   // Relations
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  events EventPaymentGateway[]
+}
+
+// Junction table: Which payment gateways are enabled for each event
+model EventPaymentGateway {
+  id              String  @id @default(uuid())
+  eventId         String
+  paymentGatewayId String
+  
+  // Event-specific settings (can override gateway defaults)
+  isActive        Boolean @default(true)
+  sortOrder       Int     @default(0) // Order of display in payment options
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event           Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentGateway  PaymentGateway @relation(fields: [paymentGatewayId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, paymentGatewayId])
+  @@index([eventId])
+  @@index([paymentGatewayId])
 }
 
 // ============================================
