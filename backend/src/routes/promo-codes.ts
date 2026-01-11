@@ -201,7 +201,7 @@ router.post('/validate', asyncHandler(async (req, res) => {
   }
 
   // Check ticket type applicability
-  if (promoCode.ticketTypeIds) {
+  if (promoCode.ticketTypeIds && ticketTypeId !== undefined) {
     const applicableTypes = JSON.parse(promoCode.ticketTypeIds) as string[];
     if (!applicableTypes.includes(ticketTypeId)) {
       return res.json({ valid: false, error: 'Promo code does not apply to this ticket type' });

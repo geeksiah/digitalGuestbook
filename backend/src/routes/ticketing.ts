@@ -240,11 +240,7 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
 
   const event = await prisma.event.findUnique({
     where: { slug: eventSlug },
-    select: {
-      id: true,
-      name: true,
-      rsvpMode: true,
-      requireApproval: true,
+    include: {
       formFields: {
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -257,7 +253,6 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
         where: { isActive: true },
         include: {
           paymentGateway: {
-            where: { isActive: true },
             select: {
               id: true,
               name: true,
@@ -434,14 +429,7 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
 
     if (promoCodeRecord) {
       // Check usage limits
-      const usageCount = await prisma.rSVP.count({
-        where: {
-          eventId: event.id,
-          promoCodeId: promoCodeRecord.id,
-        },
-      });
-
-      if (promoCodeRecord.maxUses && usageCount >= promoCodeRecord.maxUses) {
+      if (promoCodeRecord.usageLimit && promoCodeRecord.usageCount >= promoCodeRecord.usageLimit) {
         throw new AppError('Promo code has reached maximum usage limit', 400);
       }
 
@@ -475,6 +463,10 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
     throw new AppError('Payment gateway not configured for this event', 400);
   }
 
+  // Get primary ticket type name
+  const primaryTicketType = event.ticketTypes.find((t: any) => t.id === data.tickets[0].ticketTypeId);
+  const ticketTypeName = primaryTicketType?.name || 'Ticket';
+
   // Create RSVP with ticket purchase
   const rsvp = await prisma.rSVP.create({
     data: {
@@ -491,14 +483,15 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       submissionChannel: data.submissionChannel || 'web',
       status: event.requireApproval ? 'PENDING' : 'APPROVED',
       
-      // Ticket purchase fields
-      ticketTypeId: data.tickets[0].ticketTypeId, // Primary ticket type
+      // Ticket purchase fields (using String fields from schema)
+      ticketType: ticketTypeName,
       ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
       amountPaid: amountPaid,
-      paymentStatus: 'PAID', // Assume paid if payment reference provided
+      currency: event.ticketTypes[0]?.currency || 'USD',
+      paymentStatus: 'PAID',
       paymentMethod: data.paymentMethod,
-      paymentReference: data.paymentReference,
-      promoCodeId: promoCodeRecord?.id,
+      paymentRef: data.paymentReference,
+      paymentDate: new Date(),
     },
   });
 
