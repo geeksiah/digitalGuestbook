@@ -265,22 +265,20 @@ export const ownerAuthApi = {
 };
 
 // Owner Dashboard API
+const ownerDashboardHeaders = {
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+  },
+};
+
 export const ownerDashboardApi = {
-  getEvents: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-    },
-  }),
-  getEvent: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-    },
-  }),
-  getStats: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/stats`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-    },
-  }),
+  getEvents: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, ownerDashboardHeaders),
+  getEvent: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, ownerDashboardHeaders),
+  getStats: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/stats`, ownerDashboardHeaders),
+  getRsvps: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps`, { ...ownerDashboardHeaders, params }),
+  getMedia: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, { ...ownerDashboardHeaders, params }),
+  getCheckIns: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/checkins`, ownerDashboardHeaders),
+  getTickets: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/tickets`, ownerDashboardHeaders),
 };
 
 

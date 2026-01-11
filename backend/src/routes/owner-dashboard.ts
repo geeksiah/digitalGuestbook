@@ -161,5 +161,170 @@ router.get('/stats', asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/owner-dashboard/events/:eventId/rsvps
+ * Get RSVPs for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/rsvps', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+  const { status } = req.query;
+
+  // Verify owner owns this event
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const where: any = { eventId };
+  if (status && status !== 'all') {
+    where.status = status;
+  }
+
+  const rsvps = await prisma.rSVP.findMany({
+    where,
+    include: {
+      invitation: {
+        select: {
+          id: true,
+          accessCode: true,
+          token: true,
+          qrCodeData: true,
+          isCheckedIn: true,
+        },
+      },
+    },
+    orderBy: { submittedAt: 'desc' },
+  });
+
+  res.json({ rsvps });
+}));
+
+/**
+ * GET /api/owner-dashboard/events/:eventId/media
+ * Get media for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/media', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+  const { type } = req.query;
+
+  // Verify owner owns this event
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const where: any = { eventId };
+  if (type) {
+    where.type = type;
+  }
+
+  const { downloadFile, BUCKETS, getPublicUrl } = await import('../services/supabaseStorage.js');
+
+  const media = await prisma.mediaAsset.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // Transform media to include proper URLs
+  const mediaWithUrls = media.map(asset => {
+    let fileUrl = asset.filePath;
+    if (!asset.filePath.startsWith('http://') && !asset.filePath.startsWith('https://')) {
+      try {
+        fileUrl = getPublicUrl(BUCKETS.MEDIA, asset.filePath);
+      } catch {
+        fileUrl = asset.filePath.startsWith('/') ? asset.filePath : `/${asset.filePath}`;
+      }
+    }
+
+    let thumbnailUrl = asset.thumbnailPath;
+    if (asset.thumbnailPath && !asset.thumbnailPath.startsWith('http://') && !asset.thumbnailPath.startsWith('https://')) {
+      try {
+        thumbnailUrl = getPublicUrl(BUCKETS.MEDIA, asset.thumbnailPath);
+      } catch {
+        thumbnailUrl = asset.thumbnailPath.startsWith('/') ? asset.thumbnailPath : `/${asset.thumbnailPath}`;
+      }
+    }
+
+    return {
+      ...asset,
+      filePath: fileUrl,
+      thumbnailPath: thumbnailUrl,
+    };
+  });
+
+  res.json({ media: mediaWithUrls });
+}));
+
+/**
+ * GET /api/owner-dashboard/events/:eventId/checkins
+ * Get check-ins for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/checkins', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+
+  // Verify owner owns this event
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const checkIns = await prisma.checkIn.findMany({
+    where: { eventId },
+    include: {
+      invitation: {
+        select: {
+          guestName: true,
+          guestCount: true,
+          accessCode: true,
+        },
+      },
+    },
+    orderBy: { checkedInAt: 'desc' },
+  });
+
+  res.json({ checkIns });
+}));
+
+/**
+ * GET /api/owner-dashboard/events/:eventId/tickets
+ * Get tickets for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/tickets', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+
+  // Verify owner owns this event
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const tickets = await prisma.ticketType.findMany({
+    where: { eventId },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  res.json({ tickets });
+}));
+
 export default router;
 
