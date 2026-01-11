@@ -211,9 +211,28 @@ export async function sendSmsWithProvider(
           };
         };
         
+        // Log raw response for debugging
+        console.log('[SMS] Arkesel response:', JSON.stringify(result));
+        
         // Arkesel response format: { status: "success", data: { status: "sent", message_id: "...", balance: ... } }
         // Sometimes response is: { status: "success", message: "SMS sent", data: { ... } }
-        if (result.status === 'success' && (result.data?.status === 'sent' || result.message?.toLowerCase().includes('sent'))) {
+        // Also handles: { status: "success", message: "Successfully Sent", ... }
+        // Or: { message: "Successfully Sent", ... } (without status field)
+        // Or: { status: "ok", message: "Successfully Sent", ... } (different status value)
+        const statusIsSuccess = result.status?.toLowerCase() === 'success' || 
+                               result.status?.toLowerCase() === 'ok' || 
+                               !result.status;
+        const dataStatusIsSent = result.data?.status?.toLowerCase() === 'sent';
+        const messageIndicatesSuccess = result.message?.toLowerCase().includes('sent') || 
+                                        result.message?.toLowerCase().includes('successfully');
+        
+        // Success conditions (prioritize message indication over status if message is clear):
+        // 1. If message clearly indicates success, treat as success (most reliable indicator)
+        // 2. OR if status is success/ok AND (data.status is "sent" OR message indicates success)
+        const isSuccess = messageIndicatesSuccess || 
+                         (statusIsSuccess && (dataStatusIsSent || messageIndicatesSuccess));
+        
+        if (isSuccess) {
           console.log('[SMS] Sent via Arkesel to:', to, 'Message ID:', result.data?.message_id, 'Balance:', result.data?.balance);
           return { 
             success: true, 
@@ -223,6 +242,7 @@ export async function sendSmsWithProvider(
         } else {
           // Handle error response from Arkesel
           const errorMsg = result.message || result.data?.message || JSON.stringify(result);
+          console.error('[SMS] Arkesel failed - status:', result.status, 'data.status:', result.data?.status, 'message:', result.message);
           throw new Error(`Arkesel SMS failed: ${errorMsg}`);
         }
       } else {
