@@ -45,6 +45,8 @@ export default function OwnersPage() {
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   const [editingOwner, setEditingOwner] = useState<Owner | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [passwordModalOwner, setPasswordModalOwner] = useState<Owner | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     fetchOwners();
@@ -85,6 +87,15 @@ export default function OwnersPage() {
     }
   };
 
+  const handleResendWelcomeEmail = async (owner: Owner) => {
+    try {
+      await ownersApi.resendWelcomeEmail(owner.id);
+      toast.success('Welcome email sent successfully');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to send email');
+    }
+  };
+
   if (showEditModal && editingOwner) {
     return (
       <EditOwnerModal
@@ -97,6 +108,18 @@ export default function OwnersPage() {
           setShowEditModal(false);
           setEditingOwner(null);
           fetchOwners();
+        }}
+      />
+    );
+  }
+
+  if (showPasswordModal && passwordModalOwner) {
+    return (
+      <PasswordManagementModal
+        owner={passwordModalOwner}
+        onClose={() => {
+          setShowPasswordModal(false);
+          setPasswordModalOwner(null);
         }}
       />
     );
@@ -264,18 +287,43 @@ export default function OwnersPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEdit(owner)}
-                      className="text-navy-600 hover:text-navy-900 mr-4"
-                    >
-                      {Icons.edit}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(owner.id)}
-                      className="text-rose-600 hover:text-rose-900"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleEdit(owner)}
+                        className="text-navy-600 hover:text-navy-900"
+                        title="Edit"
+                      >
+                        {Icons.edit}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPasswordModalOwner(owner);
+                          setShowPasswordModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="Password Management"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleResendWelcomeEmail(owner)}
+                        className="text-emerald-600 hover:text-emerald-900"
+                        title="Resend Welcome Email"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(owner.id)}
+                        className="text-rose-600 hover:text-rose-900"
+                        title="Delete"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

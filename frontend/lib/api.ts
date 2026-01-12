@@ -240,6 +240,11 @@ export const ownersApi = {
   delete: (id: string) => api.delete(`/owners/${id}`),
   getWallet: (id: string) => api.get(`/owners/${id}/wallet`),
   updateWallet: (id: string, data: any) => api.post(`/owners/${id}/wallet`, data),
+  changePassword: (id: string, newPassword: string) => api.post(`/owners/${id}/change-password`, { newPassword }),
+  resendWelcomeEmail: (id: string) => api.post(`/owners/${id}/resend-welcome-email`),
+  getPasswordResetRequests: (status?: string) => api.get('/owners/password-reset-requests', { params: status ? { status } : {} }),
+  approvePasswordReset: (id: string, newPassword: string) => api.post(`/owners/password-reset-requests/${id}/approve`, { newPassword }),
+  rejectPasswordReset: (id: string, reason?: string) => api.post(`/owners/password-reset-requests/${id}/reject`, { reason }),
 };
 
 // Owner Authentication API
@@ -265,6 +270,8 @@ export const ownerAuthApi = {
     axios.post(`${API_BASE_URL}/api/owner-auth/change-password`, { currentPassword, newPassword }, getOwnerAuthHeaders()),
   updateProfile: (data: { name?: string; email?: string; phone?: string; company?: string }) => 
     axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, getOwnerAuthHeaders()),
+  requestPasswordReset: (email: string, reason?: string) => 
+    axios.post(`${API_BASE_URL}/api/owner-auth/request-password-reset`, { email, reason }),
 };
 
 // Owner Dashboard API

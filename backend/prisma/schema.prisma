@@ -33,6 +33,7 @@ model Admin {
 
   // Relations
   auditLogs AuditLog[]
+  passwordResetRequests PasswordResetRequest[]
 }
 
 // ============================================
@@ -62,6 +63,7 @@ model Owner {
   // Relations
   events Event[]
   wallet OwnerWallet?
+  passwordResetRequests PasswordResetRequest[]
 }
 
 // Owner Wallet Configuration (for payouts across all events)
@@ -100,6 +102,27 @@ model OwnerWallet {
 
   // Relations
   owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+// Password Reset Requests (pending admin approval)
+model PasswordResetRequest {
+  id        String   @id @default(uuid())
+  ownerId   String
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reason    String?  // Owner's reason for requesting reset
+  newPasswordHash String? // Set when admin approves (temporary until owner sets new password)
+  approvedBy String? // Admin ID who approved/rejected
+  rejectedReason String? // Reason for rejection
+  expiresAt DateTime? // Expiration for approved requests
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  admin Admin? @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([status])
 }
 
 // ============================================

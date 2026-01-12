@@ -39,6 +39,11 @@ const updateProfileSchema = z.object({
   company: z.string().optional(),
 });
 
+const requestPasswordResetSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  reason: z.string().optional(),
+});
+
 // Get JWT secret
 const getJwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;

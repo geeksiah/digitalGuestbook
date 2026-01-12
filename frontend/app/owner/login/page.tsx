@@ -13,7 +13,9 @@ export default function OwnerLoginPage() {
   const [loading, setLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [isSetupPassword, setIsSetupPassword] = useState(false);
+  const [isRequestReset, setIsRequestReset] = useState(false);
   const [setupEmail, setSetupEmail] = useState('');
+  const [resetReason, setResetReason] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -27,7 +29,14 @@ export default function OwnerLoginPage() {
     setLoading(true);
 
     try {
-      if (isSetupPassword) {
+      if (isRequestReset) {
+        await ownerAuthApi.requestPasswordReset(setupEmail, resetReason);
+        toast.success('Password reset request submitted. An admin will review your request and notify you once approved.');
+        setIsRequestReset(false);
+        setSetupEmail('');
+        setResetReason('');
+        setFormData({ ...formData, email: '', password: '' });
+      } else if (isSetupPassword) {
         const response = await ownerAuthApi.setupPassword(setupEmail, formData.password);
         const { token, owner } = response.data;
         setAuth(token, owner);
@@ -97,14 +106,48 @@ export default function OwnerLoginPage() {
               </svg>
             </div>
             <h1 className="text-2xl font-display font-bold text-navy-900">
-              {isRegister ? 'Create Account' : 'Owner Portal'}
+              {isRequestReset ? 'Request Password Reset' : isRegister ? 'Create Account' : 'Owner Portal'}
             </h1>
             <p className="text-surface-600 mt-1">
-              {isRegister ? 'Sign up to manage your events' : 'Sign in to manage your events'}
+              {isRequestReset ? 'Submit a request for admin approval' : isRegister ? 'Sign up to manage your events' : 'Sign in to manage your events'}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {isRequestReset && (
+              <>
+                <div>
+                  <label htmlFor="reset-email" className="label">
+                    Email Address *
+                  </label>
+                  <input
+                    id="reset-email"
+                    type="email"
+                    required
+                    className="input"
+                    placeholder="owner@example.com"
+                    value={setupEmail}
+                    onChange={(e) => setSetupEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="reset-reason" className="label">
+                    Reason (Optional)
+                  </label>
+                  <textarea
+                    id="reset-reason"
+                    className="input"
+                    rows={3}
+                    placeholder="Please explain why you need to reset your password..."
+                    value={resetReason}
+                    onChange={(e) => setResetReason(e.target.value)}
+                  />
+                  <p className="text-xs text-surface-500 mt-1">
+                    Your request will be reviewed by an administrator. You'll be notified once it's approved or rejected.
+                  </p>
+                </div>
+              </>
+            )}
             {isSetupPassword && (
               <div>
                 <label htmlFor="setup-email" className="label">
@@ -141,35 +184,39 @@ export default function OwnerLoginPage() {
               </div>
             )}
 
-            <div>
-              <label htmlFor="email" className="label">
-                Email Address *
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                className="input"
-                placeholder="owner@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
+            {!isRequestReset && (
+              <>
+                <div>
+                  <label htmlFor="email" className="label">
+                    Email Address *
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    className="input"
+                    placeholder="owner@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="password" className="label">
-                Password *
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                className="input"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              />
-            </div>
+                <div>
+                  <label htmlFor="password" className="label">
+                    Password *
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    required
+                    className="input"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
 
             {isRegister && (
               <>
@@ -214,27 +261,45 @@ export default function OwnerLoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  {isRegister ? 'Creating...' : 'Signing in...'}
+                  {isRequestReset ? 'Submitting...' : isRegister ? 'Creating...' : 'Signing in...'}
                 </span>
               ) : (
-                isRegister ? 'Create Account' : 'Sign In'
+                isRequestReset ? 'Submit Request' : isRegister ? 'Create Account' : 'Sign In'
               )}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(!isRegister);
-                setFormData({ name: '', email: '', password: '', phone: '', company: '' });
-              }}
-              className="text-sm text-surface-600 hover:text-navy-900"
-            >
-              {isRegister
-                ? 'Already have an account? Sign in'
-                : "Don't have an account? Sign up"}
-            </button>
+          <div className="mt-6 space-y-2 text-center">
+            {!isRequestReset && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(!isRegister);
+                  setFormData({ name: '', email: '', password: '', phone: '', company: '' });
+                }}
+                className="text-sm text-surface-600 hover:text-navy-900 block"
+              >
+                {isRegister
+                  ? 'Already have an account? Sign in'
+                  : "Don't have an account? Sign up"}
+              </button>
+            )}
+            {!isRegister && !isSetupPassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRequestReset(!isRequestReset);
+                  setFormData({ name: '', email: '', password: '', phone: '', company: '' });
+                  setSetupEmail('');
+                  setResetReason('');
+                }}
+                className="text-sm text-surface-600 hover:text-navy-900 block"
+              >
+                {isRequestReset
+                  ? 'Back to login'
+                  : 'Forgot password? Request reset'}
+              </button>
+            )}
           </div>
         </div>
       </div>
