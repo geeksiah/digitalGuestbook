@@ -433,12 +433,14 @@ export default function EventOwnerPortalPage() {
           <div className="w-14 h-14 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-4 text-red-500">{Icons.close}</div>
           <h1 className="text-xl font-semibold text-navy-900 mb-2">Access Denied</h1>
           <p className="text-surface-500">{error}</p>
+        </div>
       </div>
-    </div>
-  );
+    );
   }
 
-  if (!event) return null;
+  if (!event) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-surface-50">
