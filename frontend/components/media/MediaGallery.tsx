@@ -170,7 +170,7 @@ export default function MediaGallery({
   const handleDownloadAll = async (type?: 'VIDEO' | 'PHOTO' | 'AUDIO') => {
     const toastId = 'download-all';
     try {
-      toast.loading('Creating ZIP archive...', { id: toastId });
+      toast.loading('Creating ZIP archive... This may take a moment for large files', { id: toastId, duration: 0 });
       
       const headers: Record<string, string> = {};
       if (isAdmin) {
