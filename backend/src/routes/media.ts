@@ -115,7 +115,8 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
   
   // Support both admin token and owner token
   const authHeader = req.headers.authorization;
-  const ownerToken = req.headers['x-owner-token'] as string | undefined;
+  // Check both lowercase and capitalized header names
+  const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']) as string | undefined;
   
   const mediaAsset = await prisma.mediaAsset.findUnique({
     where: { id },

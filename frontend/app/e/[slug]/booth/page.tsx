@@ -699,7 +699,7 @@ export default function BoothPage() {
             Tap to leave a special message
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
             <button
               onClick={() => setViewState('menu')}
               className="px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:scale-105 transition-transform active:scale-95 shadow-2xl"
@@ -831,7 +831,7 @@ export default function BoothPage() {
               "absolute inset-0 w-full h-full object-cover",
               recordingState === 'preview' && "hidden"
             )}
-            style={{ transform: 'none' }}
+            style={{ transform: 'scaleX(-1)' }}
           />
           
           {/* Preview Video */}
@@ -853,7 +853,7 @@ export default function BoothPage() {
         </div>
 
         {/* Controls */}
-        <div className="bg-gradient-to-t from-black/90 to-transparent p-8">
+        <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
           <div className="flex items-center justify-center gap-8">
             {recordingState === 'ready' && (
               <button
@@ -1097,7 +1097,7 @@ export default function BoothPage() {
         </div>
 
         {/* Controls */}
-        <div className="bg-gradient-to-t from-black/90 to-transparent p-8">
+        <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
           <div className="flex items-center justify-center gap-8">
             {/* Shutter Button */}
             {recordingState === 'ready' && canTakeMorePhotos && (

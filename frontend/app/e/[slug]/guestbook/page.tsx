@@ -853,6 +853,7 @@ export default function GuestbookPage() {
                     autoPlay
                     muted
                     playsInline
+                    style={{ transform: 'scaleX(-1)' }}
                   />
                 ) : (
                   <video

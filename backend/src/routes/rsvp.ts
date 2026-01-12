@@ -122,6 +122,14 @@ router.post('/:eventSlug', asyncHandler(async (req, res) => {
   if (!event.invitationOnly && data.attendance === 'YES') {
     console.log('[RSVP] Auto-approving RSVP and generating invitation pass');
     invitation = await generateInvitationPass(rsvp.id);
+    
+    // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+    if (invitation) {
+      const { sendInvitationNotifications } = await import('../services/notifications.js');
+      sendInvitationNotifications(invitation.id).catch(err => 
+        console.error('[Notification] Failed to send invitation notifications:', err)
+      );
+    }
   } else {
     console.log('[RSVP] RSVP created with status:', initialStatus, 'Invitation-only:', event.invitationOnly, 'Attendance:', data.attendance);
   }

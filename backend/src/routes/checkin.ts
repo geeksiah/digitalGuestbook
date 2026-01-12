@@ -93,22 +93,38 @@ router.post('/:eventId', optionalAdminAuth, asyncHandler(async (req, res) => {
   
   if (data.token) {
     // QR code scan - parse the token data
+    // QR code contains JSON string like: {"type":"event-invitation","eventId":"...","token":"...","code":"..."}
     try {
-      const tokenData = JSON.parse(data.token);
+      let tokenData;
+      // Try parsing as JSON string first
+      if (typeof data.token === 'string' && data.token.startsWith('{')) {
+        tokenData = JSON.parse(data.token);
+      } else {
+        // Might already be an object
+        tokenData = typeof data.token === 'string' ? JSON.parse(data.token) : data.token;
+      }
+      
       invitation = await prisma.invitation.findFirst({
         where: {
           eventId,
           OR: [
-            { token: tokenData.token },
             { accessCode: tokenData.code },
+            { rsvpId: tokenData.token }, // tokenData.token is actually the rsvpId
           ],
         },
         include: { rsvp: true },
       });
-    } catch {
-      // Token might be a direct token string
+    } catch (parseError: any) {
+      console.log('[Check-in] Failed to parse QR token, trying direct lookup:', parseError.message);
+      // Token might be a direct access code string
       invitation = await prisma.invitation.findFirst({
-        where: { eventId, token: data.token },
+        where: { 
+          eventId, 
+          OR: [
+            { accessCode: data.token },
+            { token: data.token },
+          ],
+        },
         include: { rsvp: true },
       });
     }
