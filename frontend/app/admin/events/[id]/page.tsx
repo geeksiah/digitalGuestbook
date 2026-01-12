@@ -321,6 +321,10 @@ export default function EventDetailPage() {
     try {
       const dt = new Date(`${eventSettings.date}T${eventSettings.time}`);
       const edt = eventSettings.endDate ? new Date(`${eventSettings.endDate}T${eventSettings.endTime || '23:59'}`) : null;
+      
+      // Enforce logic: check-in disabled when invitation-only is false
+      const checkInEnabled = eventSettings.invitationOnly ? eventSettings.checkInEnabled : false;
+      
       await eventsApi.update(eventId, {
         name: eventSettings.name, description: eventSettings.description || null,
         date: dt.toISOString(), endDate: edt?.toISOString() || null,
@@ -331,7 +335,7 @@ export default function EventDetailPage() {
         invitationEnabled: eventSettings.invitationEnabled,
         rsvpEnabled: eventSettings.rsvpEnabled,
         guestbookEnabled: eventSettings.guestbookEnabled,
-        checkInEnabled: eventSettings.checkInEnabled,
+        checkInEnabled: checkInEnabled,
         // RSVP Mode & Ticketing
         rsvpMode: eventSettings.rsvpMode,
         ticketingEnabled: eventSettings.ticketingEnabled,
@@ -1054,16 +1058,38 @@ export default function EventDetailPage() {
                     <div><span className="font-medium text-navy-900">Invitations</span><p className="text-xs text-surface-500">Digital invitation passes</p></div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.rsvpEnabled} onChange={e => setEventSettings({ ...eventSettings, rsvpEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-navy-900">RSVP</span><p className="text-xs text-surface-500">Guest response collection</p></div>
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.rsvpEnabled} onChange={e => {
+                      const enabled = e.target.checked;
+                      setEventSettings({ 
+                        ...eventSettings, 
+                        rsvpEnabled: enabled,
+                        // Reset RSVP mode when disabled
+                        rsvpMode: enabled ? eventSettings.rsvpMode : 'free',
+                        ticketingEnabled: enabled && eventSettings.rsvpMode === 'paid'
+                      });
+                    }} />
+                    <div><span className="font-medium text-navy-900">RSVP</span><p className="text-xs text-surface-500">Guest response collection {eventSettings.invitationOnly ? '(Mandatory when invitation-only)' : '(Optional)'}</p></div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
                     <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.guestbookEnabled} onChange={e => setEventSettings({ ...eventSettings, guestbookEnabled: e.target.checked })} />
                     <div><span className="font-medium text-navy-900">Guestbook</span><p className="text-xs text-surface-500">Video, audio, photo messages</p></div>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.checkInEnabled} onChange={e => setEventSettings({ ...eventSettings, checkInEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-navy-900">Check-in</span><p className="text-xs text-surface-500">Guest arrival tracking</p></div>
+                  <label className={`flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors ${eventSettings.invitationOnly ? '' : 'opacity-50 cursor-not-allowed'}`}>
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 rounded border-surface-300 text-navy-900" 
+                      checked={eventSettings.checkInEnabled && eventSettings.invitationOnly} 
+                      disabled={!eventSettings.invitationOnly}
+                      onChange={e => setEventSettings({ ...eventSettings, checkInEnabled: e.target.checked })} 
+                    />
+                    <div>
+                      <span className="font-medium text-navy-900">Check-in</span>
+                      <p className="text-xs text-surface-500">
+                        {eventSettings.invitationOnly 
+                          ? 'Guest arrival tracking' 
+                          : 'Only available for invitation-only events'}
+                      </p>
+                    </div>
                   </label>
                 </div>
               </div>
@@ -1072,7 +1098,11 @@ export default function EventDetailPage() {
               {eventSettings.rsvpEnabled && (
                 <div className="border-t border-surface-100 pt-6">
                   <h4 className="font-medium text-navy-900 mb-4">RSVP Mode</h4>
-                  <p className="text-sm text-surface-500 mb-4">Choose whether RSVPs are free or require ticket purchases.</p>
+                  <p className="text-sm text-surface-500 mb-4">
+                    {eventSettings.invitationOnly 
+                      ? 'RSVP is mandatory. Choose whether RSVPs are free or require ticket purchases.' 
+                      : 'RSVP is optional. Choose whether RSVPs are free or require ticket purchases. Guests can access other features without RSVP.'}
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-3 mb-4">
                     <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'free' ? 'border-navy-900 bg-navy-50' : 'border-surface-200 hover:bg-surface-50'}`}>
                       <input type="radio" name="rsvpMode" value="free" checked={eventSettings.rsvpMode === 'free'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'free' })} className="sr-only" />
@@ -1139,7 +1169,20 @@ export default function EventDetailPage() {
                 <h4 className="font-medium text-navy-900 mb-4">Access & Options</h4>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.invitationOnly} onChange={e => setEventSettings({ ...eventSettings, invitationOnly: e.target.checked })} />
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 rounded border-surface-300 text-navy-900" 
+                      checked={eventSettings.invitationOnly} 
+                      onChange={e => {
+                        const invitationOnly = e.target.checked;
+                        setEventSettings({ 
+                          ...eventSettings, 
+                          invitationOnly,
+                          // Disable check-in when invitation-only is unchecked
+                          checkInEnabled: invitationOnly ? eventSettings.checkInEnabled : false
+                        });
+                      }} 
+                    />
                     <div><span className="font-medium text-navy-900">Invitation Only</span><p className="text-sm text-surface-500">Guests must be approved before accessing event features</p></div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">

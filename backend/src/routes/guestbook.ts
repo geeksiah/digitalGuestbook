@@ -77,6 +77,8 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
   }
 
   // For invitation-only events, verify guest has valid invitation (unless booth mode)
+  // Booth/kiosk mode never requires access code
+  // When invitation-only is false, guestbook is accessible without code
   if (event.invitationOnly && requireAccessCode) {
     const { accessCode } = req.query;
     
@@ -99,6 +101,7 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
     // Attach invitation to request for reference
     (req as any).invitation = invitation;
   }
+  // If invitation-only is false, guestbook is accessible without code (already handled by the condition above)
 
   (req as any).event = event;
   next();

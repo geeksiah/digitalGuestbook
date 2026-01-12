@@ -16,6 +16,10 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: 'EventPeepo',
   description: 'Premium digital invitations, RSVP management, and guestbook for your special events - EventPeepo',
+  icons: {
+    icon: '/img/logo-light.svg',
+    apple: '/img/logo-light.svg',
+  },
 };
 
 export default function RootLayout({

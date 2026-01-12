@@ -77,6 +77,11 @@ router.post('/:eventId', optionalAdminAuth, asyncHandler(async (req, res) => {
     throw new AppError('Check-in is not enabled for this event', 400);
   }
 
+  // Check-in is only available for invitation-only events
+  if (!event.invitationOnly) {
+    throw new AppError('Check-in is only available for invitation-only events', 400);
+  }
+
   // Verify event is in LIVE phase
   const currentPhase = calculateEventPhase(event);
   if (!canCheckIn(currentPhase)) {

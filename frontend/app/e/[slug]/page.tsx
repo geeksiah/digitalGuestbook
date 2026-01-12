@@ -185,20 +185,20 @@ export default function EventPage() {
 
               {/* CTAs based on phase */}
               <div className="space-y-4">
-                {/* RSVP Button - PRE_EVENT only */}
+                {/* RSVP Button - PRE_EVENT only, optional when invitation-only is false */}
                 {event.capabilities.canSubmitRsvp && urls.rsvp && (
                   <Link
                     href={`/e/${event.slug}/rsvp`}
                     className="btn-primary w-full sm:w-auto px-12 py-3 text-base"
                   >
-                    RSVP Now
+                    {event.invitationOnly ? 'RSVP Now (Required)' : 'RSVP Now (Optional)'}
                   </Link>
                 )}
 
-                {/* Guestbook Button - LIVE only */}
+                {/* Guestbook Button - LIVE only, accessible without code when invitation-only is false */}
                 {event.capabilities.canAccessGuestbook && urls.guestbook && (
                   <Link
-                    href={`/e/${event.slug}/guestbook`}
+                    href={`/e/${event.slug}/guestbook${!event.invitationOnly ? '' : '?accessCode=REQUIRED'}`}
                     className="btn-secondary w-full sm:w-auto px-12 py-3 text-base"
                   >
                     Leave a Message
