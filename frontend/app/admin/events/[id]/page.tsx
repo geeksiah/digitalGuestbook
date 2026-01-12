@@ -69,6 +69,7 @@ interface RSVP {
   mealPreference: string | null;
   dietaryNotes: string | null;
   note: string | null;
+  customFields: string | null;
   status: string;
   submittedAt: string;
   invitation?: { id: string; accessCode: string; token: string; qrCodeData: string | null; isCheckedIn: boolean } | null;
@@ -257,7 +258,19 @@ export default function EventDetailPage() {
       toast.error(e.response?.data?.error || 'Failed to create owner');
     }
   };
-  const fetchRsvps = async () => { try { const p: any = {}; if (rsvpFilter !== 'all') p.status = rsvpFilter; const r = await rsvpApi.list(eventId, p); setRsvps(r.data.rsvps); } catch { toast.error('Failed to load RSVPs'); } };
+  const fetchRsvps = async () => {
+    setLoadingRsvps(true);
+    try {
+      const p: any = {};
+      if (rsvpFilter !== 'all') p.status = rsvpFilter;
+      const r = await rsvpApi.list(eventId, p);
+      setRsvps(r.data.rsvps);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to load RSVPs');
+    } finally {
+      setLoadingRsvps(false);
+    }
+  };
   const fetchMedia = async () => { try { const r = await mediaApi.list(eventId); setMedia(r.data.media || []); } catch { toast.error('Failed to load media'); } };
   const fetchCheckIns = async () => { try { const r = await checkInApi.list(eventId); setCheckIns(r.data.checkIns || []); } catch { toast.error('Failed to load check-ins'); } };
   const fetchTickets = async () => {
@@ -291,8 +304,19 @@ export default function EventDetailPage() {
   };
 
   const handleReviewRsvp = async (id: string, status: 'APPROVED' | 'REJECTED') => {
-    try { await rsvpApi.review(id, status); toast.success(`RSVP ${status.toLowerCase()}`); fetchRsvps(); fetchEvent(); }
-    catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
+    setReviewingRsvp(id);
+    try {
+      await rsvpApi.review(id, status);
+      toast.success(`RSVP ${status.toLowerCase()} successfully`, {
+        icon: status === 'APPROVED' ? '✅' : '❌',
+        duration: 3000,
+      });
+      await Promise.all([fetchRsvps(), fetchEvent()]);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to review RSVP');
+    } finally {
+      setReviewingRsvp(null);
+    }
   };
 
   const handleSaveTemplates = async () => {
@@ -528,30 +552,100 @@ export default function EventDetailPage() {
             </button>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead><tr className="border-b border-surface-200 bg-surface-50">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Details</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
-                </tr></thead>
-                <tbody className="divide-y divide-surface-100">
-                  {rsvps.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-surface-500">No RSVPs found</td></tr> : rsvps.map(r => (
-                    <tr key={r.id} className="hover:bg-surface-50 transition-colors">
-                      <td className="py-3 px-4"><p className="font-medium text-navy-900">{r.primaryName}</p>{r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}</td>
-                      <td className="py-3 px-4">{r.email && <p className="text-sm text-surface-600">{r.email}</p>}{r.phone && <p className="text-sm text-surface-500">{r.phone}</p>}</td>
-                      <td className="py-3 px-4"><span className={getStatusColor(r.attendance)}>{r.attendance}</span><p className="text-sm text-surface-500">{r.guestCount} guest(s)</p></td>
-                      <td className="py-3 px-4 text-sm">{r.mealPreference && <p>Meal: {r.mealPreference}</p>}{r.note && <p className="text-xs text-surface-500 truncate max-w-[150px]">{r.note}</p>}</td>
-                      <td className="py-3 px-4"><span className={getStatusColor(r.status)}>{r.status}</span>{r.invitation?.isCheckedIn && <span className="ml-2 text-xs text-green-600">{Icons.check} In</span>}{r.invitation?.accessCode && <p className="text-xs text-surface-400 mt-1 font-mono">{r.invitation.accessCode}</p>}</td>
-                      <td className="py-3 px-4 text-right">{r.status === 'PENDING' && <div className="flex justify-end gap-2"><button onClick={() => handleReviewRsvp(r.id, 'APPROVED')} className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors">Approve</button><button onClick={() => handleReviewRsvp(r.id, 'REJECTED')} className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors">Reject</button></div>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {loadingRsvps ? (
+              <div className="py-12 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900"></div>
+                <p className="mt-4 text-surface-500">Loading RSVPs...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead><tr className="border-b border-surface-200 bg-surface-50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Meal & Dietary</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Notes</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                    <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-surface-100">
+                    {rsvps.length === 0 ? (
+                      <tr><td colSpan={7} className="py-12 text-center text-surface-500">No RSVPs found</td></tr>
+                    ) : rsvps.map(r => {
+                      const customFields = r.customFields ? JSON.parse(r.customFields) : null;
+                      return (
+                        <tr key={r.id} className="hover:bg-surface-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <p className="font-medium text-navy-900">{r.primaryName}</p>
+                            {r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}
+                          </td>
+                          <td className="py-3 px-4">
+                            {r.email && <p className="text-sm text-surface-600">{r.email}</p>}
+                            {r.phone && <p className="text-sm text-surface-500">{r.phone}</p>}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={getStatusColor(r.attendance)}>{r.attendance}</span>
+                            <p className="text-sm text-surface-500 mt-1">{r.guestCount} guest(s)</p>
+                            {r.submittedAt && (
+                              <p className="text-xs text-surface-400 mt-1">{formatDate(r.submittedAt, 'MMM d, yyyy')}</p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            {r.mealPreference && <p className="text-surface-700">Meal: <span className="font-medium">{r.mealPreference}</span></p>}
+                            {r.dietaryNotes && <p className="text-xs text-surface-600 mt-1">Dietary: {r.dietaryNotes}</p>}
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            {r.note && <p className="text-surface-600 max-w-[200px]">{r.note}</p>}
+                            {customFields && Object.keys(customFields).length > 0 && (
+                              <details className="mt-2">
+                                <summary className="text-xs text-primary-600 cursor-pointer hover:text-primary-700">Custom Fields</summary>
+                                <div className="mt-2 text-xs text-surface-500 space-y-1">
+                                  {Object.entries(customFields).map(([key, value]) => (
+                                    <p key={key}><span className="font-medium">{key}:</span> {String(value)}</p>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={getStatusColor(r.status)}>{r.status}</span>
+                            {r.invitation?.isCheckedIn && (
+                              <span className="ml-2 text-xs text-green-600 flex items-center gap-1">
+                                {Icons.check} In
+                              </span>
+                            )}
+                            {r.invitation?.accessCode && (
+                              <p className="text-xs text-surface-400 mt-1 font-mono">{r.invitation.accessCode}</p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {r.status === 'PENDING' && (
+                              <div className="flex justify-end gap-2">
+                                <button 
+                                  onClick={() => handleReviewRsvp(r.id, 'APPROVED')} 
+                                  className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={reviewingRsvp === r.id}
+                                >
+                                  {reviewingRsvp === r.id ? 'Processing...' : 'Approve'}
+                                </button>
+                                <button 
+                                  onClick={() => handleReviewRsvp(r.id, 'REJECTED')} 
+                                  className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={reviewingRsvp === r.id}
+                                >
+                                  {reviewingRsvp === r.id ? 'Processing...' : 'Reject'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

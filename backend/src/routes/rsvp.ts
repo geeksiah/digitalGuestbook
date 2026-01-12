@@ -195,7 +195,20 @@ router.get('/event/:eventId', authenticateAdmin, asyncHandler(async (req, res) =
       orderBy: { submittedAt: 'desc' },
       skip,
       take,
-      include: {
+      select: {
+        id: true,
+        primaryName: true,
+        secondaryName: true,
+        email: true,
+        phone: true,
+        attendance: true,
+        guestCount: true,
+        mealPreference: true,
+        dietaryNotes: true,
+        note: true,
+        customFields: true,
+        status: true,
+        submittedAt: true,
         invitation: {
           select: {
             id: true,
