@@ -1,6 +1,10 @@
+'use client';
+
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function NotFound() {
+  const router = useRouter();
   return (
     <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
       {/* Decorative elements */}
@@ -55,7 +59,7 @@ export default function NotFound() {
               Go Home
             </Link>
             <button
-              onClick={() => window.history.back()}
+              onClick={() => router.back()}
               className="btn-secondary px-8 py-3 text-base w-full sm:w-auto"
             >
               Go Back
