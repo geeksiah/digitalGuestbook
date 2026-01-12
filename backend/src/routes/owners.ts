@@ -167,11 +167,11 @@ router.post('/', asyncHandler(async (req, res) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to Digital Event Platform</h1>
+              <h1>Welcome to EventPeepo</h1>
             </div>
             <div class="content">
               <p>Hello ${owner.name},</p>
-              <p>An account has been created for you on the Digital Event Platform. To get started, you'll need to set up your password.</p>
+              <p>An account has been created for you on the EventPeepo. To get started, you'll need to set up your password.</p>
               <p style="text-align: center;">
                 <a href="${setupLink}" class="button">Set Up Your Password</a>
               </p>
@@ -181,7 +181,7 @@ router.post('/', asyncHandler(async (req, res) => {
               <p>If you didn't expect this email, please ignore it.</p>
             </div>
             <div class="footer">
-              <p>This is an automated message from Digital Event Platform</p>
+              <p>This is an automated message from EventPeepo</p>
             </div>
           </div>
         </body>
@@ -189,11 +189,11 @@ router.post('/', asyncHandler(async (req, res) => {
     `;
     
     const emailText = `
-Welcome to Digital Event Platform
+Welcome to EventPeepo
 
 Hello ${owner.name},
 
-An account has been created for you on the Digital Event Platform. To get started, you'll need to set up your password.
+An account has been created for you on the EventPeepo. To get started, you'll need to set up your password.
 
 Visit this link to set up your password:
 ${setupLink}
@@ -202,12 +202,12 @@ Once you've set up your password, you can log in to manage your events and view 
 
 If you didn't expect this email, please ignore it.
 
-This is an automated message from Digital Event Platform
+This is an automated message from EventPeepo
     `;
     
     const emailResult = await sendEmail(
       owner.email,
-      'Welcome to Digital Event Platform - Set Up Your Password',
+      'Welcome to EventPeepo - Set Up Your Password',
       emailHtml,
       emailText
     );
@@ -486,11 +486,11 @@ router.post('/:id/resend-welcome-email', asyncHandler(async (req, res) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to Digital Event Platform</h1>
+              <h1>Welcome to EventPeepo</h1>
             </div>
             <div class="content">
               <p>Hello ${owner.name},</p>
-              <p>An account has been created for you on the Digital Event Platform. To get started, you'll need to set up your password.</p>
+              <p>An account has been created for you on the EventPeepo. To get started, you'll need to set up your password.</p>
               <p style="text-align: center;">
                 <a href="${setupLink}" class="button">Set Up Your Password</a>
               </p>
@@ -500,7 +500,7 @@ router.post('/:id/resend-welcome-email', asyncHandler(async (req, res) => {
               <p>If you didn't expect this email, please ignore it.</p>
             </div>
             <div class="footer">
-              <p>This is an automated message from Digital Event Platform</p>
+              <p>This is an automated message from EventPeepo</p>
             </div>
           </div>
         </body>
@@ -508,11 +508,11 @@ router.post('/:id/resend-welcome-email', asyncHandler(async (req, res) => {
     `;
     
     const emailText = `
-Welcome to Digital Event Platform
+Welcome to EventPeepo
 
 Hello ${owner.name},
 
-An account has been created for you on the Digital Event Platform. To get started, you'll need to set up your password.
+An account has been created for you on the EventPeepo. To get started, you'll need to set up your password.
 
 Visit this link to set up your password:
 ${setupLink}
@@ -521,12 +521,12 @@ Once you've set up your password, you can log in to manage your events and view 
 
 If you didn't expect this email, please ignore it.
 
-This is an automated message from Digital Event Platform
+This is an automated message from EventPeepo
     `;
     
     const emailResult = await sendEmail(
       owner.email,
-      'Welcome to Digital Event Platform - Set Up Your Password',
+      'Welcome to EventPeepo - Set Up Your Password',
       emailHtml,
       emailText
     );
@@ -668,7 +668,7 @@ router.post('/password-reset-requests/:id/approve', asyncHandler(async (req, res
               <p>If you didn't request this password reset, please contact support immediately.</p>
             </div>
             <div class="footer">
-              <p>This is an automated message from Digital Event Platform</p>
+              <p>This is an automated message from EventPeepo</p>
             </div>
           </div>
         </body>
@@ -687,12 +687,12 @@ ${loginLink}
 
 If you didn't request this password reset, please contact support immediately.
 
-This is an automated message from Digital Event Platform
+This is an automated message from EventPeepo
     `;
     
     const emailResult = await sendEmail(
       request.owner.email,
-      'Password Reset Approved - Digital Event Platform',
+      'Password Reset Approved - EventPeepo',
       emailHtml,
       emailText
     );
@@ -778,7 +778,7 @@ router.post('/password-reset-requests/:id/reject', asyncHandler(async (req, res)
               <p>If you believe this is an error, please contact support for assistance.</p>
             </div>
             <div class="footer">
-              <p>This is an automated message from Digital Event Platform</p>
+              <p>This is an automated message from EventPeepo</p>
             </div>
           </div>
         </body>
@@ -787,7 +787,7 @@ router.post('/password-reset-requests/:id/reject', asyncHandler(async (req, res)
     
     const emailResult = await sendEmail(
       request.owner.email,
-      'Password Reset Request Rejected - Digital Event Platform',
+      'Password Reset Request Rejected - EventPeepo',
       emailHtml,
       `Your password reset request has been rejected.${reason ? ` Reason: ${reason}` : ''}`
     );

@@ -438,11 +438,11 @@ export default function CheckInPage() {
       <footer className="p-4 text-center border-t border-white/10 safe-area-bottom space-y-2">
         <img 
           src="/img/logo-light.svg" 
-          alt="Digital Event Platform" 
+          alt="EventPeepo" 
           className="h-6 w-auto mx-auto opacity-80"
         />
         <p className="text-surface-400 text-xs">
-          © {new Date().getFullYear()} Digital Event Platform. All rights reserved.
+          © {new Date().getFullYear()} EventPeepo. All rights reserved.
         </p>
         <p className="text-surface-500 text-xs sm:text-sm">
           {inputMode === 'scan' ? 'Scan QR code from invitation' : 'Enter 6-digit code from invitation'}

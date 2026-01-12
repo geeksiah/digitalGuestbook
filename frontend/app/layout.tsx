@@ -14,8 +14,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'Digital Event Platform',
-  description: 'Premium digital invitations, RSVP management, and guestbook for your special events',
+  title: 'EventPeepo',
+  description: 'Premium digital invitations, RSVP management, and guestbook for your special events - EventPeepo',
 };
 
 export default function RootLayout({

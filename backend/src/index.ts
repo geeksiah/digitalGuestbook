@@ -127,7 +127,7 @@ async function initializeDatabase() {
     const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
     if (!settings) {
       await prisma.systemSettings.create({
-        data: { id: 'default', siteName: 'Digital Event Platform' },
+        data: { id: 'default', siteName: 'EventPeepo' },
       });
       console.log('✅ System settings initialized');
     }
@@ -153,7 +153,7 @@ async function initializeDatabase() {
           smtpUser: smtpUser,
           smtpPass: smtpPass || '',
           fromEmail: fromEmail || smtpUser || '',
-          fromName: process.env.DEFAULT_EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Digital Event Platform',
+          fromName: process.env.DEFAULT_EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'EventPeepo',
           isDefault: true,
           isActive: true,
         },
@@ -351,7 +351,7 @@ app.use(requestLogger);
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
-    service: 'Digital Event Platform API',
+    service: 'EventPeepo API',
     timestamp: new Date().toISOString()
   });
 });

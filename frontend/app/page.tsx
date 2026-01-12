@@ -124,14 +124,14 @@ export default function HomePage() {
           <div className="flex flex-col items-center justify-center space-y-4">
             <img 
               src="/img/logo-light.svg" 
-              alt="Digital Event Platform" 
-              className="h-8 w-auto opacity-80"
+              alt="EventPeepo" 
+              className="h-8 w-auto opacity-80 mx-auto"
             />
             <p className="text-center text-surface-500 text-sm">
-              Digital Event Platform — Premium Managed Event Solutions
+              EventPeepo — Premium Managed Event Solutions
             </p>
             <p className="text-center text-surface-400 text-xs">
-              © {new Date().getFullYear()} Digital Event Platform. All rights reserved.
+              © {new Date().getFullYear()} EventPeepo. All rights reserved.
             </p>
           </div>
         </div>

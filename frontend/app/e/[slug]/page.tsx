@@ -226,14 +226,14 @@ export default function EventPage() {
           <div className="text-center mt-8 space-y-2">
             <img 
               src="/img/logo-light.svg" 
-              alt="Digital Event Platform" 
+              alt="EventPeepo" 
               className="h-6 w-auto mx-auto opacity-80"
             />
             <p className="text-surface-500 text-sm">
-              Powered by Digital Event Platform
+              Powered by EventPeepo
             </p>
             <p className="text-surface-400 text-xs">
-              © {new Date().getFullYear()} Digital Event Platform. All rights reserved.
+              © {new Date().getFullYear()} EventPeepo. All rights reserved.
             </p>
           </div>
         </div>
