@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import archiver from 'archiver';
+import jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateCouple } from '../middleware/auth.js';
@@ -150,7 +151,6 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
     }
   } else if (authHeader && authHeader.startsWith('Bearer ')) {
     // Verify token - could be admin or owner JWT token
-    const jwt = await import('jsonwebtoken');
     try {
       const token = authHeader.replace('Bearer ', '');
       const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
@@ -251,7 +251,6 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
     console.log('[Media Download All] Authorized via owner access token');
   } else if (authHeader && authHeader.startsWith('Bearer ')) {
     // Verify token - could be admin or owner JWT token
-    const jwt = await import('jsonwebtoken');
     try {
       const token = authHeader.replace('Bearer ', '');
       const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
