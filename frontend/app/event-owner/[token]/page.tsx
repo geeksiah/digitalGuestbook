@@ -778,7 +778,6 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                         </div>
                       </div>
                     )}
-                    </div>
                     
                     {viewingRsvpDetails.customFields && (() => {
                       try {
