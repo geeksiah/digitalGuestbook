@@ -402,5 +402,40 @@ router.post('/wallet', asyncHandler(async (req, res) => {
   res.json({ wallet, message: 'Wallet configuration saved successfully' });
 }));
 
+/**
+ * GET /api/owner-dashboard/payouts
+ * Get all payout requests for the logged-in owner
+ */
+router.get('/payouts', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+
+  // Get all events owned by this owner
+  const events = await prisma.event.findMany({
+    where: { ownerId },
+    select: { id: true },
+  });
+
+  const eventIds = events.map(e => e.id);
+
+  // Get all payout requests for these events
+  const payouts = await prisma.payoutRequest.findMany({
+    where: {
+      eventId: { in: eventIds },
+    },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ payouts });
+}));
+
 export default router;
 

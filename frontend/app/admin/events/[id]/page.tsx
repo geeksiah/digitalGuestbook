@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
@@ -95,7 +95,7 @@ interface CheckIn {
 
 interface Template { id: string; name: string; type: string; isDefault: boolean; }
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'settings';
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'sales' | 'settings';
 
 // SVG Icons
 const Icons = {
@@ -135,6 +135,12 @@ export default function EventDetailPage() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [tickets, setTickets] = useState<any[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
+  const [sales, setSales] = useState<any[]>([]);
+  const [salesStats, setSalesStats] = useState<any>(null);
+  const [loadingSales, setLoadingSales] = useState(false);
+  const [sales, setSales] = useState<any[]>([]);
+  const [salesStats, setSalesStats] = useState<any>(null);
+  const [loadingSales, setLoadingSales] = useState(false);
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
@@ -169,6 +175,7 @@ export default function EventDetailPage() {
     if (activeTab === 'rsvps') fetchRsvps();
     if (activeTab === 'media') fetchMedia();
     if (activeTab === 'checkin') fetchCheckIns();
+    if (activeTab === 'sales') fetchSales();
   }, [activeTab, rsvpFilter]);
 
   useEffect(() => {
@@ -265,6 +272,19 @@ export default function EventDetailPage() {
       toast.error('Failed to load tickets');
     } finally {
       setLoadingTickets(false);
+    }
+  };
+
+  const fetchSales = async () => {
+    try {
+      setLoadingSales(true);
+      const r = await adminApi.getSales({ eventId });
+      setSales(r.data.sales || []);
+      setSalesStats(r.data.stats || null);
+    } catch {
+      toast.error('Failed to load sales');
+    } finally {
+      setLoadingSales(false);
     }
   };
 
@@ -779,6 +799,119 @@ export default function EventDetailPage() {
           loading={loadingTickets}
           onRefresh={fetchTickets}
         />
+      )}
+
+      {/* Sales */}
+      {activeTab === 'sales' && (
+        <div className="space-y-4">
+          {loadingSales ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto" />
+            </div>
+          ) : (
+            <>
+              {/* Stats Cards */}
+              {salesStats && (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white rounded-xl border border-surface-200 p-5">
+                    <p className="text-sm text-surface-500 mb-1">Total Sales</p>
+                    <p className="text-3xl font-bold text-navy-900">{salesStats.totalSales || 0}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-surface-200 p-5">
+                    <p className="text-sm text-surface-500 mb-1">Total Revenue</p>
+                    <p className="text-3xl font-bold text-navy-900">
+                      ${(salesStats.totalRevenue || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-surface-200 p-5">
+                    <p className="text-sm text-surface-500 mb-1">Paid</p>
+                    <p className="text-3xl font-bold text-emerald-600">{salesStats.byStatus?.PAID || 0}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-surface-200 p-5">
+                    <p className="text-sm text-surface-500 mb-1">Pending</p>
+                    <p className="text-3xl font-bold text-yellow-600">{salesStats.byStatus?.PENDING || 0}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Sales Table */}
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-surface-200">
+                  <h3 className="text-lg font-semibold text-navy-900">Transaction History</h3>
+                </div>
+                {sales.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-surface-600">No sales found for this event</p>
+                    <p className="text-sm text-surface-500 mt-1">Ticket sales will appear here once guests purchase tickets</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-surface-200 bg-surface-50">
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
+                            Guest
+                          </th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
+                            Ticket Type
+                          </th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-surface-100">
+                        {sales.map((sale: any) => (
+                          <tr key={sale.id} className="hover:bg-surface-50 transition-colors">
+                            <td className="py-3 px-4">
+                              <p className="font-medium text-navy-900">{sale.primaryName}</p>
+                              {sale.email && (
+                                <p className="text-sm text-surface-500">{sale.email}</p>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="text-sm text-surface-900">{sale.ticketType || 'N/A'}</p>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="font-semibold text-navy-900">
+                                ${(sale.amountPaid || 0).toFixed(2)}
+                              </p>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={cn(
+                                  'inline-flex px-2 py-1 text-xs font-medium rounded',
+                                  sale.paymentStatus === 'PAID'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : sale.paymentStatus === 'PENDING'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                )}
+                              >
+                                {sale.paymentStatus || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="text-sm text-surface-600">
+                                {formatDate(sale.submittedAt)}
+                              </p>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* Settings */}

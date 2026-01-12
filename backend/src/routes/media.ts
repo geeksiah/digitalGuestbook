@@ -158,18 +158,34 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
       throw new AppError('Unauthorized', 401);
     }
   } else if (authHeader && authHeader.startsWith('Bearer ')) {
-    // Verify admin token using middleware pattern
+    // Verify token - could be admin or owner token
     const jwt = await import('jsonwebtoken');
     try {
       const token = authHeader.replace('Bearer ', '');
       const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
-      jwt.verify(token, jwtSecret);
-    } catch {
+      const decoded = jwt.verify(token, jwtSecret) as any;
+      
+      // Check if it's an owner token
+      if (decoded.ownerId) {
+        // Owner token - verify they own this event
+        event = await prisma.event.findFirst({
+          where: { id: eventId, ownerId: decoded.ownerId },
+        });
+        if (!event) {
+          throw new AppError('Unauthorized - You do not have access to this event', 401);
+        }
+      } else {
+        // Admin token - allow access to any event
+        event = await prisma.event.findUnique({ where: { id: eventId } });
+        if (!event) {
+          throw new AppError('Event not found', 404);
+        }
+      }
+    } catch (error: any) {
+      if (error.message?.includes('Unauthorized')) {
+        throw error;
+      }
       throw new AppError('Unauthorized', 401);
-    }
-    event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) {
-      throw new AppError('Event not found', 404);
     }
   } else {
     throw new AppError('Unauthorized', 401);

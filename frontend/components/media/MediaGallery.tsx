@@ -148,9 +148,21 @@ export default function MediaGallery({
       const headers: Record<string, string> = {};
       if (isAdmin) {
         const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        } else {
+          throw new Error('Authentication required');
+        }
       } else if (ownerToken) {
         headers['X-Owner-Token'] = ownerToken;
+      } else {
+        // Try to use owner dashboard API token if available
+        const ownerToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+        if (ownerToken) {
+          headers['Authorization'] = `Bearer ${ownerToken}`;
+        } else {
+          throw new Error('Authentication required');
+        }
       }
       
       const response = await fetch(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, { headers });

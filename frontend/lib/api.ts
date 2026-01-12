@@ -293,6 +293,9 @@ export const ownerDashboardApi = {
   getMedia: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, { ...getOwnerDashboardHeaders(), params }),
   getCheckIns: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/checkins`, getOwnerDashboardHeaders()),
   getTickets: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/tickets`, getOwnerDashboardHeaders()),
+  getWallet: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/wallet`, getOwnerDashboardHeaders()),
+  updateWallet: (data: any) => axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet`, data, getOwnerDashboardHeaders()),
+  getPayouts: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, getOwnerDashboardHeaders()),
 };
 
 

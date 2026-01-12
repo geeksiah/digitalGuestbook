@@ -121,9 +121,22 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-white/10 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-surface-500 text-sm">
-            Digital Event Platform — Premium Managed Event Solutions
-          </p>
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <img 
+              src="/img/logo-light.svg" 
+              alt="Digital Event Platform" 
+              className="h-8 w-auto opacity-80"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <p className="text-center text-surface-500 text-sm">
+              Digital Event Platform — Premium Managed Event Solutions
+            </p>
+            <p className="text-center text-surface-400 text-xs">
+              © {new Date().getFullYear()} Digital Event Platform. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
