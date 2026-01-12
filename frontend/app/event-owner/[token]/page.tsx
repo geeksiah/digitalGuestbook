@@ -186,7 +186,6 @@ export default function EventOwnerPortalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [rsvpFilter, setRsvpFilter] = useState('all');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [exportOpen, setExportOpen] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState('');
