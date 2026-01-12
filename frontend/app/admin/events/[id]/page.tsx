@@ -697,24 +697,33 @@ export default function EventDetailPage() {
                             )}
                           </td>
                           <td className="py-3 px-4 text-right">
-                            {r.status === 'PENDING' && (
-                              <div className="flex justify-end gap-2">
-                                <button 
-                                  onClick={() => handleReviewRsvp(r.id, 'APPROVED')} 
-                                  className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  disabled={reviewingRsvp === r.id}
-                                >
-                                  {reviewingRsvp === r.id ? 'Processing...' : 'Approve'}
-                                </button>
-                                <button 
-                                  onClick={() => handleReviewRsvp(r.id, 'REJECTED')} 
-                                  className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  disabled={reviewingRsvp === r.id}
-                                >
-                                  {reviewingRsvp === r.id ? 'Processing...' : 'Reject'}
-                                </button>
-                              </div>
-                            )}
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => setViewingRsvpDetails(r)}
+                                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                                title="View Details"
+                              >
+                                Details
+                              </button>
+                              {r.status === 'PENDING' && (
+                                <>
+                                  <button 
+                                    onClick={() => handleReviewRsvp(r.id, 'APPROVED')} 
+                                    className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={reviewingRsvp === r.id}
+                                  >
+                                    {reviewingRsvp === r.id ? 'Processing...' : 'Approve'}
+                                  </button>
+                                  <button 
+                                    onClick={() => handleReviewRsvp(r.id, 'REJECTED')} 
+                                    className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={reviewingRsvp === r.id}
+                                  >
+                                    {reviewingRsvp === r.id ? 'Processing...' : 'Reject'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -724,6 +733,112 @@ export default function EventDetailPage() {
               </div>
             )}
           </div>
+
+          {/* RSVP Details Modal */}
+          {viewingRsvpDetails && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setViewingRsvpDetails(null)}>
+              <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 border-b border-surface-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-navy-900">RSVP Details</h3>
+                    <button onClick={() => setViewingRsvpDetails(null)} className="p-2 rounded-lg hover:bg-surface-100">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Primary Name</label>
+                      <p className="text-navy-900 font-medium">{viewingRsvpDetails.primaryName}</p>
+                    </div>
+                    {viewingRsvpDetails.secondaryName && (
+                      <div>
+                        <label className="text-sm font-medium text-surface-500">Secondary Name</label>
+                        <p className="text-navy-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
+                      </div>
+                    )}
+                    {viewingRsvpDetails.email && (
+                      <div>
+                        <label className="text-sm font-medium text-surface-500">Email</label>
+                        <p className="text-navy-900">{viewingRsvpDetails.email}</p>
+                      </div>
+                    )}
+                    {viewingRsvpDetails.phone && (
+                      <div>
+                        <label className="text-sm font-medium text-surface-500">Phone</label>
+                        <p className="text-navy-900">{viewingRsvpDetails.phone}</p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Attendance</label>
+                      <p className="text-navy-900">
+                        <span className={getStatusColor(viewingRsvpDetails.attendance)}>{viewingRsvpDetails.attendance}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Guest Count</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.guestCount}</p>
+                    </div>
+                    {viewingRsvpDetails.mealPreference && (
+                      <div>
+                        <label className="text-sm font-medium text-surface-500">Meal Preference</label>
+                        <p className="text-navy-900">{viewingRsvpDetails.mealPreference}</p>
+                      </div>
+                    )}
+                    {viewingRsvpDetails.dietaryNotes && (
+                      <div>
+                        <label className="text-sm font-medium text-surface-500">Dietary Notes</label>
+                        <p className="text-navy-900">{viewingRsvpDetails.dietaryNotes}</p>
+                      </div>
+                    )}
+                    {viewingRsvpDetails.note && (
+                      <div className="sm:col-span-2">
+                        <label className="text-sm font-medium text-surface-500">Note</label>
+                        <p className="text-navy-900">{viewingRsvpDetails.note}</p>
+                      </div>
+                    )}
+                    {viewingRsvpDetails.submittedAt && (
+                      <div>
+                        <label className="text-sm font-medium text-surface-500">Submitted At</label>
+                        <p className="text-navy-900">{formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}</p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Status</label>
+                      <p className="text-navy-900">
+                        <span className={getStatusColor(viewingRsvpDetails.status)}>{viewingRsvpDetails.status}</span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {viewingRsvpDetails.customFields && (() => {
+                    try {
+                      const customFields = JSON.parse(viewingRsvpDetails.customFields);
+                      if (Object.keys(customFields).length > 0) {
+                        return (
+                          <div className="border-t border-surface-200 pt-4 mt-4">
+                            <h4 className="text-sm font-semibold text-navy-900 mb-3">Custom Fields</h4>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                              {Object.entries(customFields).map(([key, value]) => (
+                                <div key={key}>
+                                  <label className="text-sm font-medium text-surface-500">{key}</label>
+                                  <p className="text-navy-900">{String(value)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                    } catch {}
+                    return null;
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
