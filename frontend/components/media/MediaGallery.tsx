@@ -126,10 +126,12 @@ export default function MediaGallery({
       } else {
         // Try to use owner dashboard API token (JWT) if available
         const ownerJwtToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
-        if (ownerJwtToken) {
+        console.log('[Media Download] isAdmin:', isAdmin, 'ownerToken prop:', !!ownerToken, 'ownerJwtToken from localStorage:', !!ownerJwtToken);
+        if (ownerJwtToken && ownerJwtToken !== 'null' && ownerJwtToken !== 'undefined') {
           headers['Authorization'] = `Bearer ${ownerJwtToken}`;
         } else {
-          throw new Error('Authentication required');
+          console.error('[Media Download] Owner token not found in localStorage');
+          throw new Error('Authentication required - Please log in again');
         }
       }
       
@@ -184,10 +186,12 @@ export default function MediaGallery({
       } else {
         // Try to use owner dashboard API token (JWT) if available
         const ownerJwtToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
-        if (ownerJwtToken) {
+        console.log('[Media Download All] isAdmin:', isAdmin, 'ownerToken prop:', !!ownerToken, 'ownerJwtToken from localStorage:', !!ownerJwtToken);
+        if (ownerJwtToken && ownerJwtToken !== 'null' && ownerJwtToken !== 'undefined') {
           headers['Authorization'] = `Bearer ${ownerJwtToken}`;
         } else {
-          throw new Error('Authentication required');
+          console.error('[Media Download All] Owner token not found in localStorage');
+          throw new Error('Authentication required - Please log in again');
         }
       }
       
