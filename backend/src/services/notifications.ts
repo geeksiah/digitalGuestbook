@@ -20,14 +20,29 @@ export async function sendEmailWithProvider(
       // Port 465 uses direct SSL/TLS (secure: true)
       // Port 587 uses STARTTLS (secure: false, requiresTLS: true)
       // Port 25 is usually plain text
-      const isSecurePort = port === 465;
-      const useSecure = provider.smtpSecure !== undefined ? provider.smtpSecure : isSecurePort;
+      // Override database setting if it conflicts with port requirements
+      let useSecure: boolean;
+      let useRequireTLS: boolean;
+      
+      if (port === 465) {
+        // Port 465 requires direct SSL/TLS
+        useSecure = true;
+        useRequireTLS = false;
+      } else if (port === 587) {
+        // Port 587 requires STARTTLS
+        useSecure = false;
+        useRequireTLS = true;
+      } else {
+        // For other ports, use database setting or default to false
+        useSecure = provider.smtpSecure !== undefined ? provider.smtpSecure : false;
+        useRequireTLS = !useSecure;
+      }
       
       const transporter = nodemailer.createTransport({
         host: provider.smtpHost!,
         port: port,
         secure: useSecure, // true for 465, false for other ports
-        requireTLS: !useSecure && port === 587, // Use STARTTLS for port 587
+        requireTLS: useRequireTLS, // Use STARTTLS for port 587
         auth: {
           user: provider.smtpUser!,
           pass: provider.smtpPass || '',
@@ -45,9 +60,10 @@ export async function sendEmailWithProvider(
         host: provider.smtpHost,
         port: port,
         secure: useSecure,
-        requireTLS: !useSecure && port === 587,
+        requireTLS: useRequireTLS,
         user: provider.smtpUser,
         hasPassword: !!provider.smtpPass,
+        note: port === 465 ? 'Direct SSL/TLS' : port === 587 ? 'STARTTLS' : 'Custom',
       });
       
       console.log('[Email] Attempting to send mail...');
