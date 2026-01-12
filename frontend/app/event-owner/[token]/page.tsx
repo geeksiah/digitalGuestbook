@@ -443,8 +443,7 @@ export default function EventOwnerPortalPage() {
   }
 
   return (
-    <>
-      <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen bg-surface-50">
       {/* Header */}
       <header className="bg-white border-b border-surface-200 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -1384,7 +1383,6 @@ export default function EventOwnerPortalPage() {
           </div>
         )}
       </main>
-      </div>
-    </>
+    </div>
   );
 }
