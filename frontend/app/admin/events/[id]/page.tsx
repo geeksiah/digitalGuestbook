@@ -139,6 +139,27 @@ export default function EventDetailPage() {
   const [sales, setSales] = useState<any[]>([]);
   const [salesStats, setSalesStats] = useState<any>(null);
   const [loadingSales, setLoadingSales] = useState(false);
+  const [loadingRsvps, setLoadingRsvps] = useState(false);
+  const [reviewingRsvp, setReviewingRsvp] = useState<string | null>(null);
+  const [formFields, setFormFields] = useState<any[]>([]);
+  const [loadingFormFields, setLoadingFormFields] = useState(false);
+  const [showFormFieldModal, setShowFormFieldModal] = useState(false);
+  const [editingFormField, setEditingFormField] = useState<any | null>(null);
+  const [formFieldData, setFormFieldData] = useState({
+    fieldName: '',
+    label: '',
+    type: 'text' as 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox' | 'radio' | 'textarea' | 'date',
+    placeholder: '',
+    helpText: '',
+    options: [] as string[],
+    required: false,
+    minLength: undefined as number | undefined,
+    maxLength: undefined as number | undefined,
+    pattern: '',
+    sortOrder: 0,
+    isActive: true,
+    showOnConfirmation: true,
+  });
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',

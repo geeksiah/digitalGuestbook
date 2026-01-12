@@ -6,12 +6,18 @@ Both RSVP and checkout forms in EventPeepo are **fully customizable** per event.
 
 ## How It Works
 
+### Admin Access
+**Both admins and owners can customize form fields:**
+- Admins can manage fields via the **Form Fields** tab in the admin event page
+- API endpoints use `authenticateAdmin` middleware (accessible to all admins)
+- Fields are managed per event, allowing different forms for different events
+
 ### 1. **Default Fields (Always Present)**
 Every RSVP form includes these core fields by default:
 - **Primary Name** (required) - Main guest name
 - **Secondary Name** (optional) - Partner/companion name
-- **Email** (required) - Email address for confirmations
-- **Phone** (required) - Phone number for contact
+- **Email** (optional) - Email address for confirmations
+- **Phone** (optional) - Phone number for contact
 - **Attendance** (required) - YES/NO/MAYBE
 - **Guest Count** (required) - Number of guests
 - **Meal Preference** (optional) - Meal selection
@@ -113,9 +119,10 @@ POST /api/ticketing/event/{eventId}/fields
 ## Default Behavior
 
 **By Default:**
-- Email is **required** ✅
-- Phone is **required** ✅
+- Email is **optional** (but field is always present)
+- Phone is **optional** (but field is always present)
 - All other fields are optional (except primary name and attendance)
+- **Admins can make email/phone required** by creating custom fields with `type: 'email'` or `type: 'phone'` and `required: true`
 
 **Customization:**
 - Owners can add/remove/modify custom fields
