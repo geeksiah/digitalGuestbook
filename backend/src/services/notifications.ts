@@ -36,9 +36,22 @@ export async function sendEmailWithProvider(
           // Do not fail on invalid certificates (some providers use self-signed certs)
           rejectUnauthorized: false,
         },
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000, // 10 seconds
+        socketTimeout: 10000, // 10 seconds
       });
       
-      const result = await transporter.sendMail({
+      console.log('[Email] Creating transporter with config:', {
+        host: provider.smtpHost,
+        port: port,
+        secure: useSecure,
+        requireTLS: !useSecure && port === 587,
+        user: provider.smtpUser,
+        hasPassword: !!provider.smtpPass,
+      });
+      
+      console.log('[Email] Attempting to send mail...');
+      const sendPromise = transporter.sendMail({
         from: provider.fromName 
           ? `"${provider.fromName}" <${provider.fromEmail || provider.smtpUser}>`
           : provider.fromEmail || provider.smtpUser!,
@@ -47,6 +60,13 @@ export async function sendEmailWithProvider(
         html,
         text: text || html.replace(/<[^>]*>/g, ''),
       });
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Email send timeout after 30 seconds')), 30000);
+      });
+      
+      const result = await Promise.race([sendPromise, timeoutPromise]) as any;
       
       console.log('[Email] Sent via', provider.name, 'to:', to, 'ID:', result.messageId);
       return { success: true, messageId: result.messageId };

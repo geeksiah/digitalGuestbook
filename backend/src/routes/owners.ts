@@ -445,8 +445,10 @@ router.post('/:id/change-password', asyncHandler(async (req, res) => {
 /**
  * POST /api/owners/:id/resend-welcome-email
  * Admin resends password creation email to owner
+ * NOTE: This route must be defined BEFORE router.put('/:id') to avoid route conflicts
  */
 router.post('/:id/resend-welcome-email', asyncHandler(async (req, res) => {
+  console.log('[Resend Welcome Email] Route hit for owner ID:', req.params.id);
   const owner = await prisma.owner.findUnique({
     where: { id: req.params.id },
     select: {
