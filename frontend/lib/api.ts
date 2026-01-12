@@ -243,10 +243,14 @@ export const ownersApi = {
 };
 
 // Owner Authentication API
-const ownerAuthHeaders = {
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-  },
+const getOwnerAuthHeaders = () => {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('owner_token');
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
 };
 
 export const ownerAuthApi = {
@@ -256,28 +260,32 @@ export const ownerAuthApi = {
     axios.post(`${API_BASE_URL}/api/owner-auth/login`, { email, password }),
   setupPassword: (email: string, password: string) => 
     axios.post(`${API_BASE_URL}/api/owner-auth/setup-password`, { email, password }),
-  getMe: () => axios.get(`${API_BASE_URL}/api/owner-auth/me`, ownerAuthHeaders),
+  getMe: () => axios.get(`${API_BASE_URL}/api/owner-auth/me`, getOwnerAuthHeaders()),
   changePassword: (currentPassword: string, newPassword: string) => 
-    axios.post(`${API_BASE_URL}/api/owner-auth/change-password`, { currentPassword, newPassword }, ownerAuthHeaders),
+    axios.post(`${API_BASE_URL}/api/owner-auth/change-password`, { currentPassword, newPassword }, getOwnerAuthHeaders()),
   updateProfile: (data: { name?: string; email?: string; phone?: string; company?: string }) => 
-    axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, ownerAuthHeaders),
+    axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, getOwnerAuthHeaders()),
 };
 
 // Owner Dashboard API
-const ownerDashboardHeaders = {
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-  },
+const getOwnerDashboardHeaders = () => {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('owner_token');
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
 };
 
 export const ownerDashboardApi = {
-  getEvents: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, ownerDashboardHeaders),
-  getEvent: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, ownerDashboardHeaders),
-  getStats: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/stats`, ownerDashboardHeaders),
-  getRsvps: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps`, { ...ownerDashboardHeaders, params }),
-  getMedia: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, { ...ownerDashboardHeaders, params }),
-  getCheckIns: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/checkins`, ownerDashboardHeaders),
-  getTickets: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/tickets`, ownerDashboardHeaders),
+  getEvents: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, getOwnerDashboardHeaders()),
+  getEvent: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, getOwnerDashboardHeaders()),
+  getStats: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/stats`, getOwnerDashboardHeaders()),
+  getRsvps: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps`, { ...getOwnerDashboardHeaders(), params }),
+  getMedia: (eventId: string, params?: any) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, { ...getOwnerDashboardHeaders(), params }),
+  getCheckIns: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/checkins`, getOwnerDashboardHeaders()),
+  getTickets: (eventId: string) => axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/tickets`, getOwnerDashboardHeaders()),
 };
 
 
