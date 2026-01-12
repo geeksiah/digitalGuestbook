@@ -1060,7 +1060,7 @@ export default function BoothPage() {
             playsInline
             muted
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: 'none' }}
+            style={{ transform: 'scaleX(-1)' }}
           />
 
           {/* Countdown Overlay */}

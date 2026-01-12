@@ -97,6 +97,7 @@ export default function OwnerEventDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
+  const [viewingRsvpDetails, setViewingRsvpDetails] = useState<RSVP | null>(null);
 
   const fetchEvent = async () => {
     try {
@@ -399,12 +400,13 @@ export default function OwnerEventDetailPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guests</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Submitted</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-surface-200">
                     {rsvps.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-4 text-center text-sm text-surface-500">
+                        <td colSpan={7} className="px-6 py-4 text-center text-sm text-surface-500">
                           No RSVPs found
                         </td>
                       </tr>
@@ -421,6 +423,15 @@ export default function OwnerEventDetailPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(rsvp.submittedAt)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                            <button
+                              onClick={() => setViewingRsvpDetails(rsvp)}
+                              className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                              title="View Details"
+                            >
+                              Details
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}

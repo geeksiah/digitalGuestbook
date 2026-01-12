@@ -886,60 +886,60 @@ export default function GuestbookPage() {
                 {/* Controls - Overlay style, no background covering screen */}
                 {recordingState !== 'idle' && permissionState !== 'checking' && (
                   <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
-                {/* Timer */}
-                <div className="text-center mb-6">
-                  <span className="text-4xl font-mono font-bold text-navy-900">{formatDuration(recordingTime)}</span>
-                  <span className="text-surface-500 text-lg ml-2">/ {formatDuration(config?.maxRecordingDuration || 120)}</span>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex justify-center items-center gap-4">
-                  {recordingState === 'ready' && (
-                    <button
-                      onClick={startVideoRecording}
-                      className="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-white" />
-                    </button>
-                  )}
-
-                  {recordingState === 'recording' && (
-                    <button
-                      onClick={stopVideoRecording}
-                      className="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all active:scale-95 shadow-lg animate-pulse"
-                    >
-                      <div className="w-8 h-8 rounded bg-white" />
-                    </button>
-                  )}
-
-                  {recordingState === 'preview' && (
-                    <>
-                      <button onClick={retake} className="btn-outline px-8 py-3">
-                        Retake
-                      </button>
-                      <button onClick={() => uploadMedia('VIDEO')} className="btn-primary px-8 py-3">
-                        Submit
-                      </button>
-                    </>
-                  )}
-
-                  {recordingState === 'uploading' && (
-                    <div className="flex items-center gap-3 text-surface-600">
-                      <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      <span className="font-medium">Uploading...</span>
+                    {/* Timer */}
+                    <div className="text-center mb-6">
+                      <span className="text-4xl font-mono font-bold text-white drop-shadow-lg">{formatDuration(recordingTime)}</span>
+                      <span className="text-white/70 text-lg ml-2 drop-shadow">/ {formatDuration(config?.maxRecordingDuration || 120)}</span>
                     </div>
-                  )}
-                </div>
 
-                {recordingState === 'ready' && (
-                  <p className="text-center text-surface-500 text-sm mt-4">Tap the button to start recording</p>
+                    {/* Buttons */}
+                    <div className="flex justify-center items-center gap-4">
+                      {recordingState === 'ready' && (
+                        <button
+                          onClick={startVideoRecording}
+                          className="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-white" />
+                        </button>
+                      )}
+
+                      {recordingState === 'recording' && (
+                        <button
+                          onClick={stopVideoRecording}
+                          className="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all active:scale-95 shadow-lg animate-pulse"
+                        >
+                          <div className="w-8 h-8 rounded bg-white" />
+                        </button>
+                      )}
+
+                      {recordingState === 'preview' && (
+                        <>
+                          <button onClick={retake} className="px-8 py-3 bg-white/90 text-navy-900 rounded-full font-semibold hover:bg-white transition-all">
+                            Retake
+                          </button>
+                          <button onClick={() => uploadMedia('VIDEO')} className="px-8 py-3 bg-green-600 text-white rounded-full font-semibold hover:bg-green-700 transition-all">
+                            Submit
+                          </button>
+                        </>
+                      )}
+
+                      {recordingState === 'uploading' && (
+                        <div className="flex items-center gap-3 text-white drop-shadow-lg">
+                          <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          <span className="font-medium">Uploading...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {recordingState === 'ready' && (
+                      <p className="text-center text-white/70 text-sm mt-4 drop-shadow">Tap the button to start recording</p>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
-          )}
 
           {/* AUDIO VIEW */}
           {viewState === 'audio' && (
