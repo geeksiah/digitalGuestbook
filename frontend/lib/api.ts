@@ -230,6 +230,7 @@ export const promoCodeApi = {
 };
 
 // Owners API
+// Owners API
 export const ownersApi = {
   list: (params?: { search?: string; isActive?: boolean }) => api.get('/owners', { params }),
   get: (id: string) => api.get(`/owners/${id}`),
@@ -237,6 +238,8 @@ export const ownersApi = {
   update: (id: string, data: { name?: string; email?: string; phone?: string; company?: string; isActive?: boolean }) => 
     api.put(`/owners/${id}`, data),
   delete: (id: string) => api.delete(`/owners/${id}`),
+  getWallet: (id: string) => api.get(`/owners/${id}/wallet`),
+  updateWallet: (id: string, data: any) => api.post(`/owners/${id}/wallet`, data),
 };
 
 // Owner Authentication API

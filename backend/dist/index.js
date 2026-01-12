@@ -14,6 +14,33 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_js_1 = __importDefault(require("./utils/prisma.js"));
 // Load environment variables
 dotenv_1.default.config();
+// Validate required environment variables
+function validateEnvironmentVariables() {
+    const required = ['DATABASE_URL', 'JWT_SECRET'];
+    const missing = [];
+    required.forEach((key) => {
+        if (!process.env[key] || process.env[key] === '') {
+            missing.push(key);
+        }
+    });
+    if (missing.length > 0) {
+        throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+    // Additional production checks
+    if (process.env.NODE_ENV === 'production') {
+        const productionWarnings = [];
+        if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'admin123') {
+            productionWarnings.push('ADMIN_PASSWORD should be set to a secure value');
+        }
+        if (!process.env.ADMIN_EMAIL || process.env.ADMIN_EMAIL === 'admin@example.com') {
+            productionWarnings.push('ADMIN_EMAIL should be set to a valid email');
+        }
+        if (productionWarnings.length > 0) {
+            console.warn('⚠️  Production environment warnings:');
+            productionWarnings.forEach(warning => console.warn(`   - ${warning}`));
+        }
+    }
+}
 // Auto-seed database on startup (creates admin if not exists)
 async function initializeDatabase() {
     try {
@@ -47,16 +74,31 @@ async function initializeDatabase() {
         }
         if (adminCount === 0) {
             console.log('🌱 No admin found, creating default admin...');
-            const passwordHash = await bcryptjs_1.default.hash(process.env.ADMIN_PASSWORD || 'admin123', 12);
+            // Validate required environment variables in production
+            if (process.env.NODE_ENV === 'production') {
+                if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'admin123') {
+                    throw new Error('ADMIN_PASSWORD must be set in production environment. Please set a secure password.');
+                }
+                if (!process.env.ADMIN_EMAIL || process.env.ADMIN_EMAIL === 'admin@example.com') {
+                    throw new Error('ADMIN_EMAIL must be set in production environment. Please set a valid email address.');
+                }
+            }
+            const adminPassword = process.env.ADMIN_PASSWORD || 'admin123'; // Only for development
+            const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com'; // Only for development
+            const adminName = process.env.ADMIN_NAME || 'Platform Admin';
+            const passwordHash = await bcryptjs_1.default.hash(adminPassword, 12);
             await prisma_js_1.default.admin.create({
                 data: {
-                    email: process.env.ADMIN_EMAIL || 'admin@example.com',
+                    email: adminEmail,
                     passwordHash,
-                    name: process.env.ADMIN_NAME || 'Platform Admin',
+                    name: adminName,
                     role: 'superadmin',
                 },
             });
-            console.log('✅ Default admin created: ' + (process.env.ADMIN_EMAIL || 'admin@example.com'));
+            console.log('✅ Default admin created: ' + adminEmail);
+            if (process.env.NODE_ENV !== 'production') {
+                console.warn('⚠️  Using default admin credentials. Set ADMIN_PASSWORD and ADMIN_EMAIL in production!');
+            }
         }
         // Create default templates if none exist
         const templateCount = await prisma_js_1.default.template.count();
@@ -140,6 +182,10 @@ const app = (0, express_1.default)();
 // Render.com sets PORT=10000 by default for web services
 // Follow Render.com recommendation: use process.env.PORT with fallback
 const port = Number(process.env.PORT) || 10000;
+// Trust proxy (required for rate limiting behind reverse proxy like Render)
+app.set('trust proxy', true);
+// Request Compression (gzip)
+app.use(compression());
 // Security Middleware
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -148,6 +194,7 @@ app.use((0, helmet_1.default)({
 // CORS Configuration
 const allowedOrigins = [
     'http://localhost:3000',
+    'https://digiguestbook.netlify.app',
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_URL,
 ].filter(Boolean);
@@ -376,6 +423,8 @@ app.use(errorHandler_js_1.errorHandler);
 // Start Server
 // Render.com requires binding to 0.0.0.0 explicitly for Docker services
 try {
+    // Validate environment variables before starting
+    validateEnvironmentVariables();
     console.log(`[Server] Starting server...`);
     console.log(`[Server] PORT environment variable: ${process.env.PORT || 'not set (using default 10000)'}`);
     console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);

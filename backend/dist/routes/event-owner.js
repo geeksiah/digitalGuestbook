@@ -359,6 +359,34 @@ router.get('/:token/reel/:jobId/status', validateOwnerToken, async (req, res) =>
         res.status(500).json({ error: 'Failed to fetch reel status' });
     }
 });
+// GET /api/event-owner/:token/reel/:jobId/download - Download/serve a generated reel
+router.get('/:token/reel/:jobId/download', validateOwnerToken, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const eventId = req.eventId;
+        // Verify reel belongs to this event
+        const reelJob = await prisma.reelJob.findFirst({
+            where: { id: jobId, eventId },
+        });
+        if (!reelJob || !reelJob.outputPath) {
+            return res.status(404).json({ error: 'Reel not found' });
+        }
+        if (reelJob.status !== 'completed') {
+            return res.status(400).json({ error: 'Reel is not ready' });
+        }
+        // Download file and serve directly
+        const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
+        const fileBuffer = await downloadFile(BUCKETS.REELS, reelJob.outputPath);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Disposition', `attachment; filename="reel-${jobId}.mp4"`);
+        res.setHeader('Content-Length', fileBuffer.length.toString());
+        res.send(fileBuffer);
+    }
+    catch (error) {
+        console.error('[Event Owner] Error generating signed URL for reel:', error);
+        res.status(500).json({ error: 'Failed to generate download link' });
+    }
+});
 // GET /api/event-owner/:token/reels - Get all reels for the event
 router.get('/:token/reels', validateOwnerToken, async (req, res) => {
     try {

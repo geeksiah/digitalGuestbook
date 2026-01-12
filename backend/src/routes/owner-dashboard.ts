@@ -3,6 +3,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateOwnerAccount } from '../middleware/auth.js';
 import { calculateEventPhase } from '../utils/phase.js';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -324,6 +325,89 @@ router.get('/events/:eventId/tickets', asyncHandler(async (req, res) => {
   });
 
   res.json({ tickets });
+}));
+
+/**
+ * GET /api/owner-dashboard/wallet
+ * Get wallet configuration for the logged-in owner
+ */
+router.get('/wallet', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  
+  const owner = await prisma.owner.findUnique({
+    where: { id: ownerId },
+    include: { wallet: true },
+  });
+  
+  if (!owner) {
+    throw new AppError('Owner not found', 404);
+  }
+  
+  res.json({ wallet: owner.wallet || null });
+}));
+
+/**
+ * POST /api/owner-dashboard/wallet
+ * Create or update wallet configuration for the logged-in owner
+ */
+router.post('/wallet', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  
+  const owner = await prisma.owner.findUnique({
+    where: { id: ownerId },
+  });
+  
+  if (!owner) {
+    throw new AppError('Owner not found', 404);
+  }
+  
+  const walletSchema = z.object({
+    // Bank Account Details
+    bankName: z.string().optional(),
+    accountName: z.string().optional(),
+    accountNumber: z.string().optional(),
+    routingNumber: z.string().optional(),
+    swiftCode: z.string().optional(),
+    
+    // Mobile Money
+    mobileProvider: z.enum(['mpesa', 'mtn', 'airtel']).optional(),
+    mobileNumber: z.string().optional(),
+    
+    // Digital Wallets
+    paypalEmail: z.string().email().optional(),
+    stripeAccountId: z.string().optional(),
+    paystackSubaccount: z.string().optional(),
+    
+    // Payout Preferences
+    preferredMethod: z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']).default('bank'),
+    currency: z.string().default('USD'),
+    autoPayoutEnabled: z.boolean().optional(),
+    autoPayoutThreshold: z.number().optional(),
+  });
+  
+  const data = walletSchema.parse(req.body);
+  
+  const wallet = await (prisma as any).ownerWallet.upsert({
+    where: { ownerId },
+    create: {
+      ownerId,
+      ...data,
+    },
+    update: data,
+  });
+  
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      ownerId,
+      action: 'OWNER_WALLET_UPDATED',
+      entityType: 'OWNER',
+      entityId: owner.id,
+      details: JSON.stringify({ walletId: wallet.id, preferredMethod: wallet.preferredMethod }),
+    },
+  });
+  
+  res.json({ wallet, message: 'Wallet configuration saved successfully' });
 }));
 
 export default router;

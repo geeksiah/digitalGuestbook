@@ -209,7 +209,25 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
   const { id } = req.params;
   const { transactionRef, notes, processedAt } = req.body;
   
-  const payout = await prisma.payoutRequest.findUnique({ where: { id } });
+  const payout = await prisma.payoutRequest.findUnique({ 
+    where: { id },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerName: true,
+          ownerEmail: true,
+          ownerPhone: true,
+          emailNotifications: true,
+          smsNotifications: true,
+          whatsappNotifications: true,
+        },
+      },
+    },
+  });
+  
   if (!payout) {
     throw new AppError('Payout request not found', 404);
   }
@@ -223,7 +241,7 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
     data: {
       status: 'PROCESSED',
       processedAt: processedAt ? new Date(processedAt) : new Date(),
-      processedBy: (req as any).adminId,
+      processedBy: req.admin!.id,
       transactionRef: transactionRef || null,
       notes: notes || null,
     },
@@ -235,8 +253,69 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
           slug: true,
           ownerName: true,
           ownerEmail: true,
+          ownerPhone: true,
+          emailNotifications: true,
+          smsNotifications: true,
+          whatsappNotifications: true,
         },
       },
+    },
+  });
+  
+  // Send notification to event owner
+  const { sendEmail, sendSMS, sendWhatsApp } = await import('../services/notifications.js');
+  const event = updated.event as any;
+  const ownerName = event.ownerName || 'Event Owner';
+  
+  const emailSubject = `Payout Processed: $${updated.requestedAmount.toFixed(2)}`;
+  const emailBody = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Payout Processed</h2>
+      <p>Dear ${ownerName},</p>
+      <p>Your payout request for <strong>${event.name}</strong> has been processed successfully.</p>
+      <p><strong>Amount:</strong> $${updated.requestedAmount.toFixed(2)} ${updated.currency}</p>
+      <p><strong>Method:</strong> ${updated.payoutMethod}</p>
+      ${updated.transactionRef ? `<p><strong>Transaction Reference:</strong> ${updated.transactionRef}</p>` : ''}
+      ${updated.notes ? `<p><strong>Notes:</strong> ${updated.notes}</p>` : ''}
+      <p>Thank you for using our platform.</p>
+    </div>
+  `;
+  
+  const smsBody = `Payout processed for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}. Transaction Ref: ${updated.transactionRef || 'N/A'}`;
+  const whatsappBody = `*Payout Processed*\n\nYour payout request for *${event.name}* has been processed.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}\n${updated.transactionRef ? `Transaction Ref: ${updated.transactionRef}\n` : ''}Thank you!`;
+  
+  if (event.ownerEmail && event.emailNotifications) {
+    sendEmail(event.ownerEmail, emailSubject, emailBody).catch(err => 
+      console.error('[Notification] Failed to send payout processed email:', err)
+    );
+  }
+  
+  if (event.ownerPhone && event.smsNotifications) {
+    sendSMS(event.ownerPhone, smsBody).catch(err => 
+      console.error('[Notification] Failed to send payout processed SMS:', err)
+    );
+  }
+  
+  if (event.ownerPhone && event.whatsappNotifications) {
+    sendWhatsApp(event.ownerPhone, whatsappBody).catch(err => 
+      console.error('[Notification] Failed to send payout processed WhatsApp:', err)
+    );
+  }
+  
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      adminId: req.admin!.id,
+      eventId: payout.eventId,
+      action: 'PAYOUT_PROCESSED',
+      entityType: 'PAYOUT',
+      entityId: updated.id,
+      details: JSON.stringify({
+        requestedAmount: updated.requestedAmount,
+        currency: updated.currency,
+        payoutMethod: updated.payoutMethod,
+        transactionRef: updated.transactionRef,
+      }),
     },
   });
   
@@ -251,7 +330,25 @@ router.post('/payouts/:id/reject', authenticateAdmin, asyncHandler(async (req, r
   const { id } = req.params;
   const { reason } = req.body;
   
-  const payout = await prisma.payoutRequest.findUnique({ where: { id } });
+  const payout = await prisma.payoutRequest.findUnique({ 
+    where: { id },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerName: true,
+          ownerEmail: true,
+          ownerPhone: true,
+          emailNotifications: true,
+          smsNotifications: true,
+          whatsappNotifications: true,
+        },
+      },
+    },
+  });
+  
   if (!payout) {
     throw new AppError('Payout request not found', 404);
   }
@@ -265,7 +362,7 @@ router.post('/payouts/:id/reject', authenticateAdmin, asyncHandler(async (req, r
     data: {
       status: 'REJECTED',
       processedAt: new Date(),
-      processedBy: (req as any).adminId,
+      processedBy: req.admin!.id,
       notes: reason || null,
     },
     include: {
@@ -276,8 +373,66 @@ router.post('/payouts/:id/reject', authenticateAdmin, asyncHandler(async (req, r
           slug: true,
           ownerName: true,
           ownerEmail: true,
+          ownerPhone: true,
+          emailNotifications: true,
+          smsNotifications: true,
+          whatsappNotifications: true,
         },
       },
+    },
+  });
+  
+  // Send notification to event owner
+  const { sendEmail, sendSMS, sendWhatsApp } = await import('../services/notifications.js');
+  const event = updated.event as any;
+  const ownerName = event.ownerName || 'Event Owner';
+  
+  const emailSubject = `Payout Request Rejected: $${updated.requestedAmount.toFixed(2)}`;
+  const emailBody = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Payout Request Rejected</h2>
+      <p>Dear ${ownerName},</p>
+      <p>Your payout request for <strong>${event.name}</strong> has been rejected.</p>
+      <p><strong>Amount:</strong> $${updated.requestedAmount.toFixed(2)} ${updated.currency}</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+      <p>If you have questions, please contact support.</p>
+    </div>
+  `;
+  
+  const smsBody = `Payout request rejected for ${event.name}: $${updated.requestedAmount.toFixed(2)}. ${reason ? `Reason: ${reason}` : ''}`;
+  const whatsappBody = `*Payout Request Rejected*\n\nYour payout request for *${event.name}* has been rejected.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\n${reason ? `Reason: ${reason}\n` : ''}Please contact support if you have questions.`;
+  
+  if (event.ownerEmail && event.emailNotifications) {
+    sendEmail(event.ownerEmail, emailSubject, emailBody).catch(err => 
+      console.error('[Notification] Failed to send payout rejected email:', err)
+    );
+  }
+  
+  if (event.ownerPhone && event.smsNotifications) {
+    sendSMS(event.ownerPhone, smsBody).catch(err => 
+      console.error('[Notification] Failed to send payout rejected SMS:', err)
+    );
+  }
+  
+  if (event.ownerPhone && event.whatsappNotifications) {
+    sendWhatsApp(event.ownerPhone, whatsappBody).catch(err => 
+      console.error('[Notification] Failed to send payout rejected WhatsApp:', err)
+    );
+  }
+  
+  // Create audit log
+  await prisma.auditLog.create({
+    data: {
+      adminId: req.admin!.id,
+      eventId: payout.eventId,
+      action: 'PAYOUT_REJECTED',
+      entityType: 'PAYOUT',
+      entityId: updated.id,
+      details: JSON.stringify({
+        requestedAmount: updated.requestedAmount,
+        currency: updated.currency,
+        reason: reason || null,
+      }),
     },
   });
   

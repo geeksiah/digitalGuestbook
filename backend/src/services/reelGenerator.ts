@@ -320,6 +320,111 @@ const processReel = async (
   await new Promise<void>((resolve, reject) => {
     // Capture tempVideoPaths in closure for cleanup
     const tempFilesToCleanup = [...tempVideoPaths];
+    const titleCards = eventDetails ? [introPath, outroPath] : [];
+    
+    // Helper function to handle ffmpeg process
+    function handleFfmpegProcess(
+      ffmpeg: any,
+      jobId: string,
+      totalDuration: number,
+      resolve: () => void,
+      reject: (err: Error) => void,
+      tempFilesToCleanup: string[],
+      concatFile: string[],
+      titleCards: string[]
+    ) {
+      let lastProgressUpdate = 50;
+      let lastUpdateTime = Date.now();
+      const PROGRESS_UPDATE_INTERVAL = 2000; // Update every 2 seconds
+
+      ffmpeg.stderr.on('data', async (data) => {
+        const output = data.toString();
+        
+        // Parse progress from ffmpeg output - handle multiple time formats
+        // Format 1: time=00:01:23.45
+        // Format 2: time=00:01:23
+        let timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+        if (!timeMatch) {
+          timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})/);
+        }
+        
+        if (timeMatch && totalDuration > 0) {
+          const hours = parseInt(timeMatch[1], 10);
+          const minutes = parseInt(timeMatch[2], 10);
+          const secs = parseInt(timeMatch[3], 10);
+          const seconds = hours * 3600 + minutes * 60 + secs;
+          
+          // Calculate progress: 50% (before FFmpeg) + 45% (during encoding) = 95%
+          // Reserve 5% for finalization
+          const encodingProgress = Math.min(seconds / totalDuration, 1);
+          const progress = Math.min(50 + Math.floor(encodingProgress * 45), 95);
+          
+          // Update progress only if it increased significantly and enough time has passed
+          const now = Date.now();
+          if (progress > lastProgressUpdate && (now - lastUpdateTime) >= PROGRESS_UPDATE_INTERVAL) {
+            lastProgressUpdate = progress;
+            lastUpdateTime = now;
+            
+            try {
+              await updateJobProgress(jobId, progress);
+              console.log(`[ReelGenerator] [${jobId}] Progress: ${progress}% (${seconds}s / ${totalDuration}s)`);
+            } catch (error) {
+              console.error(`[ReelGenerator] [${jobId}] Failed to update progress:`, error);
+            }
+          }
+        }
+        
+        // Log FFmpeg errors/warnings
+        if (output.includes('error') || output.includes('Error')) {
+          console.error(`[ReelGenerator] [${jobId}] FFmpeg error: ${output.substring(0, 200)}`);
+        }
+      });
+
+      ffmpeg.on('close', async (code) => {
+        // Clean up temp files
+        for (const file of concatFile) {
+          try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
+        }
+        for (const card of titleCards) {
+          try { if (fs.existsSync(card)) fs.unlinkSync(card); } catch {}
+        }
+        // Cleanup temporary video files
+        for (const tempPath of tempFilesToCleanup) {
+          try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+        }
+
+        if (code === 0) {
+          // Update progress to 95% when FFmpeg completes successfully
+          try {
+            await updateJobProgress(jobId, 95);
+            console.log(`[ReelGenerator] [${jobId}] FFmpeg encoding completed successfully`);
+          } catch (error) {
+            console.error(`[ReelGenerator] [${jobId}] Failed to update progress after encoding:`, error);
+          }
+          resolve();
+        } else {
+          console.error(`[ReelGenerator] [${jobId}] FFmpeg exited with code ${code}`);
+          await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg process failed with exit code ${code}` });
+          reject(new Error(`FFmpeg exited with code ${code}`));
+        }
+      });
+
+      ffmpeg.on('error', async (error) => {
+        console.error(`[ReelGenerator] [${jobId}] FFmpeg error:`, error);
+        for (const file of concatFile) {
+          try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
+        }
+        for (const card of titleCards) {
+          try { if (fs.existsSync(card)) fs.unlinkSync(card); } catch {}
+        }
+        // Cleanup temporary video files
+        for (const tempPath of tempFilesToCleanup) {
+          try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+        }
+        await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg error: ${error.message}` });
+        reject(error);
+      });
+    }
     
     if (videoList.length === 1) {
       // Single video - just copy with title cards
@@ -338,7 +443,7 @@ const processReel = async (
       ];
 
       const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-      handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], eventDetails ? [introPath, outroPath] : []);
+      handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], titleCards);
     } else {
       // Multiple videos - use xfade for smooth transitions
       // Build filter_complex with xfade transitions
@@ -402,106 +507,8 @@ const processReel = async (
       ];
 
       const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-      handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], eventDetails ? [introPath, outroPath] : []);
+      handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], titleCards);
     }
-
-    // Helper function to handle ffmpeg process
-    function handleFfmpegProcess(
-      ffmpeg: any,
-      jobId: string,
-      totalDuration: number,
-      resolve: () => void,
-      reject: (err: Error) => void,
-      tempFilesToCleanup: string[],
-      concatFile: string[],
-      titleCards: string[]
-    ) {
-
-    let lastProgressUpdate = 50;
-    let lastUpdateTime = Date.now();
-    const PROGRESS_UPDATE_INTERVAL = 2000; // Update every 2 seconds
-
-    ffmpeg.stderr.on('data', async (data) => {
-      const output = data.toString();
-      
-      // Parse progress from ffmpeg output - handle multiple time formats
-      // Format 1: time=00:01:23.45
-      // Format 2: time=00:01:23
-      let timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
-      if (!timeMatch) {
-        timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})/);
-      }
-      
-      if (timeMatch && totalDuration > 0) {
-        const hours = parseInt(timeMatch[1], 10);
-        const minutes = parseInt(timeMatch[2], 10);
-        const secs = parseInt(timeMatch[3], 10);
-        const seconds = hours * 3600 + minutes * 60 + secs;
-        
-        // Calculate progress: 50% (before FFmpeg) + 45% (during encoding) = 95%
-        // Reserve 5% for finalization
-        const encodingProgress = Math.min(seconds / totalDuration, 1);
-        const progress = Math.min(50 + Math.floor(encodingProgress * 45), 95);
-        
-        // Update progress only if it increased significantly and enough time has passed
-        const now = Date.now();
-        if (progress > lastProgressUpdate && (now - lastUpdateTime) >= PROGRESS_UPDATE_INTERVAL) {
-          lastProgressUpdate = progress;
-          lastUpdateTime = now;
-          
-          try {
-            await updateJobProgress(jobId, progress);
-            console.log(`[ReelGenerator] [${jobId}] Progress: ${progress}% (${seconds}s / ${totalDuration}s)`);
-          } catch (error) {
-            console.error(`[ReelGenerator] [${jobId}] Failed to update progress:`, error);
-          }
-        }
-      }
-      
-      // Log FFmpeg errors/warnings
-      if (output.includes('error') || output.includes('Error')) {
-        console.error(`[ReelGenerator] [${jobId}] FFmpeg error: ${output.substring(0, 200)}`);
-      }
-    });
-
-    ffmpeg.on('close', async (code) => {
-      // Clean up temp files
-      try { fs.unlinkSync(concatFile); } catch {}
-      try { if (eventDetails && fs.existsSync(introPath)) fs.unlinkSync(introPath); } catch {}
-      try { if (eventDetails && fs.existsSync(outroPath)) fs.unlinkSync(outroPath); } catch {}
-      // Cleanup temporary video files
-      for (const tempPath of tempFilesToCleanup) {
-        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
-      }
-
-      if (code === 0) {
-        // Update progress to 95% when FFmpeg completes successfully
-        try {
-          await updateJobProgress(jobId, 95);
-          console.log(`[ReelGenerator] [${jobId}] FFmpeg encoding completed successfully`);
-        } catch (error) {
-          console.error(`[ReelGenerator] [${jobId}] Failed to update progress after encoding:`, error);
-        }
-        resolve();
-      } else {
-        console.error(`[ReelGenerator] [${jobId}] FFmpeg exited with code ${code}`);
-        await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg process failed with exit code ${code}` });
-        reject(new Error(`FFmpeg exited with code ${code}`));
-      }
-    });
-
-    ffmpeg.on('error', async (error) => {
-      console.error(`[ReelGenerator] [${jobId}] FFmpeg error:`, error);
-      try { fs.unlinkSync(concatFile); } catch {}
-      try { if (eventDetails) fs.unlinkSync(introPath); } catch {}
-      try { if (eventDetails) fs.unlinkSync(outroPath); } catch {}
-      // Cleanup temporary video files
-      for (const tempPath of tempFilesToCleanup) {
-        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
-      }
-      await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg error: ${error.message}` });
-      reject(error);
-    });
   });
 
   // Update progress to 97% - finalizing

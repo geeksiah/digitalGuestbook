@@ -61,6 +61,45 @@ model Owner {
 
   // Relations
   events Event[]
+  wallet OwnerWallet?
+}
+
+// Owner Wallet Configuration (for payouts across all events)
+model OwnerWallet {
+  id      String @id @default(uuid())
+  ownerId String @unique
+
+  // Bank Account Details
+  bankName      String?
+  accountName   String?
+  accountNumber String?
+  routingNumber String? // For US banks
+  swiftCode     String? // For international
+
+  // Mobile Money (Africa)
+  mobileProvider String? // mpesa | mtn | airtel
+  mobileNumber   String?
+
+  // Digital Wallets
+  paypalEmail        String?
+  stripeAccountId    String? // Stripe Connect account
+  paystackSubaccount String?
+
+  // Payout Preferences
+  preferredMethod     String  @default("bank") // bank | mobile | paypal | stripe | paystack
+  currency            String  @default("USD")
+  autoPayoutEnabled   Boolean @default(false)
+  autoPayoutThreshold Float   @default(100) // Minimum balance to trigger auto-payout
+
+  // Verification
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
 
 // ============================================
@@ -168,22 +207,22 @@ model Event {
   boothPhotoTemplate     Template? @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
   thankYouTemplate       Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
 
-  rsvps              RSVP[]
-  invitations        Invitation[]
-  checkIns           CheckIn[]
-  mediaAssets        MediaAsset[]
-  broadcasts         Broadcast[]
-  auditLogs          AuditLog[]
-  formFields         EventFormField[]
-  ticketTypes        TicketType[]
-  promoCodes         PromoCode[]
+  rsvps                RSVP[]
+  invitations          Invitation[]
+  checkIns             CheckIn[]
+  mediaAssets          MediaAsset[]
+  broadcasts           Broadcast[]
+  auditLogs            AuditLog[]
+  formFields           EventFormField[]
+  ticketTypes          TicketType[]
+  promoCodes           PromoCode[]
   eventPaymentGateways EventPaymentGateway[]
-  payoutWallet       PayoutWallet?
-  transactions       Transaction[]
-  payoutRequests     PayoutRequest[]
-  reelJobs           ReelJob[]
-  Owner              Owner?           @relation(fields: [ownerId], references: [id])
-  ownerId            String?
+  payoutWallet         PayoutWallet?
+  transactions         Transaction[]
+  payoutRequests       PayoutRequest[]
+  reelJobs             ReelJob[]
+  Owner                Owner?                @relation(fields: [ownerId], references: [id])
+  ownerId              String?
 }
 
 // ============================================
@@ -430,34 +469,34 @@ model RSVP {
 // ============================================
 
 model PromoCode {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   eventId     String
-  code        String   // e.g., "SUMMER2024"
+  code        String // e.g., "SUMMER2024"
   description String?
-  
+
   // Discount Configuration
-  discountType     String   // PERCENT | FIXED
-  discountValue    Float    // e.g., 10 for 10% or $10 off
-  minimumPurchase  Float?   // Minimum purchase amount to apply
-  maximumDiscount  Float?   // Maximum discount amount (for percentage)
-  
+  discountType    String // PERCENT | FIXED
+  discountValue   Float // e.g., 10 for 10% or $10 off
+  minimumPurchase Float? // Minimum purchase amount to apply
+  maximumDiscount Float? // Maximum discount amount (for percentage)
+
   // Applicability
-  ticketTypeIds    String?  // JSON array of ticket type IDs (null = all tickets)
-  usageLimit       Int?     // Total number of times code can be used (null = unlimited)
-  usageCount       Int      @default(0)
-  maxPerUser       Int      @default(1) // Max times a single user can use
-  
+  ticketTypeIds String? // JSON array of ticket type IDs (null = all tickets)
+  usageLimit    Int? // Total number of times code can be used (null = unlimited)
+  usageCount    Int     @default(0)
+  maxPerUser    Int     @default(1) // Max times a single user can use
+
   // Validity
-  validFrom        DateTime?
-  validUntil       DateTime?
-  isActive         Boolean  @default(true)
-  
+  validFrom  DateTime?
+  validUntil DateTime?
+  isActive   Boolean   @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
+
   @@unique([eventId, code])
   @@index([eventId, code])
 }
@@ -532,12 +571,12 @@ model TicketType {
 // Admin configures all available payment gateways here
 model PaymentGateway {
   id          String  @id @default(uuid())
-  name        String  // Display name (e.g., "Stripe Production", "Paystack Test")
-  gateway     String  // stripe | paystack | flutterwave | paypal | mtn_momo | telecel_cash | airteltigo_cash | custom
+  name        String // Display name (e.g., "Stripe Production", "Paystack Test")
+  gateway     String // stripe | paystack | flutterwave | paypal | mtn_momo | telecel_cash | airteltigo_cash | custom
   description String? // Optional description
-  
-  isActive    Boolean @default(true) // Enable/disable this gateway
-  isLive      Boolean @default(false) // Test vs Live mode
+
+  isActive Boolean @default(true) // Enable/disable this gateway
+  isLive   Boolean @default(false) // Test vs Live mode
 
   // Stripe Configuration
   stripePublicKey     String?
@@ -553,27 +592,27 @@ model PaymentGateway {
   flutterwaveSecretKey String?
 
   // MTN MoMo Configuration
-  mtnMomoApiKey        String?
-  mtnMomoApiSecret     String?
+  mtnMomoApiKey          String?
+  mtnMomoApiSecret       String?
   mtnMomoSubscriptionKey String?
-  mtnMomoEnvironment   String? // sandbox | production
+  mtnMomoEnvironment     String? // sandbox | production
 
   // Telecel Cash Configuration
-  telecelCashApiKey    String?
-  telecelCashApiSecret String?
+  telecelCashApiKey     String?
+  telecelCashApiSecret  String?
   telecelCashMerchantId String?
 
   // Airteltigo Cash Configuration
-  airteltigoCashApiKey    String?
-  airteltigoCashApiSecret String?
+  airteltigoCashApiKey     String?
+  airteltigoCashApiSecret  String?
   airteltigoCashMerchantId String?
 
   // Custom Gateway Configuration
-  customGatewayName   String?
-  customGatewayApiUrl String?
-  customGatewayApiKey String?
+  customGatewayName      String?
+  customGatewayApiUrl    String?
+  customGatewayApiKey    String?
   customGatewayApiSecret String?
-  customGatewayConfig String? // JSON string for additional config
+  customGatewayConfig    String? // JSON string for additional config
 
   // Common Settings
   currency   String  @default("USD")
@@ -589,20 +628,20 @@ model PaymentGateway {
 
 // Junction table: Which payment gateways are enabled for each event
 model EventPaymentGateway {
-  id              String  @id @default(uuid())
-  eventId         String
+  id               String @id @default(uuid())
+  eventId          String
   paymentGatewayId String
-  
+
   // Event-specific settings (can override gateway defaults)
-  isActive        Boolean @default(true)
-  sortOrder       Int     @default(0) // Order of display in payment options
-  
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0) // Order of display in payment options
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  event           Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  paymentGateway  PaymentGateway @relation(fields: [paymentGatewayId], references: [id], onDelete: Cascade)
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentGateway PaymentGateway @relation(fields: [paymentGatewayId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, paymentGatewayId])
   @@index([eventId])

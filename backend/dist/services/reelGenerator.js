@@ -232,139 +232,196 @@ const processReel = async (jobId, eventId, outputName, maxDuration, eventDetails
         }
     }
     await updateJobProgress(jobId, 45);
-    // Create concat file with fade transitions
-    const concatFile = await createConcatFile(videoList, outputDir);
     const outputPath = path_1.default.join(outputDir, `${outputName}-${Date.now()}.mp4`);
+    const transitionDuration = 0.5; // 0.5 second transitions
     await updateJobProgress(jobId, 50);
-    // Run ffmpeg concatenation with crossfade between clips
-    // Using a more sophisticated filter for professional look
+    // Use filter_complex with xfade for smooth transitions between clips
     await new Promise((resolve, reject) => {
         // Capture tempVideoPaths in closure for cleanup
         const tempFilesToCleanup = [...tempVideoPaths];
-        const ffmpegArgs = [
-            '-y',
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', concatFile,
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '20', // Higher quality
-            '-c:a', 'aac',
-            '-b:a', '256k', // Higher audio bitrate
-            '-ar', '48000', // Audio sample rate
-            '-movflags', '+faststart',
-            '-pix_fmt', 'yuv420p', // Compatibility
-            outputPath
-        ];
-        const ffmpeg = (0, child_process_1.spawn)('ffmpeg', ffmpegArgs);
-        let lastProgressUpdate = 50;
-        let lastUpdateTime = Date.now();
-        const PROGRESS_UPDATE_INTERVAL = 2000; // Update every 2 seconds
-        ffmpeg.stderr.on('data', async (data) => {
-            const output = data.toString();
-            // Parse progress from ffmpeg output - handle multiple time formats
-            // Format 1: time=00:01:23.45
-            // Format 2: time=00:01:23
-            let timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
-            if (!timeMatch) {
-                timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})/);
+        if (videoList.length === 1) {
+            // Single video - just copy with title cards
+            const ffmpegArgs = [
+                '-y',
+                '-i', videoList[0].path,
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '20',
+                '-c:a', 'aac',
+                '-b:a', '256k',
+                '-ar', '48000',
+                '-movflags', '+faststart',
+                '-pix_fmt', 'yuv420p',
+                outputPath
+            ];
+            const ffmpeg = (0, child_process_1.spawn)('ffmpeg', ffmpegArgs);
+            handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], eventDetails ? [introPath, outroPath] : []);
+        }
+        else {
+            // Multiple videos - use xfade for smooth transitions
+            // Build filter_complex with xfade transitions
+            const filterParts = [];
+            const inputArgs = [];
+            // Add all video inputs
+            videoList.forEach((_, idx) => {
+                inputArgs.push('-i', videoList[idx].path);
+            });
+            // Normalize all videos first (scale to 1920x1080, set fps to 30)
+            videoList.forEach((_, idx) => {
+                filterParts.push(`[${idx}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${idx}]`);
+                filterParts.push(`[${idx}:a]aformat=sample_rates=48000:channel_layouts=stereo[a${idx}]`);
+            });
+            // Build xfade chain
+            let currentVideo = 'v0';
+            let currentAudio = 'a0';
+            let offset = 0;
+            for (let i = 0; i < videoList.length - 1; i++) {
+                const nextVideo = `v${i + 1}`;
+                const nextAudio = `a${i + 1}`;
+                const outputVideo = i === videoList.length - 2 ? '[vout]' : `[v${i}x]`;
+                const outputAudio = i === videoList.length - 2 ? '[aout]' : `[a${i}x]`;
+                // Calculate transition offset (start transition 0.5s before video ends)
+                const videoDuration = videoList[i].duration;
+                const transitionStart = Math.max(0, videoDuration - transitionDuration);
+                // Video xfade transition
+                filterParts.push(`${currentVideo}${nextVideo}xfade=transition=fade:duration=${transitionDuration}:offset=${transitionStart}${outputVideo}`);
+                // Audio crossfade
+                filterParts.push(`${currentAudio}${nextAudio}acrossfade=d=${transitionDuration}${outputAudio}`);
+                currentVideo = outputVideo.replace(/[\[\]]/g, '');
+                currentAudio = outputAudio.replace(/[\[\]]/g, '');
+                offset += videoDuration - transitionDuration;
             }
-            if (timeMatch && totalDuration > 0) {
-                const hours = parseInt(timeMatch[1], 10);
-                const minutes = parseInt(timeMatch[2], 10);
-                const secs = parseInt(timeMatch[3], 10);
-                const seconds = hours * 3600 + minutes * 60 + secs;
-                // Calculate progress: 50% (before FFmpeg) + 45% (during encoding) = 95%
-                // Reserve 5% for finalization
-                const encodingProgress = Math.min(seconds / totalDuration, 1);
-                const progress = Math.min(50 + Math.floor(encodingProgress * 45), 95);
-                // Update progress only if it increased significantly and enough time has passed
-                const now = Date.now();
-                if (progress > lastProgressUpdate && (now - lastUpdateTime) >= PROGRESS_UPDATE_INTERVAL) {
-                    lastProgressUpdate = progress;
-                    lastUpdateTime = now;
+            const filterComplex = filterParts.join(';');
+            const ffmpegArgs = [
+                '-y',
+                ...inputArgs,
+                '-filter_complex', filterComplex,
+                '-map', '[vout]',
+                '-map', '[aout]',
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '20',
+                '-c:a', 'aac',
+                '-b:a', '256k',
+                '-ar', '48000',
+                '-movflags', '+faststart',
+                '-pix_fmt', 'yuv420p',
+                outputPath
+            ];
+            const ffmpeg = (0, child_process_1.spawn)('ffmpeg', ffmpegArgs);
+            handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, [], eventDetails ? [introPath, outroPath] : []);
+        }
+        // Helper function to handle ffmpeg process
+        function handleFfmpegProcess(ffmpeg, jobId, totalDuration, resolve, reject, tempFilesToCleanup, concatFile, titleCards) {
+            let lastProgressUpdate = 50;
+            let lastUpdateTime = Date.now();
+            const PROGRESS_UPDATE_INTERVAL = 2000; // Update every 2 seconds
+            ffmpeg.stderr.on('data', async (data) => {
+                const output = data.toString();
+                // Parse progress from ffmpeg output - handle multiple time formats
+                // Format 1: time=00:01:23.45
+                // Format 2: time=00:01:23
+                let timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+                if (!timeMatch) {
+                    timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})/);
+                }
+                if (timeMatch && totalDuration > 0) {
+                    const hours = parseInt(timeMatch[1], 10);
+                    const minutes = parseInt(timeMatch[2], 10);
+                    const secs = parseInt(timeMatch[3], 10);
+                    const seconds = hours * 3600 + minutes * 60 + secs;
+                    // Calculate progress: 50% (before FFmpeg) + 45% (during encoding) = 95%
+                    // Reserve 5% for finalization
+                    const encodingProgress = Math.min(seconds / totalDuration, 1);
+                    const progress = Math.min(50 + Math.floor(encodingProgress * 45), 95);
+                    // Update progress only if it increased significantly and enough time has passed
+                    const now = Date.now();
+                    if (progress > lastProgressUpdate && (now - lastUpdateTime) >= PROGRESS_UPDATE_INTERVAL) {
+                        lastProgressUpdate = progress;
+                        lastUpdateTime = now;
+                        try {
+                            await updateJobProgress(jobId, progress);
+                            console.log(`[ReelGenerator] [${jobId}] Progress: ${progress}% (${seconds}s / ${totalDuration}s)`);
+                        }
+                        catch (error) {
+                            console.error(`[ReelGenerator] [${jobId}] Failed to update progress:`, error);
+                        }
+                    }
+                }
+                // Log FFmpeg errors/warnings
+                if (output.includes('error') || output.includes('Error')) {
+                    console.error(`[ReelGenerator] [${jobId}] FFmpeg error: ${output.substring(0, 200)}`);
+                }
+            });
+            ffmpeg.on('close', async (code) => {
+                // Clean up temp files
+                try {
+                    fs_1.default.unlinkSync(concatFile);
+                }
+                catch { }
+                try {
+                    if (eventDetails && fs_1.default.existsSync(introPath))
+                        fs_1.default.unlinkSync(introPath);
+                }
+                catch { }
+                try {
+                    if (eventDetails && fs_1.default.existsSync(outroPath))
+                        fs_1.default.unlinkSync(outroPath);
+                }
+                catch { }
+                // Cleanup temporary video files
+                for (const tempPath of tempFilesToCleanup) {
                     try {
-                        await updateJobProgress(jobId, progress);
-                        console.log(`[ReelGenerator] [${jobId}] Progress: ${progress}% (${seconds}s / ${totalDuration}s)`);
+                        if (fs_1.default.existsSync(tempPath))
+                            fs_1.default.unlinkSync(tempPath);
+                    }
+                    catch { }
+                }
+                if (code === 0) {
+                    // Update progress to 95% when FFmpeg completes successfully
+                    try {
+                        await updateJobProgress(jobId, 95);
+                        console.log(`[ReelGenerator] [${jobId}] FFmpeg encoding completed successfully`);
                     }
                     catch (error) {
-                        console.error(`[ReelGenerator] [${jobId}] Failed to update progress:`, error);
+                        console.error(`[ReelGenerator] [${jobId}] Failed to update progress after encoding:`, error);
                     }
+                    resolve();
                 }
-            }
-            // Log FFmpeg errors/warnings
-            if (output.includes('error') || output.includes('Error')) {
-                console.error(`[ReelGenerator] [${jobId}] FFmpeg error: ${output.substring(0, 200)}`);
-            }
-        });
-        ffmpeg.on('close', async (code) => {
-            // Clean up temp files
-            try {
-                fs_1.default.unlinkSync(concatFile);
-            }
-            catch { }
-            try {
-                if (eventDetails && fs_1.default.existsSync(introPath))
-                    fs_1.default.unlinkSync(introPath);
-            }
-            catch { }
-            try {
-                if (eventDetails && fs_1.default.existsSync(outroPath))
-                    fs_1.default.unlinkSync(outroPath);
-            }
-            catch { }
-            // Cleanup temporary video files
-            for (const tempPath of tempFilesToCleanup) {
-                try {
-                    if (fs_1.default.existsSync(tempPath))
-                        fs_1.default.unlinkSync(tempPath);
+                else {
+                    console.error(`[ReelGenerator] [${jobId}] FFmpeg exited with code ${code}`);
+                    await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg process failed with exit code ${code}` });
+                    reject(new Error(`FFmpeg exited with code ${code}`));
                 }
-                catch { }
-            }
-            if (code === 0) {
-                // Update progress to 95% when FFmpeg completes successfully
-                try {
-                    await updateJobProgress(jobId, 95);
-                    console.log(`[ReelGenerator] [${jobId}] FFmpeg encoding completed successfully`);
+            });
+            ffmpeg.on('error', async (error) => {
+                console.error(`[ReelGenerator] [${jobId}] FFmpeg error:`, error);
+                for (const file of concatFile) {
+                    try {
+                        if (fs_1.default.existsSync(file))
+                            fs_1.default.unlinkSync(file);
+                    }
+                    catch { }
                 }
-                catch (error) {
-                    console.error(`[ReelGenerator] [${jobId}] Failed to update progress after encoding:`, error);
+                for (const card of titleCards) {
+                    try {
+                        if (fs_1.default.existsSync(card))
+                            fs_1.default.unlinkSync(card);
+                    }
+                    catch { }
                 }
-                resolve();
-            }
-            else {
-                console.error(`[ReelGenerator] [${jobId}] FFmpeg exited with code ${code}`);
-                await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg process failed with exit code ${code}` });
-                reject(new Error(`FFmpeg exited with code ${code}`));
-            }
-        });
-        ffmpeg.on('error', async (error) => {
-            console.error(`[ReelGenerator] [${jobId}] FFmpeg error:`, error);
-            try {
-                fs_1.default.unlinkSync(concatFile);
-            }
-            catch { }
-            try {
-                if (eventDetails)
-                    fs_1.default.unlinkSync(introPath);
-            }
-            catch { }
-            try {
-                if (eventDetails)
-                    fs_1.default.unlinkSync(outroPath);
-            }
-            catch { }
-            // Cleanup temporary video files
-            for (const tempPath of tempFilesToCleanup) {
-                try {
-                    if (fs_1.default.existsSync(tempPath))
-                        fs_1.default.unlinkSync(tempPath);
+                // Cleanup temporary video files
+                for (const tempPath of tempFilesToCleanup) {
+                    try {
+                        if (fs_1.default.existsSync(tempPath))
+                            fs_1.default.unlinkSync(tempPath);
+                    }
+                    catch { }
                 }
-                catch { }
-            }
-            await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg error: ${error.message}` });
-            reject(error);
-        });
+                await updateJobStatus(jobId, 'failed', { errorMessage: `FFmpeg error: ${error.message}` });
+                reject(error);
+            });
+        }
     });
     // Update progress to 97% - finalizing
     await updateJobProgress(jobId, 97).catch(() => { });

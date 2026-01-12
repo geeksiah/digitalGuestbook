@@ -149,5 +149,146 @@ router.get('/stats', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         },
     });
 }));
+/**
+ * GET /api/owner-dashboard/events/:eventId/rsvps
+ * Get RSVPs for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/rsvps', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    const { status } = req.query;
+    // Verify owner owns this event
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: { id: true },
+    });
+    if (!event) {
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    }
+    const where = { eventId };
+    if (status && status !== 'all') {
+        where.status = status;
+    }
+    const rsvps = await prisma_js_1.default.rSVP.findMany({
+        where,
+        include: {
+            invitation: {
+                select: {
+                    id: true,
+                    accessCode: true,
+                    token: true,
+                    qrCodeData: true,
+                    isCheckedIn: true,
+                },
+            },
+        },
+        orderBy: { submittedAt: 'desc' },
+    });
+    res.json({ rsvps });
+}));
+/**
+ * GET /api/owner-dashboard/events/:eventId/media
+ * Get media for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/media', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    const { type } = req.query;
+    // Verify owner owns this event
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: { id: true },
+    });
+    if (!event) {
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    }
+    const where = { eventId };
+    if (type) {
+        where.type = type;
+    }
+    const { downloadFile, BUCKETS, getPublicUrl } = await import('../services/supabaseStorage.js');
+    const media = await prisma_js_1.default.mediaAsset.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+    });
+    // Transform media to include proper URLs
+    const mediaWithUrls = media.map(asset => {
+        let fileUrl = asset.filePath;
+        if (!asset.filePath.startsWith('http://') && !asset.filePath.startsWith('https://')) {
+            try {
+                fileUrl = getPublicUrl(BUCKETS.MEDIA, asset.filePath);
+            }
+            catch {
+                fileUrl = asset.filePath.startsWith('/') ? asset.filePath : `/${asset.filePath}`;
+            }
+        }
+        let thumbnailUrl = asset.thumbnailPath;
+        if (asset.thumbnailPath && !asset.thumbnailPath.startsWith('http://') && !asset.thumbnailPath.startsWith('https://')) {
+            try {
+                thumbnailUrl = getPublicUrl(BUCKETS.MEDIA, asset.thumbnailPath);
+            }
+            catch {
+                thumbnailUrl = asset.thumbnailPath.startsWith('/') ? asset.thumbnailPath : `/${asset.thumbnailPath}`;
+            }
+        }
+        return {
+            ...asset,
+            filePath: fileUrl,
+            thumbnailPath: thumbnailUrl,
+        };
+    });
+    res.json({ media: mediaWithUrls });
+}));
+/**
+ * GET /api/owner-dashboard/events/:eventId/checkins
+ * Get check-ins for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/checkins', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    // Verify owner owns this event
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: { id: true },
+    });
+    if (!event) {
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    }
+    const checkIns = await prisma_js_1.default.checkIn.findMany({
+        where: { eventId },
+        include: {
+            invitation: {
+                select: {
+                    guestName: true,
+                    guestCount: true,
+                    accessCode: true,
+                },
+            },
+        },
+        orderBy: { checkedInAt: 'desc' },
+    });
+    res.json({ checkIns });
+}));
+/**
+ * GET /api/owner-dashboard/events/:eventId/tickets
+ * Get tickets for a specific event (owner must own the event)
+ */
+router.get('/events/:eventId/tickets', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    // Verify owner owns this event
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: { id: true },
+    });
+    if (!event) {
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    }
+    const tickets = await prisma_js_1.default.ticketType.findMany({
+        where: { eventId },
+        orderBy: { sortOrder: 'asc' },
+    });
+    res.json({ tickets });
+}));
 exports.default = router;
 //# sourceMappingURL=owner-dashboard.js.map

@@ -133,14 +133,41 @@ router.get('/:id/download', (0, errorHandler_js_1.asyncHandler)(async (req, res)
  * GET /api/media/event/:eventId/download-all
  * Download all media as ZIP
  * Per SRS Section 10
+ * Supports both admin auth and owner token via header
  */
-router.get('/event/:eventId/download-all', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+router.get('/event/:eventId/download-all', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
-    const event = await prisma_js_1.default.event.findUnique({
-        where: { id: eventId },
-    });
-    if (!event) {
-        throw new errorHandler_js_1.AppError('Event not found', 404);
+    // Support both admin token and owner token
+    const authHeader = req.headers.authorization;
+    const ownerToken = req.headers['x-owner-token'];
+    let event;
+    if (ownerToken) {
+        // If owner token, verify it matches this event
+        event = await prisma_js_1.default.event.findFirst({
+            where: { id: eventId, ownerAccessToken: ownerToken },
+        });
+        if (!event) {
+            throw new errorHandler_js_1.AppError('Unauthorized', 401);
+        }
+    }
+    else if (authHeader && authHeader.startsWith('Bearer ')) {
+        // Verify admin token using middleware pattern
+        const jwt = await import('jsonwebtoken');
+        try {
+            const token = authHeader.replace('Bearer ', '');
+            const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+            jwt.verify(token, jwtSecret);
+        }
+        catch {
+            throw new errorHandler_js_1.AppError('Unauthorized', 401);
+        }
+        event = await prisma_js_1.default.event.findUnique({ where: { id: eventId } });
+        if (!event) {
+            throw new errorHandler_js_1.AppError('Event not found', 404);
+        }
+    }
+    else {
+        throw new errorHandler_js_1.AppError('Unauthorized', 401);
     }
     const mediaAssets = await prisma_js_1.default.mediaAsset.findMany({
         where: { eventId },
@@ -366,6 +393,36 @@ router.get('/reel/:jobId/status', auth_js_1.authenticateAdmin, (0, errorHandler_
         throw new errorHandler_js_1.AppError('Job not found', 404);
     }
     res.json({ job: status });
+}));
+/**
+ * GET /api/media/reel/:jobId/download
+ * Download/serve a generated reel file (authenticated)
+ */
+router.get('/reel/:jobId/download', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { jobId } = req.params;
+    // Get reel job to verify it exists and get the output path
+    const reelJob = await prisma_js_1.default.reelJob.findUnique({
+        where: { id: jobId },
+    });
+    if (!reelJob || !reelJob.outputPath) {
+        throw new errorHandler_js_1.AppError('Reel not found', 404);
+    }
+    if (reelJob.status !== 'completed') {
+        throw new errorHandler_js_1.AppError('Reel is not ready', 400);
+    }
+    // Download file and serve directly
+    const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
+    try {
+        const fileBuffer = await downloadFile(BUCKETS.REELS, reelJob.outputPath);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Disposition', `attachment; filename="reel-${jobId}.mp4"`);
+        res.setHeader('Content-Length', fileBuffer.length.toString());
+        res.send(fileBuffer);
+    }
+    catch (error) {
+        console.error('[Media] Error downloading reel:', error);
+        throw new errorHandler_js_1.AppError('Failed to download reel', 500);
+    }
 }));
 exports.default = router;
 //# sourceMappingURL=media.js.map
