@@ -443,7 +443,14 @@ export default function MediaGallery({
           </div>
         </div>
         {currentMedia.length > 0 && (
-          <button onClick={handleDownloadAll} className="btn-outline flex items-center gap-2">
+          <button onClick={() => {
+            const typeMap: Record<string, 'VIDEO' | 'PHOTO' | 'AUDIO'> = {
+              videos: 'VIDEO',
+              photos: 'PHOTO',
+              audio: 'AUDIO',
+            };
+            handleDownloadAll(typeMap[viewMode]);
+          }} className="btn-outline flex items-center gap-2">
             {Icons.downloadSmall}
             <span>Download All</span>
           </button>
