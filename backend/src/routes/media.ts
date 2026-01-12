@@ -118,7 +118,14 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
   // Check both lowercase and capitalized header names
   const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']) as string | undefined;
   
-  console.log('[Media Download] Request for media:', id, 'Auth header present:', !!authHeader, 'Owner token present:', !!ownerToken);
+  console.log('[Media Download] Request for media:', id);
+  console.log('[Media Download] Headers received:', {
+    hasAuthHeader: !!authHeader,
+    authHeaderPrefix: authHeader?.substring(0, 20),
+    hasOwnerToken: !!ownerToken,
+    ownerTokenPrefix: ownerToken?.substring(0, 10),
+    allHeaders: Object.keys(req.headers).filter(h => h.toLowerCase().includes('auth') || h.toLowerCase().includes('owner') || h.toLowerCase().includes('token')),
+  });
   
   const mediaAsset = await prisma.mediaAsset.findUnique({
     where: { id },
@@ -222,7 +229,14 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
   // Check both lowercase and capitalized header names
   const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']) as string | undefined;
   
-  console.log('[Media Download All] Request for event:', eventId, 'Auth header present:', !!authHeader, 'Owner token present:', !!ownerToken);
+  console.log('[Media Download All] Request for event:', eventId);
+  console.log('[Media Download All] Headers received:', {
+    hasAuthHeader: !!authHeader,
+    authHeaderPrefix: authHeader?.substring(0, 20),
+    hasOwnerToken: !!ownerToken,
+    ownerTokenPrefix: ownerToken?.substring(0, 10),
+    allHeaders: Object.keys(req.headers).filter(h => h.toLowerCase().includes('auth') || h.toLowerCase().includes('owner') || h.toLowerCase().includes('token')),
+  });
   
   let event;
   if (ownerToken) {

@@ -134,12 +134,15 @@ export default function MediaGallery({
       }
       
       // Use axios for better header handling and CORS support
+      console.log('[Media Download] Sending request with headers:', Object.keys(headers));
       const response = await axios.get(`${API_BASE_URL}/api/media/${item.id}/download`, {
         headers,
         responseType: 'blob',
+        withCredentials: true,
       });
       
       const blob = response.data;
+      console.log('[Media Download] Response received, blob size:', blob.size);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -189,12 +192,15 @@ export default function MediaGallery({
       }
       
       // Use axios for better header handling and CORS support
+      console.log('[Media Download All] Sending request with headers:', Object.keys(headers));
       const response = await axios.get(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, {
         headers,
         responseType: 'blob',
+        withCredentials: true,
       });
       
       const blob = response.data;
+      console.log('[Media Download All] Response received, blob size:', blob.size);
       
       if (blob.size === 0) {
         throw new Error('Archive is empty');
