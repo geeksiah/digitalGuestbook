@@ -11,7 +11,8 @@ export async function sendEmailWithProvider(
   to: string,
   subject: string,
   html: string,
-  text?: string
+  text?: string,
+  attachments?: Array<{ filename: string; content: Buffer; cid?: string }>
 ) {
   console.log('[Email] sendEmailWithProvider called - Provider:', provider.name, 'To:', to, 'Subject:', subject);
   try {
@@ -76,6 +77,11 @@ export async function sendEmailWithProvider(
         subject,
         html,
         text: text || html.replace(/<[^>]*>/g, ''),
+        attachments: attachments?.map(att => ({
+          filename: att.filename,
+          content: att.content,
+          cid: att.cid,
+        })),
       });
       
       // Add timeout to prevent hanging
@@ -685,12 +691,22 @@ export async function sendInvitationEmail(invitationId: string) {
     return { success: false, error: 'No email address' };
   }
   
+  if (!invitation.qrCodeData) {
+    return { success: false, error: 'QR code not generated' };
+  }
+  
   const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
+  
+  // Convert QR code data URL to buffer for email attachment
+  const qrCodeBuffer = Buffer.from(
+    invitation.qrCodeData.replace(/^data:image\/png;base64,/, ''),
+    'base64'
+  );
   
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -707,7 +723,7 @@ export async function sendInvitationEmail(invitationId: string) {
       </div>
       
       <div style="text-align: center; margin: 30px 0;">
-        <img src="${invitation.qrCodeData}" alt="QR Code" style="width: 200px; height: 200px;" />
+        <img src="cid:qrcode" alt="QR Code" style="width: 200px; height: 200px; display: block; margin: 0 auto;" />
         <p style="font-size: 28px; font-weight: bold; color: #1a1a2e; margin: 15px 0;">
           ${invitation.accessCode}
         </p>
@@ -720,10 +736,27 @@ export async function sendInvitationEmail(invitationId: string) {
     </div>
   `;
   
-  const result = await sendEmail(
+  // Get the default email provider
+  const provider = await prisma.emailProvider.findFirst({
+    where: { isActive: true, isDefault: true },
+  });
+  
+  if (!provider) {
+    return { success: false, error: 'No email provider configured' };
+  }
+  
+  // Send email with QR code attachment
+  const result = await sendEmailWithProvider(
+    provider,
     invitation.rsvp.email,
     `Your Invitation - ${invitation.event.name}`,
-    html
+    html,
+    undefined,
+    [{
+      filename: 'qrcode.png',
+      content: qrCodeBuffer,
+      cid: 'qrcode', // Content ID for embedding in HTML
+    }]
   );
   
   if (result.success) {
