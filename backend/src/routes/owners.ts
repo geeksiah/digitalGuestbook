@@ -204,13 +204,17 @@ If you didn't expect this email, please ignore it.
 This is an automated message from Digital Event Platform
     `;
     
-    await sendEmail(
+    const emailResult = await sendEmail(
       owner.email,
       'Welcome to Digital Event Platform - Set Up Your Password',
       emailHtml,
       emailText
     );
-    console.log(`[Owner Created] Welcome email sent to ${owner.email}`);
+    if (emailResult.success) {
+      console.log(`[Owner Created] Welcome email sent to ${owner.email}`);
+    } else {
+      console.error('[Owner Created] Failed to send welcome email:', emailResult.error);
+    }
   } catch (emailError: any) {
     // Don't fail the request if email fails, just log it
     console.error('[Owner Created] Failed to send welcome email:', emailError.message);
@@ -517,14 +521,20 @@ If you didn't expect this email, please ignore it.
 This is an automated message from Digital Event Platform
     `;
     
-    await sendEmail(
+    const emailResult = await sendEmail(
       owner.email,
       'Welcome to Digital Event Platform - Set Up Your Password',
       emailHtml,
       emailText
     );
-    console.log(`[Owner] Welcome email resent to ${owner.email}`);
+    if (emailResult.success) {
+      console.log(`[Owner] Welcome email resent to ${owner.email}`);
+    } else {
+      console.error('[Owner] Failed to resend welcome email:', emailResult.error);
+      throw new AppError(`Failed to send email: ${emailResult.error}`, 500);
+    }
   } catch (emailError: any) {
+    console.error('[Owner] Email error:', emailError);
     throw new AppError(`Failed to send email: ${emailError.message}`, 500);
   }
 
@@ -677,12 +687,17 @@ If you didn't request this password reset, please contact support immediately.
 This is an automated message from Digital Event Platform
     `;
     
-    await sendEmail(
+    const emailResult = await sendEmail(
       request.owner.email,
       'Password Reset Approved - Digital Event Platform',
       emailHtml,
       emailText
     );
+    if (emailResult.success) {
+      console.log('[Password Reset] Approval email sent to:', request.owner.email);
+    } else {
+      console.error('[Password Reset] Failed to send approval email:', emailResult.error);
+    }
   } catch (emailError: any) {
     console.error('[Password Reset] Failed to send approval email:', emailError.message);
   }
@@ -767,12 +782,17 @@ router.post('/password-reset-requests/:id/reject', asyncHandler(async (req, res)
       </html>
     `;
     
-    await sendEmail(
+    const emailResult = await sendEmail(
       request.owner.email,
       'Password Reset Request Rejected - Digital Event Platform',
       emailHtml,
       `Your password reset request has been rejected.${reason ? ` Reason: ${reason}` : ''}`
     );
+    if (emailResult.success) {
+      console.log('[Password Reset] Rejection email sent to:', request.owner.email);
+    } else {
+      console.error('[Password Reset] Failed to send rejection email:', emailResult.error);
+    }
   } catch (emailError: any) {
     console.error('[Password Reset] Failed to send rejection email:', emailError.message);
   }

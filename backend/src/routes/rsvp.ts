@@ -29,7 +29,7 @@ async function notifyOwnerAboutRsvp(eventId: string, rsvpData: { primaryName: st
   const message = `New RSVP for ${event.name}: ${rsvpData.primaryName} - ${rsvpData.attendance} (${rsvpData.guestCount} guests)`;
 
   if (event.ownerEmail && event.emailNotifications) {
-    await sendEmail(
+    sendEmail(
       event.ownerEmail,
       `New RSVP - ${event.name}`,
       `<div style="font-family: sans-serif;">
@@ -38,15 +38,21 @@ async function notifyOwnerAboutRsvp(eventId: string, rsvpData: { primaryName: st
         <p><strong>Response:</strong> ${rsvpData.attendance}</p>
         <p><strong>Party Size:</strong> ${rsvpData.guestCount}</p>
       </div>`
-    );
+    ).catch(err => {
+      console.error('[RSVP Notification] Failed to send email:', err);
+    });
   }
 
   if (event.ownerPhone && event.smsNotifications) {
-    await sendSMS(event.ownerPhone, message);
+    sendSMS(event.ownerPhone, message).catch(err => {
+      console.error('[RSVP Notification] Failed to send SMS:', err);
+    });
   }
 
   if (event.ownerPhone && event.whatsappNotifications) {
-    await sendWhatsApp(event.ownerPhone, message);
+    sendWhatsApp(event.ownerPhone, message).catch(err => {
+      console.error('[RSVP Notification] Failed to send WhatsApp:', err);
+    });
   }
 }
 

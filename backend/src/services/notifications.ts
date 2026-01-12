@@ -13,6 +13,7 @@ export async function sendEmailWithProvider(
   html: string,
   text?: string
 ) {
+  console.log('[Email] sendEmailWithProvider called - Provider:', provider.name, 'To:', to, 'Subject:', subject);
   try {
     if (provider.provider === 'smtp') {
       const port = provider.smtpPort || 587;
@@ -422,6 +423,7 @@ async function getDefaultWhatsappProvider(): Promise<WhatsappProvider | null> {
 }
 
 export async function sendEmail(to: string, subject: string, html: string, text?: string) {
+  console.log('[Email] Attempting to send email to:', to, 'Subject:', subject);
   const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
   if (!settings?.emailEnabled) {
     console.log('[Email] Service disabled, skipping email to:', to);
@@ -434,10 +436,18 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     return { success: false, error: 'No email provider configured' };
   }
   
-  return sendEmailWithProvider(provider, to, subject, html, text);
+  console.log('[Email] Using provider:', provider.name, 'Type:', provider.provider);
+  const result = await sendEmailWithProvider(provider, to, subject, html, text);
+  if (result.success) {
+    console.log('[Email] Successfully sent email to:', to);
+  } else {
+    console.error('[Email] Failed to send email to:', to, 'Error:', result.error);
+  }
+  return result;
 }
 
 export async function sendSMS(to: string, message: string) {
+  console.log('[SMS] Attempting to send SMS to:', to);
   const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
   if (!settings?.smsEnabled) {
     console.log('[SMS] Service disabled, skipping SMS to:', to);
@@ -450,10 +460,18 @@ export async function sendSMS(to: string, message: string) {
     return { success: false, error: 'No SMS provider configured' };
   }
   
-  return sendSmsWithProvider(provider, to, message);
+  console.log('[SMS] Using provider:', provider.name, 'Type:', provider.provider);
+  const result = await sendSmsWithProvider(provider, to, message);
+  if (result.success) {
+    console.log('[SMS] Successfully sent SMS to:', to);
+  } else {
+    console.error('[SMS] Failed to send SMS to:', to, 'Error:', result.error);
+  }
+  return result;
 }
 
 export async function sendWhatsApp(to: string, message: string) {
+  console.log('[WhatsApp] Attempting to send WhatsApp message to:', to);
   const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
   if (!settings?.whatsappEnabled) {
     console.log('[WhatsApp] Service disabled, skipping message to:', to);
@@ -466,7 +484,14 @@ export async function sendWhatsApp(to: string, message: string) {
     return { success: false, error: 'No WhatsApp provider configured' };
   }
   
-  return sendWhatsappWithProvider(provider, to, message);
+  console.log('[WhatsApp] Using provider:', provider.name, 'Type:', provider.provider);
+  const result = await sendWhatsappWithProvider(provider, to, message);
+  if (result.success) {
+    console.log('[WhatsApp] Successfully sent WhatsApp message to:', to);
+  } else {
+    console.error('[WhatsApp] Failed to send WhatsApp message to:', to, 'Error:', result.error);
+  }
+  return result;
 }
 
 // ============================================

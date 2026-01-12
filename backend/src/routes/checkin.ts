@@ -28,7 +28,7 @@ async function notifyOwnerAboutCheckIn(eventId: string, guestName: string, guest
   const message = `Guest checked in: ${guestName} (${guestCount} guests) - ${event.name}`;
 
   if (event.ownerEmail && event.emailNotifications) {
-    await sendEmail(
+    sendEmail(
       event.ownerEmail,
       `Guest Checked In - ${event.name}`,
       `<div style="font-family: sans-serif;">
@@ -37,15 +37,21 @@ async function notifyOwnerAboutCheckIn(eventId: string, guestName: string, guest
         <p><strong>Party Size:</strong> ${guestCount}</p>
         <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
       </div>`
-    );
+    ).catch(err => {
+      console.error('[Check-in Notification] Failed to send email:', err);
+    });
   }
 
   if (event.ownerPhone && event.smsNotifications) {
-    await sendSMS(event.ownerPhone, message);
+    sendSMS(event.ownerPhone, message).catch(err => {
+      console.error('[Check-in Notification] Failed to send SMS:', err);
+    });
   }
 
   if (event.ownerPhone && event.whatsappNotifications) {
-    await sendWhatsApp(event.ownerPhone, message);
+    sendWhatsApp(event.ownerPhone, message).catch(err => {
+      console.error('[Check-in Notification] Failed to send WhatsApp:', err);
+    });
   }
 }
 
