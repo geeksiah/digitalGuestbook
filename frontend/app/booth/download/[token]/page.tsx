@@ -46,10 +46,8 @@ export default function BoothDownloadPage() {
         setPhotos(data.photos || []);
         setLoading(false);
 
-        // Auto-download all photos sequentially (with delays for mobile compatibility)
-        if (data.photos && data.photos.length > 0) {
-          downloadAllPhotos(data.photos);
-        }
+        // Don't auto-download on mobile - let users tap to download individually
+        // Auto-download causes issues on iPhone where new downloads cancel previous ones
       } catch (err: any) {
         console.error('Fetch error:', err);
         setError('Failed to load photos. Please try again.');
@@ -113,24 +111,8 @@ export default function BoothDownloadPage() {
     }
   };
 
-  const downloadAllPhotos = async (photosToDownload: Photo[]) => {
-    // Download photos sequentially with delays to avoid browser blocking
-    for (let i = 0; i < photosToDownload.length; i++) {
-      await downloadPhoto(photosToDownload[i]);
-      // Wait 500ms between downloads to avoid browser blocking
-      if (i < photosToDownload.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-
-    // Show success message when all downloads complete
-    if (downloaded.size === photosToDownload.length) {
-      toast.success(`All ${photosToDownload.length} photos downloaded!`);
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
-    }
-  };
+  // Removed auto-download function - users will tap to download individually
+  // This prevents iPhone from canceling previous downloads
 
   if (loading) {
     return (

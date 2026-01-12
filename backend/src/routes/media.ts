@@ -18,7 +18,10 @@ router.get('/event/:eventId', authenticateAdmin, asyncHandler(async (req, res) =
   const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
   const take = parseInt(limit as string);
 
-  const where: any = { eventId };
+  const where: any = { 
+    eventId,
+    captureMode: { not: 'BOOTH' }, // Exclude booth mode photos from media listings
+  };
   if (type) where.type = type;
 
   const [media, total] = await Promise.all([
@@ -232,7 +235,10 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
   }
 
   const mediaAssets = await prisma.mediaAsset.findMany({
-    where: { eventId },
+    where: { 
+      eventId,
+      captureMode: { not: 'BOOTH' }, // Exclude booth mode photos from download-all
+    },
   });
 
   if (mediaAssets.length === 0) {

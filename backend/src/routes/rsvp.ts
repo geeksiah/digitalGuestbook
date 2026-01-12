@@ -213,6 +213,7 @@ router.get('/event/:eventId', authenticateAdmin, asyncHandler(async (req, res) =
           select: {
             id: true,
             accessCode: true,
+            qrCodeData: true,
             isCheckedIn: true,
             checkedInAt: true,
           },

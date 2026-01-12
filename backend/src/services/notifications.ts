@@ -746,12 +746,13 @@ export async function sendInvitationEmail(invitationId: string) {
   }
   
   // Send email with QR code attachment
+  // Use sendEmailWithProvider directly to include attachments
   const result = await sendEmailWithProvider(
     provider,
     invitation.rsvp.email,
     `Your Invitation - ${invitation.event.name}`,
     html,
-    undefined,
+    undefined, // text version
     [{
       filename: 'qrcode.png',
       content: qrCodeBuffer,

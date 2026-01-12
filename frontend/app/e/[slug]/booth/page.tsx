@@ -74,6 +74,7 @@ export default function BoothPage() {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement>(null);
   const photoCanvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -85,6 +86,7 @@ export default function BoothPage() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const recordedBlobRef = useRef<Blob | null>(null);
+  const [isPlayingAudioPreview, setIsPlayingAudioPreview] = useState(false);
 
   // Initialize
   useEffect(() => {
@@ -353,6 +355,9 @@ export default function BoothPage() {
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
       recordedBlobRef.current = blob;
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.src = URL.createObjectURL(blob);
+      }
       stopStream();
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       setRecordingState('preview');
@@ -690,16 +695,27 @@ export default function BoothPage() {
             {eventName || 'Welcome'}
           </h1>
           
-          <p className="text-2xl text-white/70 mb-12">
+          <p className="text-2xl text-white/70 mb-8">
             Tap to leave a special message
           </p>
           
-          <button
-            onClick={() => setViewState('menu')}
-            className="px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:scale-105 transition-transform active:scale-95 shadow-2xl"
-          >
-            Start
-          </button>
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <button
+              onClick={() => setViewState('menu')}
+              className="px-16 py-6 bg-white text-slate-900 rounded-full text-2xl font-bold hover:scale-105 transition-transform active:scale-95 shadow-2xl"
+            >
+              Start
+            </button>
+            <button
+              onClick={() => {
+                setViewState('menu');
+                setTimeout(() => initializePhoto(), 100);
+              }}
+              className="px-12 py-6 bg-green-500/90 text-white rounded-full text-xl font-bold hover:scale-105 transition-transform active:scale-95 shadow-2xl"
+            >
+              Take Photos
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -910,20 +926,33 @@ export default function BoothPage() {
           </button>
         </div>
 
-        {/* Visualization */}
+        {/* Visualization or Audio Preview */}
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="flex items-end justify-center gap-1 h-64">
-            {audioWaveform.map((value, i) => (
-              <div
-                key={i}
-                className="w-2 md:w-3 bg-blue-400 rounded-full transition-all duration-75"
-                style={{ 
-                  height: `${Math.max(8, value * 250)}px`,
-                  opacity: recordingState === 'recording' ? 0.8 + value * 0.2 : 0.3
-                }}
+          {recordingState === 'preview' ? (
+            <div className="w-full max-w-md">
+              <audio
+                ref={audioPreviewRef}
+                controls
+                className="w-full"
+                onPlay={() => setIsPlayingAudioPreview(true)}
+                onPause={() => setIsPlayingAudioPreview(false)}
+                onEnded={() => setIsPlayingAudioPreview(false)}
               />
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="flex items-end justify-center gap-1 h-64">
+              {audioWaveform.map((value, i) => (
+                <div
+                  key={i}
+                  className="w-2 md:w-3 bg-blue-400 rounded-full transition-all duration-75"
+                  style={{ 
+                    height: `${Math.max(8, value * 250)}px`,
+                    opacity: recordingState === 'recording' ? 0.8 + value * 0.2 : 0.3
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Timer */}
