@@ -171,6 +171,8 @@ export default function EventOwnerPortalPage() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
+  const [rsvpFilter, setRsvpFilter] = useState('all');
+  const [viewingRsvpDetails, setViewingRsvpDetails] = useState<RSVP | null>(null);
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [salesSummary, setSalesSummary] = useState<SalesSummary | null>(null);
