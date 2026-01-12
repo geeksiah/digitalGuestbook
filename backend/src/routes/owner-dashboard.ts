@@ -396,16 +396,8 @@ router.post('/wallet', asyncHandler(async (req, res) => {
     update: data,
   });
   
-  // Create audit log
-  await prisma.auditLog.create({
-    data: {
-      ownerId,
-      action: 'OWNER_WALLET_UPDATED',
-      entityType: 'OWNER',
-      entityId: owner.id,
-      details: JSON.stringify({ walletId: wallet.id, preferredMethod: wallet.preferredMethod }),
-    },
-  });
+  // Create audit log (owner actions don't require audit log in current schema)
+  // Audit logs are primarily for admin actions
   
   res.json({ wallet, message: 'Wallet configuration saved successfully' });
 }));

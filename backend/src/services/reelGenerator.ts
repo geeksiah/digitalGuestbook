@@ -337,7 +337,7 @@ const processReel = async (
       let lastUpdateTime = Date.now();
       const PROGRESS_UPDATE_INTERVAL = 2000; // Update every 2 seconds
 
-      ffmpeg.stderr.on('data', async (data) => {
+      ffmpeg.stderr.on('data', async (data: Buffer) => {
         const output = data.toString();
         
         // Parse progress from ffmpeg output - handle multiple time formats
@@ -380,7 +380,7 @@ const processReel = async (
         }
       });
 
-      ffmpeg.on('close', async (code) => {
+      ffmpeg.on('close', async (code: number | null) => {
         // Clean up temp files
         for (const file of concatFile) {
           try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
@@ -409,7 +409,7 @@ const processReel = async (
         }
       });
 
-      ffmpeg.on('error', async (error) => {
+      ffmpeg.on('error', async (error: Error) => {
         console.error(`[ReelGenerator] [${jobId}] FFmpeg error:`, error);
         for (const file of concatFile) {
           try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
