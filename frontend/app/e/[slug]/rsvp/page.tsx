@@ -203,7 +203,7 @@ export default function RSVPPage() {
               mealPreference: formValues.mealPreference || undefined,
               dietaryNotes: formValues.dietaryNotes || undefined,
               note: formValues.note || undefined,
-              submissionChannel: 'web',
+              submissionChannel: 'WEB',
             }),
           }
         );
@@ -232,7 +232,7 @@ export default function RSVPPage() {
             mealPreference: formValues.mealPreference || undefined,
             dietaryNotes: formValues.dietaryNotes || undefined,
             note: formValues.note || undefined,
-            submissionChannel: 'web',
+            submissionChannel: 'WEB',
           }),
         });
 

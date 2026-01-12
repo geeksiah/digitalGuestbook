@@ -120,7 +120,10 @@ router.post('/:eventSlug', asyncHandler(async (req, res) => {
   // If auto-approved (not invitation-only), generate invitation pass immediately
   let invitation = null;
   if (!event.invitationOnly && data.attendance === 'YES') {
+    console.log('[RSVP] Auto-approving RSVP and generating invitation pass');
     invitation = await generateInvitationPass(rsvp.id);
+  } else {
+    console.log('[RSVP] RSVP created with status:', initialStatus, 'Invitation-only:', event.invitationOnly, 'Attendance:', data.attendance);
   }
 
   // Create audit log
