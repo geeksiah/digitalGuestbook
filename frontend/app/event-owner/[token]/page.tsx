@@ -669,7 +669,7 @@ export default function EventOwnerPortalPage() {
         )}
 
         {/* Reels - HIDDEN for now (feature under development) */}
-        {false && activeTab === 'reels' && event.reelEnabled && (
+        {false && activeTab === 'reels' && event?.reelEnabled && (
           <div className="space-y-6">
             {/* Active Job Progress */}
             {activeReelJob && (activeReelJob.status === 'pending' || activeReelJob.status === 'processing') && (
