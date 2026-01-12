@@ -15,13 +15,25 @@ export async function sendEmailWithProvider(
 ) {
   try {
     if (provider.provider === 'smtp') {
+      const port = provider.smtpPort || 587;
+      // Port 465 uses direct SSL/TLS (secure: true)
+      // Port 587 uses STARTTLS (secure: false, requiresTLS: true)
+      // Port 25 is usually plain text
+      const isSecurePort = port === 465;
+      const useSecure = provider.smtpSecure !== undefined ? provider.smtpSecure : isSecurePort;
+      
       const transporter = nodemailer.createTransport({
         host: provider.smtpHost!,
-        port: provider.smtpPort || 587,
-        secure: provider.smtpSecure,
+        port: port,
+        secure: useSecure, // true for 465, false for other ports
+        requireTLS: !useSecure && port === 587, // Use STARTTLS for port 587
         auth: {
           user: provider.smtpUser!,
           pass: provider.smtpPass || '',
+        },
+        tls: {
+          // Do not fail on invalid certificates (some providers use self-signed certs)
+          rejectUnauthorized: false,
         },
       });
       
