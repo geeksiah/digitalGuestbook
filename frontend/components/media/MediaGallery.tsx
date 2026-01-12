@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { API_BASE_URL } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 
 interface MediaAsset {
   id: string;
@@ -132,14 +133,13 @@ export default function MediaGallery({
         }
       }
       
-      const response = await fetch(`${API_BASE_URL}/api/media/${item.id}/download`, { headers });
+      // Use axios for better header handling and CORS support
+      const response = await axios.get(`${API_BASE_URL}/api/media/${item.id}/download`, {
+        headers,
+        responseType: 'blob',
+      });
       
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to download');
-      }
-      
-      const blob = await response.blob();
+      const blob = response.data;
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -155,7 +155,9 @@ export default function MediaGallery({
       
       toast.success('Downloaded', { id: toastId });
     } catch (error: any) {
-      toast.error(error.message || 'Failed to download', { id: toastId });
+      console.error('[Media Download] Error:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to download';
+      toast.error(errorMessage, { id: toastId });
     }
   };
 
@@ -186,14 +188,13 @@ export default function MediaGallery({
         }
       }
       
-      const response = await fetch(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, { headers });
+      // Use axios for better header handling and CORS support
+      const response = await axios.get(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, {
+        headers,
+        responseType: 'blob',
+      });
       
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create archive');
-      }
-      
-      const blob = await response.blob();
+      const blob = response.data;
       
       if (blob.size === 0) {
         throw new Error('Archive is empty');

@@ -301,6 +301,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token', 'x-owner-token', 'X-Requested-With'],
+  exposedHeaders: ['Content-Disposition', 'Content-Type'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token'],
 }));
 
