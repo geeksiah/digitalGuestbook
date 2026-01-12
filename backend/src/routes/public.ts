@@ -277,4 +277,39 @@ router.get('/verify-access/:eventSlug', asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/public/booth/download/:token
+ * Download booth photo using secure token
+ */
+router.get('/booth/download/:token', asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  
+  const { verifyBoothDownloadToken } = await import('../services/boothDownload.js');
+  const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
+  
+  const result = await verifyBoothDownloadToken(token);
+  
+  if (!result) {
+    throw new AppError('Invalid or expired download token', 404);
+  }
+  
+  try {
+    // Download file from Supabase
+    const fileBuffer = await downloadFile(BUCKETS.MEDIA, result.filePath);
+    
+    // Get file extension from path
+    const ext = result.filePath.split('.').pop() || 'jpg';
+    const contentType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 
+                       ext === 'png' ? 'image/png' : 
+                       ext === 'gif' ? 'image/gif' : 'application/octet-stream';
+    
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="booth-photo-${Date.now()}.${ext}"`);
+    res.send(fileBuffer);
+  } catch (error: any) {
+    console.error('[Booth Download] Failed to download file:', error.message);
+    throw new AppError('Failed to download file', 500);
+  }
+}));
+
 export default router;

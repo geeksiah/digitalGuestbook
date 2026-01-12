@@ -5,7 +5,7 @@ import { authenticateAdmin } from '../middleware/auth.js';
 import { createRsvpSchema, reviewRsvpSchema } from '../utils/validation.js';
 import { calculateEventPhase, canSubmitRsvp } from '../utils/phase.js';
 import { generateInvitationPass } from '../services/invitation.js';
-import { sendRsvpConfirmation, sendInvitationEmail, sendEmail, sendSMS, sendWhatsApp } from '../services/notifications.js';
+import { sendRsvpConfirmation, sendInvitationEmail, sendInvitationNotifications } from '../services/notifications.js';
 
 const router = Router();
 
@@ -306,6 +306,13 @@ router.post('/:id/review', authenticateAdmin, asyncHandler(async (req, res) => {
   if (data.status === 'APPROVED' && rsvp.attendance === 'YES') {
     // Generate invitation pass (SRS Section 6)
     invitation = await generateInvitationPass(rsvp.id);
+    
+    // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+    if (invitation) {
+      sendInvitationNotifications(invitation.id).catch(err => 
+        console.error('[Notification] Failed to send invitation notifications:', err)
+      );
+    }
   }
 
   // For rejection, send notification (SRS Section 7)
@@ -360,6 +367,13 @@ router.post('/:id/approve', authenticateAdmin, asyncHandler(async (req, res) => 
   let invitation = null;
   if (rsvp.attendance === 'YES') {
     invitation = await generateInvitationPass(rsvp.id);
+    
+    // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+    if (invitation) {
+      sendInvitationNotifications(invitation.id).catch(err => 
+        console.error('[Notification] Failed to send invitation notifications:', err)
+      );
+    }
   }
 
   res.json({ rsvp: updatedRsvp, invitation, message: 'RSVP approved successfully' });

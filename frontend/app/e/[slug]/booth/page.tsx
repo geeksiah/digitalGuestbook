@@ -6,7 +6,7 @@ import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type ViewState = 'welcome' | 'menu' | 'video' | 'audio' | 'photo' | 'photo-preview' | 'success';
+type ViewState = 'welcome' | 'menu' | 'video' | 'audio' | 'photo' | 'photo-preview' | 'download-qr' | 'success';
 type RecordingState = 'idle' | 'countdown' | 'ready' | 'recording' | 'preview' | 'uploading';
 type PermissionState = 'checking' | 'granted' | 'denied';
 
@@ -64,6 +64,8 @@ export default function BoothPage() {
   const [currentUploadIndex, setCurrentUploadIndex] = useState(-1);
   const [shutterCountdown, setShutterCountdown] = useState(0);
   const [flashActive, setFlashActive] = useState(false);
+  // Download QR codes for each photo (indexed by photo index)
+  const [photoQRCodes, setPhotoQRCodes] = useState<Record<number, string>>({});
 
   // Audio visualization state
   const [audioWaveform, setAudioWaveform] = useState<number[]>(new Array(50).fill(0));
@@ -161,6 +163,7 @@ export default function BoothPage() {
     setUploadProgress([]);
     setCurrentUploadIndex(-1);
     setShutterCountdown(0);
+    setPhotoQRCodes({});
     recordedBlobRef.current = null;
     chunksRef.current = [];
     setRecordingTime(0);
@@ -506,6 +509,7 @@ export default function BoothPage() {
 
     setRecordingState('uploading');
     const newProgress = [...uploadProgress];
+    const qrCodes: Record<number, string> = {};
 
     for (let i = 0; i < capturedBlobs.length; i++) {
       setCurrentUploadIndex(i);
@@ -521,7 +525,12 @@ export default function BoothPage() {
         formData.append('captureMode', 'BOOTH');
         formData.append('deviceId', getDeviceId());
 
-        await guestbookApi.boothUpload(config.eventId, formData);
+        const response = await guestbookApi.boothUpload(config.eventId, formData);
+        
+        // Store QR code if provided
+        if (response.data.qrCodeData) {
+          qrCodes[i] = response.data.qrCodeData;
+        }
 
         newProgress[i] = 100;
         setUploadProgress([...newProgress]);
@@ -532,9 +541,11 @@ export default function BoothPage() {
     }
 
     setCurrentUploadIndex(-1);
+    setPhotoQRCodes(qrCodes);
     const successCount = newProgress.filter(p => p === 100).length;
     if (successCount > 0) {
-      setTimeout(() => setViewState('success'), 500);
+      // Show download QR codes screen instead of success
+      setTimeout(() => setViewState('download-qr'), 500);
     } else {
       toast.error('Upload failed. Please try again.');
       setRecordingState('preview');
@@ -1171,7 +1182,7 @@ export default function BoothPage() {
                 disabled={capturedPhotos.length === 0}
                 className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Submit Photos
+                Download QR Codes
               </button>
             </>
           )}
@@ -1180,10 +1191,65 @@ export default function BoothPage() {
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
               <span className="text-white text-xl">
-                Uploading {currentUploadIndex + 1} of {capturedBlobs.length}...
+                Processing {currentUploadIndex + 1} of {capturedBlobs.length}...
               </span>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // Download QR Codes Screen
+  if (viewState === 'download-qr') {
+    const photosWithQR = capturedPhotos
+      .map((photo, i) => ({ photo, index: i, qrCode: photoQRCodes[i] }))
+      .filter(item => item.qrCode);
+
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-green-900 to-slate-900 flex flex-col p-8 overflow-y-auto">
+        <div className="max-w-4xl mx-auto w-full">
+          <h2 className="text-4xl font-bold text-white text-center mb-4">
+            Scan to Download Your Photos
+          </h2>
+          <p className="text-xl text-white/70 text-center mb-8">
+            Scan each QR code with your phone camera to download your photos
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {photosWithQR.map((item, idx) => (
+              <div key={item.index} className="bg-white/10 rounded-3xl p-6 backdrop-blur-sm">
+                <div className="text-center mb-4">
+                  <p className="text-white text-lg font-semibold">Photo {item.index + 1}</p>
+                </div>
+                <div className="flex flex-col items-center gap-4">
+                  <img
+                    src={item.qrCode}
+                    alt={`QR Code for Photo ${item.index + 1}`}
+                    className="w-64 h-64 bg-white p-4 rounded-2xl"
+                  />
+                  <p className="text-white/60 text-sm text-center">
+                    Open your phone camera and scan this QR code
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-center gap-6 mt-8">
+            <button
+              onClick={startNewSession}
+              className="px-12 py-5 bg-white text-slate-900 rounded-full text-xl font-bold hover:bg-white/90 transition-all active:scale-95"
+            >
+              Take More Photos
+            </button>
+            <button
+              onClick={resetToWelcome}
+              className="px-12 py-5 bg-white/10 text-white rounded-full text-xl font-bold hover:bg-white/20 transition-all active:scale-95"
+            >
+              Done
+            </button>
+          </div>
         </div>
       </div>
     );

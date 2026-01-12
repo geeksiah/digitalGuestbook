@@ -760,6 +760,24 @@ export default function EventOwnerPortalPage() {
                       )}
                     </div>
                     
+                    {/* QR Code Display */}
+                    {viewingRsvpDetails.invitation?.qrCodeData && (
+                      <div className="border-t border-surface-200 pt-4 mt-4">
+                        <h4 className="text-sm font-semibold text-navy-900 mb-3">QR Code</h4>
+                        <div className="flex flex-col items-center gap-3">
+                          <img
+                            src={viewingRsvpDetails.invitation.qrCodeData}
+                            alt="QR Code"
+                            className="w-48 h-48 bg-white p-2 rounded-lg border border-surface-200"
+                          />
+                          <p className="text-xs text-surface-500 text-center">
+                            Scan this QR code for check-in
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    </div>
+                    
                     {viewingRsvpDetails.customFields && (() => {
                       try {
                         const customFields = JSON.parse(viewingRsvpDetails.customFields);

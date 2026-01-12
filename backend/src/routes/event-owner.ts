@@ -156,6 +156,12 @@ router.post('/:token/rsvps/:rsvpId/review', validateOwnerToken, async (req: Requ
       // Use the invitation service to generate proper QR codes
       const invitation = await generateInvitationPass(rsvpId);
 
+      // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+      const { sendInvitationNotifications } = await import('../services/notifications.js');
+      sendInvitationNotifications(invitation.id).catch(err => 
+        console.error('[Notification] Failed to send invitation notifications:', err)
+      );
+
       // Log the approval
       await prisma.auditLog.create({
         data: {

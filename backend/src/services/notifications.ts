@@ -736,6 +736,146 @@ export async function sendInvitationEmail(invitationId: string) {
   return result;
 }
 
+/**
+ * Send invitation via WhatsApp with QR code
+ */
+export async function sendInvitationWhatsApp(invitationId: string) {
+  const invitation = await prisma.invitation.findUnique({
+    where: { id: invitationId },
+    include: { 
+      event: true,
+      rsvp: true,
+    },
+  });
+  
+  if (!invitation || !invitation.rsvp.phone) {
+    return { success: false, error: 'No phone number' };
+  }
+  
+  const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  
+  // WhatsApp message with QR code and access code
+  // Note: WhatsApp Business API supports images, but for simplicity we'll include the access code
+  // and a link to view the QR code if the provider supports media
+  const message = `🎉 You're Invited!
+
+${invitation.event.name}
+
+📅 Date: ${eventDate}
+${invitation.event.venue ? `📍 Venue: ${invitation.event.venue}\n` : ''}👥 Guests: ${invitation.guestCount}
+
+🔐 Your Access Code: ${invitation.accessCode}
+
+Scan the QR code in your email or show this code at check-in.
+
+We look forward to seeing you!`;
+  
+  const result = await sendWhatsApp(invitation.rsvp.phone, message);
+  
+  if (result.success) {
+    await prisma.invitation.update({
+      where: { id: invitationId },
+      data: { whatsappSent: true },
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * Send invitation via SMS with 6-digit code only
+ */
+export async function sendInvitationSMS(invitationId: string) {
+  const invitation = await prisma.invitation.findUnique({
+    where: { id: invitationId },
+    include: { 
+      event: true,
+      rsvp: true,
+    },
+  });
+  
+  if (!invitation || !invitation.rsvp.phone) {
+    return { success: false, error: 'No phone number' };
+  }
+  
+  const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  
+  // SMS with 6-digit code only (SMS doesn't support images)
+  const message = `You're invited to ${invitation.event.name} on ${eventDate}. Your access code: ${invitation.accessCode}. Show this code at check-in.`;
+  
+  const result = await sendSMS(invitation.rsvp.phone, message);
+  
+  if (result.success) {
+    await prisma.invitation.update({
+      where: { id: invitationId },
+      data: { smsSent: true },
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * Send invitation notifications via all enabled channels
+ */
+export async function sendInvitationNotifications(invitationId: string) {
+  const invitation = await prisma.invitation.findUnique({
+    where: { id: invitationId },
+    include: { 
+      event: true,
+      rsvp: true,
+    },
+  });
+  
+  if (!invitation) {
+    return { success: false, error: 'Invitation not found' };
+  }
+  
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+  const results: any = {};
+  
+  // Send email (always includes QR code and 6-digit code)
+  if (invitation.rsvp.email && settings?.emailEnabled) {
+    try {
+      results.email = await sendInvitationEmail(invitationId);
+    } catch (err: any) {
+      console.error('[Invitation] Failed to send email:', err.message);
+      results.email = { success: false, error: err.message };
+    }
+  }
+  
+  // Send WhatsApp (includes QR code reference and 6-digit code)
+  if (invitation.rsvp.phone && settings?.whatsappEnabled) {
+    try {
+      results.whatsapp = await sendInvitationWhatsApp(invitationId);
+    } catch (err: any) {
+      console.error('[Invitation] Failed to send WhatsApp:', err.message);
+      results.whatsapp = { success: false, error: err.message };
+    }
+  }
+  
+  // Send SMS (6-digit code only)
+  if (invitation.rsvp.phone && settings?.smsEnabled) {
+    try {
+      results.sms = await sendInvitationSMS(invitationId);
+    } catch (err: any) {
+      console.error('[Invitation] Failed to send SMS:', err.message);
+      results.sms = { success: false, error: err.message };
+    }
+  }
+  
+  return results;
+}
+
 export default {
   sendEmail,
   sendSMS,
@@ -747,4 +887,7 @@ export default {
   sendBroadcast,
   sendRsvpConfirmation,
   sendInvitationEmail,
+  sendInvitationWhatsApp,
+  sendInvitationSMS,
+  sendInvitationNotifications,
 };

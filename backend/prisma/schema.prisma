@@ -711,6 +711,27 @@ model Invitation {
 }
 
 // ============================================
+// BOOTH DOWNLOAD TOKENS
+// ============================================
+
+model BoothDownloadToken {
+  id        String   @id @default(uuid())
+  mediaId   String   @unique // One token per media asset
+  token     String   @unique // Secure download token
+  expiresAt DateTime // Token expiration (24 hours)
+  used      Boolean  @default(false) // Track if token has been used
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  // Relations
+  media MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([mediaId])
+  @@index([expiresAt])
+}
+
+// ============================================
 // CHECK-IN SYSTEM (SRS Section 8)
 // ============================================
 
@@ -776,6 +797,7 @@ model MediaAsset {
 
   // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  downloadToken BoothDownloadToken?
 }
 
 // ============================================
