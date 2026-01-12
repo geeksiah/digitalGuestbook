@@ -27,7 +27,13 @@ export default function OwnerLoginPage() {
     setLoading(true);
 
     try {
-      if (isRegister) {
+      if (isSetupPassword) {
+        const response = await ownerAuthApi.setupPassword(setupEmail, formData.password);
+        const { token, owner } = response.data;
+        setAuth(token, owner);
+        toast.success(`Password set successfully! Welcome, ${owner.name}!`);
+        router.push('/owner');
+      } else if (isRegister) {
         const response = await ownerAuthApi.register({
           name: formData.name,
           email: formData.email,
@@ -49,7 +55,17 @@ export default function OwnerLoginPage() {
         router.push('/owner');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || (isRegister ? 'Registration failed' : 'Login failed'));
+      const errorMessage = error.response?.data?.error || 'Failed';
+      
+      // Check if this is a "password not set" error
+      if (errorMessage.includes('Account was created by admin') || errorMessage.includes('set up your password')) {
+        setIsSetupPassword(true);
+        setSetupEmail(formData.email);
+        setFormData({ ...formData, password: '' });
+        toast.error('Please set up your password to continue');
+      } else {
+        toast.error(errorMessage || (isRegister ? 'Registration failed' : isSetupPassword ? 'Password setup failed' : 'Login failed'));
+      }
     } finally {
       setLoading(false);
     }
