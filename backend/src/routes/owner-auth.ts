@@ -28,8 +28,8 @@ const changePasswordSchema = z.object({
 });
 
 const setupPasswordSchema = z.object({
+  email: z.string().email('Valid email is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  token: z.string().min(1, 'Setup token is required'),
 });
 
 const updateProfileSchema = z.object({
@@ -205,6 +205,72 @@ router.get('/me', authenticateOwnerAccount, asyncHandler(async (req, res) => {
   }
 
   res.json({ owner });
+}));
+
+/**
+ * POST /api/owner-auth/setup-password
+ * Set initial password for admin-created owner accounts
+ */
+router.post('/setup-password', asyncHandler(async (req, res) => {
+  const data = setupPasswordSchema.parse(req.body);
+
+  const owner = await prisma.owner.findUnique({
+    where: { email: data.email },
+  });
+
+  if (!owner) {
+    throw new AppError('Owner account not found', 404);
+  }
+
+  // Check if password is already set
+  if (owner.passwordHash) {
+    throw new AppError('Password is already set. Use change-password endpoint instead.', 400);
+  }
+
+  // Check if account is active
+  if (!owner.isActive) {
+    throw new AppError('Account is inactive. Please contact support.', 403);
+  }
+
+  // Hash new password
+  const passwordHash = await bcrypt.hash(data.password, 12);
+
+  // Update password
+  await prisma.owner.update({
+    where: { id: owner.id },
+    data: { passwordHash },
+  });
+
+  // Generate JWT token and return it (auto-login after setup)
+  const jwtSecret = getJwtSecret();
+  const expiresIn = 2592000; // 30 days
+  const token = jwt.sign(
+    { ownerId: owner.id },
+    jwtSecret,
+    { expiresIn }
+  );
+
+  // Update last login
+  await prisma.owner.update({
+    where: { id: owner.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  const ownerResponse = {
+    id: owner.id,
+    name: owner.name,
+    email: owner.email,
+    phone: owner.phone,
+    company: owner.company,
+    isActive: owner.isActive,
+    createdAt: owner.createdAt,
+  };
+
+  res.json({
+    token,
+    owner: ownerResponse,
+    message: 'Password set successfully',
+  });
 }));
 
 /**

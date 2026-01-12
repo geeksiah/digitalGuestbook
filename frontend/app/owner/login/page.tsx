@@ -12,6 +12,8 @@ export default function OwnerLoginPage() {
   const { setAuth } = useOwnerAuthStore();
   const [loading, setLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
+  const [isSetupPassword, setIsSetupPassword] = useState(false);
+  const [setupEmail, setSetupEmail] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -87,7 +89,26 @@ export default function OwnerLoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {isRegister && (
+            {isSetupPassword && (
+              <div>
+                <label htmlFor="setup-email" className="label">
+                  Email
+                </label>
+                <input
+                  id="setup-email"
+                  type="email"
+                  required
+                  disabled
+                  className="input bg-surface-50"
+                  value={setupEmail}
+                  readOnly
+                />
+                <p className="text-xs text-surface-500 mt-1">
+                  Your account was created by an admin. Please set your password to continue.
+                </p>
+              </div>
+            )}
+            {isRegister && !isSetupPassword && (
               <div>
                 <label htmlFor="name" className="label">
                   Full Name *
