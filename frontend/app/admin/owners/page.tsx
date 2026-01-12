@@ -442,3 +442,74 @@ function EditOwnerModal({
   );
 }
 
+// Password Management Modal Component
+function PasswordManagementModal({
+  owner,
+  onClose,
+}: {
+  owner: Owner;
+  onClose: () => void;
+}) {
+  const [newPassword, setNewPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setLoading(true);
+    try {
+      await ownersApi.changePassword(owner.id, newPassword);
+      toast.success('Password changed successfully');
+      setNewPassword('');
+      onClose();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to change password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h2 className="text-xl font-bold text-navy-900 mb-4">Password Management</h2>
+        <p className="text-sm text-surface-600 mb-4">Owner: {owner.name} ({owner.email})</p>
+        
+        <form onSubmit={handleChangePassword} className="space-y-4 mb-6">
+          <div>
+            <label className="label">New Password *</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              className="input"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password (min 6 characters)"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary w-full"
+          >
+            {loading ? 'Changing...' : 'Change Password'}
+          </button>
+        </form>
+
+        <div className="border-t border-surface-200 pt-4">
+          <button
+            onClick={onClose}
+            className="btn-secondary w-full"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
