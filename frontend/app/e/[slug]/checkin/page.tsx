@@ -440,12 +440,9 @@ export default function CheckInPage() {
           src="/img/logo-light.svg" 
           alt="Digital Event Platform" 
           className="h-6 w-auto mx-auto opacity-80"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
         />
         <p className="text-surface-400 text-xs">
-          © {new Date().getFullYear()} Digital Event Platform
+          © {new Date().getFullYear()} Digital Event Platform. All rights reserved.
         </p>
         <p className="text-surface-500 text-xs sm:text-sm">
           {inputMode === 'scan' ? 'Scan QR code from invitation' : 'Enter 6-digit code from invitation'}

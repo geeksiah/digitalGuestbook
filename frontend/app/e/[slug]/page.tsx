@@ -228,9 +228,6 @@ export default function EventPage() {
               src="/img/logo-light.svg" 
               alt="Digital Event Platform" 
               className="h-6 w-auto mx-auto opacity-80"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
             />
             <p className="text-surface-500 text-sm">
               Powered by Digital Event Platform
