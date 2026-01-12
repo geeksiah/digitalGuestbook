@@ -672,7 +672,7 @@ export default function EventOwnerPortalPage() {
         {false && activeTab === 'reels' && event?.reelEnabled && (
           <div className="space-y-6">
             {/* Active Job Progress */}
-            {activeReelJob && (activeReelJob.status === 'pending' || activeReelJob.status === 'processing') && (
+            {activeReelJob && (activeReelJob?.status === 'pending' || activeReelJob?.status === 'processing') && (
               <div className="bg-navy-50 border border-navy-200 rounded-xl p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-12 h-12 rounded-full bg-navy-100 flex items-center justify-center animate-pulse">
@@ -681,15 +681,15 @@ export default function EventOwnerPortalPage() {
                   <div className="flex-1">
                     <h3 className="font-semibold text-navy-900">Generating Reel...</h3>
                     <p className="text-sm text-surface-600">
-                      {activeReelJob.videoCount} video{activeReelJob.videoCount !== 1 ? 's' : ''} being processed
+                      {activeReelJob?.videoCount} video{activeReelJob?.videoCount !== 1 ? 's' : ''} being processed
                     </p>
                   </div>
-                  <span className="text-2xl font-bold text-navy-900">{activeReelJob.progress}%</span>
+                  <span className="text-2xl font-bold text-navy-900">{activeReelJob?.progress}%</span>
                 </div>
                 <div className="w-full bg-surface-200 rounded-full h-2">
                   <div
                     className="bg-navy-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${activeReelJob.progress}%` }}
+                    style={{ width: `${activeReelJob?.progress ?? 0}%` }}
                   />
                 </div>
               </div>
