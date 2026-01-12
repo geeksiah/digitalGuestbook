@@ -19,7 +19,7 @@ export default function BoothDownloadPage() {
       return;
     }
 
-    // Download the file
+    // Download the file(s)
     const downloadFile = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/public/booth/download/${token}`);
@@ -28,18 +28,18 @@ export default function BoothDownloadPage() {
           if (response.status === 404) {
             setError('Download link has expired or is invalid');
           } else {
-            setError('Failed to download photo');
+            setError('Failed to download photos');
           }
           setLoading(false);
           return;
         }
 
-        // Get the file blob
+        // Get the file blob (could be a single photo or ZIP file)
         const blob = await response.blob();
         
         // Get filename from Content-Disposition header or use default
         const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = 'booth-photo.jpg';
+        let filename = 'booth-photos.zip';
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
           if (filenameMatch) {
@@ -57,7 +57,7 @@ export default function BoothDownloadPage() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
-        toast.success('Photo downloaded successfully!');
+        toast.success('Photos downloaded successfully!');
         
         // Redirect after a short delay
         setTimeout(() => {
@@ -65,7 +65,7 @@ export default function BoothDownloadPage() {
         }, 2000);
       } catch (err: any) {
         console.error('Download error:', err);
-        setError('Failed to download photo. Please try again.');
+        setError('Failed to download photos. Please try again.');
         setLoading(false);
       }
     };
@@ -78,7 +78,7 @@ export default function BoothDownloadPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
         <div className="text-center">
           <div className="w-20 h-20 mx-auto border-4 border-white/20 border-t-white rounded-full animate-spin mb-6" />
-          <p className="text-white/70 text-xl">Downloading your photo...</p>
+          <p className="text-white/70 text-xl">Downloading your photos...</p>
         </div>
       </div>
     );
@@ -94,6 +94,7 @@ export default function BoothDownloadPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-white mb-4">{error}</h1>
+          <p className="text-white/60 mb-6">The download link may have expired or all photos have already been downloaded.</p>
           <button
             onClick={() => router.push('/')}
             className="px-8 py-4 bg-white text-slate-900 rounded-full text-lg font-bold hover:bg-white/90 transition-all"

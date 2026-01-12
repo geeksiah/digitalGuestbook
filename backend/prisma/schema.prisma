@@ -716,7 +716,7 @@ model Invitation {
 
 model BoothDownloadToken {
   id        String   @id @default(uuid())
-  mediaId   String?  // Optional: for backward compatibility with single photo downloads
+  mediaId   String?  @unique // Optional: for backward compatibility with single photo downloads
   sessionId String?  // Session identifier (deviceId + timestamp window) for multi-photo downloads
   eventId   String   // Event ID for session-based queries
   deviceId  String?  // Device ID for session grouping
