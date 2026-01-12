@@ -157,38 +157,6 @@ export default function MediaGallery({
       toast.error(error.message || 'Failed to download', { id: toastId });
     }
   };
-    e?.stopPropagation();
-    e?.preventDefault();
-    
-    const toastId = `dl-${item.id}`;
-    try {
-      toast.loading('Downloading...', { id: toastId });
-      
-      const response = await fetch(`${API_BASE_URL}${item.filePath}`);
-      if (!response.ok) throw new Error('Download failed');
-      
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = item.fileName || `${item.type.toLowerCase()}-${item.id}`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }, 100);
-      
-      toast.success('Downloaded!', { id: toastId });
-    } catch (error) {
-      console.error('Download error:', error);
-      toast.error('Download failed', { id: toastId });
-    }
-  };
 
   // Download all as ZIP
   const handleDownloadAll = async () => {

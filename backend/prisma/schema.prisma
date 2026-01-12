@@ -244,6 +244,7 @@ model Event {
   transactions         Transaction[]
   payoutRequests       PayoutRequest[]
   reelJobs             ReelJob[]
+  boothDownloadTokens  BoothDownloadToken[]
   Owner                Owner?                @relation(fields: [ownerId], references: [id])
   ownerId              String?
 }
