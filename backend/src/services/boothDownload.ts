@@ -145,8 +145,9 @@ export async function generateBoothDownloadQR(mediaId: string): Promise<string> 
 
 /**
  * Verify and get download token info (for session-based downloads)
+ * Note: Token is NOT marked as used here - it's marked when individual photos are downloaded
  */
-export async function verifyBoothDownloadToken(token: string): Promise<{
+export async function verifyBoothDownloadToken(token: string, markAsUsed: boolean = false): Promise<{
   type: 'single' | 'session';
   mediaId?: string;
   filePath?: string;
@@ -167,9 +168,20 @@ export async function verifyBoothDownloadToken(token: string): Promise<{
     return null;
   }
 
-  // Check if token has been used
-  if (downloadToken.used) {
+  // Check if token has been used (only if markAsUsed is true)
+  if (markAsUsed && downloadToken.used) {
     return null;
+  }
+
+  // Mark as used if requested
+  if (markAsUsed) {
+    await prisma.boothDownloadToken.update({
+      where: { token },
+      data: {
+        used: true,
+        usedAt: new Date(),
+      },
+    });
   }
 
   // If sessionId exists, it's a session-based download
