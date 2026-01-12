@@ -362,7 +362,7 @@ export default function MediaGallery({
             <h3 className="text-lg font-semibold text-navy-900">Media Library</h3>
             <p className="text-sm text-surface-500">{media.length} total items</p>
           </div>
-          <button onClick={handleDownloadAll} className="btn-outline" disabled={media.length === 0}>
+          <button onClick={() => handleDownloadAll()} className="btn-outline" disabled={media.length === 0}>
             {Icons.downloadSmall}
             <span className="ml-2">Download All</span>
           </button>
