@@ -165,7 +165,7 @@ function exportToCSV(data: any[], filename: string, columns: { key: string; labe
   a.click();
 }
 
-export default function EventOwnerPortalPage() {
+export default function EventOwnerPortalPage(): JSX.Element | null {
   const params = useParams();
   const token = params.token as string;
 
