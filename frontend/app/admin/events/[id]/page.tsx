@@ -96,7 +96,7 @@ interface CheckIn {
 
 interface Template { id: string; name: string; type: string; isDefault: boolean; }
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'sales' | 'settings';
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'formFields' | 'sales' | 'settings';
 
 // SVG Icons
 const Icons = {
@@ -174,6 +174,7 @@ export default function EventDetailPage() {
     if (activeTab === 'media') fetchMedia();
     if (activeTab === 'checkin') fetchCheckIns();
     if (activeTab === 'sales') fetchSales();
+    if (activeTab === 'formFields') fetchFormFields();
   }, [activeTab, rsvpFilter]);
 
   useEffect(() => {
@@ -298,6 +299,59 @@ export default function EventDetailPage() {
     }
   };
 
+  const fetchFormFields = async () => {
+    setLoadingFormFields(true);
+    try {
+      const r = await ticketingApi.getCustomFields(eventId);
+      const fields = r.data.fields.map((f: any) => ({
+        ...f,
+        options: f.options ? JSON.parse(f.options) : null,
+      }));
+      setFormFields(fields);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to load form fields');
+    } finally {
+      setLoadingFormFields(false);
+    }
+  };
+
+  const handleSaveFormField = async () => {
+    try {
+      const data = {
+        ...formFieldData,
+        options: formFieldData.options.length > 0 ? formFieldData.options : undefined,
+      };
+      if (editingFormField) {
+        await ticketingApi.updateCustomField(eventId, editingFormField.id, data);
+        toast.success('Form field updated', { icon: '✅' });
+      } else {
+        await ticketingApi.createCustomField(eventId, data);
+        toast.success('Form field created', { icon: '✅' });
+      }
+      setShowFormFieldModal(false);
+      setEditingFormField(null);
+      setFormFieldData({
+        fieldName: '', label: '', type: 'text', placeholder: '', helpText: '',
+        options: [], required: false, minLength: undefined, maxLength: undefined,
+        pattern: '', sortOrder: formFields.length, isActive: true, showOnConfirmation: true,
+      });
+      await fetchFormFields();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to save form field');
+    }
+  };
+
+  const handleDeleteFormField = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this field?')) return;
+    try {
+      await ticketingApi.deleteCustomField(eventId, id);
+      toast.success('Form field deleted', { icon: '✅' });
+      await fetchFormFields();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to delete form field');
+    }
+  };
+
   const handlePhaseChange = async (phase: string) => {
     try { await eventsApi.setPhase(eventId, phase, true); toast.success(`Phase: ${getPhaseLabel(phase)}`); fetchEvent(); }
     catch { toast.error('Failed'); }
@@ -412,6 +466,7 @@ export default function EventDetailPage() {
     { id: 'media', label: 'Media', count: event._count.mediaAssets },
     { id: 'templates', label: 'Templates' },
     { id: 'tickets', label: 'Tickets' },
+    { id: 'formFields', label: 'Form Fields', count: formFields.length },
     { id: 'settings', label: 'Settings' },
   ];
 

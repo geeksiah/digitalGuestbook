@@ -157,8 +157,8 @@ export const updateTemplateSchema = createTemplateSchema.partial();
 export const createRsvpSchema = z.object({
   primaryName: z.string().min(2, 'Name must be at least 2 characters'),
   secondaryName: z.string().optional(),
-  email: z.string().email('Invalid email address').min(1, 'Email is required'),
-  phone: z.string().min(1, 'Phone number is required'),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  phone: z.string().optional(),
   
   attendance: z.enum(['YES', 'NO', 'MAYBE']),
   guestCount: z.number().int().min(1).max(20).default(1),
