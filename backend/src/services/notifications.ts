@@ -86,6 +86,33 @@ export async function sendEmailWithProvider(
       
       console.log('[Email] Sent via', provider.name, 'to:', to, 'ID:', result.messageId);
       return { success: true, messageId: result.messageId };
+    } catch (error: any) {
+      console.error('[Email] Failed to send via', provider.name, ':', error.message);
+      console.error('[Email] Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+      });
+      
+      // Provide helpful error messages
+      let errorMessage = error.message;
+      if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+        errorMessage = `Connection timeout to ${provider.smtpHost}:${port}. `;
+        if (port === 587) {
+          errorMessage += 'Try using port 465 (SSL) instead, or check if your hosting provider blocks outbound SMTP connections. ';
+        } else if (port === 465) {
+          errorMessage += 'Try using port 587 (STARTTLS) instead, or check if your hosting provider blocks outbound SMTP connections. ';
+        }
+        errorMessage += `Verify the SMTP host "${provider.smtpHost}" is correct and reachable.`;
+      } else if (error.code === 'ECONNREFUSED') {
+        errorMessage = `Connection refused by ${provider.smtpHost}:${port}. Check if the host and port are correct.`;
+      } else if (error.code === 'ENOTFOUND') {
+        errorMessage = `SMTP host "${provider.smtpHost}" not found. Verify the hostname is correct.`;
+      }
+      
+      return { success: false, error: errorMessage };
     }
     
     if (provider.provider === 'sendgrid' && provider.apiKey) {
