@@ -5,7 +5,7 @@ import { authenticateAdmin } from '../middleware/auth.js';
 import { createRsvpSchema, reviewRsvpSchema } from '../utils/validation.js';
 import { calculateEventPhase, canSubmitRsvp } from '../utils/phase.js';
 import { generateInvitationPass } from '../services/invitation.js';
-import { sendRsvpConfirmation, sendInvitationEmail, sendInvitationNotifications } from '../services/notifications.js';
+import { sendRsvpConfirmation, sendInvitationEmail, sendInvitationNotifications, sendEmail, sendSMS, sendWhatsApp } from '../services/notifications.js';
 
 const router = Router();
 
@@ -38,19 +38,19 @@ async function notifyOwnerAboutRsvp(eventId: string, rsvpData: { primaryName: st
         <p><strong>Response:</strong> ${rsvpData.attendance}</p>
         <p><strong>Party Size:</strong> ${rsvpData.guestCount}</p>
       </div>`
-    ).catch(err => {
+    ).catch((err: any) => {
       console.error('[RSVP Notification] Failed to send email:', err);
     });
   }
 
   if (event.ownerPhone && event.smsNotifications) {
-    sendSMS(event.ownerPhone, message).catch(err => {
+    sendSMS(event.ownerPhone, message).catch((err: any) => {
       console.error('[RSVP Notification] Failed to send SMS:', err);
     });
   }
 
   if (event.ownerPhone && event.whatsappNotifications) {
-    sendWhatsApp(event.ownerPhone, message).catch(err => {
+    sendWhatsApp(event.ownerPhone, message).catch((err: any) => {
       console.error('[RSVP Notification] Failed to send WhatsApp:', err);
     });
   }

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
+import type { PrismaClient } from '@prisma/client';
 
 const router = Router();
 
@@ -330,7 +331,6 @@ router.get('/booth/download/:token/:photoId', asyncHandler(async (req, res) => {
   
   const { verifyBoothDownloadToken, getSessionPhotos } = await import('../services/boothDownload.js');
   const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
-  const prisma = await import('../utils/prisma.js').then(m => m.default);
   
   const result = await verifyBoothDownloadToken(token, false); // Don't mark as used - allow multiple downloads
   
