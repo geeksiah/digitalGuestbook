@@ -141,6 +141,7 @@ export default function EventDetailPage() {
   const [loadingSales, setLoadingSales] = useState(false);
   const [loadingRsvps, setLoadingRsvps] = useState(false);
   const [reviewingRsvp, setReviewingRsvp] = useState<string | null>(null);
+  const [viewingRsvpDetails, setViewingRsvpDetails] = useState<RSVP | null>(null);
   const [formFields, setFormFields] = useState<any[]>([]);
   const [loadingFormFields, setLoadingFormFields] = useState(false);
   const [showFormFieldModal, setShowFormFieldModal] = useState(false);

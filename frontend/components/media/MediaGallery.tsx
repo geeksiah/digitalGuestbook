@@ -107,6 +107,57 @@ export default function MediaGallery({
   // Download single file
   const handleDownload = async (item: MediaAsset, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    const toastId = `download-${item.id}`;
+    try {
+      toast.loading('Downloading...', { id: toastId });
+      
+      const headers: Record<string, string> = {};
+      if (isAdmin) {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        } else {
+          throw new Error('Authentication required');
+        }
+      } else if (ownerToken) {
+        headers['X-Owner-Token'] = ownerToken;
+      } else {
+        // Try to use owner dashboard API token if available
+        const ownerToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+        if (ownerToken) {
+          headers['Authorization'] = `Bearer ${ownerToken}`;
+        } else {
+          throw new Error('Authentication required');
+        }
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/media/${item.id}/download`, { headers });
+      
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to download');
+      }
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success('Downloaded', { id: toastId });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to download', { id: toastId });
+    }
+  };
+    e?.stopPropagation();
     e?.preventDefault();
     
     const toastId = `dl-${item.id}`;

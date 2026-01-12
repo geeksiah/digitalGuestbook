@@ -105,14 +105,54 @@ router.get('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
  * GET /api/media/:id/download
  * Download a single media file
  * Handles both Supabase and local filesystem storage
+ * Supports both admin token and owner token via header
  */
 router.get('/:id/download', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
+  // Support both admin token and owner token
+  const authHeader = req.headers.authorization;
+  const ownerToken = req.headers['x-owner-token'] as string | undefined;
+  
   const mediaAsset = await prisma.mediaAsset.findUnique({
-    where: { id: req.params.id },
+    where: { id },
+    include: { event: { select: { id: true, ownerId: true, ownerAccessToken: true } } },
   });
 
   if (!mediaAsset) {
     throw new AppError('Media asset not found', 404);
+  }
+
+  // Verify authentication
+  if (ownerToken) {
+    // If owner token, verify it matches this event
+    if (mediaAsset.event.ownerAccessToken !== ownerToken) {
+      throw new AppError('Unauthorized', 401);
+    }
+  } else if (authHeader && authHeader.startsWith('Bearer ')) {
+    // Verify token - could be admin or owner token
+    const jwt = await import('jsonwebtoken');
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+      const decoded = jwt.verify(token, jwtSecret) as any;
+      
+      // Check if it's an owner token
+      if (decoded.ownerId) {
+        // Owner token - verify they own this event
+        if (mediaAsset.event.ownerId !== decoded.ownerId) {
+          throw new AppError('Unauthorized - You do not have access to this event', 401);
+        }
+      }
+      // Admin token - allow access (no additional check needed)
+    } catch (error: any) {
+      if (error.message?.includes('Unauthorized')) {
+        throw error;
+      }
+      throw new AppError('Unauthorized', 401);
+    }
+  } else {
+    throw new AppError('Unauthorized', 401);
   }
 
   // Check if filePath is a Supabase URL
