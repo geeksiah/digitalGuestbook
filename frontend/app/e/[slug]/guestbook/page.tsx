@@ -940,6 +940,8 @@ export default function GuestbookPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
           {/* AUDIO VIEW */}
           {viewState === 'audio' && (
