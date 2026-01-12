@@ -215,8 +215,9 @@ export default function MediaGallery({
       
       toast.success('Download started!', { id: toastId });
     } catch (error: any) {
-      console.error('Download all error:', error);
-      toast.error(error.message || 'Download failed', { id: toastId });
+      console.error('[Media Download All] Error:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Download failed';
+      toast.error(errorMessage, { id: toastId });
     }
   };
 
