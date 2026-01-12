@@ -972,6 +972,287 @@ export default function EventDetailPage() {
         />
       )}
 
+      {/* Form Fields */}
+      {activeTab === 'formFields' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-navy-900">RSVP Form Fields</h3>
+              <p className="text-sm text-surface-500 mt-1">Customize the fields guests see when RSVPing. Email and Phone are always present but optional by default.</p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingFormField(null);
+                setFormFieldData({
+                  fieldName: '', label: '', type: 'text', placeholder: '', helpText: '',
+                  options: [], required: false, minLength: undefined, maxLength: undefined,
+                  pattern: '', sortOrder: formFields.length, isActive: true, showOnConfirmation: true,
+                });
+                setShowFormFieldModal(true);
+              }}
+              className="btn-primary"
+            >
+              + Add Field
+            </button>
+          </div>
+
+          {loadingFormFields ? (
+            <div className="py-12 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900"></div>
+              <p className="mt-4 text-surface-500">Loading form fields...</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+              {formFields.length === 0 ? (
+                <div className="py-12 text-center text-surface-500">
+                  <p>No custom fields yet. Add fields to collect additional information from guests.</p>
+                  <p className="text-sm mt-2">Note: Email and Phone fields are always present but optional by default.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-surface-200 bg-surface-50">
+                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Label</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Type</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Required</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Active</th>
+                        <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-100">
+                      {formFields.map((field) => (
+                        <tr key={field.id} className="hover:bg-surface-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <p className="font-medium text-navy-900">{field.label}</p>
+                            {field.helpText && <p className="text-xs text-surface-500 mt-1">{field.helpText}</p>}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-1 text-xs rounded bg-surface-100 text-surface-700">{field.type}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {field.required ? (
+                              <span className="text-green-600 font-medium">Yes</span>
+                            ) : (
+                              <span className="text-surface-400">No</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {field.isActive ? (
+                              <span className="text-green-600 font-medium">Active</span>
+                            ) : (
+                              <span className="text-surface-400">Inactive</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingFormField(field);
+                                  setFormFieldData({
+                                    fieldName: field.fieldName,
+                                    label: field.label,
+                                    type: field.type,
+                                    placeholder: field.placeholder || '',
+                                    helpText: field.helpText || '',
+                                    options: field.options || [],
+                                    required: field.required,
+                                    minLength: field.minLength || undefined,
+                                    maxLength: field.maxLength || undefined,
+                                    pattern: field.pattern || '',
+                                    sortOrder: field.sortOrder,
+                                    isActive: field.isActive,
+                                    showOnConfirmation: field.showOnConfirmation,
+                                  });
+                                  setShowFormFieldModal(true);
+                                }}
+                                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteFormField(field.id)}
+                                className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Form Field Modal */}
+          {showFormFieldModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b border-surface-200">
+                  <h3 className="text-lg font-semibold text-navy-900">
+                    {editingFormField ? 'Edit Form Field' : 'Add Form Field'}
+                  </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Field Name (Internal)</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formFieldData.fieldName}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, fieldName: e.target.value })}
+                        placeholder="e.g., company_name"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Display Label *</label>
+                      <input
+                        type="text"
+                        className="input"
+                        required
+                        value={formFieldData.label}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, label: e.target.value })}
+                        placeholder="e.g., Company Name"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Field Type *</label>
+                    <select
+                      className="input"
+                      value={formFieldData.type}
+                      onChange={(e) => setFormFieldData({ ...formFieldData, type: e.target.value as any })}
+                    >
+                      <option value="text">Text</option>
+                      <option value="email">Email</option>
+                      <option value="phone">Phone</option>
+                      <option value="number">Number</option>
+                      <option value="textarea">Textarea</option>
+                      <option value="select">Select (Dropdown)</option>
+                      <option value="radio">Radio Buttons</option>
+                      <option value="checkbox">Checkbox</option>
+                      <option value="date">Date</option>
+                    </select>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Placeholder</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formFieldData.placeholder}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, placeholder: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Help Text</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formFieldData.helpText}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, helpText: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  {(formFieldData.type === 'select' || formFieldData.type === 'radio') && (
+                    <div>
+                      <label className="label">Options (one per line)</label>
+                      <textarea
+                        className="input"
+                        rows={4}
+                        value={formFieldData.options.join('\n')}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, options: e.target.value.split('\n').filter(o => o.trim()) })}
+                        placeholder="Option 1&#10;Option 2&#10;Option 3"
+                      />
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="label">Min Length</label>
+                      <input
+                        type="number"
+                        className="input"
+                        value={formFieldData.minLength || ''}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, minLength: e.target.value ? parseInt(e.target.value) : undefined })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Max Length</label>
+                      <input
+                        type="number"
+                        className="input"
+                        value={formFieldData.maxLength || ''}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, maxLength: e.target.value ? parseInt(e.target.value) : undefined })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Sort Order</label>
+                      <input
+                        type="number"
+                        className="input"
+                        value={formFieldData.sortOrder}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, sortOrder: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-surface-300"
+                        checked={formFieldData.required}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, required: e.target.checked })}
+                      />
+                      <span className="text-sm font-medium">Required Field</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-surface-300"
+                        checked={formFieldData.isActive}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, isActive: e.target.checked })}
+                      />
+                      <span className="text-sm font-medium">Active</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-surface-300"
+                        checked={formFieldData.showOnConfirmation}
+                        onChange={(e) => setFormFieldData({ ...formFieldData, showOnConfirmation: e.target.checked })}
+                      />
+                      <span className="text-sm font-medium">Show on Confirmation</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="p-6 border-t border-surface-200 flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowFormFieldModal(false);
+                      setEditingFormField(null);
+                    }}
+                    className="btn-outline"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveFormField}
+                    className="btn-primary"
+                    disabled={!formFieldData.label || !formFieldData.fieldName}
+                  >
+                    {editingFormField ? 'Update Field' : 'Create Field'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Sales */}
       {activeTab === 'sales' && (
         <div className="space-y-4">
