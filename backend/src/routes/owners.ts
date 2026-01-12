@@ -5,6 +5,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { z } from 'zod';
 import { sendEmail } from '../services/notifications.js';
+import { getSiteUrl } from '../utils/siteUrl.js';
 
 const router = Router();
 
@@ -146,7 +147,7 @@ router.post('/', asyncHandler(async (req, res) => {
   
   // Send welcome email with password setup link
   try {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getSiteUrl();
     const setupLink = `${frontendUrl}/owner/login`;
     
     const emailHtml = `
@@ -465,7 +466,7 @@ router.post('/:id/resend-welcome-email', asyncHandler(async (req, res) => {
 
   // Send welcome email with password setup link
   try {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getSiteUrl();
     const setupLink = `${frontendUrl}/owner/login`;
     
     const emailHtml = `
@@ -634,7 +635,7 @@ router.post('/password-reset-requests/:id/approve', asyncHandler(async (req, res
 
   // Send notification email to owner
   try {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getSiteUrl();
     const loginLink = `${frontendUrl}/owner/login`;
     
     const emailHtml = `

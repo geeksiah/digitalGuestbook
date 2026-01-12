@@ -262,12 +262,21 @@ app.use(helmet({
 }));
 
 // CORS Configuration
+import { getSiteUrl } from './utils/siteUrl.js';
+
 const allowedOrigins = [
-  'http://localhost:3000',
+  getSiteUrl(),
   'https://digiguestbook.netlify.app',
   process.env.CORS_ORIGIN,
   process.env.FRONTEND_URL,
+  process.env.SITE_URL,
+  process.env.APP_URL,
 ].filter(Boolean) as string[];
+
+// Add localhost only in development
+if (process.env.NODE_ENV === 'development') {
+  allowedOrigins.push('http://localhost:3000');
+}
 
 app.use(cors({
   origin: (origin, callback) => {
