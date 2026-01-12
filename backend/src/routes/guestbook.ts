@@ -486,4 +486,27 @@ router.post(
   })
 );
 
+/**
+ * POST /api/guestbook/:eventId/booth/session-qr
+ * Generate QR code for downloading all photos from a session
+ */
+router.post('/:eventId/booth/session-qr', verifyBoothAccess, asyncHandler(async (req, res) => {
+  const event = (req as any).event;
+  const { deviceId, sessionStart } = req.body;
+
+  if (!deviceId || !sessionStart) {
+    throw new AppError('deviceId and sessionStart are required', 400);
+  }
+
+  const sessionStartDate = new Date(sessionStart);
+  if (isNaN(sessionStartDate.getTime())) {
+    throw new AppError('Invalid sessionStart date', 400);
+  }
+
+  const { generateBoothSessionDownloadQR } = await import('../services/boothDownload.js');
+  const qrCodeData = await generateBoothSessionDownloadQR(event.id, deviceId, sessionStartDate);
+
+  res.json({ qrCodeData });
+}));
+
 export default router;

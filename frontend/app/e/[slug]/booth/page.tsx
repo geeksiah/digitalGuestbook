@@ -544,31 +544,22 @@ export default function BoothPage() {
     if (successCount > 0) {
       // Generate session download QR code
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/guestbook/${config.eventId}/booth/session-qr`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deviceId: getDeviceId(),
-            sessionStart: sessionStart.toISOString(),
-          }),
-        });
+        const response = await guestbookApi.generateSessionQR(
+          config.eventId,
+          getDeviceId(),
+          sessionStart.toISOString()
+        );
         
-        if (response.ok) {
-          const data = await response.json();
-          if (data.qrCodeData) {
-            setSessionQRCode(data.qrCodeData);
-            setTimeout(() => setViewState('download-qr'), 500);
-          } else {
-            toast.error('Failed to generate download QR code');
-            setRecordingState('preview');
-          }
+        if (response.data.qrCodeData) {
+          setSessionQRCode(response.data.qrCodeData);
+          setTimeout(() => setViewState('download-qr'), 500);
         } else {
           toast.error('Failed to generate download QR code');
           setRecordingState('preview');
         }
       } catch (err: any) {
         console.error('Failed to generate session QR:', err);
-        toast.error('Failed to generate download QR code');
+        toast.error(err.response?.data?.error || 'Failed to generate download QR code');
         setRecordingState('preview');
       }
     } else {

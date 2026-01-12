@@ -153,6 +153,12 @@ export const guestbookApi = {
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     ),
+  generateSessionQR: (eventId: string, deviceId: string, sessionStart: string) =>
+    axios.post(
+      `${API_BASE_URL}/api/guestbook/${eventId}/booth/session-qr`,
+      { deviceId, sessionStart },
+      { headers: { 'Content-Type': 'application/json' } }
+    ),
 };
 
 // Event Owner Portal API
