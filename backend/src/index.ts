@@ -249,7 +249,8 @@ const app = express();
 const port = Number(process.env.PORT) || 10000;
 
 // Trust proxy (required for rate limiting behind reverse proxy like Render)
-app.set('trust proxy', true);
+// Only trust the first proxy (Render.com) to prevent IP spoofing
+app.set('trust proxy', 1);
 
 // Request Compression (gzip)
 app.use(compression());
@@ -301,6 +302,15 @@ const limiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Use a custom key generator that works with trust proxy
+  keyGenerator: (req) => {
+    // Get IP from X-Forwarded-For header (first IP when trust proxy is set)
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
+  // Skip trust proxy validation warning
+  validate: {
+    trustProxy: false,
+  },
 });
 app.use('/api/', limiter);
 
@@ -309,6 +319,15 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: 'Too many authentication attempts, please try again later.' },
+  // Use a custom key generator that works with trust proxy
+  keyGenerator: (req) => {
+    // Get IP from X-Forwarded-For header (first IP when trust proxy is set)
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
+  // Skip trust proxy validation warning
+  validate: {
+    trustProxy: false,
+  },
 });
 app.use('/api/auth/', authLimiter);
 

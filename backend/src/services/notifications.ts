@@ -110,6 +110,13 @@ export async function sendEmailWithProvider(
     return { success: false, error: `Unsupported email provider: ${provider.provider}` };
   } catch (error: any) {
     console.error('[Email] Failed to send via', provider.name, ':', error.message);
+    console.error('[Email] Error details:', {
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+    });
     return { success: false, error: error.message };
   }
 }
