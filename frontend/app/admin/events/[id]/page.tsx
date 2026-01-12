@@ -138,9 +138,6 @@ export default function EventDetailPage() {
   const [sales, setSales] = useState<any[]>([]);
   const [salesStats, setSalesStats] = useState<any>(null);
   const [loadingSales, setLoadingSales] = useState(false);
-  const [sales, setSales] = useState<any[]>([]);
-  const [salesStats, setSalesStats] = useState<any>(null);
-  const [loadingSales, setLoadingSales] = useState(false);
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
