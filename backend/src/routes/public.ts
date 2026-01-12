@@ -279,13 +279,15 @@ router.get('/verify-access/:eventSlug', asyncHandler(async (req, res) => {
 
 /**
  * GET /api/public/booth/download/:token
- * Download booth photo using secure token
+ * Download booth photos using secure token (single photo or ZIP of all session photos)
  */
 router.get('/booth/download/:token', asyncHandler(async (req, res) => {
   const { token } = req.params;
   
-  const { verifyBoothDownloadToken } = await import('../services/boothDownload.js');
+  const { verifyBoothDownloadToken, getSessionPhotos } = await import('../services/boothDownload.js');
   const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
+  const archiver = await import('archiver');
+  const prisma = await import('../utils/prisma.js').then(m => m.default);
   
   const result = await verifyBoothDownloadToken(token);
   
@@ -294,21 +296,69 @@ router.get('/booth/download/:token', asyncHandler(async (req, res) => {
   }
   
   try {
-    // Download file from Supabase
-    const fileBuffer = await downloadFile(BUCKETS.MEDIA, result.filePath);
-    
-    // Get file extension from path
-    const ext = result.filePath.split('.').pop() || 'jpg';
-    const contentType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 
-                       ext === 'png' ? 'image/png' : 
-                       ext === 'gif' ? 'image/gif' : 'application/octet-stream';
-    
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="booth-photo-${Date.now()}.${ext}"`);
-    res.send(fileBuffer);
+    // Mark token as used
+    await prisma.boothDownloadToken.update({
+      where: { token },
+      data: {
+        used: true,
+        usedAt: new Date(),
+      },
+    });
+
+    if (result.type === 'session' && result.sessionId && result.eventId) {
+      // Session-based download: download all photos as ZIP
+      const photos = await getSessionPhotos(result.sessionId, result.eventId, result.deviceId || null);
+      
+      if (photos.length === 0) {
+        throw new AppError('No photos found for this session', 404);
+      }
+
+      // Set up ZIP response
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="booth-photos-${Date.now()}.zip"`
+      );
+
+      const archive = archiver.default('zip', { zlib: { level: 5 } });
+      
+      archive.on('error', (err) => {
+        throw err;
+      });
+
+      archive.pipe(res);
+
+      // Add all photos to ZIP
+      for (const photo of photos) {
+        try {
+          const fileBuffer = await downloadFile(BUCKETS.MEDIA, photo.filePath);
+          archive.append(fileBuffer, { name: photo.fileName || `photo-${photo.id}.jpg` });
+        } catch (error: any) {
+          console.warn(`[Booth Download] Failed to add photo ${photo.id} to ZIP:`, error.message);
+          // Continue with other photos
+        }
+      }
+
+      await archive.finalize();
+    } else if (result.type === 'single' && result.filePath) {
+      // Single photo download (backward compatibility)
+      const fileBuffer = await downloadFile(BUCKETS.MEDIA, result.filePath);
+      
+      // Get file extension from path
+      const ext = result.filePath.split('.').pop() || 'jpg';
+      const contentType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 
+                         ext === 'png' ? 'image/png' : 
+                         ext === 'gif' ? 'image/gif' : 'application/octet-stream';
+      
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="booth-photo-${Date.now()}.${ext}"`);
+      res.send(fileBuffer);
+    } else {
+      throw new AppError('Invalid download token', 400);
+    }
   } catch (error: any) {
-    console.error('[Booth Download] Failed to download file:', error.message);
-    throw new AppError('Failed to download file', 500);
+    console.error('[Booth Download] Failed to download:', error.message);
+    throw new AppError('Failed to download photos', 500);
   }
 }));
 

@@ -64,8 +64,9 @@ export default function BoothPage() {
   const [currentUploadIndex, setCurrentUploadIndex] = useState(-1);
   const [shutterCountdown, setShutterCountdown] = useState(0);
   const [flashActive, setFlashActive] = useState(false);
-  // Download QR codes for each photo (indexed by photo index)
-  const [photoQRCodes, setPhotoQRCodes] = useState<Record<number, string>>({});
+  // Download QR code for session (all photos)
+  const [sessionQRCode, setSessionQRCode] = useState<string | null>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
 
   // Audio visualization state
   const [audioWaveform, setAudioWaveform] = useState<number[]>(new Array(50).fill(0));
@@ -163,7 +164,8 @@ export default function BoothPage() {
     setUploadProgress([]);
     setCurrentUploadIndex(-1);
     setShutterCountdown(0);
-    setPhotoQRCodes({});
+    setSessionQRCode(null);
+    setSessionStartTime(null);
     recordedBlobRef.current = null;
     chunksRef.current = [];
     setRecordingTime(0);
@@ -390,6 +392,7 @@ export default function BoothPage() {
     setCapturedBlobs([]);
     setUploadProgress([]);
     setCurrentUploadIndex(-1);
+    setSessionStartTime(new Date()); // Track session start time
     
     const granted = await requestMediaPermission('photo');
     if (!granted) return;
@@ -509,8 +512,9 @@ export default function BoothPage() {
 
     setRecordingState('uploading');
     const newProgress = [...uploadProgress];
-    const qrCodes: Record<number, string> = {};
+    const sessionStart = sessionStartTime || new Date();
 
+    // Upload all photos
     for (let i = 0; i < capturedBlobs.length; i++) {
       setCurrentUploadIndex(i);
       try {
@@ -525,13 +529,7 @@ export default function BoothPage() {
         formData.append('captureMode', 'BOOTH');
         formData.append('deviceId', getDeviceId());
 
-        const response = await guestbookApi.boothUpload(config.eventId, formData);
-        
-        // Store QR code if provided
-        if (response.data.qrCodeData) {
-          qrCodes[i] = response.data.qrCodeData;
-        }
-
+        await guestbookApi.boothUpload(config.eventId, formData);
         newProgress[i] = 100;
         setUploadProgress([...newProgress]);
       } catch (err: any) {
@@ -541,11 +539,38 @@ export default function BoothPage() {
     }
 
     setCurrentUploadIndex(-1);
-    setPhotoQRCodes(qrCodes);
     const successCount = newProgress.filter(p => p === 100).length;
+    
     if (successCount > 0) {
-      // Show download QR codes screen instead of success
-      setTimeout(() => setViewState('download-qr'), 500);
+      // Generate session download QR code
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/guestbook/${config.eventId}/booth/session-qr`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: getDeviceId(),
+            sessionStart: sessionStart.toISOString(),
+          }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.qrCodeData) {
+            setSessionQRCode(data.qrCodeData);
+            setTimeout(() => setViewState('download-qr'), 500);
+          } else {
+            toast.error('Failed to generate download QR code');
+            setRecordingState('preview');
+          }
+        } else {
+          toast.error('Failed to generate download QR code');
+          setRecordingState('preview');
+        }
+      } catch (err: any) {
+        console.error('Failed to generate session QR:', err);
+        toast.error('Failed to generate download QR code');
+        setRecordingState('preview');
+      }
     } else {
       toast.error('Upload failed. Please try again.');
       setRecordingState('preview');
@@ -1182,7 +1207,7 @@ export default function BoothPage() {
                 disabled={capturedPhotos.length === 0}
                 className="px-14 py-5 bg-green-600 text-white rounded-full text-xl font-bold hover:bg-green-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Download QR Codes
+                Download Photos
               </button>
             </>
           )}
@@ -1200,43 +1225,32 @@ export default function BoothPage() {
     );
   }
 
-  // Download QR Codes Screen
-  if (viewState === 'download-qr') {
-    const photosWithQR = capturedPhotos
-      .map((photo, i) => ({ photo, index: i, qrCode: photoQRCodes[i] }))
-      .filter(item => item.qrCode);
-
+  // Download QR Code Screen
+  if (viewState === 'download-qr' && sessionQRCode) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-green-900 to-slate-900 flex flex-col p-8 overflow-y-auto">
-        <div className="max-w-4xl mx-auto w-full">
+        <div className="max-w-2xl mx-auto w-full flex flex-col items-center justify-center min-h-full">
           <h2 className="text-4xl font-bold text-white text-center mb-4">
-            Scan to Download Your Photos
+            Download Your Photos
           </h2>
           <p className="text-xl text-white/70 text-center mb-8">
-            Scan each QR code with your phone camera to download your photos
+            Scan the QR code with your phone camera to download all {capturedPhotos.length} photo{capturedPhotos.length !== 1 ? 's' : ''}
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {photosWithQR.map((item, idx) => (
-              <div key={item.index} className="bg-white/10 rounded-3xl p-6 backdrop-blur-sm">
-                <div className="text-center mb-4">
-                  <p className="text-white text-lg font-semibold">Photo {item.index + 1}</p>
-                </div>
-                <div className="flex flex-col items-center gap-4">
-                  <img
-                    src={item.qrCode}
-                    alt={`QR Code for Photo ${item.index + 1}`}
-                    className="w-64 h-64 bg-white p-4 rounded-2xl"
-                  />
-                  <p className="text-white/60 text-sm text-center">
-                    Open your phone camera and scan this QR code
-                  </p>
-                </div>
-              </div>
-            ))}
+          <div className="bg-white/10 rounded-3xl p-8 backdrop-blur-sm mb-8">
+            <div className="flex flex-col items-center gap-6">
+              <img
+                src={sessionQRCode}
+                alt="QR Code to download all photos"
+                className="w-80 h-80 bg-white p-4 rounded-2xl"
+              />
+              <p className="text-white/60 text-sm text-center max-w-md">
+                Open your phone camera and scan this QR code. All your photos will be downloaded as a ZIP file.
+              </p>
+            </div>
           </div>
 
-          <div className="flex justify-center gap-6 mt-8">
+          <div className="flex justify-center gap-6">
             <button
               onClick={startNewSession}
               className="px-12 py-5 bg-white text-slate-900 rounded-full text-xl font-bold hover:bg-white/90 transition-all active:scale-95"

@@ -455,15 +455,6 @@ router.post(
         },
       });
 
-      // For photos, generate download token and QR code
-      let downloadToken: string | null = null;
-      let qrCodeData: string | null = null;
-      if (metadata.type === 'PHOTO') {
-        const { generateBoothDownloadToken, generateBoothDownloadQR } = await import('../services/boothDownload.js');
-        downloadToken = await generateBoothDownloadToken(mediaAsset.id);
-        qrCodeData = await generateBoothDownloadQR(mediaAsset.id);
-      }
-
       // Create audit log
       await prisma.auditLog.create({
         data: {
@@ -487,11 +478,6 @@ router.post(
           type: mediaAsset.type,
           status: mediaAsset.status,
         },
-        // For photos, include download token and QR code
-        ...(metadata.type === 'PHOTO' && downloadToken && qrCodeData ? {
-          downloadToken,
-          qrCodeData,
-        } : {}),
       });
     } catch (error: any) {
       console.error('[Booth Upload] Supabase upload error:', error);

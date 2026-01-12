@@ -716,7 +716,10 @@ model Invitation {
 
 model BoothDownloadToken {
   id        String   @id @default(uuid())
-  mediaId   String   @unique // One token per media asset
+  mediaId   String?  // Optional: for backward compatibility with single photo downloads
+  sessionId String?  // Session identifier (deviceId + timestamp window) for multi-photo downloads
+  eventId   String   // Event ID for session-based queries
+  deviceId  String?  // Device ID for session grouping
   token     String   @unique // Secure download token
   expiresAt DateTime // Token expiration (24 hours)
   used      Boolean  @default(false) // Track if token has been used
@@ -724,10 +727,13 @@ model BoothDownloadToken {
   createdAt DateTime @default(now())
 
   // Relations
-  media MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  media MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  event Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([mediaId])
+  @@index([sessionId])
+  @@index([eventId, deviceId, createdAt])
   @@index([expiresAt])
 }
 
