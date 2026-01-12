@@ -63,7 +63,19 @@ async function notifyOwnerAboutRsvp(eventId: string, rsvpData: { primaryName: st
  */
 router.post('/:eventSlug', asyncHandler(async (req, res) => {
   const { eventSlug } = req.params;
-  const data = createRsvpSchema.parse(req.body);
+  console.log('[RSVP] Received request for event slug:', eventSlug);
+  console.log('[RSVP] Request body:', JSON.stringify(req.body, null, 2));
+  
+  let data;
+  try {
+    data = createRsvpSchema.parse(req.body);
+  } catch (error: any) {
+    console.error('[RSVP] Validation error:', error);
+    if (error.name === 'ZodError') {
+      console.error('[RSVP] Validation issues:', JSON.stringify(error.issues, null, 2));
+    }
+    throw error;
+  }
 
   // Find event by slug
   const event = await prisma.event.findUnique({
