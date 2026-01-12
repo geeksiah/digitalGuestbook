@@ -466,7 +466,7 @@ export default function EventDetailPage() {
                   { l: 'RSVP Form', p: `/e/${event.slug}/rsvp` },
                   { l: 'Guestbook', p: `/e/${event.slug}/guestbook` },
                   { l: 'Check-In', p: `/e/${event.slug}/checkin` },
-                  { l: 'Owner Portal', p: `/event-owner/${event.ownerAccessToken}` },
+                  { l: 'Owner Dashboard', p: `/owner/login` },
                 ].map(x => (
                   <button 
                     key={x.p} 

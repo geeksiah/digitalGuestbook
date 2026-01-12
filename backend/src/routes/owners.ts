@@ -3,6 +3,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { z } from 'zod';
+import { sendEmail } from '../services/notifications.js';
 
 const router = Router();
 
@@ -141,6 +142,78 @@ router.post('/', asyncHandler(async (req, res) => {
       details: JSON.stringify({ name: owner.name, email: owner.email }),
     },
   });
+  
+  // Send welcome email with password setup link
+  try {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const setupLink = `${frontendUrl}/owner/login`;
+    
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #1a1a2e; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #1a1a2e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Welcome to Digital Event Platform</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${owner.name},</p>
+              <p>An account has been created for you on the Digital Event Platform. To get started, you'll need to set up your password.</p>
+              <p style="text-align: center;">
+                <a href="${setupLink}" class="button">Set Up Your Password</a>
+              </p>
+              <p>Or copy and paste this link into your browser:</p>
+              <p style="word-break: break-all; color: #666; font-size: 12px;">${setupLink}</p>
+              <p>Once you've set up your password, you can log in to manage your events and view your dashboard.</p>
+              <p>If you didn't expect this email, please ignore it.</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message from Digital Event Platform</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    const emailText = `
+Welcome to Digital Event Platform
+
+Hello ${owner.name},
+
+An account has been created for you on the Digital Event Platform. To get started, you'll need to set up your password.
+
+Visit this link to set up your password:
+${setupLink}
+
+Once you've set up your password, you can log in to manage your events and view your dashboard.
+
+If you didn't expect this email, please ignore it.
+
+This is an automated message from Digital Event Platform
+    `;
+    
+    await sendEmail(
+      owner.email,
+      'Welcome to Digital Event Platform - Set Up Your Password',
+      emailHtml,
+      emailText
+    );
+    console.log(`[Owner Created] Welcome email sent to ${owner.email}`);
+  } catch (emailError: any) {
+    // Don't fail the request if email fails, just log it
+    console.error('[Owner Created] Failed to send welcome email:', emailError.message);
+  }
   
   res.status(201).json({ owner });
 }));

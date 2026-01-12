@@ -132,6 +132,43 @@ async function initializeDatabase() {
       console.log('✅ System settings initialized');
     }
 
+    // Create default email provider from environment variables if none exists
+    const emailProviderCount = await prisma.emailProvider.count();
+    // Check for both DEFAULT_EMAIL_* and legacy SMTP_* variables
+    const smtpHost = process.env.DEFAULT_EMAIL_HOST || process.env.SMTP_HOST;
+    const smtpPort = process.env.DEFAULT_EMAIL_PORT || process.env.SMTP_PORT || '587';
+    const smtpUser = process.env.DEFAULT_EMAIL_USER || process.env.SMTP_USER;
+    const smtpPass = process.env.DEFAULT_EMAIL_PASS || process.env.SMTP_PASS;
+    const fromEmail = process.env.DEFAULT_EMAIL_FROM || process.env.SMTP_FROM || smtpUser;
+    
+    if (emailProviderCount === 0 && smtpHost && smtpUser) {
+      console.log('🌱 Creating default email provider from environment variables...');
+      await prisma.emailProvider.create({
+        data: {
+          name: 'Default SMTP',
+          provider: 'smtp',
+          smtpHost: smtpHost,
+          smtpPort: parseInt(smtpPort),
+          smtpSecure: process.env.DEFAULT_EMAIL_SECURE === 'true' || process.env.SMTP_SECURE === 'true',
+          smtpUser: smtpUser,
+          smtpPass: smtpPass || '',
+          fromEmail: fromEmail || smtpUser || '',
+          fromName: process.env.DEFAULT_EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Digital Event Platform',
+          isDefault: true,
+          isActive: true,
+        },
+      });
+      console.log('✅ Default email provider created from environment variables');
+      
+      // Enable email in system settings
+      await prisma.systemSettings.update({
+        where: { id: 'default' },
+        data: { emailEnabled: true },
+      });
+    } else if (emailProviderCount === 0) {
+      console.log('ℹ️  No email provider configured. Set SMTP_HOST and SMTP_USER (or DEFAULT_EMAIL_*) to enable email notifications.');
+    }
+
     // Create sample event if none exist
     const eventCount = await prisma.event.count();
     if (eventCount === 0) {
