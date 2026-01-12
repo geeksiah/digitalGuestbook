@@ -120,12 +120,13 @@ export default function MediaGallery({
           throw new Error('Authentication required');
         }
       } else if (ownerToken) {
+        // Owner token from event-owner portal (access token)
         headers['X-Owner-Token'] = ownerToken;
       } else {
-        // Try to use owner dashboard API token if available
-        const ownerToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
-        if (ownerToken) {
-          headers['Authorization'] = `Bearer ${ownerToken}`;
+        // Try to use owner dashboard API token (JWT) if available
+        const ownerJwtToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+        if (ownerJwtToken) {
+          headers['Authorization'] = `Bearer ${ownerJwtToken}`;
         } else {
           throw new Error('Authentication required');
         }
@@ -173,12 +174,13 @@ export default function MediaGallery({
           throw new Error('Authentication required');
         }
       } else if (ownerToken) {
+        // Owner token from event-owner portal (access token)
         headers['X-Owner-Token'] = ownerToken;
       } else {
-        // Try to use owner dashboard API token if available
-        const ownerToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
-        if (ownerToken) {
-          headers['Authorization'] = `Bearer ${ownerToken}`;
+        // Try to use owner dashboard API token (JWT) if available
+        const ownerJwtToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+        if (ownerJwtToken) {
+          headers['Authorization'] = `Bearer ${ownerJwtToken}`;
         } else {
           throw new Error('Authentication required');
         }

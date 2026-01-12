@@ -118,6 +118,8 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
   // Check both lowercase and capitalized header names
   const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']) as string | undefined;
   
+  console.log('[Media Download] Request for media:', id, 'Auth header present:', !!authHeader, 'Owner token present:', !!ownerToken);
+  
   const mediaAsset = await prisma.mediaAsset.findUnique({
     where: { id },
     include: { event: { select: { id: true, ownerId: true, ownerAccessToken: true } } },
@@ -128,34 +130,61 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
   }
 
   // Verify authentication
+  let isAuthorized = false;
+  
   if (ownerToken) {
-    // If owner token, verify it matches this event
-    if (mediaAsset.event.ownerAccessToken !== ownerToken) {
+    // If owner token (access token from event-owner portal), verify it matches this event
+    if (mediaAsset.event.ownerAccessToken === ownerToken) {
+      isAuthorized = true;
+      console.log('[Media Download] Authorized via owner access token');
+    } else {
+      console.log('[Media Download] Owner access token mismatch');
       throw new AppError('Unauthorized', 401);
     }
   } else if (authHeader && authHeader.startsWith('Bearer ')) {
-    // Verify token - could be admin or owner token
+    // Verify token - could be admin or owner JWT token
     const jwt = await import('jsonwebtoken');
     try {
       const token = authHeader.replace('Bearer ', '');
       const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
       const decoded = jwt.verify(token, jwtSecret) as any;
       
-      // Check if it's an owner token
+      console.log('[Media Download] JWT decoded:', { ownerId: decoded.ownerId, adminId: decoded.adminId });
+      
+      // Check if it's an owner JWT token
       if (decoded.ownerId) {
-        // Owner token - verify they own this event
-        if (mediaAsset.event.ownerId !== decoded.ownerId) {
+        // Owner JWT token - verify they own this event
+        if (mediaAsset.event.ownerId === decoded.ownerId) {
+          isAuthorized = true;
+          console.log('[Media Download] Authorized via owner JWT token');
+        } else {
+          console.log('[Media Download] Owner JWT token - ownerId mismatch. Event owner:', mediaAsset.event.ownerId, 'Token owner:', decoded.ownerId);
           throw new AppError('Unauthorized - You do not have access to this event', 401);
         }
+      } else if (decoded.adminId) {
+        // Admin token - allow access (no additional check needed)
+        isAuthorized = true;
+        console.log('[Media Download] Authorized via admin JWT token');
+      } else {
+        console.log('[Media Download] JWT token missing ownerId or adminId');
+        throw new AppError('Unauthorized - Invalid token', 401);
       }
-      // Admin token - allow access (no additional check needed)
     } catch (error: any) {
+      console.error('[Media Download] JWT verification error:', error.message);
       if (error.message?.includes('Unauthorized')) {
         throw error;
+      }
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        throw new AppError('Unauthorized - Invalid or expired token', 401);
       }
       throw new AppError('Unauthorized', 401);
     }
   } else {
+    console.log('[Media Download] No authentication provided');
+    throw new AppError('Unauthorized', 401);
+  }
+
+  if (!isAuthorized) {
     throw new AppError('Unauthorized', 401);
   }
 
