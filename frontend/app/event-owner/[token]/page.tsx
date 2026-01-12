@@ -765,7 +765,7 @@ export default function EventOwnerPortalPage() {
                         </div>
                         <button
                           onClick={() => {
-                            setDismissedFailedReels(prev => new Set([...prev, reel.id]));
+                            setDismissedFailedReels(prev => new Set([...Array.from(prev), reel.id]));
                           }}
                           className="ml-2 p-1 rounded text-red-600 hover:bg-red-100 flex-shrink-0"
                           aria-label="Close"
