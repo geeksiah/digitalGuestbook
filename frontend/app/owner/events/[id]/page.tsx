@@ -489,6 +489,111 @@ export default function OwnerEventDetailPage() {
           </div>
         )}
 
+        {/* RSVP Details Modal */}
+        {viewingRsvpDetails && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setViewingRsvpDetails(null)}>
+            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b border-surface-200 px-6 py-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-navy-900">RSVP Details</h3>
+                <button onClick={() => setViewingRsvpDetails(null)} className="p-2 rounded-lg hover:bg-surface-100">
+                  {Icons.close}
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-surface-500">Primary Name</label>
+                    <p className="text-navy-900 font-medium">{viewingRsvpDetails.primaryName}</p>
+                  </div>
+                  {viewingRsvpDetails.secondaryName && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Secondary Name</label>
+                      <p className="text-navy-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
+                    </div>
+                  )}
+                  {viewingRsvpDetails.email && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Email</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.email}</p>
+                    </div>
+                  )}
+                  {viewingRsvpDetails.phone && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Phone</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.phone}</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-sm font-medium text-surface-500">Attendance</label>
+                    <p className="text-navy-900">{viewingRsvpDetails.attendance}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-surface-500">Guest Count</label>
+                    <p className="text-navy-900">{viewingRsvpDetails.guestCount}</p>
+                  </div>
+                  {viewingRsvpDetails.mealPreference && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Meal Preference</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.mealPreference}</p>
+                    </div>
+                  )}
+                  {viewingRsvpDetails.dietaryNotes && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Dietary Notes</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.dietaryNotes}</p>
+                    </div>
+                  )}
+                  {viewingRsvpDetails.note && (
+                    <div className="sm:col-span-2">
+                      <label className="text-sm font-medium text-surface-500">Note</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.note}</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-sm font-medium text-surface-500">Submitted At</label>
+                    <p className="text-navy-900">{formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-surface-500">Status</label>
+                    <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', viewingRsvpDetails.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : viewingRsvpDetails.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-yellow-100 text-yellow-700')}>
+                      {viewingRsvpDetails.status}
+                    </span>
+                  </div>
+                  {viewingRsvpDetails.invitation?.accessCode && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Access Code</label>
+                      <p className="text-navy-900 font-mono">{viewingRsvpDetails.invitation.accessCode}</p>
+                    </div>
+                  )}
+                  {viewingRsvpDetails.invitation?.isCheckedIn !== undefined && (
+                    <div>
+                      <label className="text-sm font-medium text-surface-500">Checked In</label>
+                      <p className="text-navy-900">{viewingRsvpDetails.invitation.isCheckedIn ? 'Yes' : 'No'}</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* QR Code Display */}
+                {viewingRsvpDetails.invitation?.qrCodeData && (
+                  <div className="border-t border-surface-200 pt-4 mt-4">
+                    <h4 className="text-sm font-semibold text-navy-900 mb-3">QR Code</h4>
+                    <div className="flex flex-col items-center gap-3">
+                      <img
+                        src={viewingRsvpDetails.invitation.qrCodeData}
+                        alt="QR Code"
+                        className="w-48 h-48 bg-white p-2 rounded-lg border border-surface-200"
+                      />
+                      <p className="text-xs text-surface-500 text-center">
+                        Scan this QR code for check-in
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Media Tab */}
         {activeTab === 'media' && (
           <div>
