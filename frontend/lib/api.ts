@@ -240,28 +240,24 @@ export const ownersApi = {
 };
 
 // Owner Authentication API
+const ownerAuthHeaders = {
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
+  },
+};
+
 export const ownerAuthApi = {
   register: (data: { name: string; email: string; password: string; phone?: string; company?: string }) => 
     axios.post(`${API_BASE_URL}/api/owner-auth/register`, data),
   login: (email: string, password: string) => 
     axios.post(`${API_BASE_URL}/api/owner-auth/login`, { email, password }),
-  getMe: () => axios.get(`${API_BASE_URL}/api/owner-auth/me`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-    },
-  }),
+  setupPassword: (email: string, password: string) => 
+    axios.post(`${API_BASE_URL}/api/owner-auth/setup-password`, { email, password }),
+  getMe: () => axios.get(`${API_BASE_URL}/api/owner-auth/me`, ownerAuthHeaders),
   changePassword: (currentPassword: string, newPassword: string) => 
-    axios.post(`${API_BASE_URL}/api/owner-auth/change-password`, { currentPassword, newPassword }, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-      },
-    }),
+    axios.post(`${API_BASE_URL}/api/owner-auth/change-password`, { currentPassword, newPassword }, ownerAuthHeaders),
   updateProfile: (data: { name?: string; email?: string; phone?: string; company?: string }) => 
-    axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('owner_token')}`,
-      },
-    }),
+    axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, ownerAuthHeaders),
 };
 
 // Owner Dashboard API
