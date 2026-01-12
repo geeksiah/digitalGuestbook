@@ -183,19 +183,6 @@ async function initializeDatabase() {
       } else if (hasActiveProvider && settings?.emailEnabled) {
         console.log('✅ Email service is enabled and provider is configured');
       }
-    } else {
-      // If provider exists but email is disabled, check if we should enable it
-      const hasActiveProvider = await prisma.emailProvider.findFirst({
-        where: { isActive: true, isDefault: true },
-      });
-      if (hasActiveProvider && settings && !settings.emailEnabled) {
-        console.log('🌱 Enabling email service (provider exists but was disabled)...');
-        await prisma.systemSettings.update({
-          where: { id: 'default' },
-          data: { emailEnabled: true },
-        });
-        console.log('✅ Email service enabled');
-      }
     }
 
     // Create sample event if none exist
