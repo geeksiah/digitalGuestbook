@@ -835,6 +835,45 @@ export default function EventDetailPage() {
                     } catch {}
                     return null;
                   })()}
+
+                  {/* Invitation Details with QR Code */}
+                  {viewingRsvpDetails.invitation && (
+                    <div className="border-t border-surface-200 pt-4 mt-4">
+                      <h4 className="text-sm font-semibold text-navy-900 mb-3">Invitation Details</h4>
+                      <div className="grid sm:grid-cols-2 gap-4 text-sm mb-4">
+                        <div>
+                          <label className="text-sm font-medium text-surface-500">Access Code</label>
+                          <p className="text-navy-900 font-mono">{viewingRsvpDetails.invitation.accessCode}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-surface-500">Checked In</label>
+                          <p className="text-navy-900">
+                            {viewingRsvpDetails.invitation.isCheckedIn ? (
+                              <span className="text-green-600 font-medium">Yes</span>
+                            ) : (
+                              <span className="text-surface-400">No</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      {/* QR Code Display */}
+                      {viewingRsvpDetails.invitation.qrCodeData && (
+                        <div className="mt-4">
+                          <label className="text-sm font-medium text-surface-500 mb-3 block">QR Code</label>
+                          <div className="flex flex-col items-center gap-3">
+                            <img
+                              src={viewingRsvpDetails.invitation.qrCodeData}
+                              alt="QR Code"
+                              className="w-48 h-48 bg-white p-2 rounded-lg border border-surface-200"
+                            />
+                            <p className="text-xs text-surface-500 text-center">
+                              Scan this QR code for check-in
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
