@@ -222,15 +222,19 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
   // Check both lowercase and capitalized header names
   const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']) as string | undefined;
   
+  console.log('[Media Download All] Request for event:', eventId, 'Auth header present:', !!authHeader, 'Owner token present:', !!ownerToken);
+  
   let event;
   if (ownerToken) {
-    // If owner token, verify it matches this event
+    // If owner token (access token from event-owner portal), verify it matches this event
     event = await prisma.event.findFirst({
       where: { id: eventId, ownerAccessToken: ownerToken },
     });
     if (!event) {
+      console.log('[Media Download All] Owner access token mismatch for event:', eventId);
       throw new AppError('Unauthorized', 401);
     }
+    console.log('[Media Download All] Authorized via owner access token');
   } else if (authHeader && authHeader.startsWith('Bearer ')) {
     // Verify token - could be admin or owner token
     const jwt = await import('jsonwebtoken');
