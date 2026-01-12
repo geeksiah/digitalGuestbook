@@ -792,9 +792,22 @@ export async function sendInvitationWhatsApp(invitationId: string) {
     day: 'numeric',
   });
   
-  // WhatsApp message with QR code and access code
-  // Note: WhatsApp Business API supports images, but for simplicity we'll include the access code
-  // and a link to view the QR code if the provider supports media
+  if (!invitation.qrCodeData) {
+    return { success: false, error: 'QR code not generated' };
+  }
+  
+  // Get the site URL for QR code link
+  const { getSiteUrl } = await import('../utils/siteUrl.js');
+  const siteUrl = getSiteUrl();
+  const checkInUrl = `${siteUrl}/e/${invitation.event.slug}/checkin?code=${invitation.accessCode}`;
+  
+  // WhatsApp message with QR code image and access code
+  // Convert QR code data URL to buffer for media attachment
+  const qrCodeBuffer = Buffer.from(
+    invitation.qrCodeData.replace(/^data:image\/png;base64,/, ''),
+    'base64'
+  );
+  
   const message = `🎉 You're Invited!
 
 ${invitation.event.name}
@@ -804,11 +817,54 @@ ${invitation.event.venue ? `📍 Venue: ${invitation.event.venue}\n` : ''}👥 G
 
 🔐 Your Access Code: ${invitation.accessCode}
 
-Scan the QR code in your email or show this code at check-in.
+📱 Check-in: ${checkInUrl}
+
+Scan the QR code (attached) or show this code at check-in.
 
 We look forward to seeing you!`;
   
-  const result = await sendWhatsApp(invitation.rsvp.phone, message);
+  // Get WhatsApp provider
+  const provider = await prisma.whatsappProvider.findFirst({
+    where: { isActive: true, isDefault: true },
+  });
+  
+  if (!provider) {
+    return { success: false, error: 'No WhatsApp provider configured' };
+  }
+  
+  // Send WhatsApp with QR code image if provider supports media (Twilio)
+  let result;
+  if (provider.provider === 'twilio' && provider.accountSid && provider.authToken) {
+    try {
+      const twilio = await import('twilio');
+      const client = twilio.default(provider.accountSid, provider.authToken);
+      
+      const whatsappTo = invitation.rsvp.phone.startsWith('whatsapp:') 
+        ? invitation.rsvp.phone 
+        : `whatsapp:${invitation.rsvp.phone}`;
+      const whatsappFrom = provider.phoneNumber?.startsWith('whatsapp:') 
+        ? provider.phoneNumber 
+        : `whatsapp:${provider.phoneNumber}`;
+      
+      // Send message with media (QR code image)
+      // Twilio WhatsApp supports media via mediaUrl with data URI
+      const mediaResult = await client.messages.create({
+        from: whatsappFrom,
+        to: whatsappTo,
+        body: message,
+        mediaUrl: [`data:image/png;base64,${qrCodeBuffer.toString('base64')}`],
+      });
+      
+      result = { success: true, messageId: mediaResult.sid };
+    } catch (error: any) {
+      console.error('[WhatsApp] Failed to send with media, falling back to text:', error.message);
+      // Fallback to text-only if media fails
+      result = await sendWhatsappWithProvider(provider, invitation.rsvp.phone, message);
+    }
+  } else {
+    // For other providers, send text with link to QR code
+    result = await sendWhatsappWithProvider(provider, invitation.rsvp.phone, message);
+  }
   
   if (result.success) {
     await prisma.invitation.update({
