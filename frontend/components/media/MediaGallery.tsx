@@ -524,9 +524,9 @@ export default function MediaGallery({
 
       {/* ============ LIGHTBOX ============ */}
       {previewMedia && previewIndex !== null && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm" onClick={() => setPreviewIndex(null)}>
+        <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] bg-black/80 backdrop-blur-sm" onClick={() => setPreviewIndex(null)} style={{ margin: 0, padding: 0, position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh' }}>
           {/* Top bar - responsive */}
-          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-2 sm:p-4 bg-gradient-to-b from-black/80 to-transparent safe-area-top">
+          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-2 sm:p-4 bg-gradient-to-b from-black/80 to-transparent">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <span className="text-white/80 text-xs sm:text-sm font-medium flex-shrink-0">{previewIndex + 1} / {currentMedia.length}</span>
               <span className="text-white font-medium text-sm sm:text-base truncate">{previewMedia.guestName || 'Anonymous'}</span>
