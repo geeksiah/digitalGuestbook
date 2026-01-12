@@ -297,11 +297,21 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
     throw new AppError('Unauthorized', 401);
   }
 
+  // Get type filter from query parameter
+  const typeFilter = req.query.type as string | undefined;
+  
+  const whereClause: any = {
+    eventId,
+    captureMode: { not: 'BOOTH' }, // Exclude booth mode photos from download-all
+  };
+  
+  // Filter by type if specified
+  if (typeFilter && ['VIDEO', 'PHOTO', 'AUDIO'].includes(typeFilter)) {
+    whereClause.type = typeFilter;
+  }
+  
   const mediaAssets = await prisma.mediaAsset.findMany({
-    where: { 
-      eventId,
-      captureMode: { not: 'BOOTH' }, // Exclude booth mode photos from download-all
-    },
+    where: whereClause,
   });
 
   if (mediaAssets.length === 0) {

@@ -165,7 +165,7 @@ export default function MediaGallery({
   };
 
   // Download all as ZIP
-  const handleDownloadAll = async () => {
+  const handleDownloadAll = async (type?: 'VIDEO' | 'PHOTO' | 'AUDIO') => {
     const toastId = 'download-all';
     try {
       toast.loading('Creating ZIP archive...', { id: toastId });
@@ -193,8 +193,13 @@ export default function MediaGallery({
       
       // Use axios for better header handling and CORS support
       console.log('[Media Download All] Sending request with headers:', Object.keys(headers));
+      const params: Record<string, string> = {};
+      if (type) {
+        params.type = type;
+      }
       const response = await axios.get(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, {
         headers,
+        params,
         responseType: 'blob',
         withCredentials: true,
       });

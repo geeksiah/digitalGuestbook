@@ -597,7 +597,7 @@ export default function OwnerEventDetailPage() {
         {/* Media Tab */}
         {activeTab === 'media' && (
           <div>
-            <MediaGallery eventId={eventId} media={media} />
+            <MediaGallery eventId={eventId} media={media} isAdmin={false} />
           </div>
         )}
 
