@@ -250,36 +250,51 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
     }
     console.log('[Media Download All] Authorized via owner access token');
   } else if (authHeader && authHeader.startsWith('Bearer ')) {
-    // Verify token - could be admin or owner token
+    // Verify token - could be admin or owner JWT token
     const jwt = await import('jsonwebtoken');
     try {
       const token = authHeader.replace('Bearer ', '');
       const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+      console.log('[Media Download All] Attempting JWT verification...');
       const decoded = jwt.verify(token, jwtSecret) as any;
       
-      // Check if it's an owner token
+      console.log('[Media Download All] JWT decoded:', { ownerId: decoded.ownerId, adminId: decoded.adminId });
+      
+      // Check if it's an owner JWT token
       if (decoded.ownerId) {
-        // Owner token - verify they own this event
+        // Owner JWT token - verify they own this event
         event = await prisma.event.findFirst({
           where: { id: eventId, ownerId: decoded.ownerId },
         });
         if (!event) {
+          console.log('[Media Download All] Owner JWT - ownerId mismatch. Event:', eventId, 'Token owner:', decoded.ownerId);
           throw new AppError('Unauthorized - You do not have access to this event', 401);
         }
-      } else {
+        console.log('[Media Download All] Authorized via owner JWT token');
+      } else if (decoded.adminId) {
         // Admin token - allow access to any event
         event = await prisma.event.findUnique({ where: { id: eventId } });
         if (!event) {
           throw new AppError('Event not found', 404);
         }
+        console.log('[Media Download All] Authorized via admin JWT token');
+      } else {
+        console.log('[Media Download All] JWT token missing ownerId or adminId');
+        throw new AppError('Unauthorized - Invalid token', 401);
       }
     } catch (error: any) {
+      console.error('[Media Download All] JWT verification error:', error.message);
+      console.error('[Media Download All] Error name:', error.name);
       if (error.message?.includes('Unauthorized')) {
         throw error;
+      }
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        throw new AppError('Unauthorized - Invalid or expired token', 401);
       }
       throw new AppError('Unauthorized', 401);
     }
   } else {
+    console.log('[Media Download All] No authentication provided');
     throw new AppError('Unauthorized', 401);
   }
 
