@@ -170,7 +170,14 @@ export default function MediaGallery({
   const handleDownloadAll = async (type?: 'VIDEO' | 'PHOTO' | 'AUDIO') => {
     const toastId = 'download-all';
     try {
-      toast.loading('Creating ZIP archive... This may take a moment for large files', { id: toastId, duration: 0 });
+      // Calculate file count and size for progress estimation
+      const filesToDownload = type 
+        ? media.filter(m => m.type === type)
+        : media;
+      const fileCount = filesToDownload.length;
+      const estimatedSize = filesToDownload.reduce((sum, m) => sum + (m.fileSize || 0), 0);
+      
+      toast.loading(`Preparing ${fileCount} file${fileCount !== 1 ? 's' : ''} for download...`, { id: toastId, duration: 0 });
       
       const headers: Record<string, string> = {};
       if (isAdmin) {
@@ -201,11 +208,35 @@ export default function MediaGallery({
       if (type) {
         params.type = type;
       }
+      
+      let contentLength = 0;
+      let loadedBytes = 0;
+      
       const response = await axios.get(`${API_BASE_URL}/api/media/event/${eventId}/download-all`, {
         headers,
         params,
         responseType: 'blob',
         withCredentials: true,
+        onDownloadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            contentLength = progressEvent.total;
+            loadedBytes = progressEvent.loaded;
+            const percentComplete = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+            const loadedMB = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
+            const totalMB = (progressEvent.total / (1024 * 1024)).toFixed(1);
+            
+            if (percentComplete < 100) {
+              toast.loading(
+                `Downloading: ${percentComplete}% (${loadedMB}MB / ${totalMB}MB)`,
+                { id: toastId, duration: 0 }
+              );
+            }
+          } else if (progressEvent.loaded) {
+            // If total is not available, show loaded bytes
+            const loadedMB = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
+            toast.loading(`Downloading: ${loadedMB}MB received...`, { id: toastId, duration: 0 });
+          }
+        },
       });
       
       const blob = response.data;
@@ -214,6 +245,9 @@ export default function MediaGallery({
       if (blob.size === 0) {
         throw new Error('Archive is empty');
       }
+      
+      // Show finalizing message
+      toast.loading('Finalizing download...', { id: toastId, duration: 0 });
       
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -228,7 +262,8 @@ export default function MediaGallery({
         URL.revokeObjectURL(url);
       }, 100);
       
-      toast.success('Download started!', { id: toastId });
+      const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+      toast.success(`Download complete! (${fileSizeMB}MB)`, { id: toastId, duration: 4000 });
     } catch (error: any) {
       console.error('[Media Download All] Error:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Download failed';
