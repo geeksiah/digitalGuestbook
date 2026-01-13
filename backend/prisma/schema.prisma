@@ -373,7 +373,7 @@ model PayoutRequest {
   payoutMethod    String // bank | mobile | paypal | stripe | paystack
 
   // Status
-  status String @default("pending") // pending | processing | fulfilled | delayed | rejected
+  status String @default("PENDING") // PENDING | PROCESSING | FULFILLED | DELAYED | REJECTED
 
   // Processing Info
   processedAt     DateTime?

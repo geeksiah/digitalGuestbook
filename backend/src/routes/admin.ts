@@ -148,9 +148,17 @@ router.get('/payouts', authenticateAdmin, asyncHandler(async (req, res) => {
     totalPendingAmount: allPayouts
       .filter((p: any) => p.status === 'PENDING')
       .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
-    totalProcessed: allPayouts.filter((p: any) => p.status === 'PROCESSED').length,
-    totalProcessedAmount: allPayouts
-      .filter((p: any) => p.status === 'PROCESSED')
+    totalFulfilled: allPayouts.filter((p: any) => p.status === 'FULFILLED').length,
+    totalFulfilledAmount: allPayouts
+      .filter((p: any) => p.status === 'FULFILLED')
+      .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
+    totalProcessing: allPayouts.filter((p: any) => p.status === 'PROCESSING').length,
+    totalProcessingAmount: allPayouts
+      .filter((p: any) => p.status === 'PROCESSING')
+      .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
+    totalDelayed: allPayouts.filter((p: any) => p.status === 'DELAYED').length,
+    totalDelayedAmount: allPayouts
+      .filter((p: any) => p.status === 'DELAYED')
       .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
     totalRejected: allPayouts.filter((p: any) => p.status === 'REJECTED').length,
     totalRejectedAmount: allPayouts
@@ -158,9 +166,10 @@ router.get('/payouts', authenticateAdmin, asyncHandler(async (req, res) => {
       .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
     byStatus: {
       PENDING: allPayouts.filter((p: any) => p.status === 'PENDING').length,
-      PROCESSED: allPayouts.filter((p: any) => p.status === 'PROCESSED').length,
+      PROCESSING: allPayouts.filter((p: any) => p.status === 'PROCESSING').length,
+      FULFILLED: allPayouts.filter((p: any) => p.status === 'FULFILLED').length,
+      DELAYED: allPayouts.filter((p: any) => p.status === 'DELAYED').length,
       REJECTED: allPayouts.filter((p: any) => p.status === 'REJECTED').length,
-      CANCELLED: allPayouts.filter((p: any) => p.status === 'CANCELLED').length,
     },
   };
   
@@ -236,14 +245,21 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
     throw new AppError('Only pending payouts can be processed', 400);
   }
   
+  // Determine new status based on body (default to PROCESSING)
+  const newStatus = req.body.status || 'PROCESSING'; // PROCESSING | FULFILLED | DELAYED
+  
+  if (!['PROCESSING', 'FULFILLED', 'DELAYED'].includes(newStatus)) {
+    throw new AppError('Invalid status. Must be PROCESSING, FULFILLED, or DELAYED', 400);
+  }
+  
   const updated = await prisma.payoutRequest.update({
     where: { id },
     data: {
-      status: 'PROCESSED',
+      status: newStatus,
       processedAt: processedAt ? new Date(processedAt) : new Date(),
       processedBy: req.admin!.id,
       transactionRef: transactionRef || null,
-      notes: notes || null,
+      notes: req.body.notes || notes || null,
     },
     include: {
       event: {
@@ -267,12 +283,42 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
   const event = updated.event as any;
   const ownerName = event.ownerName || 'Event Owner';
   
-  const emailSubject = `Payout Processed: $${updated.requestedAmount.toFixed(2)}`;
+  // Determine notification message based on status
+  let emailSubject = '';
+  let emailTitle = '';
+  let emailMessage = '';
+  let smsBody = '';
+  let whatsappTitle = '';
+  let whatsappMessage = '';
+  
+  if (newStatus === 'PROCESSING') {
+    emailSubject = `Payout Processing: $${updated.requestedAmount.toFixed(2)}`;
+    emailTitle = 'Payout Processing';
+    emailMessage = `Your payout request for <strong>${event.name}</strong> is now being processed.`;
+    smsBody = `Payout processing for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}.`;
+    whatsappTitle = '*Payout Processing*';
+    whatsappMessage = `Your payout request for *${event.name}* is now being processed.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}`;
+  } else if (newStatus === 'FULFILLED') {
+    emailSubject = `Payout Fulfilled: $${updated.requestedAmount.toFixed(2)}`;
+    emailTitle = 'Payout Fulfilled';
+    emailMessage = `Your payout request for <strong>${event.name}</strong> has been fulfilled successfully.`;
+    smsBody = `Payout fulfilled for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}. Transaction Ref: ${updated.transactionRef || 'N/A'}`;
+    whatsappTitle = '*Payout Fulfilled*';
+    whatsappMessage = `Your payout request for *${event.name}* has been fulfilled.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}\n${updated.transactionRef ? `Transaction Ref: ${updated.transactionRef}\n` : ''}Thank you!`;
+  } else if (newStatus === 'DELAYED') {
+    emailSubject = `Payout Delayed: $${updated.requestedAmount.toFixed(2)}`;
+    emailTitle = 'Payout Delayed';
+    emailMessage = `Your payout request for <strong>${event.name}</strong> has been delayed.`;
+    smsBody = `Payout delayed for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}.`;
+    whatsappTitle = '*Payout Delayed*';
+    whatsappMessage = `Your payout request for *${event.name}* has been delayed.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}`;
+  }
+  
   const emailBody = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Payout Processed</h2>
+      <h2>${emailTitle}</h2>
       <p>Dear ${ownerName},</p>
-      <p>Your payout request for <strong>${event.name}</strong> has been processed successfully.</p>
+      <p>${emailMessage}</p>
       <p><strong>Amount:</strong> $${updated.requestedAmount.toFixed(2)} ${updated.currency}</p>
       <p><strong>Method:</strong> ${updated.payoutMethod}</p>
       ${updated.transactionRef ? `<p><strong>Transaction Reference:</strong> ${updated.transactionRef}</p>` : ''}
@@ -281,8 +327,7 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
     </div>
   `;
   
-  const smsBody = `Payout processed for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}. Transaction Ref: ${updated.transactionRef || 'N/A'}`;
-  const whatsappBody = `*Payout Processed*\n\nYour payout request for *${event.name}* has been processed.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}\n${updated.transactionRef ? `Transaction Ref: ${updated.transactionRef}\n` : ''}Thank you!`;
+  const whatsappBody = `${whatsappTitle}\n\n${whatsappMessage}${updated.notes ? `\n\nNotes: ${updated.notes}` : ''}`;
   
   if (event.ownerEmail && event.emailNotifications) {
     sendEmail(event.ownerEmail, emailSubject, emailBody).catch(err => 
@@ -470,16 +515,23 @@ router.get('/payouts/analytics', authenticateAdmin, asyncHandler(async (req, res
     total: payouts.length,
     byStatus: {
       PENDING: (payouts as any[]).filter((p: any) => p.status === 'PENDING').length,
-      PROCESSED: (payouts as any[]).filter((p: any) => p.status === 'PROCESSED').length,
+      PROCESSING: (payouts as any[]).filter((p: any) => p.status === 'PROCESSING').length,
+      FULFILLED: (payouts as any[]).filter((p: any) => p.status === 'FULFILLED').length,
+      DELAYED: (payouts as any[]).filter((p: any) => p.status === 'DELAYED').length,
       REJECTED: (payouts as any[]).filter((p: any) => p.status === 'REJECTED').length,
-      CANCELLED: (payouts as any[]).filter((p: any) => p.status === 'CANCELLED').length,
     },
     amounts: {
       totalPending: payouts
         .filter(p => p.status === 'PENDING')
         .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
-      totalProcessed: payouts
-        .filter((p: any) => p.status === 'PROCESSED')
+      totalProcessing: payouts
+        .filter((p: any) => p.status === 'PROCESSING')
+        .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
+      totalFulfilled: payouts
+        .filter((p: any) => p.status === 'FULFILLED')
+        .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
+      totalDelayed: payouts
+        .filter((p: any) => p.status === 'DELAYED')
         .reduce((sum: number, p: any) => sum + (p.requestedAmount || 0), 0),
       totalRejected: payouts
         .filter((p: any) => p.status === 'REJECTED')

@@ -404,7 +404,7 @@ router.post('/wallet', asyncHandler(async (req, res) => {
 
 /**
  * GET /api/owner-dashboard/payouts
- * Get all payout requests for the logged-in owner
+ * Get all payout requests for the logged-in owner with totals
  */
 router.get('/payouts', asyncHandler(async (req, res) => {
   const ownerId = (req as any).ownerId;
@@ -412,7 +412,11 @@ router.get('/payouts', asyncHandler(async (req, res) => {
   // Get all events owned by this owner
   const events = await prisma.event.findMany({
     where: { ownerId },
-    select: { id: true },
+    select: { 
+      id: true,
+      name: true,
+      slug: true,
+    },
   });
 
   const eventIds = events.map(e => e.id);
@@ -434,7 +438,167 @@ router.get('/payouts', asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  res.json({ payouts });
+  // Calculate totals per event and overall
+  const eventTotals = await Promise.all(
+    events.map(async (event) => {
+      // Get all transactions for this event
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          eventId: event.id,
+          type: 'ticket_sale',
+          status: 'completed',
+        },
+      });
+
+      // Calculate total net amount (available for payout)
+      const totalNet = transactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
+
+      // Get all payout requests for this event
+      const eventPayouts = payouts.filter(p => p.eventId === event.id);
+      
+      // Calculate fulfilled payout amount (status: FULFILLED)
+      const fulfilledAmount = eventPayouts
+        .filter(p => p.status === 'FULFILLED')
+        .reduce((sum, p) => sum + (p.requestedAmount || 0), 0);
+      
+      // Calculate pending/processing payout amount
+      const pendingAmount = eventPayouts
+        .filter(p => p.status === 'PENDING' || p.status === 'PROCESSING' || p.status === 'DELAYED')
+        .reduce((sum, p) => sum + (p.requestedAmount || 0), 0);
+
+      // Available balance = totalNet - fulfilledAmount - pendingAmount
+      const availableBalance = totalNet - fulfilledAmount - pendingAmount;
+
+      return {
+        eventId: event.id,
+        eventName: event.name,
+        eventSlug: event.slug,
+        totalNet,
+        fulfilledAmount,
+        pendingAmount,
+        availableBalance,
+        payoutCount: eventPayouts.length,
+      };
+    })
+  );
+
+  // Calculate overall totals
+  const overallTotals = {
+    totalNet: eventTotals.reduce((sum, e) => sum + e.totalNet, 0),
+    fulfilledAmount: eventTotals.reduce((sum, e) => sum + e.fulfilledAmount, 0),
+    pendingAmount: eventTotals.reduce((sum, e) => sum + e.pendingAmount, 0),
+    availableBalance: eventTotals.reduce((sum, e) => sum + e.availableBalance, 0),
+    totalPayoutCount: payouts.length,
+  };
+
+  res.json({ 
+    payouts,
+    eventTotals,
+    overallTotals,
+  });
+}));
+
+/**
+ * POST /api/owner-dashboard/payouts
+ * Create a new payout request
+ */
+router.post('/payouts', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  
+  const payoutSchema = z.object({
+    eventId: z.string().uuid(),
+    requestedAmount: z.number().positive(),
+    currency: z.string().default('USD'),
+    payoutMethod: z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']),
+    notes: z.string().optional(),
+  });
+  
+  const data = payoutSchema.parse(req.body);
+  
+  // Verify event belongs to owner
+  const event = await prisma.event.findFirst({
+    where: {
+      id: data.eventId,
+      ownerId,
+    },
+  });
+  
+  if (!event) {
+    throw new AppError('Event not found or you do not have access', 404);
+  }
+  
+  // Get wallet configuration to verify payout method
+  const wallet = await (prisma as any).ownerWallet.findUnique({
+    where: { ownerId },
+  });
+  
+  if (!wallet) {
+    throw new AppError('Wallet configuration required. Please set up your wallet first.', 400);
+  }
+  
+  // Check if preferred method matches request
+  if (wallet.preferredMethod !== data.payoutMethod) {
+    // Allow override but warn (optional check)
+  }
+  
+  // Calculate available balance for this event
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      eventId: data.eventId,
+      type: 'ticket_sale',
+      status: 'completed',
+    },
+  });
+  
+  const totalNet = transactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
+  
+  // Get existing payout requests for this event
+  const existingPayouts = await prisma.payoutRequest.findMany({
+    where: {
+      eventId: data.eventId,
+      status: { in: ['PENDING', 'PROCESSING', 'FULFILLED', 'DELAYED'] },
+    },
+  });
+  
+  const fulfilledAmount = existingPayouts
+    .filter(p => p.status === 'FULFILLED')
+    .reduce((sum, p) => sum + (p.requestedAmount || 0), 0);
+  
+  const pendingAmount = existingPayouts
+    .filter(p => p.status === 'PENDING' || p.status === 'PROCESSING' || p.status === 'DELAYED')
+    .reduce((sum, p) => sum + (p.requestedAmount || 0), 0);
+  
+  const availableBalance = totalNet - fulfilledAmount - pendingAmount;
+  
+  if (data.requestedAmount > availableBalance) {
+    throw new AppError(
+      `Requested amount (${data.currency} ${data.requestedAmount.toFixed(2)}) exceeds available balance (${data.currency} ${availableBalance.toFixed(2)})`,
+      400
+    );
+  }
+  
+  // Create payout request
+  const payout = await prisma.payoutRequest.create({
+    data: {
+      eventId: data.eventId,
+      requestedAmount: data.requestedAmount,
+      currency: data.currency,
+      payoutMethod: data.payoutMethod,
+      notes: data.notes,
+      status: 'PENDING',
+    },
+    include: {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+  });
+  
+  res.status(201).json({ payout });
 }));
 
 export default router;
