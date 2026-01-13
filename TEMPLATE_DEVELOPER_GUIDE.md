@@ -1,7 +1,17 @@
 # Template Developer Guide
 
 ## Overview
-This guide explains how to create custom templates for the Digital Event Platform. Templates are HTML/CSS/JS bundles that can be uploaded to customize the appearance and behavior of event pages.
+This guide explains how to create custom templates for **EventPeepo** (formerly Digital Event Platform). Templates are HTML/CSS/JS bundles that can be uploaded to customize the appearance and behavior of event pages.
+
+EventPeepo is a comprehensive event management platform that supports:
+- **RSVP Management** - Customizable RSVP forms with approval workflows
+- **Guestbook** - Video, audio, and photo submissions from guests
+- **Photo Booth** - Interactive photo booth with QR code downloads
+- **Check-in System** - QR code-based check-in for invitation-only events
+- **Payout Management** - Owner wallet system with payout requests
+- **Ticketing** - Paid and free ticket sales with custom form fields
+- **Notifications** - Multi-channel notifications (Email, SMS, WhatsApp)
+- **Media Management** - Comprehensive media library with download capabilities
 
 ## Template Types
 
@@ -230,14 +240,170 @@ When updating a template:
 2. Assign updated template to events
 3. Old events continue using previous version (due to isolation)
 
+## New Features & Capabilities
+
+### RSVP System
+- **Customizable Forms**: Admins can create custom form fields with configurable types, labels, placeholders, and required status
+- **Approval Workflow**: Invitation-only events require owner/admin approval for RSVPs
+- **QR Code Generation**: Approved RSVPs automatically generate QR codes for check-in
+- **Multi-channel Notifications**: RSVP approvals trigger email, SMS, and WhatsApp notifications with QR codes
+
+### Guestbook & Booth
+- **Media Types**: Support for video, audio, and photo submissions
+- **Booth Downloads**: Guests can download their booth photos via QR code (exclusive, time-limited access)
+- **Camera Features**: 
+  - Horizontal flip (mirror mode) for natural camera view
+  - Fullscreen camera with overlay controls
+  - Audio/video playback controls
+- **Session Management**: Booth photos are grouped by session for batch downloads
+
+### Payout System
+- **Owner Wallets**: Owners can configure payout methods (bank, mobile money, PayPal, Stripe, Paystack)
+- **Payout Requests**: Owners can request payouts with event selection and amount validation
+- **Status Tracking**: Payouts support multiple statuses (PENDING, PROCESSING, FULFILLED, DELAYED, REJECTED)
+- **Totals Display**: Real-time calculation of available, fulfilled, and pending amounts per event
+
+### Media Management
+- **Progress Feedback**: ZIP downloads show real-time progress with file count and MB downloaded
+- **Folder Organization**: Media organized by type (VIDEO, PHOTO, AUDIO)
+- **Download Options**: Individual file downloads and bulk ZIP downloads with progress tracking
+- **Authentication**: Secure downloads with admin JWT or owner token authentication
+
+### Notification System
+- **Multi-Provider Support**: Email (SMTP with auto-configuration), SMS (Twilio, Arkesel), WhatsApp (Twilio)
+- **Dynamic Templates**: Status-aware notifications with context-specific messages
+- **QR Code Attachments**: QR codes embedded in emails and WhatsApp messages
+- **Retry Logic**: Automatic retry with timeout handling for failed notifications
+
 ## Limitations
 
 - Templates run in isolated iframes for security
 - External API calls may be blocked by CORS
 - File size limit: 50MB per template
 - Supported file types: HTML, CSS, JS, images, fonts
+- QR codes are generated server-side and injected as base64 data URLs
+
+## Security Considerations
+
+1. **Template Isolation**: Each event gets its own isolated copy of template assets
+2. **XSS Prevention**: Templates are sanitized and run in isolated iframes
+3. **Authentication**: All API endpoints require proper authentication (admin JWT or owner token)
+4. **Download Security**: Media downloads use secure, time-limited tokens
+5. **QR Code Security**: QR codes contain encrypted data and expire after use
+
+## Best Practices Updates
+
+1. **Mobile-First Design**: Ensure templates are responsive and work on mobile devices
+2. **Fast Loading**: Keep assets optimized and file sizes small
+3. **Accessibility**: Use semantic HTML and ensure proper contrast
+4. **Browser Compatibility**: Test in modern browsers (Chrome, Firefox, Safari, Edge)
+5. **Error Handling**: Handle cases where variables might be missing
+6. **Security**: Avoid inline scripts that could be XSS vectors (prefer external JS files)
+7. **QR Code Display**: When displaying QR codes, use the `{{qrCodeData}}` variable as an image source
+8. **Conditional Rendering**: Use event capabilities to conditionally show/hide features
+9. **Form Validation**: Leverage form field metadata for client-side validation
+10. **Progressive Enhancement**: Ensure templates work without JavaScript where possible
+
+## Template Examples
+
+### RSVP Template with Custom Fields
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RSVP - {{event.name}}</title>
+  <style>
+    .form-field { margin-bottom: 20px; }
+    .required::after { content: " *"; color: red; }
+  </style>
+</head>
+<body>
+  <h1>RSVP for {{event.name}}</h1>
+  <form id="rsvpForm">
+    {{#each formFields}}
+    <div class="form-field">
+      <label class="{{#if required}}required{{/if}}">{{label}}</label>
+      {{#if (eq type "select")}}
+        <select name="{{name}}" {{#if required}}required{{/if}}>
+          {{#each options}}
+          <option value="{{this}}">{{this}}</option>
+          {{/each}}
+        </select>
+      {{else if (eq type "textarea")}}
+        <textarea name="{{name}}" placeholder="{{placeholder}}" {{#if required}}required{{/if}}></textarea>
+      {{else}}
+        <input type="{{type}}" name="{{name}}" placeholder="{{placeholder}}" {{#if required}}required{{/if}} />
+      {{/if}}
+      {{#if helpText}}<small>{{helpText}}</small>{{/if}}
+    </div>
+    {{/each}}
+    <button type="submit">Submit RSVP</button>
+  </form>
+</body>
+</html>
+```
+
+### Invitation Template with QR Code
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Invitation - {{event.name}}</title>
+</head>
+<body>
+  <h1>You're Invited!</h1>
+  <h2>{{event.name}}</h2>
+  <p>Date: {{event.formattedDate}}</p>
+  <p>Venue: {{event.venue}}</p>
+  
+  {{#if accessCode}}
+  <div class="access-info">
+    <p>Your access code: <strong>{{accessCode}}</strong></p>
+    {{#if qrCodeData}}
+    <div class="qr-code">
+      <p>Scan this QR code for check-in:</p>
+      <img src="{{qrCodeData}}" alt="Check-in QR Code" />
+    </div>
+    {{/if}}
+  </div>
+  {{/if}}
+  
+  <a href="{{urls.rsvp}}">RSVP Now</a>
+  <a href="{{urls.guestbook}}">View Guestbook</a>
+</body>
+</html>
+```
+
+## API Integration
+
+Templates can make API calls to the EventPeepo backend using the following endpoints:
+
+### Public Endpoints
+- `GET /api/public/events/:slug` - Get event details
+- `POST /api/rsvp/:slug` - Submit RSVP
+- `POST /api/guestbook/:eventId/submit` - Submit guestbook entry
+- `GET /api/public/booth/download/:token` - Download booth photos
+
+### Authentication
+- Admin endpoints require `Authorization: Bearer <admin_jwt_token>`
+- Owner endpoints require `X-Owner-Token: <owner_access_token>` or `Authorization: Bearer <owner_jwt_token>`
 
 ## Support
 
-For template development support, contact the platform administrator or refer to the main documentation.
+For template development support:
+- Refer to the main [Developer Documentation](./DEVELOPER_DOCUMENTATION.md)
+- Check the [RSVP Form Customization Guide](./RSVP_FORM_CUSTOMIZATION.md)
+- Contact the platform administrator
+
+## Changelog
+
+### Recent Updates (2025-01-13)
+- ✅ Added QR code generation for RSVP approvals
+- ✅ Enhanced payout system with status management
+- ✅ Improved media download with progress feedback
+- ✅ Added customizable RSVP form fields
+- ✅ Enhanced notification system with multi-provider support
+- ✅ Updated branding to EventPeepo
+- ✅ Added booth photo download system with QR codes
+- ✅ Improved camera UX with mirror mode and fullscreen controls
 
