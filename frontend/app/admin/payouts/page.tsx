@@ -11,12 +11,13 @@ interface Payout {
   eventId: string;
   requestedAmount: number;
   currency: string;
-  status: 'PENDING' | 'PROCESSED' | 'REJECTED' | 'CANCELLED';
-  requestedAt: string;
+  status: 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'DELAYED' | 'REJECTED';
+  createdAt: string;
   processedAt: string | null;
   processedBy: string | null;
   transactionRef: string | null;
   notes: string | null;
+  payoutMethod: string;
   event: {
     id: string;
     name: string;
@@ -29,15 +30,20 @@ interface Payout {
 interface Analytics {
   totalPending: number;
   totalPendingAmount: number;
-  totalProcessed: number;
-  totalProcessedAmount: number;
+  totalProcessing: number;
+  totalProcessingAmount: number;
+  totalFulfilled: number;
+  totalFulfilledAmount: number;
+  totalDelayed: number;
+  totalDelayedAmount: number;
   totalRejected: number;
   totalRejectedAmount: number;
   byStatus: {
     PENDING: number;
-    PROCESSED: number;
+    PROCESSING: number;
+    FULFILLED: number;
+    DELAYED: number;
     REJECTED: number;
-    CANCELLED: number;
   };
 }
 
@@ -58,6 +64,7 @@ export default function PayoutsPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [processForm, setProcessForm] = useState({
+    status: 'PROCESSING' as 'PROCESSING' | 'FULFILLED' | 'DELAYED',
     transactionRef: '',
     notes: '',
   });
@@ -107,15 +114,15 @@ export default function PayoutsPage() {
 
     try {
       setProcessing(true);
-      await adminApi.processPayout(
-        selectedPayout.id,
-        processForm.transactionRef || undefined,
-        processForm.notes || undefined
-      );
-      toast.success('Payout processed successfully');
+      await adminApi.processPayout(selectedPayout.id, {
+        status: processForm.status,
+        transactionRef: processForm.transactionRef || undefined,
+        notes: processForm.notes || undefined,
+      });
+      toast.success(`Payout ${processForm.status === 'FULFILLED' ? 'fulfilled' : processForm.status.toLowerCase()} successfully`);
       setShowProcessModal(false);
       setSelectedPayout(null);
-      setProcessForm({ transactionRef: '', notes: '' });
+      setProcessForm({ status: 'PROCESSING', transactionRef: '', notes: '' });
       fetchPayouts();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to process payout');
@@ -154,21 +161,40 @@ export default function PayoutsPage() {
     switch (status) {
       case 'PENDING':
         return 'bg-yellow-100 text-yellow-800';
-      case 'PROCESSED':
+      case 'PROCESSING':
+        return 'bg-blue-100 text-blue-800';
+      case 'FULFILLED':
         return 'bg-emerald-100 text-emerald-800';
+      case 'DELAYED':
+        return 'bg-orange-100 text-orange-800';
       case 'REJECTED':
         return 'bg-rose-100 text-rose-800';
-      case 'CANCELLED':
-        return 'bg-surface-100 text-surface-600';
       default:
         return 'bg-surface-100 text-surface-600';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'Pending';
+      case 'PROCESSING':
+        return 'Processing';
+      case 'FULFILLED':
+        return 'Fulfilled';
+      case 'DELAYED':
+        return 'Delayed';
+      case 'REJECTED':
+        return 'Rejected';
+      default:
+        return status;
     }
   };
 
   const exportToCSV = () => {
     const headers = ['Date', 'Event', 'Owner', 'Amount', 'Currency', 'Status', 'Transaction Ref', 'Processed At', 'Notes'];
     const rows = payouts.map(payout => [
-      formatDate(payout.requestedAt, 'yyyy-MM-dd HH:mm'),
+      formatDate(payout.createdAt, 'yyyy-MM-dd HH:mm'),
       payout.event.name,
       payout.event.ownerName || payout.event.ownerEmail || '',
       payout.requestedAmount.toString(),
@@ -211,19 +237,33 @@ export default function PayoutsPage() {
 
       {/* Analytics Cards */}
       {analytics && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <p className="text-sm text-surface-500 mb-1">Pending Payouts</p>
+            <p className="text-sm text-surface-500 mb-1">Pending</p>
             <p className="text-2xl font-bold text-yellow-600">{analytics.totalPending}</p>
             <p className="text-sm text-surface-500 mt-1">
               {formatCurrency(analytics.totalPendingAmount, 'USD')}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <p className="text-sm text-surface-500 mb-1">Processed</p>
-            <p className="text-2xl font-bold text-emerald-600">{analytics.totalProcessed}</p>
+            <p className="text-sm text-surface-500 mb-1">Processing</p>
+            <p className="text-2xl font-bold text-blue-600">{analytics.totalProcessing || 0}</p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(analytics.totalProcessedAmount, 'USD')}
+              {formatCurrency(analytics.totalProcessingAmount || 0, 'USD')}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl border border-surface-200 p-6">
+            <p className="text-sm text-surface-500 mb-1">Fulfilled</p>
+            <p className="text-2xl font-bold text-emerald-600">{analytics.totalFulfilled || 0}</p>
+            <p className="text-sm text-surface-500 mt-1">
+              {formatCurrency(analytics.totalFulfilledAmount || 0, 'USD')}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl border border-surface-200 p-6">
+            <p className="text-sm text-surface-500 mb-1">Delayed</p>
+            <p className="text-2xl font-bold text-orange-600">{analytics.totalDelayed || 0}</p>
+            <p className="text-sm text-surface-500 mt-1">
+              {formatCurrency(analytics.totalDelayedAmount || 0, 'USD')}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
@@ -234,13 +274,13 @@ export default function PayoutsPage() {
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <p className="text-sm text-surface-500 mb-1">Total Payouts</p>
+            <p className="text-sm text-surface-500 mb-1">Total</p>
             <p className="text-2xl font-bold text-navy-900">
-              {analytics.totalPending + analytics.totalProcessed + analytics.totalRejected}
+              {(analytics.byStatus.PENDING || 0) + (analytics.byStatus.PROCESSING || 0) + (analytics.byStatus.FULFILLED || 0) + (analytics.byStatus.DELAYED || 0) + (analytics.byStatus.REJECTED || 0)}
             </p>
             <p className="text-sm text-surface-500 mt-1">
               {formatCurrency(
-                analytics.totalPendingAmount + analytics.totalProcessedAmount + analytics.totalRejectedAmount,
+                analytics.totalPendingAmount + (analytics.totalProcessingAmount || 0) + (analytics.totalFulfilledAmount || 0) + (analytics.totalDelayedAmount || 0) + analytics.totalRejectedAmount,
                 'USD'
               )}
             </p>
@@ -273,9 +313,10 @@ export default function PayoutsPage() {
             >
               <option value="">All Statuses</option>
               <option value="PENDING">Pending</option>
-              <option value="PROCESSED">Processed</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="FULFILLED">Fulfilled</option>
+              <option value="DELAYED">Delayed</option>
               <option value="REJECTED">Rejected</option>
-              <option value="CANCELLED">Cancelled</option>
             </select>
           </div>
           <div>
@@ -327,7 +368,7 @@ export default function PayoutsPage() {
                 {payouts.map((payout) => (
                   <tr key={payout.id} className="hover:bg-surface-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-900">
-                      {formatDate(payout.requestedAt, 'MMM dd, yyyy HH:mm')}
+                      {formatDate(payout.createdAt, 'MMM dd, yyyy HH:mm')}
                     </td>
                     <td className="px-6 py-4">
                       <Link href={`/admin/events/${payout.event.id}`} className="text-sm font-medium text-navy-600 hover:text-navy-900">
@@ -347,7 +388,7 @@ export default function PayoutsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={cn('inline-flex px-2 py-1 text-xs font-medium rounded-full', getStatusColor(payout.status))}>
-                        {payout.status}
+                        {getStatusLabel(payout.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">
@@ -358,11 +399,16 @@ export default function PayoutsPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {payout.status === 'PENDING' && (
+                      {(payout.status === 'PENDING' || payout.status === 'PROCESSING' || payout.status === 'DELAYED') && (
                         <>
                           <button
                             onClick={() => {
                               setSelectedPayout(payout);
+                              setProcessForm({
+                                status: payout.status === 'PENDING' ? 'PROCESSING' : payout.status as 'PROCESSING' | 'FULFILLED' | 'DELAYED',
+                                transactionRef: payout.transactionRef || '',
+                                notes: payout.notes || '',
+                              });
                               setShowProcessModal(true);
                             }}
                             className="text-emerald-600 hover:text-emerald-900 mr-4"
@@ -406,6 +452,24 @@ export default function PayoutsPage() {
                   Amount: <span className="font-medium text-navy-900">
                     {formatCurrency(selectedPayout.requestedAmount, selectedPayout.currency)}
                   </span>
+                </p>
+              </div>
+              <div>
+                <label className="label">Status <span className="text-red-500">*</span></label>
+                <select
+                  className="input"
+                  value={processForm.status}
+                  onChange={(e) => setProcessForm({ ...processForm, status: e.target.value as 'PROCESSING' | 'FULFILLED' | 'DELAYED' })}
+                  required
+                >
+                  <option value="PROCESSING">Processing</option>
+                  <option value="FULFILLED">Fulfilled</option>
+                  <option value="DELAYED">Delayed</option>
+                </select>
+                <p className="text-xs text-surface-500 mt-1">
+                  {processForm.status === 'PROCESSING' && 'Mark as currently being processed'}
+                  {processForm.status === 'FULFILLED' && 'Mark as completed and fulfilled'}
+                  {processForm.status === 'DELAYED' && 'Mark as delayed with a reason in notes'}
                 </p>
               </div>
               <div>

@@ -11,8 +11,8 @@ interface Payout {
   requestedAmount: number;
   currency: string;
   payoutMethod: string;
-  status: 'PENDING' | 'PROCESSED' | 'REJECTED';
-  requestedAt: string;
+  status: 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'DELAYED' | 'REJECTED';
+  createdAt: string;
   processedAt: string | null;
   transactionRef: string | null;
   notes: string | null;
@@ -23,32 +23,79 @@ interface Payout {
   };
 }
 
+interface EventTotal {
+  eventId: string;
+  eventName: string;
+  eventSlug: string;
+  totalNet: number;
+  fulfilledAmount: number;
+  pendingAmount: number;
+  availableBalance: number;
+  payoutCount: number;
+}
+
+interface OverallTotals {
+  totalNet: number;
+  fulfilledAmount: number;
+  pendingAmount: number;
+  availableBalance: number;
+  totalPayoutCount: number;
+}
+
 const statusColors = {
   PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  PROCESSED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  PROCESSING: 'bg-blue-100 text-blue-800 border-blue-200',
+  FULFILLED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  DELAYED: 'bg-orange-100 text-orange-800 border-orange-200',
   REJECTED: 'bg-rose-100 text-rose-800 border-rose-200',
 };
 
 const statusLabels = {
   PENDING: 'Pending',
-  PROCESSED: 'Processed',
+  PROCESSING: 'Processing',
+  FULFILLED: 'Fulfilled',
+  DELAYED: 'Delayed',
   REJECTED: 'Rejected',
 };
 
 export default function OwnerPayoutsPage() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [eventTotals, setEventTotals] = useState<EventTotal[]>([]);
+  const [overallTotals, setOverallTotals] = useState<OverallTotals | null>(null);
+  const [events, setEvents] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'PENDING' | 'PROCESSED' | 'REJECTED'>('all');
+  const [filter, setFilter] = useState<'all' | 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'DELAYED' | 'REJECTED'>('all');
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [formData, setFormData] = useState({
+    eventId: '',
+    requestedAmount: '',
+    currency: 'USD',
+    payoutMethod: 'bank',
+    notes: '',
+  });
 
   useEffect(() => {
     fetchPayouts();
+    fetchEvents();
   }, []);
+
+  const fetchEvents = async () => {
+    try {
+      const response = await ownerDashboardApi.getEvents();
+      setEvents(response.data.events || []);
+    } catch (error: any) {
+      console.error('Failed to load events:', error);
+    }
+  };
 
   const fetchPayouts = async () => {
     try {
       setLoading(true);
       const response = await ownerDashboardApi.getPayouts();
       setPayouts(response.data.payouts || []);
+      setEventTotals(response.data.eventTotals || []);
+      setOverallTotals(response.data.overallTotals || null);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to load payouts');
     } finally {
@@ -56,22 +103,40 @@ export default function OwnerPayoutsPage() {
     }
   };
 
+  const handleRequestPayout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setRequesting(true);
+      await ownerDashboardApi.requestPayout({
+        eventId: formData.eventId,
+        requestedAmount: parseFloat(formData.requestedAmount),
+        currency: formData.currency,
+        payoutMethod: formData.payoutMethod,
+        notes: formData.notes || undefined,
+      });
+      toast.success('Payout request submitted successfully');
+      setShowRequestForm(false);
+      setFormData({
+        eventId: '',
+        requestedAmount: '',
+        currency: 'USD',
+        payoutMethod: 'bank',
+        notes: '',
+      });
+      fetchPayouts();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to request payout');
+    } finally {
+      setRequesting(false);
+    }
+  };
+
   const filteredPayouts = filter === 'all' 
     ? payouts 
     : payouts.filter(p => p.status === filter);
 
-  const stats = {
-    total: payouts.length,
-    pending: payouts.filter(p => p.status === 'PENDING').length,
-    processed: payouts.filter(p => p.status === 'PROCESSED').length,
-    rejected: payouts.filter(p => p.status === 'REJECTED').length,
-    totalAmount: payouts
-      .filter(p => p.status === 'PROCESSED')
-      .reduce((sum, p) => sum + p.requestedAmount, 0),
-    pendingAmount: payouts
-      .filter(p => p.status === 'PENDING')
-      .reduce((sum, p) => sum + p.requestedAmount, 0),
-  };
+  const selectedEventTotal = eventTotals.find(e => e.eventId === formData.eventId);
+  const maxAmount = selectedEventTotal?.availableBalance || 0;
 
   if (loading) {
     return (
@@ -84,78 +149,213 @@ export default function OwnerPayoutsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-navy-900">Payout Management</h1>
-        <p className="text-surface-600 mt-1">View and track your payout requests</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-navy-900">Payout Management</h1>
+          <p className="text-surface-600 mt-1">View and track your payout requests</p>
+        </div>
+        <button
+          onClick={() => setShowRequestForm(!showRequestForm)}
+          className="px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors font-medium"
+        >
+          {showRequestForm ? 'Cancel' : '+ Request Payout'}
+        </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Request Payout Form */}
+      {showRequestForm && (
         <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-surface-600">Total Payouts</p>
-              <p className="text-2xl font-bold text-navy-900 mt-1">{stats.total}</p>
-            </div>
-            <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
+          <h2 className="text-lg font-semibold text-navy-900 mb-4">Request Payout</h2>
+          <form onSubmit={handleRequestPayout} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">
+                  Event <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.eventId}
+                  onChange={(e) => setFormData({ ...formData, eventId: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Select an event</option>
+                  {events.map((event) => {
+                    const eventTotal = eventTotals.find((e) => e.eventId === event.id);
+                    return (
+                      <option key={event.id} value={event.id}>
+                        {event.name} {eventTotal && `(${eventTotal.currency || 'USD'} ${eventTotal.availableBalance.toFixed(2)} available)`}
+                      </option>
+                    );
+                  })}
+                </select>
+                {selectedEventTotal && (
+                  <p className="text-xs text-surface-500 mt-1">
+                    Available: {new Intl.NumberFormat('en-US', { style: 'currency', currency: selectedEventTotal.currency || 'USD' }).format(selectedEventTotal.availableBalance)}
+                  </p>
+                )}
+              </div>
 
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-surface-600">Pending</p>
-              <p className="text-2xl font-bold text-navy-900 mt-1">{stats.pending}</p>
-            </div>
-            <div className="w-12 h-12 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">
+                  Amount <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={formData.currency}
+                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                    className="px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="GHS">GHS</option>
+                    <option value="NGN">NGN</option>
+                    <option value="KES">KES</option>
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={maxAmount}
+                    value={formData.requestedAmount}
+                    onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                {selectedEventTotal && (
+                  <p className="text-xs text-surface-500 mt-1">
+                    Max: {new Intl.NumberFormat('en-US', { style: 'currency', currency: formData.currency }).format(maxAmount)}
+                  </p>
+                )}
+              </div>
 
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-surface-600">Processed</p>
-              <p className="text-2xl font-bold text-navy-900 mt-1">{stats.processed}</p>
-            </div>
-            <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">
+                  Payout Method <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.payoutMethod}
+                  onChange={(e) => setFormData({ ...formData, payoutMethod: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  required
+                >
+                  <option value="bank">Bank Transfer</option>
+                  <option value="mobile">Mobile Money</option>
+                  <option value="paypal">PayPal</option>
+                  <option value="stripe">Stripe</option>
+                  <option value="paystack">Paystack</option>
+                </select>
+              </div>
 
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1">
+                  Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="Additional notes..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                disabled={requesting || !formData.eventId || !formData.requestedAmount}
+                className="px-6 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {requesting ? 'Submitting...' : 'Submit Request'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowRequestForm(false)}
+                className="px-6 py-2 border border-surface-300 text-surface-700 rounded-lg hover:bg-surface-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Overall Totals */}
+      {overallTotals && (
+        <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-lg p-6 text-white">
+          <h2 className="text-lg font-semibold mb-4">Overall Summary</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <p className="text-sm font-medium text-surface-600">Total Processed</p>
-              <p className="text-2xl font-bold text-navy-900 mt-1">
-                {new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                }).format(stats.totalAmount)}
+              <p className="text-sm opacity-80">Total Available</p>
+              <p className="text-2xl font-bold mt-1">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.availableBalance)}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-lg bg-violet-100 flex items-center justify-center text-violet-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div>
+              <p className="text-sm opacity-80">Total Fulfilled</p>
+              <p className="text-2xl font-bold mt-1">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.fulfilledAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm opacity-80">Pending/Processing</p>
+              <p className="text-2xl font-bold mt-1">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.pendingAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm opacity-80">Total Payouts</p>
+              <p className="text-2xl font-bold mt-1">{overallTotals.totalPayoutCount}</p>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Event Totals */}
+      {eventTotals.length > 0 && (
+        <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+          <h2 className="text-lg font-semibold text-navy-900 p-4 border-b border-surface-200">Event Breakdown</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-surface-50 border-b border-surface-200">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Event</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Total Net</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Fulfilled</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Pending</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Available</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Payouts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-100">
+                {eventTotals.map((event) => (
+                  <tr key={event.eventId} className="hover:bg-surface-50">
+                    <td className="py-3 px-4 font-medium text-navy-900">{event.eventName}</td>
+                    <td className="py-3 px-4 text-right font-semibold">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.totalNet)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-emerald-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.fulfilledAmount)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-yellow-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.pendingAmount)}
+                    </td>
+                    <td className="py-3 px-4 text-right font-semibold text-navy-900">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.availableBalance)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-surface-600">{event.payoutCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 bg-surface-100 p-1 rounded-lg">
-        {(['all', 'PENDING', 'PROCESSED', 'REJECTED'] as const).map((status) => (
+        {(['all', 'PENDING', 'PROCESSING', 'FULFILLED', 'DELAYED', 'REJECTED'] as const).map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -243,7 +443,7 @@ export default function OwnerPayoutsPage() {
                     </td>
                     <td className="py-3 px-4">
                       <p className="text-sm text-surface-600">
-                        {formatDate(payout.requestedAt)}
+                        {formatDate(payout.createdAt)}
                       </p>
                     </td>
                     <td className="py-3 px-4">

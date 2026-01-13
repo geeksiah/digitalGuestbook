@@ -302,6 +302,8 @@ export const ownerDashboardApi = {
   getWallet: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/wallet`, getOwnerDashboardHeaders()),
   updateWallet: (data: any) => axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet`, data, getOwnerDashboardHeaders()),
   getPayouts: () => axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, getOwnerDashboardHeaders()),
+  requestPayout: (data: { eventId: string; requestedAmount: number; currency?: string; payoutMethod: string; notes?: string }) => 
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/payouts`, data, getOwnerDashboardHeaders()),
 };
 
 
@@ -328,8 +330,8 @@ export const adminApi = {
   getPayouts: (params?: { status?: string; eventId?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) =>
     api.get('/admin/payouts', { params }),
   getPayoutDetails: (id: string) => api.get(`/admin/payouts/${id}`),
-  processPayout: (id: string, transactionRef?: string, notes?: string, processedAt?: string) =>
-    api.post(`/admin/payouts/${id}/process`, { transactionRef, notes, processedAt }),
+  processPayout: (id: string, data: { status?: 'PROCESSING' | 'FULFILLED' | 'DELAYED'; transactionRef?: string; notes?: string; processedAt?: string }) =>
+    api.post(`/admin/payouts/${id}/process`, data),
   rejectPayout: (id: string, reason: string) =>
     api.post(`/admin/payouts/${id}/reject`, { reason }),
   getPayoutAnalytics: (params?: { startDate?: string; endDate?: string; eventId?: string }) =>
