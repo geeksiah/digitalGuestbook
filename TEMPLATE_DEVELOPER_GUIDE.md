@@ -93,9 +93,17 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{owner.phone}}` - Owner phone
 
 #### Additional Variables (Context-specific)
-- `{{accessCode}}` - Access code (for invitation pages)
+- `{{accessCode}}` - 6-digit access code (for invitation pages)
+- `{{invitationCode}}` - 6-digit invitation code (alias for accessCode)
 - `{{guestName}}` - Guest name (for invitation pages)
 - `{{guestCount}}` - Guest count (for invitation pages)
+- `{{qrCodeData}}` - QR code data URL (base64 image) for check-in (invitation pages, RSVP approval pages)
+- `{{formFields}}` - Array of custom form fields (for RSVP templates)
+  - Each field contains: `label`, `type`, `name`, `required`, `placeholder`, `helpText`, `options` (for select fields)
+- `{{rsvpStatus}}` - RSVP status: PENDING, APPROVED, REJECTED (for RSVP confirmation pages)
+- `{{attendance}}` - Attendance response: YES, NO, MAYBE (for RSVP pages)
+- `{{mealPreference}}` - Meal preference (for RSVP pages)
+- `{{dietaryNotes}}` - Dietary restrictions/notes (for RSVP pages)
 
 ## Creating a Template
 
@@ -210,7 +218,34 @@ Templates are isolated per event:
   secondaryColor: string (hex),
   accentColor: string (hex),
   phase: 'PRE_EVENT' | 'LIVE' | 'POST_EVENT',
-  slug: string
+  slug: string,
+  invitationOnly: boolean,
+  rsvpEnabled: boolean,
+  ticketingEnabled: boolean,
+  checkInEnabled: boolean,
+  guestbookEnabled: boolean,
+  boothEnabled: boolean,
+  capabilities: {
+    canSubmitRsvp: boolean,
+    canAccessGuestbook: boolean,
+    canAccessBooth: boolean,
+    requiresCheckIn: boolean
+  }
+}
+```
+
+### Form Field Object (for RSVP templates)
+```javascript
+{
+  id: string,
+  label: string,
+  type: 'text' | 'email' | 'phone' | 'select' | 'textarea' | 'number' | 'date',
+  name: string,
+  required: boolean,
+  placeholder: string | null,
+  helpText: string | null,
+  options: string[] | null, // For select fields
+  order: number
 }
 ```
 
