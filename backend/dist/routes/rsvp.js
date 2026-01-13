@@ -30,18 +30,24 @@ async function notifyOwnerAboutRsvp(eventId, rsvpData) {
         return;
     const message = `New RSVP for ${event.name}: ${rsvpData.primaryName} - ${rsvpData.attendance} (${rsvpData.guestCount} guests)`;
     if (event.ownerEmail && event.emailNotifications) {
-        await (0, notifications_js_1.sendEmail)(event.ownerEmail, `New RSVP - ${event.name}`, `<div style="font-family: sans-serif;">
+        (0, notifications_js_1.sendEmail)(event.ownerEmail, `New RSVP - ${event.name}`, `<div style="font-family: sans-serif;">
         <h2>New RSVP Received</h2>
         <p><strong>Guest:</strong> ${rsvpData.primaryName}</p>
         <p><strong>Response:</strong> ${rsvpData.attendance}</p>
         <p><strong>Party Size:</strong> ${rsvpData.guestCount}</p>
-      </div>`);
+      </div>`).catch((err) => {
+            console.error('[RSVP Notification] Failed to send email:', err);
+        });
     }
     if (event.ownerPhone && event.smsNotifications) {
-        await (0, notifications_js_1.sendSMS)(event.ownerPhone, message);
+        (0, notifications_js_1.sendSMS)(event.ownerPhone, message).catch((err) => {
+            console.error('[RSVP Notification] Failed to send SMS:', err);
+        });
     }
     if (event.ownerPhone && event.whatsappNotifications) {
-        await (0, notifications_js_1.sendWhatsApp)(event.ownerPhone, message);
+        (0, notifications_js_1.sendWhatsApp)(event.ownerPhone, message).catch((err) => {
+            console.error('[RSVP Notification] Failed to send WhatsApp:', err);
+        });
     }
 }
 /**
@@ -51,7 +57,19 @@ async function notifyOwnerAboutRsvp(eventId, rsvpData) {
  */
 router.post('/:eventSlug', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventSlug } = req.params;
-    const data = validation_js_1.createRsvpSchema.parse(req.body);
+    console.log('[RSVP] Received request for event slug:', eventSlug);
+    console.log('[RSVP] Request body:', JSON.stringify(req.body, null, 2));
+    let data;
+    try {
+        data = validation_js_1.createRsvpSchema.parse(req.body);
+    }
+    catch (error) {
+        console.error('[RSVP] Validation error:', error);
+        if (error.name === 'ZodError') {
+            console.error('[RSVP] Validation issues:', JSON.stringify(error.issues, null, 2));
+        }
+        throw error;
+    }
     // Find event by slug
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: eventSlug },
@@ -89,7 +107,16 @@ router.post('/:eventSlug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
     // If auto-approved (not invitation-only), generate invitation pass immediately
     let invitation = null;
     if (!event.invitationOnly && data.attendance === 'YES') {
+        console.log('[RSVP] Auto-approving RSVP and generating invitation pass');
         invitation = await (0, invitation_js_1.generateInvitationPass)(rsvp.id);
+        // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+        if (invitation) {
+            const { sendInvitationNotifications } = await import('../services/notifications.js');
+            sendInvitationNotifications(invitation.id).catch(err => console.error('[Notification] Failed to send invitation notifications:', err));
+        }
+    }
+    else {
+        console.log('[RSVP] RSVP created with status:', initialStatus, 'Invitation-only:', event.invitationOnly, 'Attendance:', data.attendance);
     }
     // Create audit log
     await prisma_js_1.default.auditLog.create({
@@ -154,11 +181,25 @@ router.get('/event/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_1
             orderBy: { submittedAt: 'desc' },
             skip,
             take,
-            include: {
+            select: {
+                id: true,
+                primaryName: true,
+                secondaryName: true,
+                email: true,
+                phone: true,
+                attendance: true,
+                guestCount: true,
+                mealPreference: true,
+                dietaryNotes: true,
+                note: true,
+                customFields: true,
+                status: true,
+                submittedAt: true,
                 invitation: {
                     select: {
                         id: true,
                         accessCode: true,
+                        qrCodeData: true,
                         isCheckedIn: true,
                         checkedInAt: true,
                     },
@@ -240,6 +281,10 @@ router.post('/:id/review', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.as
     if (data.status === 'APPROVED' && rsvp.attendance === 'YES') {
         // Generate invitation pass (SRS Section 6)
         invitation = await (0, invitation_js_1.generateInvitationPass)(rsvp.id);
+        // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+        if (invitation) {
+            (0, notifications_js_1.sendInvitationNotifications)(invitation.id).catch(err => console.error('[Notification] Failed to send invitation notifications:', err));
+        }
     }
     // For rejection, send notification (SRS Section 7)
     // The fixed message: "Thank you for your response. The event organizers will be in touch."
@@ -287,6 +332,10 @@ router.post('/:id/approve', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.a
     let invitation = null;
     if (rsvp.attendance === 'YES') {
         invitation = await (0, invitation_js_1.generateInvitationPass)(rsvp.id);
+        // Send invitation notifications via all enabled channels (email, WhatsApp, SMS)
+        if (invitation) {
+            (0, notifications_js_1.sendInvitationNotifications)(invitation.id).catch(err => console.error('[Notification] Failed to send invitation notifications:', err));
+        }
     }
     res.json({ rsvp: updatedRsvp, invitation, message: 'RSVP approved successfully' });
 }));

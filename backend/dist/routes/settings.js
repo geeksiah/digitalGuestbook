@@ -143,6 +143,7 @@ router.delete('/email-providers/:id', auth_js_1.authenticateAdmin, (0, errorHand
 router.post('/email-providers/:id/test', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const { email } = req.body;
+    console.log('[Test Email] Request received for provider:', id, 'to:', email);
     if (!email) {
         return res.status(400).json({ error: 'Email address required' });
     }
@@ -150,8 +151,14 @@ router.post('/email-providers/:id/test', auth_js_1.authenticateAdmin, (0, errorH
         where: { id },
     });
     if (!provider) {
+        console.error('[Test Email] Provider not found:', id);
         return res.status(404).json({ error: 'Provider not found' });
     }
+    if (!provider.isActive) {
+        console.error('[Test Email] Provider is not active:', id);
+        return res.status(400).json({ error: 'Provider is not active' });
+    }
+    console.log('[Test Email] Using provider:', provider.name, 'Type:', provider.provider);
     const { sendEmailWithProvider } = await import('../services/notifications.js');
     const result = await sendEmailWithProvider(provider, email, 'Test Email - Digital Event Platform', `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -164,9 +171,11 @@ router.post('/email-providers/:id/test', auth_js_1.authenticateAdmin, (0, errorH
       </div>
     `);
     if (result.success) {
+        console.log('[Test Email] Successfully sent test email to:', email);
         res.json({ success: true, message: 'Test email sent successfully' });
     }
     else {
+        console.error('[Test Email] Failed to send test email to:', email, 'Error:', result.error);
         res.status(500).json({ success: false, error: result.error });
     }
 }));

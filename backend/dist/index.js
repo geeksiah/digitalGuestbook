@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const compression_1 = __importDefault(require("compression"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
@@ -118,9 +119,62 @@ async function initializeDatabase() {
         const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
         if (!settings) {
             await prisma_js_1.default.systemSettings.create({
-                data: { id: 'default', siteName: 'Digital Event Platform' },
+                data: { id: 'default', siteName: 'EventPeepo' },
             });
             console.log('✅ System settings initialized');
+        }
+        // Create default email provider from environment variables if none exists
+        const emailProviderCount = await prisma_js_1.default.emailProvider.count();
+        // Check for both DEFAULT_EMAIL_* and legacy SMTP_* variables
+        const smtpHost = process.env.DEFAULT_EMAIL_HOST || process.env.SMTP_HOST;
+        const smtpPort = process.env.DEFAULT_EMAIL_PORT || process.env.SMTP_PORT || '587';
+        const smtpUser = process.env.DEFAULT_EMAIL_USER || process.env.SMTP_USER;
+        const smtpPass = process.env.DEFAULT_EMAIL_PASS || process.env.SMTP_PASS;
+        const fromEmail = process.env.DEFAULT_EMAIL_FROM || process.env.SMTP_FROM || smtpUser;
+        if (emailProviderCount === 0 && smtpHost && smtpUser) {
+            console.log('🌱 Creating default email provider from environment variables...');
+            await prisma_js_1.default.emailProvider.create({
+                data: {
+                    name: 'Default SMTP',
+                    provider: 'smtp',
+                    smtpHost: smtpHost,
+                    smtpPort: parseInt(smtpPort),
+                    smtpSecure: process.env.DEFAULT_EMAIL_SECURE === 'true' || process.env.SMTP_SECURE === 'true',
+                    smtpUser: smtpUser,
+                    smtpPass: smtpPass || '',
+                    fromEmail: fromEmail || smtpUser || '',
+                    fromName: process.env.DEFAULT_EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'EventPeepo',
+                    isDefault: true,
+                    isActive: true,
+                },
+            });
+            console.log('✅ Default email provider created from environment variables');
+            // Enable email in system settings
+            await prisma_js_1.default.systemSettings.update({
+                where: { id: 'default' },
+                data: { emailEnabled: true },
+            });
+            console.log('✅ Email service enabled in system settings');
+        }
+        else if (emailProviderCount === 0) {
+            console.log('ℹ️  No email provider configured. Set SMTP_HOST and SMTP_USER (or DEFAULT_EMAIL_*) to enable email notifications.');
+        }
+        else {
+            // If provider exists but email is disabled, check if we should enable it
+            const hasActiveProvider = await prisma_js_1.default.emailProvider.findFirst({
+                where: { isActive: true, isDefault: true },
+            });
+            if (hasActiveProvider && settings && !settings.emailEnabled) {
+                console.log('🌱 Enabling email service (provider exists but was disabled)...');
+                await prisma_js_1.default.systemSettings.update({
+                    where: { id: 'default' },
+                    data: { emailEnabled: true },
+                });
+                console.log('✅ Email service enabled');
+            }
+            else if (hasActiveProvider && settings?.emailEnabled) {
+                console.log('✅ Email service is enabled and provider is configured');
+            }
         }
         // Create sample event if none exist
         const eventCount = await prisma_js_1.default.event.count();
@@ -183,21 +237,29 @@ const app = (0, express_1.default)();
 // Follow Render.com recommendation: use process.env.PORT with fallback
 const port = Number(process.env.PORT) || 10000;
 // Trust proxy (required for rate limiting behind reverse proxy like Render)
-app.set('trust proxy', true);
+// Only trust the first proxy (Render.com) to prevent IP spoofing
+app.set('trust proxy', 1);
 // Request Compression (gzip)
-app.use(compression());
+app.use((0, compression_1.default)());
 // Security Middleware
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" },
     contentSecurityPolicy: false, // Allow templates to load resources
 }));
 // CORS Configuration
+const siteUrl_js_1 = require("./utils/siteUrl.js");
 const allowedOrigins = [
-    'http://localhost:3000',
+    (0, siteUrl_js_1.getSiteUrl)(),
     'https://digiguestbook.netlify.app',
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_URL,
+    process.env.SITE_URL,
+    process.env.APP_URL,
 ].filter(Boolean);
+// Add localhost only in development
+if (process.env.NODE_ENV === 'development') {
+    allowedOrigins.push('http://localhost:3000');
+}
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         // Allow requests with no origin (mobile apps, curl, etc.)
@@ -221,7 +283,8 @@ app.use((0, cors_1.default)({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token', 'x-owner-token', 'X-Requested-With'],
+    exposedHeaders: ['Content-Disposition', 'Content-Type'],
 }));
 // Rate Limiting (Non-Functional: Stable during high usage)
 const limiter = (0, express_rate_limit_1.default)({
@@ -230,6 +293,15 @@ const limiter = (0, express_rate_limit_1.default)({
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    // Use a custom key generator that works with trust proxy
+    keyGenerator: (req) => {
+        // Get IP from X-Forwarded-For header (first IP when trust proxy is set)
+        return req.ip || req.socket.remoteAddress || 'unknown';
+    },
+    // Skip trust proxy validation warning
+    validate: {
+        trustProxy: false,
+    },
 });
 app.use('/api/', limiter);
 // Stricter rate limit for auth endpoints
@@ -237,6 +309,15 @@ const authLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     max: 10,
     message: { error: 'Too many authentication attempts, please try again later.' },
+    // Use a custom key generator that works with trust proxy
+    keyGenerator: (req) => {
+        // Get IP from X-Forwarded-For header (first IP when trust proxy is set)
+        return req.ip || req.socket.remoteAddress || 'unknown';
+    },
+    // Skip trust proxy validation warning
+    validate: {
+        trustProxy: false,
+    },
 });
 app.use('/api/auth/', authLimiter);
 // Body Parsing
@@ -248,7 +329,7 @@ app.use(requestLogger_js_1.requestLogger);
 app.get('/', (req, res) => {
     res.json({
         status: 'ok',
-        service: 'Digital Event Platform API',
+        service: 'EventPeepo API',
         timestamp: new Date().toISOString()
     });
 });

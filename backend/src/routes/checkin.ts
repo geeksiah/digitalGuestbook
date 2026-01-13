@@ -94,35 +94,61 @@ router.post('/:eventId', optionalAdminAuth, asyncHandler(async (req, res) => {
   if (data.token) {
     // QR code scan - parse the token data
     // QR code contains JSON string like: {"type":"event-invitation","eventId":"...","token":"...","code":"..."}
+    // OR the frontend might have already parsed it and sent just the token/rsvpId
     try {
-      let tokenData;
+      let tokenData: any = null;
+      let parsed = false;
+      
       // Try parsing as JSON string first
       if (typeof data.token === 'string' && data.token.startsWith('{')) {
-        tokenData = JSON.parse(data.token);
-      } else {
-        // Might already be an object
-        tokenData = typeof data.token === 'string' ? JSON.parse(data.token) : data.token;
+        try {
+          tokenData = JSON.parse(data.token);
+          parsed = true;
+        } catch (e) {
+          // Not valid JSON, continue
+        }
       }
       
-      invitation = await prisma.invitation.findFirst({
-        where: {
-          eventId,
-          OR: [
-            { accessCode: tokenData.code },
-            { rsvpId: tokenData.token }, // tokenData.token is actually the rsvpId
-          ],
-        },
-        include: { rsvp: true },
-      });
+      if (parsed && tokenData) {
+        // QR code was JSON - extract code and token (rsvpId)
+        console.log('[Check-in] Parsed QR code JSON:', { code: tokenData.code, token: tokenData.token, eventId: tokenData.eventId });
+        
+        invitation = await prisma.invitation.findFirst({
+          where: {
+            eventId,
+            OR: [
+              { accessCode: tokenData.code },
+              { rsvpId: tokenData.token }, // tokenData.token is the rsvpId
+            ],
+          },
+          include: { rsvp: true },
+        });
+      } else {
+        // Token is likely already parsed by frontend - could be rsvpId or invitation token UUID
+        console.log('[Check-in] Token is not JSON, trying direct lookup:', data.token);
+        
+        invitation = await prisma.invitation.findFirst({
+          where: { 
+            eventId, 
+            OR: [
+              { rsvpId: data.token }, // Direct rsvpId lookup
+              { token: data.token }, // Invitation UUID token lookup
+              { accessCode: data.token }, // Fallback: might be access code
+            ],
+          },
+          include: { rsvp: true },
+        });
+      }
     } catch (parseError: any) {
-      console.log('[Check-in] Failed to parse QR token, trying direct lookup:', parseError.message);
-      // Token might be a direct access code string
+      console.error('[Check-in] Error parsing token:', parseError.message);
+      // Fallback: try direct lookup
       invitation = await prisma.invitation.findFirst({
         where: { 
           eventId, 
           OR: [
-            { accessCode: data.token },
+            { rsvpId: data.token },
             { token: data.token },
+            { accessCode: data.token },
           ],
         },
         include: { rsvp: true },
@@ -134,6 +160,19 @@ router.post('/:eventId', optionalAdminAuth, asyncHandler(async (req, res) => {
       where: { eventId, accessCode: data.accessCode },
       include: { rsvp: true },
     });
+  }
+  
+  // Log for debugging
+  if (invitation) {
+    console.log('[Check-in] Found invitation:', { 
+      id: invitation.id, 
+      rsvpId: invitation.rsvpId, 
+      accessCode: invitation.accessCode,
+      isCheckedIn: invitation.isCheckedIn,
+      rsvpStatus: invitation.rsvp?.status 
+    });
+  } else {
+    console.log('[Check-in] No invitation found for:', { eventId, token: data.token, accessCode: data.accessCode });
   }
 
   // Validation per SRS Section 8.2

@@ -1,11 +1,15 @@
 import type { EmailProvider, SmsProvider, WhatsappProvider } from '@prisma/client';
-export declare function sendEmailWithProvider(provider: EmailProvider, to: string, subject: string, html: string, text?: string): Promise<{
+export declare function sendEmailWithProvider(provider: EmailProvider, to: string, subject: string, html: string, text?: string, attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    cid?: string;
+}>): Promise<{
     success: boolean;
-    messageId?: undefined;
+    messageId: any;
     error?: undefined;
 } | {
     success: boolean;
-    messageId: string | undefined;
+    messageId?: undefined;
     error?: undefined;
 } | {
     success: boolean;
@@ -45,11 +49,11 @@ export declare function sendWhatsappWithProvider(provider: WhatsappProvider, to:
 }>;
 export declare function sendEmail(to: string, subject: string, html: string, text?: string): Promise<{
     success: boolean;
-    messageId?: undefined;
+    messageId: any;
     error?: undefined;
 } | {
     success: boolean;
-    messageId: string | undefined;
+    messageId?: undefined;
     error?: undefined;
 } | {
     success: boolean;
@@ -86,11 +90,11 @@ export declare function sendBroadcast(eventId: string, broadcastId: string, mess
 }>;
 export declare function sendRsvpConfirmation(rsvpId: string): Promise<{
     success: boolean;
-    messageId?: undefined;
+    messageId: any;
     error?: undefined;
 } | {
     success: boolean;
-    messageId: string | undefined;
+    messageId?: undefined;
     error?: undefined;
 } | {
     success: boolean;
@@ -99,17 +103,50 @@ export declare function sendRsvpConfirmation(rsvpId: string): Promise<{
 }>;
 export declare function sendInvitationEmail(invitationId: string): Promise<{
     success: boolean;
-    messageId?: undefined;
+    messageId: any;
     error?: undefined;
 } | {
     success: boolean;
-    messageId: string | undefined;
+    messageId?: undefined;
     error?: undefined;
 } | {
     success: boolean;
     error: any;
     messageId?: undefined;
 }>;
+/**
+ * Send invitation via WhatsApp with QR code
+ */
+export declare function sendInvitationWhatsApp(invitationId: string): Promise<{
+    success: boolean;
+    sid: string;
+    messageId?: undefined;
+    error?: undefined;
+} | {
+    success: boolean;
+    messageId: string | undefined;
+    sid?: undefined;
+    error?: undefined;
+} | {
+    success: boolean;
+    error: any;
+    sid?: undefined;
+    messageId?: undefined;
+}>;
+/**
+ * Send invitation via SMS with 6-digit code only
+ */
+export declare function sendInvitationSMS(invitationId: string): Promise<{
+    success: boolean;
+    sid?: string;
+    messageId?: string;
+    balance?: number;
+    error?: string;
+}>;
+/**
+ * Send invitation notifications via all enabled channels
+ */
+export declare function sendInvitationNotifications(invitationId: string): Promise<any>;
 declare const _default: {
     sendEmail: typeof sendEmail;
     sendSMS: typeof sendSMS;
@@ -121,6 +158,9 @@ declare const _default: {
     sendBroadcast: typeof sendBroadcast;
     sendRsvpConfirmation: typeof sendRsvpConfirmation;
     sendInvitationEmail: typeof sendInvitationEmail;
+    sendInvitationWhatsApp: typeof sendInvitationWhatsApp;
+    sendInvitationSMS: typeof sendInvitationSMS;
+    sendInvitationNotifications: typeof sendInvitationNotifications;
 };
 export default _default;
 //# sourceMappingURL=notifications.d.ts.map

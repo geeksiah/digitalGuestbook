@@ -89,6 +89,10 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
  */
 router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const data = validation_js_1.createEventSchema.parse(req.body);
+    // Enforce logic: check-in disabled when invitation-only is false
+    if (!data.invitationOnly && data.checkInEnabled) {
+        data.checkInEnabled = false;
+    }
     // Check if slug is unique
     const existing = await prisma_js_1.default.event.findUnique({
         where: { slug: data.slug },
@@ -160,13 +164,22 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             }
         }
     }
+    // Enforce logic: check-in disabled when invitation-only is false
+    if (data.invitationOnly === false && data.checkInEnabled !== undefined) {
+        data.checkInEnabled = false;
+    }
+    // Enforce logic: check-in disabled when invitation-only is false
+    const updateData = {
+        ...data,
+        date: data.date ? new Date(data.date) : undefined,
+        endDate: data.endDate ? new Date(data.endDate) : undefined,
+    };
+    if (updateData.invitationOnly === false) {
+        updateData.checkInEnabled = false;
+    }
     const event = await prisma_js_1.default.event.update({
         where: { id: req.params.id },
-        data: {
-            ...data,
-            date: data.date ? new Date(data.date) : undefined,
-            endDate: data.endDate ? new Date(data.endDate) : undefined,
-        },
+        data: updateData,
     });
     // Create audit log for phase change
     if (data.phase && data.phase !== existing.phase) {

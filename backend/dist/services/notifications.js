@@ -13,24 +13,69 @@ exports.sendWhatsApp = sendWhatsApp;
 exports.sendBroadcast = sendBroadcast;
 exports.sendRsvpConfirmation = sendRsvpConfirmation;
 exports.sendInvitationEmail = sendInvitationEmail;
+exports.sendInvitationWhatsApp = sendInvitationWhatsApp;
+exports.sendInvitationSMS = sendInvitationSMS;
+exports.sendInvitationNotifications = sendInvitationNotifications;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 // ============================================
 // PROVIDER-BASED EMAIL
 // ============================================
-async function sendEmailWithProvider(provider, to, subject, html, text) {
+async function sendEmailWithProvider(provider, to, subject, html, text, attachments) {
+    console.log('[Email] sendEmailWithProvider called - Provider:', provider.name, 'To:', to, 'Subject:', subject);
     try {
         if (provider.provider === 'smtp') {
+            const port = provider.smtpPort || 587;
+            // Port 465 uses direct SSL/TLS (secure: true)
+            // Port 587 uses STARTTLS (secure: false, requiresTLS: true)
+            // Port 25 is usually plain text
+            // Override database setting if it conflicts with port requirements
+            let useSecure;
+            let useRequireTLS;
+            if (port === 465) {
+                // Port 465 requires direct SSL/TLS
+                useSecure = true;
+                useRequireTLS = false;
+            }
+            else if (port === 587) {
+                // Port 587 requires STARTTLS
+                useSecure = false;
+                useRequireTLS = true;
+            }
+            else {
+                // For other ports (2525, 8025, etc.), use STARTTLS by default
+                // Port 2525 is commonly used for STARTTLS
+                useSecure = false;
+                useRequireTLS = true;
+            }
             const transporter = nodemailer_1.default.createTransport({
                 host: provider.smtpHost,
-                port: provider.smtpPort || 587,
-                secure: provider.smtpSecure,
+                port: port,
+                secure: useSecure, // true for 465, false for other ports
+                requireTLS: useRequireTLS, // Use STARTTLS for port 587, 2525, etc.
                 auth: {
                     user: provider.smtpUser,
                     pass: provider.smtpPass || '',
                 },
+                tls: {
+                    // Do not fail on invalid certificates (some providers use self-signed certs)
+                    rejectUnauthorized: false,
+                },
+                connectionTimeout: 10000, // 10 seconds
+                greetingTimeout: 10000, // 10 seconds
+                socketTimeout: 10000, // 10 seconds
             });
-            const result = await transporter.sendMail({
+            console.log('[Email] Creating transporter with config:', {
+                host: provider.smtpHost,
+                port: port,
+                secure: useSecure,
+                requireTLS: useRequireTLS,
+                user: provider.smtpUser,
+                hasPassword: !!provider.smtpPass,
+                note: port === 465 ? 'Direct SSL/TLS' : port === 587 ? 'STARTTLS' : 'STARTTLS (Custom Port)',
+            });
+            console.log('[Email] Attempting to send mail...');
+            const sendPromise = transporter.sendMail({
                 from: provider.fromName
                     ? `"${provider.fromName}" <${provider.fromEmail || provider.smtpUser}>`
                     : provider.fromEmail || provider.smtpUser,
@@ -38,7 +83,17 @@ async function sendEmailWithProvider(provider, to, subject, html, text) {
                 subject,
                 html,
                 text: text || html.replace(/<[^>]*>/g, ''),
+                attachments: attachments?.map(att => ({
+                    filename: att.filename,
+                    content: att.content,
+                    cid: att.cid,
+                })),
             });
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Email send timeout after 30 seconds')), 30000);
+            });
+            const result = await Promise.race([sendPromise, timeoutPromise]);
             console.log('[Email] Sent via', provider.name, 'to:', to, 'ID:', result.messageId);
             return { success: true, messageId: result.messageId };
         }
@@ -98,6 +153,13 @@ async function sendEmailWithProvider(provider, to, subject, html, text) {
     }
     catch (error) {
         console.error('[Email] Failed to send via', provider.name, ':', error.message);
+        console.error('[Email] Error details:', {
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode,
+            stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+        });
         return { success: false, error: error.message };
     }
 }
@@ -357,6 +419,7 @@ async function getDefaultWhatsappProvider() {
     });
 }
 async function sendEmail(to, subject, html, text) {
+    console.log('[Email] Attempting to send email to:', to, 'Subject:', subject);
     const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
     if (!settings?.emailEnabled) {
         console.log('[Email] Service disabled, skipping email to:', to);
@@ -367,9 +430,18 @@ async function sendEmail(to, subject, html, text) {
         console.log('[Email] No default provider configured');
         return { success: false, error: 'No email provider configured' };
     }
-    return sendEmailWithProvider(provider, to, subject, html, text);
+    console.log('[Email] Using provider:', provider.name, 'Type:', provider.provider);
+    const result = await sendEmailWithProvider(provider, to, subject, html, text);
+    if (result.success) {
+        console.log('[Email] Successfully sent email to:', to);
+    }
+    else {
+        console.error('[Email] Failed to send email to:', to, 'Error:', result.error);
+    }
+    return result;
 }
 async function sendSMS(to, message) {
+    console.log('[SMS] Attempting to send SMS to:', to);
     const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
     if (!settings?.smsEnabled) {
         console.log('[SMS] Service disabled, skipping SMS to:', to);
@@ -380,9 +452,18 @@ async function sendSMS(to, message) {
         console.log('[SMS] No default provider configured');
         return { success: false, error: 'No SMS provider configured' };
     }
-    return sendSmsWithProvider(provider, to, message);
+    console.log('[SMS] Using provider:', provider.name, 'Type:', provider.provider);
+    const result = await sendSmsWithProvider(provider, to, message);
+    if (result.success) {
+        console.log('[SMS] Successfully sent SMS to:', to);
+    }
+    else {
+        console.error('[SMS] Failed to send SMS to:', to, 'Error:', result.error);
+    }
+    return result;
 }
 async function sendWhatsApp(to, message) {
+    console.log('[WhatsApp] Attempting to send WhatsApp message to:', to);
     const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
     if (!settings?.whatsappEnabled) {
         console.log('[WhatsApp] Service disabled, skipping message to:', to);
@@ -393,7 +474,15 @@ async function sendWhatsApp(to, message) {
         console.log('[WhatsApp] No default provider configured');
         return { success: false, error: 'No WhatsApp provider configured' };
     }
-    return sendWhatsappWithProvider(provider, to, message);
+    console.log('[WhatsApp] Using provider:', provider.name, 'Type:', provider.provider);
+    const result = await sendWhatsappWithProvider(provider, to, message);
+    if (result.success) {
+        console.log('[WhatsApp] Successfully sent WhatsApp message to:', to);
+    }
+    else {
+        console.error('[WhatsApp] Failed to send WhatsApp message to:', to, 'Error:', result.error);
+    }
+    return result;
 }
 // ============================================
 // BROADCAST & NOTIFICATION FUNCTIONS
@@ -525,12 +614,17 @@ async function sendInvitationEmail(invitationId) {
     if (!invitation || !invitation.rsvp.email) {
         return { success: false, error: 'No email address' };
     }
+    if (!invitation.qrCodeData) {
+        return { success: false, error: 'QR code not generated' };
+    }
     const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
     });
+    // Convert QR code data URL to buffer for email attachment
+    const qrCodeBuffer = Buffer.from(invitation.qrCodeData.replace(/^data:image\/png;base64,/, ''), 'base64');
     const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <h1 style="color: #1a1a2e; text-align: center;">You're Invited!</h1>
@@ -546,7 +640,7 @@ async function sendInvitationEmail(invitationId) {
       </div>
       
       <div style="text-align: center; margin: 30px 0;">
-        <img src="${invitation.qrCodeData}" alt="QR Code" style="width: 200px; height: 200px;" />
+        <img src="cid:qrcode" alt="QR Code" style="width: 200px; height: 200px; display: block; margin: 0 auto;" />
         <p style="font-size: 28px; font-weight: bold; color: #1a1a2e; margin: 15px 0;">
           ${invitation.accessCode}
         </p>
@@ -558,7 +652,21 @@ async function sendInvitationEmail(invitationId) {
       </p>
     </div>
   `;
-    const result = await sendEmail(invitation.rsvp.email, `Your Invitation - ${invitation.event.name}`, html);
+    // Get the default email provider
+    const provider = await prisma_js_1.default.emailProvider.findFirst({
+        where: { isActive: true, isDefault: true },
+    });
+    if (!provider) {
+        return { success: false, error: 'No email provider configured' };
+    }
+    // Send email with QR code attachment
+    // Use sendEmailWithProvider directly to include attachments
+    const result = await sendEmailWithProvider(provider, invitation.rsvp.email, `Your Invitation - ${invitation.event.name}`, html, undefined, // text version
+    [{
+            filename: 'qrcode.png',
+            content: qrCodeBuffer,
+            cid: 'qrcode', // Content ID for embedding in HTML
+        }]);
     if (result.success) {
         await prisma_js_1.default.invitation.update({
             where: { id: invitationId },
@@ -566,6 +674,175 @@ async function sendInvitationEmail(invitationId) {
         });
     }
     return result;
+}
+/**
+ * Send invitation via WhatsApp with QR code
+ */
+async function sendInvitationWhatsApp(invitationId) {
+    const invitation = await prisma_js_1.default.invitation.findUnique({
+        where: { id: invitationId },
+        include: {
+            event: true,
+            rsvp: true,
+        },
+    });
+    if (!invitation || !invitation.rsvp.phone) {
+        return { success: false, error: 'No phone number' };
+    }
+    const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+    if (!invitation.qrCodeData) {
+        return { success: false, error: 'QR code not generated' };
+    }
+    // Get the site URL for QR code link
+    const { getSiteUrl } = await import('../utils/siteUrl.js');
+    const siteUrl = getSiteUrl();
+    const checkInUrl = `${siteUrl}/e/${invitation.event.slug}/checkin?code=${invitation.accessCode}`;
+    // WhatsApp message with QR code image and access code
+    // Convert QR code data URL to buffer for media attachment
+    const qrCodeBuffer = Buffer.from(invitation.qrCodeData.replace(/^data:image\/png;base64,/, ''), 'base64');
+    const message = `🎉 You're Invited!
+
+${invitation.event.name}
+
+📅 Date: ${eventDate}
+${invitation.event.venue ? `📍 Venue: ${invitation.event.venue}\n` : ''}👥 Guests: ${invitation.guestCount}
+
+🔐 Your Access Code: ${invitation.accessCode}
+
+📱 Check-in: ${checkInUrl}
+
+Scan the QR code (attached) or show this code at check-in.
+
+We look forward to seeing you!`;
+    // Get WhatsApp provider
+    const provider = await prisma_js_1.default.whatsappProvider.findFirst({
+        where: { isActive: true, isDefault: true },
+    });
+    if (!provider) {
+        return { success: false, error: 'No WhatsApp provider configured' };
+    }
+    // Send WhatsApp with QR code image if provider supports media (Twilio)
+    let result;
+    if (provider.provider === 'twilio' && provider.accountSid && provider.authToken) {
+        try {
+            const twilio = await import('twilio');
+            const client = twilio.default(provider.accountSid, provider.authToken);
+            const whatsappTo = invitation.rsvp.phone.startsWith('whatsapp:')
+                ? invitation.rsvp.phone
+                : `whatsapp:${invitation.rsvp.phone}`;
+            const whatsappFrom = provider.phoneNumber?.startsWith('whatsapp:')
+                ? provider.phoneNumber
+                : `whatsapp:${provider.phoneNumber}`;
+            // Send message with media (QR code image)
+            // Twilio WhatsApp supports media via mediaUrl with data URI
+            const mediaResult = await client.messages.create({
+                from: whatsappFrom,
+                to: whatsappTo,
+                body: message,
+                mediaUrl: [`data:image/png;base64,${qrCodeBuffer.toString('base64')}`],
+            });
+            result = { success: true, messageId: mediaResult.sid };
+        }
+        catch (error) {
+            console.error('[WhatsApp] Failed to send with media, falling back to text:', error.message);
+            // Fallback to text-only if media fails
+            result = await sendWhatsappWithProvider(provider, invitation.rsvp.phone, message);
+        }
+    }
+    else {
+        // For other providers, send text with link to QR code
+        result = await sendWhatsappWithProvider(provider, invitation.rsvp.phone, message);
+    }
+    if (result.success) {
+        await prisma_js_1.default.invitation.update({
+            where: { id: invitationId },
+            data: { whatsappSent: true },
+        });
+    }
+    return result;
+}
+/**
+ * Send invitation via SMS with 6-digit code only
+ */
+async function sendInvitationSMS(invitationId) {
+    const invitation = await prisma_js_1.default.invitation.findUnique({
+        where: { id: invitationId },
+        include: {
+            event: true,
+            rsvp: true,
+        },
+    });
+    if (!invitation || !invitation.rsvp.phone) {
+        return { success: false, error: 'No phone number' };
+    }
+    const eventDate = new Date(invitation.event.date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+    // SMS with 6-digit code only (SMS doesn't support images)
+    const message = `You're invited to ${invitation.event.name} on ${eventDate}. Your access code: ${invitation.accessCode}. Show this code at check-in.`;
+    const result = await sendSMS(invitation.rsvp.phone, message);
+    if (result.success) {
+        await prisma_js_1.default.invitation.update({
+            where: { id: invitationId },
+            data: { smsSent: true },
+        });
+    }
+    return result;
+}
+/**
+ * Send invitation notifications via all enabled channels
+ */
+async function sendInvitationNotifications(invitationId) {
+    const invitation = await prisma_js_1.default.invitation.findUnique({
+        where: { id: invitationId },
+        include: {
+            event: true,
+            rsvp: true,
+        },
+    });
+    if (!invitation) {
+        return { success: false, error: 'Invitation not found' };
+    }
+    const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
+    const results = {};
+    // Send email (always includes QR code and 6-digit code)
+    if (invitation.rsvp.email && settings?.emailEnabled) {
+        try {
+            results.email = await sendInvitationEmail(invitationId);
+        }
+        catch (err) {
+            console.error('[Invitation] Failed to send email:', err.message);
+            results.email = { success: false, error: err.message };
+        }
+    }
+    // Send WhatsApp (includes QR code reference and 6-digit code)
+    if (invitation.rsvp.phone && settings?.whatsappEnabled) {
+        try {
+            results.whatsapp = await sendInvitationWhatsApp(invitationId);
+        }
+        catch (err) {
+            console.error('[Invitation] Failed to send WhatsApp:', err.message);
+            results.whatsapp = { success: false, error: err.message };
+        }
+    }
+    // Send SMS (6-digit code only)
+    if (invitation.rsvp.phone && settings?.smsEnabled) {
+        try {
+            results.sms = await sendInvitationSMS(invitationId);
+        }
+        catch (err) {
+            console.error('[Invitation] Failed to send SMS:', err.message);
+            results.sms = { success: false, error: err.message };
+        }
+    }
+    return results;
 }
 exports.default = {
     sendEmail,
@@ -578,5 +855,8 @@ exports.default = {
     sendBroadcast,
     sendRsvpConfirmation,
     sendInvitationEmail,
+    sendInvitationWhatsApp,
+    sendInvitationSMS,
+    sendInvitationNotifications,
 };
 //# sourceMappingURL=notifications.js.map

@@ -29,18 +29,24 @@ async function notifyOwnerAboutCheckIn(eventId, guestName, guestCount) {
         return;
     const message = `Guest checked in: ${guestName} (${guestCount} guests) - ${event.name}`;
     if (event.ownerEmail && event.emailNotifications) {
-        await (0, notifications_js_1.sendEmail)(event.ownerEmail, `Guest Checked In - ${event.name}`, `<div style="font-family: sans-serif;">
+        (0, notifications_js_1.sendEmail)(event.ownerEmail, `Guest Checked In - ${event.name}`, `<div style="font-family: sans-serif;">
         <h2>Guest Checked In</h2>
         <p><strong>Guest:</strong> ${guestName}</p>
         <p><strong>Party Size:</strong> ${guestCount}</p>
         <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-      </div>`);
+      </div>`).catch(err => {
+            console.error('[Check-in Notification] Failed to send email:', err);
+        });
     }
     if (event.ownerPhone && event.smsNotifications) {
-        await (0, notifications_js_1.sendSMS)(event.ownerPhone, message);
+        (0, notifications_js_1.sendSMS)(event.ownerPhone, message).catch(err => {
+            console.error('[Check-in Notification] Failed to send SMS:', err);
+        });
     }
     if (event.ownerPhone && event.whatsappNotifications) {
-        await (0, notifications_js_1.sendWhatsApp)(event.ownerPhone, message);
+        (0, notifications_js_1.sendWhatsApp)(event.ownerPhone, message).catch(err => {
+            console.error('[Check-in Notification] Failed to send WhatsApp:', err);
+        });
     }
 }
 /**
@@ -61,6 +67,10 @@ router.post('/:eventId', auth_js_1.optionalAdminAuth, (0, errorHandler_js_1.asyn
     if (!event.checkInEnabled) {
         throw new errorHandler_js_1.AppError('Check-in is not enabled for this event', 400);
     }
+    // Check-in is only available for invitation-only events
+    if (!event.invitationOnly) {
+        throw new errorHandler_js_1.AppError('Check-in is only available for invitation-only events', 400);
+    }
     // Verify event is in LIVE phase
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     if (!(0, phase_js_1.canCheckIn)(currentPhase)) {
@@ -70,23 +80,63 @@ router.post('/:eventId', auth_js_1.optionalAdminAuth, (0, errorHandler_js_1.asyn
     let invitation;
     if (data.token) {
         // QR code scan - parse the token data
+        // QR code contains JSON string like: {"type":"event-invitation","eventId":"...","token":"...","code":"..."}
+        // OR the frontend might have already parsed it and sent just the token/rsvpId
         try {
-            const tokenData = JSON.parse(data.token);
+            let tokenData = null;
+            let parsed = false;
+            // Try parsing as JSON string first
+            if (typeof data.token === 'string' && data.token.startsWith('{')) {
+                try {
+                    tokenData = JSON.parse(data.token);
+                    parsed = true;
+                }
+                catch (e) {
+                    // Not valid JSON, continue
+                }
+            }
+            if (parsed && tokenData) {
+                // QR code was JSON - extract code and token (rsvpId)
+                console.log('[Check-in] Parsed QR code JSON:', { code: tokenData.code, token: tokenData.token, eventId: tokenData.eventId });
+                invitation = await prisma_js_1.default.invitation.findFirst({
+                    where: {
+                        eventId,
+                        OR: [
+                            { accessCode: tokenData.code },
+                            { rsvpId: tokenData.token }, // tokenData.token is the rsvpId
+                        ],
+                    },
+                    include: { rsvp: true },
+                });
+            }
+            else {
+                // Token is likely already parsed by frontend - could be rsvpId or invitation token UUID
+                console.log('[Check-in] Token is not JSON, trying direct lookup:', data.token);
+                invitation = await prisma_js_1.default.invitation.findFirst({
+                    where: {
+                        eventId,
+                        OR: [
+                            { rsvpId: data.token }, // Direct rsvpId lookup
+                            { token: data.token }, // Invitation UUID token lookup
+                            { accessCode: data.token }, // Fallback: might be access code
+                        ],
+                    },
+                    include: { rsvp: true },
+                });
+            }
+        }
+        catch (parseError) {
+            console.error('[Check-in] Error parsing token:', parseError.message);
+            // Fallback: try direct lookup
             invitation = await prisma_js_1.default.invitation.findFirst({
                 where: {
                     eventId,
                     OR: [
-                        { token: tokenData.token },
-                        { accessCode: tokenData.code },
+                        { rsvpId: data.token },
+                        { token: data.token },
+                        { accessCode: data.token },
                     ],
                 },
-                include: { rsvp: true },
-            });
-        }
-        catch {
-            // Token might be a direct token string
-            invitation = await prisma_js_1.default.invitation.findFirst({
-                where: { eventId, token: data.token },
                 include: { rsvp: true },
             });
         }
@@ -97,6 +147,19 @@ router.post('/:eventId', auth_js_1.optionalAdminAuth, (0, errorHandler_js_1.asyn
             where: { eventId, accessCode: data.accessCode },
             include: { rsvp: true },
         });
+    }
+    // Log for debugging
+    if (invitation) {
+        console.log('[Check-in] Found invitation:', {
+            id: invitation.id,
+            rsvpId: invitation.rsvpId,
+            accessCode: invitation.accessCode,
+            isCheckedIn: invitation.isCheckedIn,
+            rsvpStatus: invitation.rsvp?.status
+        });
+    }
+    else {
+        console.log('[Check-in] No invitation found for:', { eventId, token: data.token, accessCode: data.accessCode });
     }
     // Validation per SRS Section 8.2
     let success = false;

@@ -138,16 +138,24 @@ export default function CheckInPage() {
     try {
       // Try to parse as JSON (our QR format)
       const parsed = JSON.parse(data);
-      if (parsed.token) {
-        handleCheckIn(undefined, parsed.token);
-      } else if (parsed.code) {
-        handleCheckIn(parsed.code, undefined);
+      console.log('[Check-in] Parsed QR code:', parsed);
+      
+      // Send the full JSON string as token so backend can parse it
+      // This ensures backend gets all the data (code, token/rsvpId, eventId)
+      if (parsed.token || parsed.code) {
+        handleCheckIn(parsed.code, JSON.stringify(parsed));
+      } else {
+        // Fallback: send as-is
+        handleCheckIn(undefined, data);
       }
     } catch {
-      // Not JSON, might be just a token string
+      // Not JSON, might be just a token string or access code
+      console.log('[Check-in] QR code is not JSON:', data);
       if (data.length === 6 && /^\d+$/.test(data)) {
+        // Looks like an access code
         handleCheckIn(data, undefined);
       } else {
+        // Might be a token/rsvpId
         handleCheckIn(undefined, data);
       }
     }

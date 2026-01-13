@@ -137,9 +137,17 @@ router.get('/payouts', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncH
         totalPendingAmount: allPayouts
             .filter((p) => p.status === 'PENDING')
             .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
-        totalProcessed: allPayouts.filter((p) => p.status === 'PROCESSED').length,
-        totalProcessedAmount: allPayouts
-            .filter((p) => p.status === 'PROCESSED')
+        totalFulfilled: allPayouts.filter((p) => p.status === 'FULFILLED').length,
+        totalFulfilledAmount: allPayouts
+            .filter((p) => p.status === 'FULFILLED')
+            .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
+        totalProcessing: allPayouts.filter((p) => p.status === 'PROCESSING').length,
+        totalProcessingAmount: allPayouts
+            .filter((p) => p.status === 'PROCESSING')
+            .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
+        totalDelayed: allPayouts.filter((p) => p.status === 'DELAYED').length,
+        totalDelayedAmount: allPayouts
+            .filter((p) => p.status === 'DELAYED')
             .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
         totalRejected: allPayouts.filter((p) => p.status === 'REJECTED').length,
         totalRejectedAmount: allPayouts
@@ -147,9 +155,10 @@ router.get('/payouts', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncH
             .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
         byStatus: {
             PENDING: allPayouts.filter((p) => p.status === 'PENDING').length,
-            PROCESSED: allPayouts.filter((p) => p.status === 'PROCESSED').length,
+            PROCESSING: allPayouts.filter((p) => p.status === 'PROCESSING').length,
+            FULFILLED: allPayouts.filter((p) => p.status === 'FULFILLED').length,
+            DELAYED: allPayouts.filter((p) => p.status === 'DELAYED').length,
             REJECTED: allPayouts.filter((p) => p.status === 'REJECTED').length,
-            CANCELLED: allPayouts.filter((p) => p.status === 'CANCELLED').length,
         },
     };
     res.json({
@@ -191,21 +200,43 @@ router.get('/payouts/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.as
 router.post('/payouts/:id/process', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const { transactionRef, notes, processedAt } = req.body;
-    const payout = await prisma_js_1.default.payoutRequest.findUnique({ where: { id } });
+    const payout = await prisma_js_1.default.payoutRequest.findUnique({
+        where: { id },
+        include: {
+            event: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    ownerName: true,
+                    ownerEmail: true,
+                    ownerPhone: true,
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    whatsappNotifications: true,
+                },
+            },
+        },
+    });
     if (!payout) {
         throw new errorHandler_js_1.AppError('Payout request not found', 404);
     }
     if (payout.status !== 'PENDING') {
         throw new errorHandler_js_1.AppError('Only pending payouts can be processed', 400);
     }
+    // Determine new status based on body (default to PROCESSING)
+    const newStatus = req.body.status || 'PROCESSING'; // PROCESSING | FULFILLED | DELAYED
+    if (!['PROCESSING', 'FULFILLED', 'DELAYED'].includes(newStatus)) {
+        throw new errorHandler_js_1.AppError('Invalid status. Must be PROCESSING, FULFILLED, or DELAYED', 400);
+    }
     const updated = await prisma_js_1.default.payoutRequest.update({
         where: { id },
         data: {
-            status: 'PROCESSED',
+            status: newStatus,
             processedAt: processedAt ? new Date(processedAt) : new Date(),
-            processedBy: req.adminId,
+            processedBy: req.admin.id,
             transactionRef: transactionRef || null,
-            notes: notes || null,
+            notes: req.body.notes || notes || null,
         },
         include: {
             event: {
@@ -215,8 +246,85 @@ router.post('/payouts/:id/process', auth_js_1.authenticateAdmin, (0, errorHandle
                     slug: true,
                     ownerName: true,
                     ownerEmail: true,
+                    ownerPhone: true,
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    whatsappNotifications: true,
                 },
             },
+        },
+    });
+    // Send notification to event owner
+    const { sendEmail, sendSMS, sendWhatsApp } = await import('../services/notifications.js');
+    const event = updated.event;
+    const ownerName = event.ownerName || 'Event Owner';
+    // Determine notification message based on status
+    let emailSubject = '';
+    let emailTitle = '';
+    let emailMessage = '';
+    let smsBody = '';
+    let whatsappTitle = '';
+    let whatsappMessage = '';
+    if (newStatus === 'PROCESSING') {
+        emailSubject = `Payout Processing: $${updated.requestedAmount.toFixed(2)}`;
+        emailTitle = 'Payout Processing';
+        emailMessage = `Your payout request for <strong>${event.name}</strong> is now being processed.`;
+        smsBody = `Payout processing for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}.`;
+        whatsappTitle = '*Payout Processing*';
+        whatsappMessage = `Your payout request for *${event.name}* is now being processed.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}`;
+    }
+    else if (newStatus === 'FULFILLED') {
+        emailSubject = `Payout Fulfilled: $${updated.requestedAmount.toFixed(2)}`;
+        emailTitle = 'Payout Fulfilled';
+        emailMessage = `Your payout request for <strong>${event.name}</strong> has been fulfilled successfully.`;
+        smsBody = `Payout fulfilled for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}. Transaction Ref: ${updated.transactionRef || 'N/A'}`;
+        whatsappTitle = '*Payout Fulfilled*';
+        whatsappMessage = `Your payout request for *${event.name}* has been fulfilled.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}\n${updated.transactionRef ? `Transaction Ref: ${updated.transactionRef}\n` : ''}Thank you!`;
+    }
+    else if (newStatus === 'DELAYED') {
+        emailSubject = `Payout Delayed: $${updated.requestedAmount.toFixed(2)}`;
+        emailTitle = 'Payout Delayed';
+        emailMessage = `Your payout request for <strong>${event.name}</strong> has been delayed.`;
+        smsBody = `Payout delayed for ${event.name}: $${updated.requestedAmount.toFixed(2)} ${updated.currency}.`;
+        whatsappTitle = '*Payout Delayed*';
+        whatsappMessage = `Your payout request for *${event.name}* has been delayed.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\nMethod: ${updated.payoutMethod}`;
+    }
+    const emailBody = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>${emailTitle}</h2>
+      <p>Dear ${ownerName},</p>
+      <p>${emailMessage}</p>
+      <p><strong>Amount:</strong> $${updated.requestedAmount.toFixed(2)} ${updated.currency}</p>
+      <p><strong>Method:</strong> ${updated.payoutMethod}</p>
+      ${updated.transactionRef ? `<p><strong>Transaction Reference:</strong> ${updated.transactionRef}</p>` : ''}
+      ${updated.notes ? `<p><strong>Notes:</strong> ${updated.notes}</p>` : ''}
+      <p>Thank you for using our platform.</p>
+    </div>
+  `;
+    const whatsappBody = `${whatsappTitle}\n\n${whatsappMessage}${updated.notes ? `\n\nNotes: ${updated.notes}` : ''}`;
+    if (event.ownerEmail && event.emailNotifications) {
+        sendEmail(event.ownerEmail, emailSubject, emailBody).catch(err => console.error('[Notification] Failed to send payout processed email:', err));
+    }
+    if (event.ownerPhone && event.smsNotifications) {
+        sendSMS(event.ownerPhone, smsBody).catch(err => console.error('[Notification] Failed to send payout processed SMS:', err));
+    }
+    if (event.ownerPhone && event.whatsappNotifications) {
+        sendWhatsApp(event.ownerPhone, whatsappBody).catch(err => console.error('[Notification] Failed to send payout processed WhatsApp:', err));
+    }
+    // Create audit log
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            adminId: req.admin.id,
+            eventId: payout.eventId,
+            action: 'PAYOUT_PROCESSED',
+            entityType: 'PAYOUT',
+            entityId: updated.id,
+            details: JSON.stringify({
+                requestedAmount: updated.requestedAmount,
+                currency: updated.currency,
+                payoutMethod: updated.payoutMethod,
+                transactionRef: updated.transactionRef,
+            }),
         },
     });
     res.json({ payout: updated });
@@ -228,7 +336,24 @@ router.post('/payouts/:id/process', auth_js_1.authenticateAdmin, (0, errorHandle
 router.post('/payouts/:id/reject', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
-    const payout = await prisma_js_1.default.payoutRequest.findUnique({ where: { id } });
+    const payout = await prisma_js_1.default.payoutRequest.findUnique({
+        where: { id },
+        include: {
+            event: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    ownerName: true,
+                    ownerEmail: true,
+                    ownerPhone: true,
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    whatsappNotifications: true,
+                },
+            },
+        },
+    });
     if (!payout) {
         throw new errorHandler_js_1.AppError('Payout request not found', 404);
     }
@@ -240,7 +365,7 @@ router.post('/payouts/:id/reject', auth_js_1.authenticateAdmin, (0, errorHandler
         data: {
             status: 'REJECTED',
             processedAt: new Date(),
-            processedBy: req.adminId,
+            processedBy: req.admin.id,
             notes: reason || null,
         },
         include: {
@@ -251,8 +376,53 @@ router.post('/payouts/:id/reject', auth_js_1.authenticateAdmin, (0, errorHandler
                     slug: true,
                     ownerName: true,
                     ownerEmail: true,
+                    ownerPhone: true,
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    whatsappNotifications: true,
                 },
             },
+        },
+    });
+    // Send notification to event owner
+    const { sendEmail, sendSMS, sendWhatsApp } = await import('../services/notifications.js');
+    const event = updated.event;
+    const ownerName = event.ownerName || 'Event Owner';
+    const emailSubject = `Payout Request Rejected: $${updated.requestedAmount.toFixed(2)}`;
+    const emailBody = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Payout Request Rejected</h2>
+      <p>Dear ${ownerName},</p>
+      <p>Your payout request for <strong>${event.name}</strong> has been rejected.</p>
+      <p><strong>Amount:</strong> $${updated.requestedAmount.toFixed(2)} ${updated.currency}</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+      <p>If you have questions, please contact support.</p>
+    </div>
+  `;
+    const smsBody = `Payout request rejected for ${event.name}: $${updated.requestedAmount.toFixed(2)}. ${reason ? `Reason: ${reason}` : ''}`;
+    const whatsappBody = `*Payout Request Rejected*\n\nYour payout request for *${event.name}* has been rejected.\n\nAmount: $${updated.requestedAmount.toFixed(2)} ${updated.currency}\n${reason ? `Reason: ${reason}\n` : ''}Please contact support if you have questions.`;
+    if (event.ownerEmail && event.emailNotifications) {
+        sendEmail(event.ownerEmail, emailSubject, emailBody).catch(err => console.error('[Notification] Failed to send payout rejected email:', err));
+    }
+    if (event.ownerPhone && event.smsNotifications) {
+        sendSMS(event.ownerPhone, smsBody).catch(err => console.error('[Notification] Failed to send payout rejected SMS:', err));
+    }
+    if (event.ownerPhone && event.whatsappNotifications) {
+        sendWhatsApp(event.ownerPhone, whatsappBody).catch(err => console.error('[Notification] Failed to send payout rejected WhatsApp:', err));
+    }
+    // Create audit log
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            adminId: req.admin.id,
+            eventId: payout.eventId,
+            action: 'PAYOUT_REJECTED',
+            entityType: 'PAYOUT',
+            entityId: updated.id,
+            details: JSON.stringify({
+                requestedAmount: updated.requestedAmount,
+                currency: updated.currency,
+                reason: reason || null,
+            }),
         },
     });
     res.json({ payout: updated });
@@ -288,16 +458,23 @@ router.get('/payouts/analytics', auth_js_1.authenticateAdmin, (0, errorHandler_j
         total: payouts.length,
         byStatus: {
             PENDING: payouts.filter((p) => p.status === 'PENDING').length,
-            PROCESSED: payouts.filter((p) => p.status === 'PROCESSED').length,
+            PROCESSING: payouts.filter((p) => p.status === 'PROCESSING').length,
+            FULFILLED: payouts.filter((p) => p.status === 'FULFILLED').length,
+            DELAYED: payouts.filter((p) => p.status === 'DELAYED').length,
             REJECTED: payouts.filter((p) => p.status === 'REJECTED').length,
-            CANCELLED: payouts.filter((p) => p.status === 'CANCELLED').length,
         },
         amounts: {
             totalPending: payouts
                 .filter(p => p.status === 'PENDING')
                 .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
-            totalProcessed: payouts
-                .filter((p) => p.status === 'PROCESSED')
+            totalProcessing: payouts
+                .filter((p) => p.status === 'PROCESSING')
+                .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
+            totalFulfilled: payouts
+                .filter((p) => p.status === 'FULFILLED')
+                .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
+            totalDelayed: payouts
+                .filter((p) => p.status === 'DELAYED')
                 .reduce((sum, p) => sum + (p.requestedAmount || 0), 0),
             totalRejected: payouts
                 .filter((p) => p.status === 'REJECTED')

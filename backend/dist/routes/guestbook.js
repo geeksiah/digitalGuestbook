@@ -74,6 +74,8 @@ const createGuestbookAccessMiddleware = (requireAccessCode = true) => (0, errorH
         throw new errorHandler_js_1.AppError('Guestbook is only available during the live event', 400);
     }
     // For invitation-only events, verify guest has valid invitation (unless booth mode)
+    // Booth/kiosk mode never requires access code
+    // When invitation-only is false, guestbook is accessible without code
     if (event.invitationOnly && requireAccessCode) {
         const { accessCode } = req.query;
         if (!accessCode) {
@@ -92,6 +94,7 @@ const createGuestbookAccessMiddleware = (requireAccessCode = true) => (0, errorH
         // Attach invitation to request for reference
         req.invitation = invitation;
     }
+    // If invitation-only is false, guestbook is accessible without code (already handled by the condition above)
     req.event = event;
     next();
 });
@@ -409,6 +412,24 @@ router.post('/:eventId/booth/upload', verifyBoothAccess, upload.single('media'),
         console.error('[Booth Upload] Supabase upload error:', error);
         throw new errorHandler_js_1.AppError(`Failed to upload file: ${error.message}`, 500);
     }
+}));
+/**
+ * POST /api/guestbook/:eventId/booth/session-qr
+ * Generate QR code for downloading all photos from a session
+ */
+router.post('/:eventId/booth/session-qr', verifyBoothAccess, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const event = req.event;
+    const { deviceId, sessionStart } = req.body;
+    if (!deviceId || !sessionStart) {
+        throw new errorHandler_js_1.AppError('deviceId and sessionStart are required', 400);
+    }
+    const sessionStartDate = new Date(sessionStart);
+    if (isNaN(sessionStartDate.getTime())) {
+        throw new errorHandler_js_1.AppError('Invalid sessionStart date', 400);
+    }
+    const { generateBoothSessionDownloadQR } = await import('../services/boothDownload.js');
+    const qrCodeData = await generateBoothSessionDownloadQR(event.id, deviceId, sessionStartDate);
+    res.json({ qrCodeData });
 }));
 exports.default = router;
 //# sourceMappingURL=guestbook.js.map

@@ -245,5 +245,105 @@ router.get('/verify-access/:eventSlug', (0, errorHandler_js_1.asyncHandler)(asyn
         },
     });
 }));
+/**
+ * GET /api/public/booth/download/:token
+ * Get session photos info (for displaying download page)
+ */
+router.get('/booth/download/:token/info', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { token } = req.params;
+    const { verifyBoothDownloadToken, getSessionPhotos } = await import('../services/boothDownload.js');
+    const result = await verifyBoothDownloadToken(token, false); // Don't mark as used yet
+    if (!result) {
+        throw new errorHandler_js_1.AppError('Invalid or expired download token', 404);
+    }
+    if (result.type === 'session' && result.sessionId && result.eventId) {
+        const photos = await getSessionPhotos(result.sessionId, result.eventId, result.deviceId || null);
+        if (photos.length === 0) {
+            throw new errorHandler_js_1.AppError('No photos found for this session', 404);
+        }
+        res.json({
+            token,
+            type: 'session',
+            photos: photos.map(p => ({
+                id: p.id,
+                fileName: p.fileName,
+            })),
+        });
+    }
+    else if (result.type === 'single' && result.filePath) {
+        res.json({
+            token,
+            type: 'single',
+            photos: [{
+                    id: result.mediaId,
+                    fileName: result.filePath.split('/').pop() || 'photo.jpg',
+                }],
+        });
+    }
+    else {
+        throw new errorHandler_js_1.AppError('Invalid download token', 400);
+    }
+}));
+/**
+ * GET /api/public/booth/download/:token/:photoId
+ * Download a single photo from a session
+ */
+router.get('/booth/download/:token/:photoId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { token, photoId } = req.params;
+    const { verifyBoothDownloadToken, getSessionPhotos } = await import('../services/boothDownload.js');
+    const { downloadFile, BUCKETS } = await import('../services/supabaseStorage.js');
+    const result = await verifyBoothDownloadToken(token, false); // Don't mark as used - allow multiple downloads
+    if (!result) {
+        throw new errorHandler_js_1.AppError('Invalid or expired download token', 404);
+    }
+    try {
+        let photo = null;
+        if (result.type === 'session' && result.sessionId && result.eventId) {
+            // Get all photos from session and find the requested one
+            const photos = await getSessionPhotos(result.sessionId, result.eventId, result.deviceId || null);
+            photo = photos.find(p => p.id === photoId) || null;
+        }
+        else if (result.type === 'single' && result.mediaId === photoId) {
+            // Single photo download
+            const media = await prisma_js_1.default.mediaAsset.findUnique({
+                where: { id: photoId },
+                select: { id: true, filePath: true, fileName: true },
+            });
+            if (media) {
+                photo = {
+                    id: media.id,
+                    filePath: media.filePath,
+                    fileName: media.fileName,
+                };
+            }
+        }
+        if (!photo) {
+            throw new errorHandler_js_1.AppError('Photo not found', 404);
+        }
+        // Download file from Supabase
+        const fileBuffer = await downloadFile(BUCKETS.MEDIA, photo.filePath);
+        // Get file extension from path
+        const ext = photo.filePath.split('.').pop() || 'jpg';
+        const contentType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+            ext === 'png' ? 'image/png' :
+                ext === 'gif' ? 'image/gif' : 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${photo.fileName || `booth-photo-${photo.id}.${ext}`}"`);
+        res.send(fileBuffer);
+    }
+    catch (error) {
+        console.error('[Booth Download] Failed to download photo:', error.message);
+        throw new errorHandler_js_1.AppError('Failed to download photo', 500);
+    }
+}));
+/**
+ * GET /api/public/booth/download/:token
+ * Redirect to frontend download page
+ */
+router.get('/booth/download/:token', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { getSiteUrl } = await import('../utils/siteUrl.js');
+    const siteUrl = getSiteUrl();
+    res.redirect(`${siteUrl}/booth/download/${req.params.token}`);
+}));
 exports.default = router;
 //# sourceMappingURL=public.js.map

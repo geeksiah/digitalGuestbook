@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const archiver_1 = __importDefault(require("archiver"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
@@ -19,7 +20,10 @@ router.get('/event/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_1
     const { type, page = '1', limit = '50' } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
-    const where = { eventId };
+    const where = {
+        eventId,
+        captureMode: { not: 'BOOTH' }, // Exclude booth mode photos from media listings
+    };
     if (type)
         where.type = type;
     const [media, total] = await Promise.all([
@@ -102,13 +106,88 @@ router.get('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandl
  * GET /api/media/:id/download
  * Download a single media file
  * Handles both Supabase and local filesystem storage
+ * Supports both admin token and owner token via header
  */
 router.get('/:id/download', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { id } = req.params;
+    // Support both admin token and owner token
+    const authHeader = req.headers.authorization;
+    // Check both lowercase and capitalized header names
+    const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']);
+    console.log('[Media Download] Request for media:', id);
+    console.log('[Media Download] Headers received:', {
+        hasAuthHeader: !!authHeader,
+        authHeaderPrefix: authHeader?.substring(0, 20),
+        hasOwnerToken: !!ownerToken,
+        ownerTokenPrefix: ownerToken?.substring(0, 10),
+        allHeaders: Object.keys(req.headers).filter(h => h.toLowerCase().includes('auth') || h.toLowerCase().includes('owner') || h.toLowerCase().includes('token')),
+    });
     const mediaAsset = await prisma_js_1.default.mediaAsset.findUnique({
-        where: { id: req.params.id },
+        where: { id },
+        include: { event: { select: { id: true, ownerId: true, ownerAccessToken: true } } },
     });
     if (!mediaAsset) {
         throw new errorHandler_js_1.AppError('Media asset not found', 404);
+    }
+    // Verify authentication
+    let isAuthorized = false;
+    if (ownerToken) {
+        // If owner token (access token from event-owner portal), verify it matches this event
+        if (mediaAsset.event.ownerAccessToken === ownerToken) {
+            isAuthorized = true;
+            console.log('[Media Download] Authorized via owner access token');
+        }
+        else {
+            console.log('[Media Download] Owner access token mismatch');
+            throw new errorHandler_js_1.AppError('Unauthorized', 401);
+        }
+    }
+    else if (authHeader && authHeader.startsWith('Bearer ')) {
+        // Verify token - could be admin or owner JWT token
+        try {
+            const token = authHeader.replace('Bearer ', '');
+            const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+            const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+            console.log('[Media Download] JWT decoded:', { ownerId: decoded.ownerId, adminId: decoded.adminId });
+            // Check if it's an owner JWT token
+            if (decoded.ownerId) {
+                // Owner JWT token - verify they own this event
+                if (mediaAsset.event.ownerId === decoded.ownerId) {
+                    isAuthorized = true;
+                    console.log('[Media Download] Authorized via owner JWT token');
+                }
+                else {
+                    console.log('[Media Download] Owner JWT token - ownerId mismatch. Event owner:', mediaAsset.event.ownerId, 'Token owner:', decoded.ownerId);
+                    throw new errorHandler_js_1.AppError('Unauthorized - You do not have access to this event', 401);
+                }
+            }
+            else if (decoded.adminId) {
+                // Admin token - allow access (no additional check needed)
+                isAuthorized = true;
+                console.log('[Media Download] Authorized via admin JWT token');
+            }
+            else {
+                console.log('[Media Download] JWT token missing ownerId or adminId');
+                throw new errorHandler_js_1.AppError('Unauthorized - Invalid token', 401);
+            }
+        }
+        catch (error) {
+            console.error('[Media Download] JWT verification error:', error.message);
+            if (error.message?.includes('Unauthorized')) {
+                throw error;
+            }
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+                throw new errorHandler_js_1.AppError('Unauthorized - Invalid or expired token', 401);
+            }
+            throw new errorHandler_js_1.AppError('Unauthorized', 401);
+        }
+    }
+    else {
+        console.log('[Media Download] No authentication provided');
+        throw new errorHandler_js_1.AppError('Unauthorized', 401);
+    }
+    if (!isAuthorized) {
+        throw new errorHandler_js_1.AppError('Unauthorized', 401);
     }
     // Check if filePath is a Supabase URL
     if (mediaAsset.filePath.startsWith('http://') || mediaAsset.filePath.startsWith('https://')) {
@@ -139,38 +218,89 @@ router.get('/event/:eventId/download-all', (0, errorHandler_js_1.asyncHandler)(a
     const { eventId } = req.params;
     // Support both admin token and owner token
     const authHeader = req.headers.authorization;
-    const ownerToken = req.headers['x-owner-token'];
+    // Check both lowercase and capitalized header names
+    const ownerToken = (req.headers['x-owner-token'] || req.headers['X-Owner-Token']);
+    console.log('[Media Download All] Request for event:', eventId);
+    console.log('[Media Download All] Headers received:', {
+        hasAuthHeader: !!authHeader,
+        authHeaderPrefix: authHeader?.substring(0, 20),
+        hasOwnerToken: !!ownerToken,
+        ownerTokenPrefix: ownerToken?.substring(0, 10),
+        allHeaders: Object.keys(req.headers).filter(h => h.toLowerCase().includes('auth') || h.toLowerCase().includes('owner') || h.toLowerCase().includes('token')),
+    });
     let event;
     if (ownerToken) {
-        // If owner token, verify it matches this event
+        // If owner token (access token from event-owner portal), verify it matches this event
         event = await prisma_js_1.default.event.findFirst({
             where: { id: eventId, ownerAccessToken: ownerToken },
         });
         if (!event) {
+            console.log('[Media Download All] Owner access token mismatch for event:', eventId);
             throw new errorHandler_js_1.AppError('Unauthorized', 401);
         }
+        console.log('[Media Download All] Authorized via owner access token');
     }
     else if (authHeader && authHeader.startsWith('Bearer ')) {
-        // Verify admin token using middleware pattern
-        const jwt = await import('jsonwebtoken');
+        // Verify token - could be admin or owner JWT token
         try {
             const token = authHeader.replace('Bearer ', '');
             const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
-            jwt.verify(token, jwtSecret);
+            console.log('[Media Download All] Attempting JWT verification...');
+            const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+            console.log('[Media Download All] JWT decoded:', { ownerId: decoded.ownerId, adminId: decoded.adminId });
+            // Check if it's an owner JWT token
+            if (decoded.ownerId) {
+                // Owner JWT token - verify they own this event
+                event = await prisma_js_1.default.event.findFirst({
+                    where: { id: eventId, ownerId: decoded.ownerId },
+                });
+                if (!event) {
+                    console.log('[Media Download All] Owner JWT - ownerId mismatch. Event:', eventId, 'Token owner:', decoded.ownerId);
+                    throw new errorHandler_js_1.AppError('Unauthorized - You do not have access to this event', 401);
+                }
+                console.log('[Media Download All] Authorized via owner JWT token');
+            }
+            else if (decoded.adminId) {
+                // Admin token - allow access to any event
+                event = await prisma_js_1.default.event.findUnique({ where: { id: eventId } });
+                if (!event) {
+                    throw new errorHandler_js_1.AppError('Event not found', 404);
+                }
+                console.log('[Media Download All] Authorized via admin JWT token');
+            }
+            else {
+                console.log('[Media Download All] JWT token missing ownerId or adminId');
+                throw new errorHandler_js_1.AppError('Unauthorized - Invalid token', 401);
+            }
         }
-        catch {
+        catch (error) {
+            console.error('[Media Download All] JWT verification error:', error.message);
+            console.error('[Media Download All] Error name:', error.name);
+            if (error.message?.includes('Unauthorized')) {
+                throw error;
+            }
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+                throw new errorHandler_js_1.AppError('Unauthorized - Invalid or expired token', 401);
+            }
             throw new errorHandler_js_1.AppError('Unauthorized', 401);
-        }
-        event = await prisma_js_1.default.event.findUnique({ where: { id: eventId } });
-        if (!event) {
-            throw new errorHandler_js_1.AppError('Event not found', 404);
         }
     }
     else {
+        console.log('[Media Download All] No authentication provided');
         throw new errorHandler_js_1.AppError('Unauthorized', 401);
     }
+    // Get type filter from query parameter
+    const typeFilter = req.query.type;
+    const whereClause = {
+        eventId,
+        captureMode: { not: 'BOOTH' }, // Exclude booth mode photos from download-all
+    };
+    // Filter by type if specified
+    if (typeFilter && ['VIDEO', 'PHOTO', 'AUDIO'].includes(typeFilter)) {
+        whereClause.type = typeFilter;
+    }
     const mediaAssets = await prisma_js_1.default.mediaAsset.findMany({
-        where: { eventId },
+        where: whereClause,
     });
     if (mediaAssets.length === 0) {
         throw new errorHandler_js_1.AppError('No media assets found for this event', 404);
