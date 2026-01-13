@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { publicApi, checkInApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import QrScanner from 'qr-scanner';
 
 type CheckInState = 'idle' | 'checking' | 'success' | 'error';
 type InputMode = 'scan' | 'manual';
@@ -28,9 +29,7 @@ export default function CheckInPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [hasCamera, setHasCamera] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const qrScannerRef = useRef<QrScanner | null>(null);
 
   useEffect(() => {
     fetchEvent();
@@ -64,98 +63,75 @@ export default function CheckInPage() {
   };
 
   const startScanner = async () => {
+    if (!videoRef.current) return;
+    
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      });
-      streamRef.current = stream;
+      // Use qr-scanner library
+      const qrScanner = new QrScanner(
+        videoRef.current,
+        (result) => {
+          console.log('[QR Scanner] QR code detected:', result.data);
+          handleQRResult(result.data);
+        },
+        {
+          preferredCamera: 'environment',
+          maxScansPerSecond: 5,
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+        }
+      );
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      
+      await qrScanner.start();
+      qrScannerRef.current = qrScanner;
       setScannerActive(true);
-      
-      // Start scanning for QR codes
-      scanIntervalRef.current = setInterval(() => {
-        scanQRCode();
-      }, 250);
-    } catch (err) {
-      console.error('Camera error:', err);
+      console.log('[QR Scanner] Scanner started successfully');
+    } catch (err: any) {
+      console.error('[QR Scanner] Camera error:', err);
+      toast.error('Failed to start camera. Please check permissions.');
       setHasCamera(false);
       setInputMode('manual');
     }
   };
 
   const stopScanner = () => {
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+    if (qrScannerRef.current) {
+      qrScannerRef.current.stop();
+      qrScannerRef.current.destroy();
+      qrScannerRef.current = null;
     }
     setScannerActive(false);
-  };
-
-  const scanQRCode = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
-    // Use BarcodeDetector API if available
-    if ('BarcodeDetector' in window) {
-      try {
-        // @ts-ignore
-        const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-        const barcodes = await barcodeDetector.detect(imageData);
-        
-        if (barcodes.length > 0) {
-          const qrData = barcodes[0].rawValue;
-          handleQRResult(qrData);
-        }
-      } catch (err) {
-        // BarcodeDetector failed, continue scanning
-      }
-    }
+    console.log('[QR Scanner] Scanner stopped');
   };
 
   const handleQRResult = (data: string) => {
+    console.log('[Check-in] QR code result received:', data);
     stopScanner();
     
     try {
       // Try to parse as JSON (our QR format)
       const parsed = JSON.parse(data);
-      console.log('[Check-in] Parsed QR code:', parsed);
+      console.log('[Check-in] Parsed QR code JSON:', parsed);
       
       // Send the full JSON string as token so backend can parse it
       // This ensures backend gets all the data (code, token/rsvpId, eventId)
       if (parsed.token || parsed.code) {
+        console.log('[Check-in] Sending check-in request with:', { accessCode: parsed.code, token: JSON.stringify(parsed) });
         handleCheckIn(parsed.code, JSON.stringify(parsed));
       } else {
         // Fallback: send as-is
+        console.log('[Check-in] No token or code in parsed data, sending as-is');
         handleCheckIn(undefined, data);
       }
-    } catch {
+    } catch (parseError) {
       // Not JSON, might be just a token string or access code
-      console.log('[Check-in] QR code is not JSON:', data);
+      console.log('[Check-in] QR code is not JSON, raw data:', data);
       if (data.length === 6 && /^\d+$/.test(data)) {
         // Looks like an access code
+        console.log('[Check-in] Detected as access code');
         handleCheckIn(data, undefined);
       } else {
         // Might be a token/rsvpId
+        console.log('[Check-in] Sending as token');
         handleCheckIn(undefined, data);
       }
     }
@@ -218,29 +194,47 @@ export default function CheckInPage() {
   };
 
   const handleCheckIn = async (accessCode?: string, token?: string) => {
-    if (!eventId) return;
+    if (!eventId) {
+      console.error('[Check-in] No eventId available');
+      return;
+    }
     
+    console.log('[Check-in] Starting check-in request:', { eventId, accessCode, token, hasToken: !!token, hasCode: !!accessCode });
     setCheckInState('checking');
     setErrorMessage('');
 
     try {
-      const response = await checkInApi.checkIn(eventId, {
+      const requestData = {
         accessCode,
         token,
         method: token ? 'QR_SCAN' : 'MANUAL_CODE',
-      });
+        deviceInfo: navigator.userAgent,
+      };
+      
+      console.log('[Check-in] Sending request to backend:', requestData);
+      
+      const response = await checkInApi.checkIn(eventId, requestData);
+      
+      console.log('[Check-in] Backend response:', response.data);
 
       if (response.data.success) {
         setCheckInState('success');
         setGuestInfo(response.data.guest);
+        toast.success('Check-in successful!');
         // Vibrate on success (mobile)
         if (navigator.vibrate) {
           navigator.vibrate(200);
         }
+      } else {
+        throw new Error(response.data.error || 'Check-in failed');
       }
     } catch (err: any) {
+      console.error('[Check-in] Check-in error:', err);
+      console.error('[Check-in] Error response:', err.response?.data);
       setCheckInState('error');
-      setErrorMessage(err.response?.data?.error || 'Check-in failed');
+      const errorMessage = err.response?.data?.error || err.message || 'Check-in failed';
+      setErrorMessage(errorMessage);
+      toast.error(errorMessage);
       // Vibrate pattern on error (mobile)
       if (navigator.vibrate) {
         navigator.vibrate([100, 50, 100]);
@@ -400,7 +394,6 @@ export default function CheckInPage() {
                       )}
                     </div>
                   </div>
-                  <canvas ref={canvasRef} className="hidden" />
                 </div>
                 <p className="text-center text-surface-400 text-sm sm:text-base">
                   Position the QR code within the frame
