@@ -32,6 +32,7 @@ interface EventTotal {
   pendingAmount: number;
   availableBalance: number;
   payoutCount: number;
+  currency?: string;
 }
 
 interface OverallTotals {
@@ -183,7 +184,7 @@ export default function OwnerPayoutsPage() {
                     const eventTotal = eventTotals.find((e) => e.eventId === event.id);
                     return (
                       <option key={event.id} value={event.id}>
-                        {event.name} {eventTotal && `(${eventTotal.currency || 'USD'} ${eventTotal.availableBalance.toFixed(2)} available)`}
+                        {event.name} {eventTotal && `(${eventTotal.availableBalance.toFixed(2)} available)`}
                       </option>
                     );
                   })}
