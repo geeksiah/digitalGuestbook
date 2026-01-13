@@ -498,7 +498,7 @@ export default function PayoutsPage() {
                 onClick={() => {
                   setShowProcessModal(false);
                   setSelectedPayout(null);
-                  setProcessForm({ transactionRef: '', notes: '' });
+                  setProcessForm({ status: 'PROCESSING', transactionRef: '', notes: '' });
                 }}
                 className="btn-secondary flex-1"
               >
