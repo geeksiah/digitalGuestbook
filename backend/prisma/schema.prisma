@@ -1,14 +1,21 @@
-// Digital Event Platform - Complete Prisma Schema
-// DROP-IN REPLACEMENT for backend/prisma/schema.prisma
-// Includes: LIVE_LANDING and EVENT_ENDED template types
+// Digital Event Platform - Prisma Schema
+// Following SRS: Event Phases, RSVP with Approval Gating, Check-In, Guestbook
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"  // Change to "sqlite" for local dev if needed
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  // For Supabase on Render.com (IPv4-only platforms):
+  // DATABASE_URL: Use Session Pooler (for app queries) - IPv4 compatible, supports prepared statements
+  //   Format: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
+  // DIRECT_URL: Use Session Pooler (for migrations/schema operations) - IPv4 compatible, supports DDL
+  //   Format: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?pgbouncer=true
+  // Note: Use Session Pooler (port 5432) NOT Transaction Pooler (port 6543) for schema operations
+  // Note: Direct Connection (db.*.supabase.co) requires IPv6 and doesn't work on Render.com
 }
 
 // ============================================
@@ -24,35 +31,42 @@ model Admin {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Relations
   auditLogs AuditLog[]
+  passwordResetRequests PasswordResetRequest[]
 }
 
 // ============================================
-// OWNER MANAGEMENT
+// OWNER/CLIENT ACCOUNTS
 // ============================================
 
 model Owner {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  company   String?
-  
-  // Authentication
-  passwordHash String?
-  
-  // Status
-  isActive  Boolean  @default(true)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String? // Optional for backward compatibility - admin-created owners don't need passwords
+  name         String
+  phone        String?
+  company      String?
+
+  // Account Status
+  isActive Boolean @default(true)
+
+  // Email verification
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
 
   // Relations
   events Event[]
   wallet OwnerWallet?
-  payoutRequests PayoutRequest[]
+  passwordResetRequests PasswordResetRequest[]
 }
 
+// Owner Wallet Configuration (for payouts across all events)
 model OwnerWallet {
   id      String @id @default(uuid())
   ownerId String @unique
@@ -61,23 +75,23 @@ model OwnerWallet {
   bankName      String?
   accountName   String?
   accountNumber String?
-  routingNumber String?
-  swiftCode     String?
+  routingNumber String? // For US banks
+  swiftCode     String? // For international
 
   // Mobile Money (Africa)
-  mobileProvider String?
+  mobileProvider String? // mpesa | mtn | airtel
   mobileNumber   String?
 
   // Digital Wallets
   paypalEmail        String?
-  stripeAccountId    String?
+  stripeAccountId    String? // Stripe Connect account
   paystackSubaccount String?
 
   // Payout Preferences
-  preferredMethod     String  @default("bank")
+  preferredMethod     String  @default("bank") // bank | mobile | paypal | stripe | paystack
   currency            String  @default("USD")
   autoPayoutEnabled   Boolean @default(false)
-  autoPayoutThreshold Float   @default(100)
+  autoPayoutThreshold Float   @default(100) // Minimum balance to trigger auto-payout
 
   // Verification
   isVerified Boolean   @default(false)
@@ -86,7 +100,29 @@ model OwnerWallet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
   owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+// Password Reset Requests (pending admin approval)
+model PasswordResetRequest {
+  id        String   @id @default(uuid())
+  ownerId   String
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reason    String?  // Owner's reason for requesting reset
+  newPasswordHash String? // Set when admin approves (temporary until owner sets new password)
+  approvedBy String? // Admin ID who approved/rejected
+  rejectedReason String? // Reason for rejection
+  expiresAt DateTime? // Expiration for approved requests
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  admin Admin? @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([status])
 }
 
 // ============================================
@@ -94,43 +130,41 @@ model OwnerWallet {
 // ============================================
 
 model Event {
-  id          String   @id @default(uuid())
-  slug        String   @unique
+  id          String    @id @default(uuid())
+  slug        String    @unique // URL-friendly identifier
   name        String
   description String?
   date        DateTime
   endDate     DateTime?
-  timezone    String   @default("UTC")
+  timezone    String    @default("UTC")
   venue       String?
-  
-  // Owner
-  ownerId String?
-  
-  // Couple Contact Information
-  coupleName1  String?
-  coupleName2  String?
-  coupleEmail  String?
-  couplePhone  String?
-  
+
+  // Event Owner Contact Information
+  ownerName        String?
+  ownerEmail       String?
+  ownerPhone       String?
+  organizationName String?
+
   // Event Styling
-  primaryColor   String @default("#FFD700")
-  secondaryColor String @default("#1a1a2e")
-  accentColor    String @default("#ffffff")
-  
-  // Event Phase Control
-  phase         String  @default("PRE_EVENT") // PRE_EVENT | LIVE | POST_EVENT
-  phaseOverride Boolean @default(false)
-  
-  // Service Flags
+  primaryColor   String @default("#FFD700") // Gold
+  secondaryColor String @default("#1a1a2e") // Navy
+  accentColor    String @default("#ffffff") // White
+
+  // Event Phase Control (Critical per SRS Section 3)
+  // Values: PRE_EVENT | LIVE | POST_EVENT
+  phase         String  @default("PRE_EVENT")
+  phaseOverride Boolean @default(false) // Manual override flag
+
+  // Service Flags (per Build Plan - modular services)
   invitationEnabled Boolean @default(true)
   rsvpEnabled       Boolean @default(true)
   guestbookEnabled  Boolean @default(true)
   checkInEnabled    Boolean @default(true)
-  
-  // Invitation-Only Flag
+
+  // Invitation-Only Flag (Critical per SRS Section 4.3)
   invitationOnly Boolean @default(false)
-  
-  // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
+
+  // Template Assignments
   invitationTemplateId     String?
   rsvpTemplateId           String?
   guestbookTemplateId      String?
@@ -138,92 +172,259 @@ model Event {
   guestbookAudioTemplateId String?
   guestbookPhotoTemplateId String?
   boothTemplateId          String?
-  boothVideoTemplateId     String?
-  boothAudioTemplateId     String?
-  boothPhotoTemplateId     String?
   thankYouTemplateId       String?
-  liveLandingTemplateId    String?  // ⭐ NEW - LIVE phase landing page
-  eventEndedTemplateId     String?  // ⭐ NEW - POST_EVENT landing page
-  
-  // Couple Portal Access
-  coupleAccessToken String @unique @default(uuid())
-  
+liveLandingTemplateId    String?  // Landing page during LIVE phase
+  eventEndedTemplateId     String?  // Landing page after POST_EVENT
+
+  // Event Owner Portal Access
+  ownerAccessToken String @unique @default(uuid())
+
   // Guestbook Settings
-  maxRecordingDuration Int @default(120)
+  maxRecordingDuration Int @default(120) // seconds (30-120 per SRS)
   minRecordingDuration Int @default(30)
   maxPhotosPerGuest    Int @default(5)
-  
-  // Reel Generation
+
+  // PhotoBooth settings
+  maxPhotosPerBoothSession Int @default(10)
+  boothShutterCountdown    Int @default(3)
+
+  // Reel Generation (Admin toggle per event)
   reelEnabled Boolean @default(false)
-  
-  // Notification Settings
+
+  // Notification Settings per Event
   notifyOnRsvp          Boolean @default(true)
   notifyOnCheckIn       Boolean @default(false)
   notifyOnGuestbook     Boolean @default(false)
   emailNotifications    Boolean @default(true)
   smsNotifications      Boolean @default(false)
   whatsappNotifications Boolean @default(false)
-  
+
+  // RSVP/Ticketing Mode
+  rsvpMode        String  @default("free") // free | paid
+  requireApproval Boolean @default(true) // Auto-approve if false
+
+  // Ticketing Settings (only used when rsvpMode = "paid")
+  ticketingEnabled     Boolean @default(false)
+  platformFeePercent   Float   @default(5.0) // Platform fee percentage
+  processingFeePercent Float   @default(2.9) // Payment processing fee %
+  processingFeeFixed   Float   @default(0.30) // Fixed processing fee per txn
+
+  // Booth/Kiosk Template IDs (for video/audio/photo pages)
+  boothVideoTemplateId String?
+  boothAudioTemplateId String?
+  boothPhotoTemplateId String?
+
   // Metadata
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  // Relations - ⭐ INCLUDES NEW TEMPLATE RELATIONS
-  owner                  Owner?     @relation(fields: [ownerId], references: [id])
-  invitationTemplate     Template?  @relation("InvitationTemplate", fields: [invitationTemplateId], references: [id])
-  rsvpTemplate           Template?  @relation("RsvpTemplate", fields: [rsvpTemplateId], references: [id])
-  guestbookTemplate      Template?  @relation("GuestbookTemplate", fields: [guestbookTemplateId], references: [id])
-  guestbookVideoTemplate Template?  @relation("GuestbookVideoTemplate", fields: [guestbookVideoTemplateId], references: [id])
-  guestbookAudioTemplate Template?  @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
-  guestbookPhotoTemplate Template?  @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
-  boothTemplate          Template?  @relation("BoothTemplate", fields: [boothTemplateId], references: [id])
-  boothVideoTemplate     Template?  @relation("BoothVideoTemplate", fields: [boothVideoTemplateId], references: [id])
-  boothAudioTemplate     Template?  @relation("BoothAudioTemplate", fields: [boothAudioTemplateId], references: [id])
-  boothPhotoTemplate     Template?  @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
-  thankYouTemplate       Template?  @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
-  liveLandingTemplate    Template?  @relation("LiveLandingTemplate", fields: [liveLandingTemplateId], references: [id])  // ⭐ NEW
-  eventEndedTemplate     Template?  @relation("EventEndedTemplate", fields: [eventEndedTemplateId], references: [id])   // ⭐ NEW
-  
-  rsvps       RSVP[]
-  invitations Invitation[]
-  checkIns    CheckIn[]
-  mediaAssets MediaAsset[]
-  broadcasts  Broadcast[]
-  auditLogs   AuditLog[]
-  payoutWallet PayoutWallet?
-  transactions Transaction[]
+  // Relations
+  invitationTemplate     Template? @relation("InvitationTemplate", fields: [invitationTemplateId], references: [id])
+  rsvpTemplate           Template? @relation("RsvpTemplate", fields: [rsvpTemplateId], references: [id])
+  guestbookTemplate      Template? @relation("GuestbookTemplate", fields: [guestbookTemplateId], references: [id])
+  guestbookVideoTemplate Template? @relation("GuestbookVideoTemplate", fields: [guestbookVideoTemplateId], references: [id])
+  guestbookAudioTemplate Template? @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
+  guestbookPhotoTemplate Template? @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
+  boothTemplate          Template? @relation("BoothTemplate", fields: [boothTemplateId], references: [id])
+  boothVideoTemplate     Template? @relation("BoothVideoTemplate", fields: [boothVideoTemplateId], references: [id])
+  boothAudioTemplate     Template? @relation("BoothAudioTemplate", fields: [boothAudioTemplateId], references: [id])
+  boothPhotoTemplate     Template? @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
+  thankYouTemplate       Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
+  liveLandingTemplate    Template? @relation("LiveLandingTemplate", fields: [liveLandingTemplateId], references: [id])
+  eventEndedTemplate     Template? @relation("EventEndedTemplate", fields: [eventEndedTemplateId], references: [id])
+
+  rsvps                RSVP[]
+  invitations          Invitation[]
+  checkIns             CheckIn[]
+  mediaAssets          MediaAsset[]
+  broadcasts           Broadcast[]
+  auditLogs            AuditLog[]
+  formFields           EventFormField[]
+  ticketTypes          TicketType[]
+  promoCodes           PromoCode[]
+  eventPaymentGateways EventPaymentGateway[]
+  payoutWallet         PayoutWallet?
+  transactions         Transaction[]
+  payoutRequests       PayoutRequest[]
+  reelJobs             ReelJob[]
+  boothDownloadTokens  BoothDownloadToken[]
+  Owner                Owner?                @relation(fields: [ownerId], references: [id])
+  ownerId              String?
 }
 
 // ============================================
-// TEMPLATE SYSTEM - ⭐ INCLUDES NEW TYPES
+// REEL GENERATION
+// ============================================
+
+model ReelJob {
+  id      String @id @default(uuid())
+  eventId String
+
+  // Job Status
+  status   String @default("pending") // pending | processing | completed | failed
+  progress Int    @default(0) // 0-100 percentage
+
+  // Configuration
+  maxDuration Int @default(300) // Max reel duration in seconds
+
+  // Output
+  outputPath String? // Path to generated reel
+  outputSize Int? // File size in bytes
+  duration   Int? // Actual duration in seconds
+
+  // Error Handling
+  errorMessage String?
+  retryCount   Int     @default(0)
+
+  // Metadata
+  videoCount  Int       @default(0) // Number of videos included
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// EVENT OWNER PAYOUT SYSTEM
+// ============================================
+
+// Payout Wallet Configuration per Event
+model PayoutWallet {
+  id      String @id @default(uuid())
+  eventId String @unique
+
+  // Bank Account Details
+  bankName      String?
+  accountName   String?
+  accountNumber String?
+  routingNumber String? // For US banks
+  swiftCode     String? // For international
+
+  // Mobile Money (Africa)
+  mobileProvider String? // mpesa | mtn | airtel
+  mobileNumber   String?
+
+  // Digital Wallets
+  paypalEmail        String?
+  stripeAccountId    String? // Stripe Connect account
+  paystackSubaccount String?
+
+  // Payout Preferences
+  preferredMethod     String  @default("bank") // bank | mobile | paypal | stripe | paystack
+  currency            String  @default("USD")
+  autoPayoutEnabled   Boolean @default(false)
+  autoPayoutThreshold Float   @default(100) // Minimum balance to trigger auto-payout
+
+  // Verification
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Sales Transactions
+model Transaction {
+  id      String  @id @default(uuid())
+  eventId String
+  rsvpId  String?
+
+  // Transaction Type
+  type String // ticket_sale | refund | fee | payout
+
+  // Amount Details
+  grossAmount   Float // Total amount charged
+  platformFee   Float // Platform's cut
+  processingFee Float // Payment processor fee
+  netAmount     Float // Amount to event owner
+  currency      String @default("USD")
+
+  // Payment Info
+  paymentMethod String? // stripe | paystack | paypal | cash
+  paymentRef    String? // External payment reference
+
+  // Ticket Info
+  ticketTypeName String?
+  ticketQuantity Int     @default(1)
+  buyerName      String?
+  buyerEmail     String?
+
+  // Status
+  status String @default("pending") // pending | completed | refunded | failed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Payout Requests from Event Owners
+model PayoutRequest {
+  id      String @id @default(uuid())
+  eventId String
+
+  // Request Details
+  requestedAmount Float
+  currency        String @default("USD")
+  payoutMethod    String // bank | mobile | paypal | stripe | paystack
+
+  // Status
+  status String @default("PENDING") // PENDING | PROCESSING | FULFILLED | DELAYED | REJECTED
+
+  // Processing Info
+  processedAt     DateTime?
+  processedBy     String? // Admin ID
+  transactionRef  String? // External payout reference
+  rejectionReason String?
+
+  // Notes
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// TEMPLATE SYSTEM (Build Plan Increment 2)
 // ============================================
 
 model Template {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  
-  // Template Type - ⭐ NOW INCLUDES: LIVE_LANDING | EVENT_ENDED
-  // Full list: INVITATION | RSVP | GUESTBOOK | GUESTBOOK_VIDEO | GUESTBOOK_AUDIO | 
-  //            GUESTBOOK_PHOTO | BOOTH | BOOTH_VIDEO | BOOTH_AUDIO | BOOTH_PHOTO | 
-  //            THANK_YOU | LIVE_LANDING | EVENT_ENDED
+
+  // Template Type: INVITATION | RSVP | GUESTBOOK | GUESTBOOK_VIDEO | GUESTBOOK_AUDIO | GUESTBOOK_PHOTO | THANK_YOU | BOOTH | BOOTH_VIDEO | BOOTH_AUDIO | BOOTH_PHOTO
   type String
-  
-  // Template Content
+
+  // Template Content (HTML/CSS/JS bundle)
   htmlContent String
   cssContent  String?
   jsContent   String?
-  
-  // Template Variables (JSON schema)
-  variables String?
-  
+
+  // Template Assets (for ZIP-based templates)
+  assetsPath    String? // Directory path where template assets are stored (for ZIP uploads)
+  thumbnailPath String? // Thumbnail/preview image path
+
+  // Template Variables (JSON schema for injection)
+  variables String? // JSON string of available variables
+
   // Metadata
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations - ⭐ INCLUDES NEW TEMPLATE RELATIONS
+  // Relations - Events using this template
   eventsAsInvitation     Event[] @relation("InvitationTemplate")
   eventsAsRsvp           Event[] @relation("RsvpTemplate")
   eventsAsGuestbook      Event[] @relation("GuestbookTemplate")
@@ -235,268 +436,540 @@ model Template {
   eventsAsBoothAudio     Event[] @relation("BoothAudioTemplate")
   eventsAsBoothPhoto     Event[] @relation("BoothPhotoTemplate")
   eventsAsThankYou       Event[] @relation("ThankYouTemplate")
-  eventsAsLiveLanding    Event[] @relation("LiveLandingTemplate")  // ⭐ NEW
-  eventsAsEventEnded     Event[] @relation("EventEndedTemplate")   // ⭐ NEW
+  eventsAsLiveLanding    Event[] @relation("LiveLandingTemplate")
+  eventsAsEventEnded     Event[] @relation("EventEndedTemplate")
 }
 
 // ============================================
-// RSVP SYSTEM
+// RSVP SYSTEM (SRS Sections 4-7)
 // ============================================
 
 model RSVP {
-  id        String   @id @default(uuid())
-  eventId   String
-  
-  // Guest Information
+  id      String @id @default(uuid())
+  eventId String
+
+  // Guest Information (SRS Section 4.2)
   primaryName   String
   secondaryName String?
   email         String?
   phone         String?
-  
-  // Response
-  attendance    String   @default("PENDING")
-  guestCount    Int      @default(1)
+
+  // Response (Yes / No / Maybe)
+  attendance     String  @default("PENDING") // YES | NO | MAYBE | PENDING
+  guestCount     Int     @default(1)
   mealPreference String?
   dietaryNotes   String?
-  note          String?
-  
-  // Custom form fields (JSON)
-  customFields String?
-  
-  // RSVP Status: PENDING | APPROVED | REJECTED
+  note           String?
+
+  // Custom Fields Data (JSON - flexible per-event fields)
+  customFields String? // JSON object with custom field responses
+
+  // RSVP Status (Critical - SRS Section 4.3)
+  // Values: PENDING | APPROVED | REJECTED
   status String @default("PENDING")
-  
-  // Submission channel
-  submissionChannel String?
-  
+
+  // Channel used for submission (for rejection notification)
+  submissionChannel String? // EMAIL | SMS | WHATSAPP | WEB
+
+  // Payment/Ticket Info (if event uses ticketing)
+  ticketType     String? // Ticket type purchased
+  ticketQuantity Int? // Number of tickets
+  amountPaid     Float? // Amount paid in cents
+  currency       String? // USD, NGN, etc.
+  paymentStatus  String? // PENDING | PAID | REFUNDED | FAILED
+  paymentMethod  String? // stripe | paystack | cash | free
+  paymentRef     String? // External payment reference
+  paymentDate    DateTime?
+
   // Timestamps
   submittedAt DateTime  @default(now())
   reviewedAt  DateTime?
-  reviewedBy  String?
-  
+  reviewedBy  String? // Admin ID who reviewed
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
   event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   invitation Invitation?
 }
 
 // ============================================
-// INVITATION PASS
+// PROMO CODES (SRS Section 7.3)
+// ============================================
+
+model PromoCode {
+  id          String  @id @default(uuid())
+  eventId     String
+  code        String // e.g., "SUMMER2024"
+  description String?
+
+  // Discount Configuration
+  discountType    String // PERCENT | FIXED
+  discountValue   Float // e.g., 10 for 10% or $10 off
+  minimumPurchase Float? // Minimum purchase amount to apply
+  maximumDiscount Float? // Maximum discount amount (for percentage)
+
+  // Applicability
+  ticketTypeIds String? // JSON array of ticket type IDs (null = all tickets)
+  usageLimit    Int? // Total number of times code can be used (null = unlimited)
+  usageCount    Int     @default(0)
+  maxPerUser    Int     @default(1) // Max times a single user can use
+
+  // Validity
+  validFrom  DateTime?
+  validUntil DateTime?
+  isActive   Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, code])
+  @@index([eventId, code])
+}
+
+// Custom RSVP/Ticket Fields per Event
+model EventFormField {
+  id      String @id @default(uuid())
+  eventId String
+
+  // Field Configuration
+  fieldName   String // Internal name (e.g., "company_name")
+  label       String // Display label (e.g., "Company Name")
+  type        String // text | email | phone | number | select | checkbox | radio | textarea | date
+  placeholder String?
+  helpText    String?
+
+  // Options for select/radio/checkbox (JSON array)
+  options String? // ["Option 1", "Option 2", "Option 3"]
+
+  // Validation
+  required  Boolean @default(false)
+  minLength Int?
+  maxLength Int?
+  pattern   String? // Regex pattern
+
+  // Display Order
+  sortOrder Int @default(0)
+
+  // Visibility
+  isActive           Boolean @default(true)
+  showOnConfirmation Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Ticket Types for Paid Events
+model TicketType {
+  id      String @id @default(uuid())
+  eventId String
+
+  name        String // "General Admission", "VIP", "Early Bird"
+  description String?
+  price       Float // Price in smallest currency unit (cents)
+  currency    String  @default("USD")
+
+  // Availability
+  quantityTotal Int @default(0) // 0 = unlimited
+  quantitySold  Int @default(0)
+  maxPerOrder   Int @default(10)
+
+  // Sales Window
+  saleStartDate DateTime?
+  saleEndDate   DateTime?
+
+  // Display
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// Payment Gateway Configuration per Event
+// System-wide Payment Gateway Configuration
+// Admin configures all available payment gateways here
+model PaymentGateway {
+  id          String  @id @default(uuid())
+  name        String // Display name (e.g., "Stripe Production", "Paystack Test")
+  gateway     String // stripe | paystack | flutterwave | paypal | mtn_momo | telecel_cash | airteltigo_cash | custom
+  description String? // Optional description
+
+  isActive Boolean @default(true) // Enable/disable this gateway
+  isLive   Boolean @default(false) // Test vs Live mode
+
+  // Stripe Configuration
+  stripePublicKey     String?
+  stripeSecretKey     String?
+  stripeWebhookSecret String?
+
+  // Paystack Configuration
+  paystackPublicKey String?
+  paystackSecretKey String?
+
+  // Flutterwave Configuration
+  flutterwavePublicKey String?
+  flutterwaveSecretKey String?
+
+  // MTN MoMo Configuration
+  mtnMomoApiKey          String?
+  mtnMomoApiSecret       String?
+  mtnMomoSubscriptionKey String?
+  mtnMomoEnvironment     String? // sandbox | production
+
+  // Telecel Cash Configuration
+  telecelCashApiKey     String?
+  telecelCashApiSecret  String?
+  telecelCashMerchantId String?
+
+  // Airteltigo Cash Configuration
+  airteltigoCashApiKey     String?
+  airteltigoCashApiSecret  String?
+  airteltigoCashMerchantId String?
+
+  // Custom Gateway Configuration
+  customGatewayName      String?
+  customGatewayApiUrl    String?
+  customGatewayApiKey    String?
+  customGatewayApiSecret String?
+  customGatewayConfig    String? // JSON string for additional config
+
+  // Common Settings
+  currency   String  @default("USD")
+  successUrl String?
+  cancelUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  events EventPaymentGateway[]
+}
+
+// Junction table: Which payment gateways are enabled for each event
+model EventPaymentGateway {
+  id               String @id @default(uuid())
+  eventId          String
+  paymentGatewayId String
+
+  // Event-specific settings (can override gateway defaults)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0) // Order of display in payment options
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentGateway PaymentGateway @relation(fields: [paymentGatewayId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, paymentGatewayId])
+  @@index([eventId])
+  @@index([paymentGatewayId])
+}
+
+// ============================================
+// INVITATION PASS (SRS Section 6)
 // ============================================
 
 model Invitation {
   id      String @id @default(uuid())
   eventId String
   rsvpId  String @unique
-  
-  // Credentials
-  token      String @unique @default(uuid())
-  qrCodeData String
-  accessCode String @unique
-  
-  // Guest Info
+
+  // Credentials (SRS Section 6.1)
+  token      String @unique @default(uuid()) // Unique attendee token
+  qrCodeData String // Base64 encoded QR code
+  accessCode String @unique // 6-digit numeric code
+
+  // Guest Info (denormalized for PDF generation)
   guestName  String
-  guestCount Int @default(1)
-  
+  guestCount Int    @default(1)
+
   // Delivery Status
-  emailSent    Boolean  @default(false)
-  smsSent      Boolean  @default(false)
-  whatsappSent Boolean  @default(false)
-  pdfGenerated Boolean  @default(false)
+  emailSent    Boolean @default(false)
+  smsSent      Boolean @default(false)
+  whatsappSent Boolean @default(false)
+  pdfGenerated Boolean @default(false)
   pdfPath      String?
-  
+
+  // Check-in Status
+  isCheckedIn Boolean   @default(false)
+  checkedInAt DateTime?
+
+  // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  rsvp    RSVP     @relation(fields: [rsvpId], references: [id], onDelete: Cascade)
-  checkIn CheckIn?
+  // Relations
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rsvp     RSVP      @relation(fields: [rsvpId], references: [id], onDelete: Cascade)
+  checkIns CheckIn[]
 }
 
 // ============================================
-// CHECK-IN SYSTEM
+// BOOTH DOWNLOAD TOKENS
+// ============================================
+
+model BoothDownloadToken {
+  id        String   @id @default(uuid())
+  mediaId   String?  @unique // Optional: for backward compatibility with single photo downloads
+  sessionId String?  // Session identifier (deviceId + timestamp window) for multi-photo downloads
+  eventId   String   // Event ID for session-based queries
+  deviceId  String?  // Device ID for session grouping
+  token     String   @unique // Secure download token
+  expiresAt DateTime // Token expiration (24 hours)
+  used      Boolean  @default(false) // Track if token has been used
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  // Relations
+  media MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  event Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([mediaId])
+  @@index([sessionId])
+  @@index([eventId, deviceId, createdAt])
+  @@index([expiresAt])
+}
+
+// ============================================
+// CHECK-IN SYSTEM (SRS Section 8)
 // ============================================
 
 model CheckIn {
-  id           String   @id @default(uuid())
+  id           String @id @default(uuid())
   eventId      String
-  invitationId String   @unique
-  
-  // Check-in details
-  checkedInAt DateTime @default(now())
-  checkedInBy String?
-  notes       String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  invitationId String
 
+  // Check-in Method (SRS Section 8.1)
+  method String // QR_SCAN | MANUAL_CODE
+
+  // Validation Result
+  success       Boolean
+  failureReason String? // INVALID | ALREADY_USED | NOT_APPROVED
+
+  // Device Info
+  deviceInfo String?
+  ipAddress  String?
+
+  // Timestamp
+  checkedInAt DateTime @default(now())
+
+  // Relations
   event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
 }
 
 // ============================================
-// GUESTBOOK / MEDIA
+// GUESTBOOK & MEDIA (SRS Section 9-10)
 // ============================================
 
 model MediaAsset {
   id      String @id @default(uuid())
   eventId String
-  
-  // Media details
-  type        String // video | audio | photo
-  filename    String
-  filepath    String
-  contentType String
-  size        Int
-  duration    Int?
-  
-  // Guest info
-  guestName String?
-  guestNote String?
-  
-  // Status
-  isProcessed Boolean @default(false)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-}
+  // Media Type: VIDEO | AUDIO | PHOTO
+  type String
 
-// ============================================
-// TICKETING & PAYMENTS
-// ============================================
+  // Guest Info (optional - anonymous allowed)
+  guestName  String?
+  guestEmail String?
 
-model Transaction {
-  id      String @id @default(uuid())
-  eventId String
-  
-  // Payment details
-  amount          Float
-  currency        String @default("USD")
-  paymentMethod   String
-  paymentGateway  String
-  gatewayRef      String?
-  
-  // Status
-  status String @default("PENDING") // PENDING | SUCCESS | FAILED | REFUNDED
-  
-  // Customer info
-  customerName  String
-  customerEmail String
-  customerPhone String?
-  
+  // File Information
+  fileName String
+  filePath String
+  fileSize Int // bytes
+  mimeType String
+  duration Int? // seconds (for video/audio)
+
+  // Processing Status
+  status        String  @default("UPLOADED") // UPLOADED | PROCESSING | READY | FAILED
+  thumbnailPath String?
+
+  // Access Mode (SRS Section 9.1)
+  captureMode String @default("PERSONAL") // PERSONAL | BOOTH
+
+  // Device fingerprint (for upload limits)
+  deviceId String?
+
   // Metadata
-  metadata String? // JSON
-  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-}
-
-model PayoutWallet {
-  id      String @id @default(uuid())
-  eventId String @unique
-  
-  // Wallet details (same as OwnerWallet structure)
-  bankName           String?
-  accountName        String?
-  accountNumber      String?
-  routingNumber      String?
-  swiftCode          String?
-  mobileProvider     String?
-  mobileNumber       String?
-  paypalEmail        String?
-  stripeAccountId    String?
-  paystackSubaccount String?
-  
-  // Settings
-  preferredMethod String @default("bank")
-  currency        String @default("USD")
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-}
-
-model PayoutRequest {
-  id      String @id @default(uuid())
-  ownerId String
-  
-  // Payout details
-  amount        Float
-  currency      String @default("USD")
-  method        String
-  accountDetails String // JSON
-  
-  // Status
-  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | PROCESSED
-  processedAt DateTime?
-  processedBy String?
-  txnReference String?
-  notes        String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  downloadToken BoothDownloadToken?
 }
 
 // ============================================
-// NOTIFICATIONS
+// BROADCAST MESSAGING (SRS Section 11)
 // ============================================
 
 model Broadcast {
   id      String @id @default(uuid())
   eventId String
-  
-  // Message details
-  subject String
+
+  // Message Content
+  subject String?
   message String
-  
-  // Channels
-  sendEmail    Boolean @default(false)
-  sendSms      Boolean @default(false)
-  sendWhatsapp Boolean @default(false)
-  
-  // Recipients
-  recipientFilter String? // JSON: { status: "APPROVED", ... }
-  
-  // Status
-  status     String    @default("PENDING") // PENDING | SENT | FAILED
-  sentAt     DateTime?
-  sentCount  Int       @default(0)
-  failCount  Int       @default(0)
-  
+
+  // Target Audience: ALL_RSVPS | APPROVED_ONLY
+  audience String
+
+  // Channels Used
+  channels String // JSON array: ["EMAIL", "SMS", "WHATSAPP"]
+
+  // Delivery Stats
+  totalRecipients Int @default(0)
+  deliveredCount  Int @default(0)
+  failedCount     Int @default(0)
+
+  // Status: DRAFT | SENDING | SENT | FAILED
+  status String    @default("DRAFT")
+  sentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 // ============================================
-// AUDIT LOGGING
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSettings {
+  id String @id @default("default")
+
+  // General Settings
+  siteName String  @default("Digital Event Platform")
+  siteUrl  String?
+  logoUrl  String?
+
+  // Feature Toggles
+  emailEnabled    Boolean @default(false)
+  smsEnabled      Boolean @default(false)
+  whatsappEnabled Boolean @default(false)
+
+  // Default providers (reference by id)
+  defaultEmailProviderId    String?
+  defaultSmsProviderId      String?
+  defaultWhatsappProviderId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Email Provider (SMTP, SendGrid, Mailgun, etc.)
+model EmailProvider {
+  id        String  @id @default(uuid())
+  name      String // Display name
+  provider  String // smtp | sendgrid | mailgun | ses
+  isActive  Boolean @default(true)
+  isDefault Boolean @default(false)
+
+  // SMTP Settings
+  smtpHost   String?
+  smtpPort   Int?
+  smtpUser   String?
+  smtpPass   String?
+  smtpSecure Boolean @default(true)
+
+  // SendGrid / API-based
+  apiKey String?
+
+  // Common fields
+  fromEmail String?
+  fromName  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// SMS Provider (Twilio, Vonage, Africa's Talking, etc.)
+model SmsProvider {
+  id        String  @id @default(uuid())
+  name      String // Display name
+  provider  String // twilio | vonage | africastalking | termii | arkesel
+  isActive  Boolean @default(true)
+  isDefault Boolean @default(false)
+
+  // Twilio Settings
+  accountSid  String?
+  authToken   String?
+  phoneNumber String?
+
+  // API-based providers (Termii, Arkesel, Africa's Talking, etc.)
+  apiKey    String? // API key for Arkesel, Termii, Africa's Talking
+  apiSecret String? // API secret (for some providers)
+  senderId  String? // Sender ID / From number (required for Arkesel, Termii)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// WhatsApp Provider (Twilio, Meta Cloud API, etc.)
+model WhatsappProvider {
+  id        String  @id @default(uuid())
+  name      String // Display name
+  provider  String // twilio | meta
+  isActive  Boolean @default(true)
+  isDefault Boolean @default(false)
+
+  // Twilio WhatsApp Settings
+  accountSid  String?
+  authToken   String?
+  phoneNumber String?
+
+  // Meta Cloud API Settings
+  apiKey        String?
+  phoneNumberId String?
+  businessId    String?
+  accessToken   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// AUDIT LOG (Non-Functional - Auditability)
 // ============================================
 
 model AuditLog {
-  id      String @id @default(uuid())
+  id      String  @id @default(uuid())
   eventId String?
   adminId String?
-  
-  // Action details
-  action      String
-  entity      String
-  entityId    String?
-  oldValues   String? // JSON
-  newValues   String? // JSON
-  ipAddress   String?
-  userAgent   String?
-  
+
+  // Action Type
+  action String // RSVP_APPROVED | RSVP_REJECTED | CHECK_IN | PHASE_CHANGE | etc.
+
+  // Target Entity
+  entityType String? // RSVP | INVITATION | EVENT | MEDIA
+  entityId   String?
+
+  // Details
+  details String? // JSON string with action details
+
+  // Request Info
+  ipAddress String?
+  userAgent String?
+
   createdAt DateTime @default(now())
 
-  event Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  // Relations
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
 }
