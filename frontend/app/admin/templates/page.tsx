@@ -29,6 +29,12 @@ const typeLabels: Record<string, string> = {
   GUESTBOOK_AUDIO: 'Audio Recording',
   GUESTBOOK_PHOTO: 'Photo Upload',
   THANK_YOU: 'Thank You',
+  BOOTH: 'Booth Menu',                       // Add this if missing
+  BOOTH_VIDEO: 'Booth Video',                // Add this if missing
+  BOOTH_AUDIO: 'Booth Audio',                // Add this if missing
+  BOOTH_PHOTO: 'Booth Photo',                // Add this if missing
+  LIVE_LANDING: 'Live Landing Page',         // ⭐ ADD THIS
+  EVENT_ENDED: 'Event Ended Page',           // ⭐ ADD THIS
 };
 
 const typeColors: Record<string, string> = {
@@ -39,6 +45,12 @@ const typeColors: Record<string, string> = {
   GUESTBOOK_AUDIO: 'bg-amber-100 text-amber-700 border-amber-200',
   GUESTBOOK_PHOTO: 'bg-teal-100 text-teal-700 border-teal-200',
   THANK_YOU: 'bg-orange-100 text-orange-700 border-orange-200',
+  BOOTH: 'bg-indigo-100 text-indigo-700 border-indigo-200',   
+  BOOTH_VIDEO: 'bg-pink-100 text-pink-700 border-pink-200', 
+  BOOTH_AUDIO: 'bg-cyan-100 text-cyan-700 border-cyan-200',  
+  BOOTH_PHOTO: 'bg-lime-100 text-lime-700 border-lime-200',  
+  LIVE_LANDING: 'bg-violet-100 text-violet-700 border-violet-200',  
+  EVENT_ENDED: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 
 const typeIconColors: Record<string, string> = {
@@ -48,7 +60,13 @@ const typeIconColors: Record<string, string> = {
   GUESTBOOK_VIDEO: 'bg-red-500',
   GUESTBOOK_AUDIO: 'bg-amber-500',
   GUESTBOOK_PHOTO: 'bg-teal-500',
+  BOOTH: 'bg-indigo-500',           // Add if missing
+  BOOTH_VIDEO: 'bg-pink-500',       // Add if missing
+  BOOTH_AUDIO: 'bg-cyan-500',       // Add if missing
+  BOOTH_PHOTO: 'bg-lime-500',       // Add if missing
   THANK_YOU: 'bg-orange-500',
+  LIVE_LANDING: 'bg-violet-500',    // ⭐ ADD THIS
+  EVENT_ENDED: 'bg-rose-500',       // ⭐ ADD THIS
 };
 
 type ViewMode = 'grid' | 'list';

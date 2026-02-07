@@ -19,6 +19,8 @@ const typeLabels: Record<string, string> = {
   BOOTH_AUDIO: 'Booth Audio',
   BOOTH_PHOTO: 'Booth Photo',
   THANK_YOU: 'Thank You',
+  LIVE_LANDING: 'Live Landing Page',      // ⭐ NEW
+  EVENT_ENDED: 'Event Ended Page',        // ⭐ NEW
 };
 
 export default function NewTemplatePage() {
