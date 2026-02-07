@@ -68,6 +68,8 @@ export default function NewEventPage() {
     guestbookAudioTemplateId: '',
     guestbookPhotoTemplateId: '',
     thankYouTemplateId: '',
+    liveLandingTemplateId: '',
+    eventEndedTemplateId: '',
   });
 
   useEffect(() => {
@@ -103,6 +105,8 @@ export default function NewEventPage() {
           if (t.type === 'GUESTBOOK_AUDIO') defaults.guestbookAudioTemplateId = t.id;
           if (t.type === 'GUESTBOOK_PHOTO') defaults.guestbookPhotoTemplateId = t.id;
           if (t.type === 'THANK_YOU') defaults.thankYouTemplateId = t.id;
+          if (t.type === 'LIVE_LANDING') defaults.liveLandingTemplateId = t.id;
+          if (t.type === 'EVENT_ENDED') defaults.eventEndedTemplateId = t.id;
         }
       });
       setFormData(prev => ({ ...prev, ...defaults }));
@@ -185,6 +189,8 @@ export default function NewEventPage() {
         guestbookAudioTemplateId: formData.guestbookAudioTemplateId || undefined,
         guestbookPhotoTemplateId: formData.guestbookPhotoTemplateId || undefined,
         thankYouTemplateId: formData.thankYouTemplateId || undefined,
+        liveLandingTemplateId: formData.liveLandingTemplateId || undefined,
+        eventEndedTemplateId: formData.eventEndedTemplateId || undefined,
       });
 
       toast.success('Event created successfully!');
@@ -666,6 +672,20 @@ export default function NewEventPage() {
                 label="Thank You Page"
                 value={formData.thankYouTemplateId}
                 onChange={(id) => setFormData({ ...formData, thankYouTemplateId: id })}
+              />
+
+              <TemplateSelect
+                type="LIVE_LANDING"
+                label="Live Landing Page"
+                value={formData.liveLandingTemplateId}
+                onChange={(id) => setFormData({ ...formData, liveLandingTemplateId: id })}
+              />
+
+              <TemplateSelect
+                type="EVENT_ENDED"
+                label="Event Ended Page"
+                value={formData.eventEndedTemplateId}
+                onChange={(id) => setFormData({ ...formData, eventEndedTemplateId: id })}
               />
             </div>
           )}

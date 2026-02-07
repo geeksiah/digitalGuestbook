@@ -45,6 +45,8 @@ interface Event {
   rsvpTemplateId: string | null;
   guestbookTemplateId: string | null;
   thankYouTemplateId: string | null;
+  liveLandingTemplateId: string | null;
+  eventEndedTemplateId: string | null;
   // Event branding
   primaryColor?: string;
   secondaryColor?: string;
@@ -187,6 +189,8 @@ export default function EventDetailPage() {
     guestbookVideoTemplateId: '', guestbookAudioTemplateId: '', guestbookPhotoTemplateId: '',
     boothTemplateId: '', boothVideoTemplateId: '', boothAudioTemplateId: '', boothPhotoTemplateId: '',
     thankYouTemplateId: '',
+    liveLandingTemplateId: '',
+    eventEndedTemplateId: '',
   });
 
   useEffect(() => { fetchEvent(); fetchTemplates(); fetchOwners(); }, [eventId]);
@@ -213,6 +217,8 @@ export default function EventDetailPage() {
         boothAudioTemplateId: (event as any).boothAudioTemplateId || '',
         boothPhotoTemplateId: (event as any).boothPhotoTemplateId || '',
         thankYouTemplateId: event.thankYouTemplateId || '',
+        liveLandingTemplateId: event.liveLandingTemplateId || '',
+        eventEndedTemplateId: event.eventEndedTemplateId || '',
       });
       const d = new Date(event.date);
       const ed = event.endDate ? new Date(event.endDate) : null;
@@ -410,6 +416,8 @@ export default function EventDetailPage() {
         boothAudioTemplateId: selectedTemplates.boothAudioTemplateId || null,
         boothPhotoTemplateId: selectedTemplates.boothPhotoTemplateId || null,
         thankYouTemplateId: selectedTemplates.thankYouTemplateId || null,
+        liveLandingTemplateId: selectedTemplates.liveLandingTemplateId || null,
+        eventEndedTemplateId: selectedTemplates.eventEndedTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -975,6 +983,8 @@ export default function EventDetailPage() {
                   { t: 'RSVP', l: 'RSVP Form', f: 'rsvpTemplateId', e: event.rsvpEnabled, icon: '✋', desc: 'Guest response form' },
                   { t: 'GUESTBOOK', l: 'Guestbook Menu', f: 'guestbookTemplateId', e: event.guestbookEnabled, icon: '📖', desc: 'Guestbook landing page' },
                   { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true, icon: '🙏', desc: 'Post-submission page' },
+                  { t: 'LIVE_LANDING', l: 'Live Landing Page', f: 'liveLandingTemplateId', e: true, icon: '🎉', desc: 'During live phase' },
+                  { t: 'EVENT_ENDED', l: 'Event Ended Page', f: 'eventEndedTemplateId', e: true, icon: '🏁', desc: 'After event ends' },
                 ].map(x => (
                   <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-navy-300 hover:shadow-md')}>
                     <div className="flex items-start gap-3">

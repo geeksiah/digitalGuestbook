@@ -144,7 +144,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
   }
 
   // Validate template type
-  const validTypes = ['INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 'THANK_YOU'];
+  const validTypes = ['INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED'];
   if (!validTypes.includes(type)) {
     if (fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -411,6 +411,8 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
     boothAudioTemplateId,
     boothPhotoTemplateId,
     thankYouTemplateId,
+    liveLandingTemplateId,
+    eventEndedTemplateId,
   } = req.body;
 
   const event = await prisma.event.findUnique({
@@ -470,6 +472,8 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
   await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', 
     { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
   await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
+  await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
+  await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
 
   // Copy template assets to event-specific directory for isolation using service
   const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
@@ -485,6 +489,8 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
     boothAudioTemplateId,
     boothPhotoTemplateId,
     thankYouTemplateId,
+    liveLandingTemplateId,
+    eventEndedTemplateId,
   });
 
   const updatedEvent = await prisma.event.update({
@@ -502,6 +508,8 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
       boothAudioTemplate: true,
       boothPhotoTemplate: true,
       thankYouTemplate: true,
+      liveLandingTemplate: true,
+      eventEndedTemplate: true,
     },
   });
 

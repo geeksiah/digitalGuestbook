@@ -497,6 +497,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     boothAudioTemplateId,
     boothPhotoTemplateId,
     thankYouTemplateId,
+    liveLandingTemplateId,
+    eventEndedTemplateId,
   } = req.body;
 
   const event = await prisma.event.findUnique({
@@ -558,6 +560,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
   await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', 
     { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
   await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
+  await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
+  await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
 
   // Copy template assets to event-specific directory for isolation
   // This ensures Event A's templates don't leak into Event B
@@ -573,6 +577,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     boothAudioTemplateId,
     boothPhotoTemplateId,
     thankYouTemplateId,
+    liveLandingTemplateId,
+    eventEndedTemplateId,
   });
 
   const updatedEvent = await prisma.event.update({
@@ -590,6 +596,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
       boothAudioTemplate: true,
       boothPhotoTemplate: true,
       thankYouTemplate: true,
+      liveLandingTemplate: true,
+      eventEndedTemplate: true,
     },
   });
 

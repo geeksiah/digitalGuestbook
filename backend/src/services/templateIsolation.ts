@@ -15,6 +15,8 @@ interface TemplateAssignments {
   boothAudioTemplateId?: string | null;
   boothPhotoTemplateId?: string | null;
   thankYouTemplateId?: string | null;
+  liveLandingTemplateId?: string | null;
+  eventEndedTemplateId?: string | null;
 }
 
 /**
@@ -82,6 +84,8 @@ export const copyTemplateAssetsForEvent = async (
   await copyAssets(assignments.boothAudioTemplateId, 'boothAudioTemplateId');
   await copyAssets(assignments.boothPhotoTemplateId, 'boothPhotoTemplateId');
   await copyAssets(assignments.thankYouTemplateId, 'thankYouTemplateId');
+  await copyAssets(assignments.liveLandingTemplateId, 'liveLandingTemplateId');
+  await copyAssets(assignments.eventEndedTemplateId, 'eventEndedTemplateId');
 };
 
 /**

@@ -10,6 +10,8 @@ interface TemplateAssignments {
     boothAudioTemplateId?: string | null;
     boothPhotoTemplateId?: string | null;
     thankYouTemplateId?: string | null;
+    liveLandingTemplateId?: string | null;
+    eventEndedTemplateId?: string | null;
 }
 /**
  * Copy template assets to event-specific directory for isolation

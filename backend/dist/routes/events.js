@@ -426,7 +426,7 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
  */
 router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id: eventId } = req.params;
-    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, } = req.body;
+    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, liveLandingTemplateId, eventEndedTemplateId, } = req.body;
     const event = await prisma_js_1.default.event.findUnique({
         where: { id: eventId },
     });
@@ -465,6 +465,8 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
     await validateAndAdd(boothAudioTemplateId, 'boothAudioTemplateId', 'BOOTH_AUDIO', { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
     await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
     await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
+    await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
+    await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
     // Copy template assets to event-specific directory for isolation
     // This ensures Event A's templates don't leak into Event B
     await copyTemplateAssetsForEvent(eventId, {
@@ -479,6 +481,8 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
         boothAudioTemplateId,
         boothPhotoTemplateId,
         thankYouTemplateId,
+        liveLandingTemplateId,
+        eventEndedTemplateId,
     });
     const updatedEvent = await prisma_js_1.default.event.update({
         where: { id: eventId },
@@ -495,6 +499,8 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
             boothAudioTemplate: true,
             boothPhotoTemplate: true,
             thankYouTemplate: true,
+            liveLandingTemplate: true,
+            eventEndedTemplate: true,
         },
     });
     // Create audit log

@@ -130,7 +130,7 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
         throw new errorHandler_js_1.AppError('Template type is required', 400);
     }
     // Validate template type
-    const validTypes = ['INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 'THANK_YOU'];
+    const validTypes = ['INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED'];
     if (!validTypes.includes(type)) {
         if (fs_1.default.existsSync(req.file.path)) {
             fs_1.default.unlinkSync(req.file.path);
@@ -350,7 +350,7 @@ router.post('/:id/duplicate', (0, errorHandler_js_1.asyncHandler)(async (req, re
  */
 router.post('/assign/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
-    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, } = req.body;
+    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, liveLandingTemplateId, eventEndedTemplateId, } = req.body;
     const event = await prisma_js_1.default.event.findUnique({
         where: { id: eventId },
     });
@@ -388,6 +388,8 @@ router.post('/assign/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, 
     await validateAndAdd(boothAudioTemplateId, 'boothAudioTemplateId', 'BOOTH_AUDIO', { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
     await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
     await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
+    await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
+    await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
     // Copy template assets to event-specific directory for isolation using service
     const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
     await copyTemplateAssetsForEvent(eventId, {
@@ -402,6 +404,8 @@ router.post('/assign/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, 
         boothAudioTemplateId,
         boothPhotoTemplateId,
         thankYouTemplateId,
+        liveLandingTemplateId,
+        eventEndedTemplateId,
     });
     const updatedEvent = await prisma_js_1.default.event.update({
         where: { id: eventId },
@@ -418,6 +422,8 @@ router.post('/assign/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, 
             boothAudioTemplate: true,
             boothPhotoTemplate: true,
             thankYouTemplate: true,
+            liveLandingTemplate: true,
+            eventEndedTemplate: true,
         },
     });
     // Create audit log

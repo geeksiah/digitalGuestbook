@@ -3,6 +3,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
 import type { PrismaClient } from '@prisma/client';
+import { getEventTemplate } from '../utils/template-helper.js';
 
 const router = Router();
 
@@ -68,7 +69,6 @@ router.get('/event/:slug', asyncHandler(async (req, res) => {
 router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
-    include: { invitationTemplate: true },
   });
 
   if (!event) {
@@ -82,8 +82,10 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
   const currentPhase = calculateEventPhase(event);
   const capabilities = getPhaseCapabilities(currentPhase);
 
-  // If no custom template, return data for frontend to render
-  if (!event.invitationTemplate) {
+  // Use helper function
+  const template = await getEventTemplate('INVITATION', event.invitationTemplateId);
+
+  if (!template) {
     return res.json({
       template: null,
       data: {
@@ -118,6 +120,8 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
       }),
       venue: event.venue,
     },
@@ -132,7 +136,7 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
   };
 
   // Replace template variables
-  let html = event.invitationTemplate.htmlContent;
+  let html = template.htmlContent;
   
   // Simple variable replacement: {{variable.path}}
   const replaceVariables = (template: string, data: any, prefix = ''): string => {
@@ -156,11 +160,11 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
   html = replaceVariables(html, templateData);
 
   // Inject CSS and JS
-  if (event.invitationTemplate.cssContent) {
-    html = html.replace('</head>', `<style>${event.invitationTemplate.cssContent}</style></head>`);
+  if (template.cssContent) {
+    html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
   }
-  if (event.invitationTemplate.jsContent) {
-    html = html.replace('</body>', `<script>${event.invitationTemplate.jsContent}</script></body>`);
+  if (template.jsContent) {
+    html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
   }
 
   res.send(html);
@@ -173,7 +177,6 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
 router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
-    include: { thankYouTemplate: true },
   });
 
   if (!event) {
@@ -187,7 +190,10 @@ router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
     return res.redirect(`/e/${event.slug}`);
   }
 
-  if (!event.thankYouTemplate) {
+  // Use helper function
+  const template = await getEventTemplate('THANK_YOU', event.thankYouTemplateId);
+
+  if (!template) {
     return res.json({
       template: null,
       data: {
@@ -201,7 +207,7 @@ router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
   }
 
   // Render template
-  let html = event.thankYouTemplate.htmlContent;
+  let html = template.htmlContent;
   
   const templateData = {
     event: {
@@ -219,14 +225,551 @@ router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
     return String(value ?? '');
   });
 
-  if (event.thankYouTemplate.cssContent) {
-    html = html.replace('</head>', `<style>${event.thankYouTemplate.cssContent}</style></head>`);
+  if (template.cssContent) {
+    html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
   }
-  if (event.thankYouTemplate.jsContent) {
-    html = html.replace('</body>', `<script>${event.thankYouTemplate.jsContent}</script></body>`);
+  if (template.jsContent) {
+    html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
   }
 
   res.send(html);
+}));
+
+// Helper function to render template with event data
+async function renderEventTemplate(
+  event: any,
+  templateType: string,
+  templateId: string | null | undefined,
+  templateData: any,
+  res: any
+) {
+  const template = await getEventTemplate(templateType, templateId);
+
+  if (!template) {
+    return res.json({
+      template: null,
+      data: templateData,
+    });
+  }
+
+  // Replace template variables
+  let html = template.htmlContent;
+
+  const replaceVariables = (template: string, data: any, prefix = ''): string => {
+    return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
+      const fullPath = prefix ? `${prefix}.${path}` : path;
+      const keys = path.split('.');
+      let value: any = data;
+
+      for (const key of keys) {
+        if (value && typeof value === 'object' && key in value) {
+          value = value[key];
+        } else {
+          return match; // Keep original if not found
+        }
+      }
+
+      return String(value ?? '');
+    });
+  };
+
+  html = replaceVariables(html, templateData);
+
+  // Inject CSS and JS
+  if (template.cssContent) {
+    html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
+  }
+  if (template.jsContent) {
+    html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
+  }
+
+  res.send(html);
+}
+
+/**
+ * GET /api/public/event/:slug/rsvp
+ * Get RSVP form page
+ */
+router.get('/event/:slug/rsvp', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.rsvpEnabled) {
+    throw new AppError('RSVP is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    urls: {
+      invitation: `/e/${event.slug}/invitation`,
+      guestbook: `/e/${event.slug}/guestbook`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'RSVP', event.rsvpTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/guestbook
+ * Get guestbook menu page
+ */
+router.get('/event/:slug/guestbook', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Guestbook is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Guestbook is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    urls: {
+      video: `/e/${event.slug}/guestbook/video`,
+      audio: `/e/${event.slug}/guestbook/audio`,
+      photo: `/e/${event.slug}/guestbook/photo`,
+      booth: `/e/${event.slug}/booth`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'GUESTBOOK', event.guestbookTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/guestbook/video
+ * Get video recording page
+ */
+router.get('/event/:slug/guestbook/video', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Guestbook is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Guestbook is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    settings: {
+      maxDuration: event.maxRecordingDuration,
+      minDuration: event.minRecordingDuration,
+    },
+    urls: {
+      guestbook: `/e/${event.slug}/guestbook`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'GUESTBOOK_VIDEO', event.guestbookVideoTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/guestbook/audio
+ * Get audio recording page
+ */
+router.get('/event/:slug/guestbook/audio', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Guestbook is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Guestbook is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    settings: {
+      maxDuration: event.maxRecordingDuration,
+      minDuration: event.minRecordingDuration,
+    },
+    urls: {
+      guestbook: `/e/${event.slug}/guestbook`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'GUESTBOOK_AUDIO', event.guestbookAudioTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/guestbook/photo
+ * Get photo upload page
+ */
+router.get('/event/:slug/guestbook/photo', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Guestbook is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Guestbook is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    settings: {
+      maxPhotos: event.maxPhotosPerGuest,
+    },
+    urls: {
+      guestbook: `/e/${event.slug}/guestbook`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'GUESTBOOK_PHOTO', event.guestbookPhotoTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/booth
+ * Get booth menu page
+ */
+router.get('/event/:slug/booth', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Booth is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Booth is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    urls: {
+      video: `/e/${event.slug}/booth/video`,
+      audio: `/e/${event.slug}/booth/audio`,
+      photo: `/e/${event.slug}/booth/photo`,
+      guestbook: `/e/${event.slug}/guestbook`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'BOOTH', event.boothTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/booth/video
+ * Get booth video recording page
+ */
+router.get('/event/:slug/booth/video', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Booth is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Booth is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    settings: {
+      maxDuration: event.maxRecordingDuration,
+      minDuration: event.minRecordingDuration,
+      maxPhotos: event.maxPhotosPerBoothSession,
+      countdown: event.boothShutterCountdown,
+    },
+    urls: {
+      booth: `/e/${event.slug}/booth`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'BOOTH_VIDEO', event.boothVideoTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/booth/audio
+ * Get booth audio recording page
+ */
+router.get('/event/:slug/booth/audio', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Booth is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Booth is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    settings: {
+      maxDuration: event.maxRecordingDuration,
+      minDuration: event.minRecordingDuration,
+    },
+    urls: {
+      booth: `/e/${event.slug}/booth`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'BOOTH_AUDIO', event.boothAudioTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/booth/photo
+ * Get booth photo capture page
+ */
+router.get('/event/:slug/booth/photo', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (!event.guestbookEnabled) {
+    throw new AppError('Booth is not enabled for this event', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  if (!capabilities.canAccessGuestbook) {
+    throw new AppError('Booth is not available at this time', 404);
+  }
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    settings: {
+      maxPhotos: event.maxPhotosPerBoothSession,
+      countdown: event.boothShutterCountdown,
+    },
+    urls: {
+      booth: `/e/${event.slug}/booth`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'BOOTH_PHOTO', event.boothPhotoTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/live
+ * Get live landing page (shown during LIVE phase)
+ */
+router.get('/event/:slug/live', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+
+  // Live landing page is only shown during LIVE phase
+  if (currentPhase !== 'LIVE') {
+    return res.redirect(`/e/${event.slug}`);
+  }
+
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    urls: {
+      guestbook: `/e/${event.slug}/guestbook`,
+      booth: `/e/${event.slug}/booth`,
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'LIVE_LANDING', event.liveLandingTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/ended
+ * Get event ended page (shown after POST_EVENT phase)
+ */
+router.get('/event/:slug/ended', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const currentPhase = calculateEventPhase(event);
+
+  // Event ended page is only shown after POST_EVENT phase
+  if (currentPhase !== 'POST_EVENT') {
+    return res.redirect(`/e/${event.slug}`);
+  }
+
+  const capabilities = getPhaseCapabilities(currentPhase);
+
+  const templateData = {
+    event: {
+      name: event.name,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+    },
+    phase: currentPhase,
+    capabilities,
+    urls: {
+      thankYou: `/e/${event.slug}/thanks`,
+    },
+  };
+
+  await renderEventTemplate(event, 'EVENT_ENDED', event.eventEndedTemplateId, templateData, res);
 }));
 
 /**
