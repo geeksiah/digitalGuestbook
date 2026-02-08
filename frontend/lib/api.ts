@@ -94,6 +94,19 @@ export const templatesApi = {
    */
   getAssetUrl: (id: string, assetPath: string) =>
     `${API_BASE_URL}/api/templates/${id}/assets/${assetPath}`,
+  
+  /**
+   * Upload template ZIP file
+   */
+  upload: (formData: FormData) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    return axios.post(`${API_BASE_URL}/api/templates/upload`, formData, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
 };
 
 // RSVP API
@@ -173,5 +186,68 @@ export const settingsApi = {
   testSMS: (phone: string) => api.post('/settings/test-sms', { phone }),
   testWhatsApp: (phone: string) => api.post('/settings/test-whatsapp', { phone }),
 };
+
+// Ticketing API (admin/owner)
+export const ticketingApi = {
+  listTickets: (eventId: string) => api.get(`/tickets/event/${eventId}`),
+  getTicket: (id: string) => api.get(`/tickets/${id}`),
+  createTicket: (eventId: string, data: any) => api.post(`/tickets/event/${eventId}`, data),
+  updateTicket: (id: string, data: any) => api.patch(`/tickets/${id}`, data),
+  deleteTicket: (id: string) => api.delete(`/tickets/${id}`),
+  stats: (eventId: string) => api.get(`/tickets/event/${eventId}/stats`),
+};
+
+// Owners API (admin)
+export const ownersApi = {
+  list: (params?: any) => api.get('/owners', { params }),
+  get: (id: string) => api.get(`/owners/${id}`),
+  create: (data: any) => api.post('/owners', data),
+  update: (id: string, data: any) => api.patch(`/owners/${id}`, data),
+  delete: (id: string) => api.delete(`/owners/${id}`),
+  // common pattern: assign/unassign owner to event
+  assignToEvent: (eventId: string, ownerId: string) =>
+    api.post(`/events/${eventId}/owner`, { ownerId }),
+};
+
+// Admin API (admin dashboards, payouts, sales, etc.)
+export const adminApi = {
+  dashboard: () => api.get('/admin/dashboard'),
+  sales: (params?: any) => api.get('/admin/sales', { params }),
+  payouts: (params?: any) => api.get('/admin/payouts', { params }),
+  users: (params?: any) => api.get('/admin/users', { params }),
+};
+
+// Event Owner “token” portal API (no admin_token; uses token in URL)
+export const eventOwnerApi = {
+  getEvent: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}`),
+  getMedia: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/media`),
+  getTickets: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/tickets`),
+  getSales: (token: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/sales`, { params }),
+};
+
+// Owner auth / dashboard APIs (owner account area)
+export const ownerAuthApi = {
+  login: (email: string, password: string) =>
+    axios.post(`${API_BASE_URL}/api/owner/auth/login`, { email, password }),
+  me: (token: string) =>
+    axios.get(`${API_BASE_URL}/api/owner/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+};
+
+export const ownerDashboardApi = {
+  events: (token: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner/events`, {
+      params,
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  payouts: (token: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner/payouts`, {
+      params,
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+};
+
 
 export default api;
