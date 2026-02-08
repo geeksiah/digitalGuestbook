@@ -109,38 +109,42 @@ export default function EventPage() {
     );
   }
 
-  const { event, urls } = data;
+ const { event, urls } = data;
 
-  // POST_EVENT phase - show thank you
-  if (event.phase === 'POST_EVENT') {
-    // If backend template exists for thank-you, render it
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    // We rely on the separate thank-you page component to replace the SPA UI, so keep current behavior
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
-          <div className="absolute -top-1/2 -right-1/4 w-[500px] h-[500px] rounded-full bg-primary-500/10 blur-3xl" />
-          <div className="relative bg-white max-w-lg rounded-2xl shadow-elegant p-12 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-primary-500/20 flex items-center justify-center mb-6">
-              <svg className="w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </div>
-            <h1 className="text-3xl font-display font-bold text-navy-900 mb-4">
-              Thank You
-            </h1>
-            <h2 className="text-xl text-surface-700 mb-6">
-              For Being Part of Our Special Day
-            </h2>
-            <p className="text-surface-600">
-              We are deeply grateful for your presence, your love, and your support.
-            </p>
-            <p className="font-serif italic text-primary-600 mt-8">
-              With love,<br />The Happy Couple
-            </p>
-          </div>
-        </div>
+// POST_EVENT phase - show thank you
+if (event.phase === 'POST_EVENT') {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  // We rely on the separate thank-you page component to replace the SPA UI, so keep current behavior
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
+      {/* Background effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/2 -right-1/4 w-[500px] h-[500px] rounded-full bg-primary-500/10 blur-3xl" />
       </div>
-    );
+      
+      {/* Content */}
+      <div className="relative bg-white max-w-lg rounded-2xl shadow-elegant p-12 text-center">
+        <div className="w-16 h-16 mx-auto rounded-full bg-primary-500/20 flex items-center justify-center mb-6">
+          <svg className="w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+        </div>
+        <h1 className="text-3xl font-display font-bold text-navy-900 mb-4">
+          Thank You
+        </h1>
+        <h2 className="text-xl text-surface-700 mb-6">
+          For Being Part of Our Special Day
+        </h2>
+        <p className="text-surface-600">
+          We are deeply grateful for your presence, your love, and your support.
+        </p>
+        <p className="font-serif italic text-primary-600 mt-8">
+          With love,<br />The Happy Couple
+        </p>
+      </div>
+    </div>
+  );
+}
   }
 
   // If invitation template exists on backend, render it for PRE_EVENT or LIVE
