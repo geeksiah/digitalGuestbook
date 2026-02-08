@@ -247,6 +247,13 @@ async function renderEventTemplate(
 ) {
   const template = await getEventTemplate(templateType, templateId);
 
+  // Debug: log which template was selected for rendering
+  try {
+    console.info(`[Render] event=${event.id} templateType=${templateType} assignedId=${templateId} selectedTemplate=${template?.id || 'none'} type=${template?.type || 'none'}`);
+  } catch (e) {
+    console.info('[Render] Selected template (unable to stringify)');
+  }
+
   if (!template) {
     return res.json({
       template: null,
