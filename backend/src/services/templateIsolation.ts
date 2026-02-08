@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import prisma from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { isSupabaseConfigured, BUCKETS, listFiles, downloadFile } from './supabaseStorage.js';
 
 interface TemplateAssignments {
   invitationTemplateId?: string | null;
@@ -53,7 +54,53 @@ export const copyTemplateAssetsForEvent = async (
       const destPath = path.join(eventAssetsDir, fieldName.replace('TemplateId', ''));
       
       if (!fs.existsSync(sourcePath)) {
-        console.warn(`[TemplateIsolation] Template assets not found: ${sourcePath} for template ${template.id}`);
+        console.warn(`[TemplateIsolation] Local template assets not found: ${sourcePath} for template ${template.id}`);
+
+        // If Supabase is configured, attempt to download the assets into the event folder
+        if (isSupabaseConfigured() && template.assetsPath) {
+          try {
+            const normalized = template.assetsPath.replace(/^\/+/,'').replace(/\\/g, '/');
+
+            // Ensure destination exists
+            if (!fs.existsSync(destPath)) {
+              fs.mkdirSync(destPath, { recursive: true });
+            }
+
+            // Recursive downloader using listFiles + downloadFile
+            const downloadRecursive = async (folderPrefix: string, outDir: string) => {
+              const entries = await listFiles(BUCKETS.TEMPLATES, folderPrefix);
+              for (const e of entries) {
+                const entryPath = folderPrefix.endsWith('/') ? `${folderPrefix}${e.name}` : `${folderPrefix}/${e.name}`;
+                try {
+                  const buf = await downloadFile(BUCKETS.TEMPLATES, entryPath);
+                  const outFile = path.join(outDir, e.name);
+                  fs.writeFileSync(outFile, buf);
+                  console.log(`[TemplateIsolation] Downloaded ${entryPath} -> ${outFile}`);
+                } catch (err: any) {
+                  // If download failed, it may be a folder - recurse into it
+                  try {
+                    const nestedOut = path.join(outDir, e.name);
+                    if (!fs.existsSync(nestedOut)) {
+                      fs.mkdirSync(nestedOut, { recursive: true });
+                    }
+                    await downloadRecursive(entryPath, nestedOut);
+                  } catch (nestedErr: any) {
+                    console.warn(`[TemplateIsolation] Skipping ${entryPath}: ${nestedErr?.message || nestedErr}`);
+                  }
+                }
+              }
+            };
+
+            await downloadRecursive(normalized, destPath);
+            console.log(`[TemplateIsolation] Downloaded assets from Supabase for template ${template.id} into ${destPath}`);
+            return;
+          } catch (err: any) {
+            console.error(`[TemplateIsolation] Failed to download assets from Supabase for template ${template.id}:`, err.message || err);
+            // fall through and skip copying
+            return;
+          }
+        }
+
         return;
       }
       

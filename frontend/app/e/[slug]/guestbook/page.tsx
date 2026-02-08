@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
+import BackendTemplateFrame from '@/components/BackendTemplateFrame';
 import toast from 'react-hot-toast';
 
 type ViewState = 'menu' | 'video' | 'audio' | 'photo' | 'success';
@@ -34,6 +35,35 @@ export default function GuestbookPage() {
   const slug = params.slug as string;
   const urlCode = searchParams.get('code');
   const urlToken = searchParams.get('token');
+
+  // Backend template check (render backend HTML if assigned)
+  const [checkedTemplate, setCheckedTemplate] = useState(false);
+  const [useBackendTemplate, setUseBackendTemplate] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
+        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/guestbook`);
+        const ct = res.headers.get('content-type') || '';
+        if (!cancelled && res.ok && ct.includes('text/html')) {
+          setUseBackendTemplate(true);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        if (!cancelled) setCheckedTemplate(true);
+      }
+    };
+
+    if (slug) check();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  if (checkedTemplate && useBackendTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
+  }
 
   // Core state
   const [loading, setLoading] = useState(true);

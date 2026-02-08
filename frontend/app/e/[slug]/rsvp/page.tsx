@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import BackendTemplateFrame from '@/components/BackendTemplateFrame';
 import { useParams } from 'next/navigation';
 
 interface TicketType {
@@ -45,6 +46,35 @@ interface FormData {
 export default function RSVPPage() {
   const params = useParams();
   const slug = params?.slug as string;
+
+  // Backend template check (render backend HTML if assigned)
+  const [checkedTemplate, setCheckedTemplate] = useState(false);
+  const [useBackendTemplate, setUseBackendTemplate] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/rsvp`);
+        const ct = res.headers.get('content-type') || '';
+        if (!cancelled && res.ok && ct.includes('text/html')) {
+          setUseBackendTemplate(true);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        if (!cancelled) setCheckedTemplate(true);
+      }
+    };
+
+    if (slug) check();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  if (checkedTemplate && useBackendTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
+  }
 
   const [formData, setFormData] = useState<FormData | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import BackendTemplateFrame from '@/components/BackendTemplateFrame';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
@@ -32,6 +33,35 @@ export default function ThankYouPage() {
   useEffect(() => {
     fetchEvent();
   }, [slug]);
+
+  // Backend template check (render backend HTML if assigned)
+  const [checkedTemplate, setCheckedTemplate] = useState(false);
+  const [useBackendTemplate, setUseBackendTemplate] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/thank-you`);
+        const ct = res.headers.get('content-type') || '';
+        if (!cancelled && res.ok && ct.includes('text/html')) {
+          setUseBackendTemplate(true);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        if (!cancelled) setCheckedTemplate(true);
+      }
+    };
+
+    if (slug) check();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  if (checkedTemplate && useBackendTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="thank-you" />;
+  }
 
   const fetchEvent = async () => {
     try {

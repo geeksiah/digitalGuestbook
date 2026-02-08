@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
+import BackendTemplateFrame from '@/components/BackendTemplateFrame';
 import { formatDate } from '@/lib/utils';
 
 interface EventData {
@@ -44,6 +45,30 @@ export default function EventPage() {
   const [data, setData] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Backend template check for invitation (PRE_EVENT / LIVE)
+  const [checkedInvitationTemplate, setCheckedInvitationTemplate] = useState(false);
+  const [useInvitationTemplate, setUseInvitationTemplate] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/invitation`);
+        const ct = res.headers.get('content-type') || '';
+        if (!cancelled && res.ok && ct.includes('text/html')) {
+          setUseInvitationTemplate(true);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        if (!cancelled) setCheckedInvitationTemplate(true);
+      }
+    };
+    if (slug) check();
+    return () => { cancelled = true; };
+  }, [slug]);
 
   useEffect(() => {
     fetchEvent();
@@ -88,9 +113,11 @@ export default function EventPage() {
 
   // POST_EVENT phase - show thank you
   if (event.phase === 'POST_EVENT') {
+    // If backend template exists for thank-you, render it
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    // We rely on the separate thank-you page component to replace the SPA UI, so keep current behavior
     return (
       <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
-        <div className="relative overflow-hidden">
           <div className="absolute -top-1/2 -right-1/4 w-[500px] h-[500px] rounded-full bg-primary-500/10 blur-3xl" />
           <div className="relative bg-white max-w-lg rounded-2xl shadow-elegant p-12 text-center">
             <div className="w-16 h-16 mx-auto rounded-full bg-primary-500/20 flex items-center justify-center mb-6">
@@ -114,6 +141,11 @@ export default function EventPage() {
         </div>
       </div>
     );
+  }
+
+  // If invitation template exists on backend, render it for PRE_EVENT or LIVE
+  if ((event.phase === 'PRE_EVENT' || event.phase === 'LIVE') && checkedInvitationTemplate && useInvitationTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="invitation" />;
   }
 
   // PRE_EVENT or LIVE phase - show invitation
