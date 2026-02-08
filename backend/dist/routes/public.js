@@ -148,7 +148,7 @@ router.get('/event/:slug/invitation', (0, errorHandler_js_1.asyncHandler)(async 
             },
         });
     }
-    // Render template with injected data
+    // Render using shared renderer
     const templateData = {
         event: {
             name: event.name,
@@ -173,34 +173,7 @@ router.get('/event/:slug/invitation', (0, errorHandler_js_1.asyncHandler)(async 
             thankYou: `/e/${event.slug}/thanks`,
         },
     };
-    // Replace template variables
-    let html = template.htmlContent;
-    // Simple variable replacement: {{variable.path}}
-    const replaceVariables = (template, data, prefix = '') => {
-        return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-            const fullPath = prefix ? `${prefix}.${path}` : path;
-            const keys = path.split('.');
-            let value = data;
-            for (const key of keys) {
-                if (value && typeof value === 'object' && key in value) {
-                    value = value[key];
-                }
-                else {
-                    return match; // Keep original if not found
-                }
-            }
-            return String(value ?? '');
-        });
-    };
-    html = replaceVariables(html, templateData);
-    // Inject CSS and JS
-    if (template.cssContent) {
-        html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
-    }
-    if (template.jsContent) {
-        html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
-    }
-    res.send(html);
+    await renderEventTemplate(event, 'INVITATION', event.invitationTemplateId, templateData, res);
 }));
 /**
  * GET /api/public/event/:slug/thank-you
@@ -234,28 +207,14 @@ router.get('/event/:slug/thank-you', (0, errorHandler_js_1.asyncHandler)(async (
         });
     }
     // Render template
-    let html = template.htmlContent;
     const templateData = {
         event: {
             name: event.name,
             date: event.date,
         },
     };
-    html = html.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-        const keys = path.split('.');
-        let value = templateData;
-        for (const key of keys) {
-            value = value?.[key];
-        }
-        return String(value ?? '');
-    });
-    if (template.cssContent) {
-        html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
-    }
-    if (template.jsContent) {
-        html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
-    }
-    res.send(html);
+    // Use shared renderer to ensure asset path resolution and consistent rendering
+    await renderEventTemplate(event, 'THANK_YOU', event.thankYouTemplateId, templateData, res);
 }));
 // Helper function to render template with event data
 async function renderEventTemplate(event, templateType, templateId, templateData, res) {

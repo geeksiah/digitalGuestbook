@@ -4,6 +4,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
 import type { PrismaClient } from '@prisma/client';
 import { getEventTemplate } from '../utils/template-helper.js';
+import { getEventTemplateAssetPath } from '../services/templateIsolation.js';
 
 const router = Router();
 
@@ -158,7 +159,7 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
     });
   }
 
-  // Render template with injected data
+  // Render using shared renderer
   const templateData = {
     event: {
       name: event.name,
@@ -184,39 +185,7 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
     },
   };
 
-  // Replace template variables
-  let html = template.htmlContent;
-  
-  // Simple variable replacement: {{variable.path}}
-  const replaceVariables = (template: string, data: any, prefix = ''): string => {
-    return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-      const fullPath = prefix ? `${prefix}.${path}` : path;
-      const keys = path.split('.');
-      let value: any = data;
-      
-      for (const key of keys) {
-        if (value && typeof value === 'object' && key in value) {
-          value = value[key];
-        } else {
-          return match; // Keep original if not found
-        }
-      }
-      
-      return String(value ?? '');
-    });
-  };
-
-  html = replaceVariables(html, templateData);
-
-  // Inject CSS and JS
-  if (template.cssContent) {
-    html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
-  }
-  if (template.jsContent) {
-    html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
-  }
-
-  res.send(html);
+  await renderEventTemplate(event, 'INVITATION', event.invitationTemplateId, templateData, res);
 }));
 
 /**
@@ -257,8 +226,6 @@ router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
   }
 
   // Render template
-  let html = template.htmlContent;
-  
   const templateData = {
     event: {
       name: event.name,
@@ -266,23 +233,8 @@ router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
     },
   };
 
-  html = html.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-    const keys = path.split('.');
-    let value: any = templateData;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return String(value ?? '');
-  });
-
-  if (template.cssContent) {
-    html = html.replace('</head>', `<style>${template.cssContent}</style></head>`);
-  }
-  if (template.jsContent) {
-    html = html.replace('</body>', `<script>${template.jsContent}</script></body>`);
-  }
-
-  res.send(html);
+  // Use shared renderer to ensure asset path resolution and consistent rendering
+  await renderEventTemplate(event, 'THANK_YOU', event.thankYouTemplateId, templateData, res);
 }));
 
 // Helper function to render template with event data

@@ -454,6 +454,23 @@ router.post('/assign/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, 
     });
     res.json({ event: updatedEvent, message: 'Templates assigned and assets copied successfully' });
 }));
+// Serve template asset files publicly via API
+router.get('/assets/:assetPath(*)', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const assetPath = req.params.assetPath;
+    if (!assetPath) {
+        throw new errorHandler_js_1.AppError('Asset path required', 400);
+    }
+    // Resolve and secure path
+    const templatesDir = path_1.default.join(process.cwd(), 'templates');
+    const fullPath = path_1.default.resolve(process.cwd(), assetPath);
+    if (!fullPath.startsWith(templatesDir)) {
+        throw new errorHandler_js_1.AppError('Invalid asset path', 403);
+    }
+    if (!fs_1.default.existsSync(fullPath)) {
+        throw new errorHandler_js_1.AppError('Asset not found', 404);
+    }
+    res.sendFile(fullPath);
+}));
 /**
  * GET /api/templates/:id/assets
  * List assets files for a template
