@@ -83,7 +83,20 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const template = await prisma.template.findUnique({
     where: { id: req.params.id },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      type: true,
+      htmlContent: true,
+      cssContent: true,
+      jsContent: true,
+      assetsPath: true,
+      thumbnailPath: true,
+      variables: true,
+      isDefault: true,
+      createdAt: true,
+      updatedAt: true,
       eventsAsInvitation: { select: { id: true, name: true, slug: true } },
       eventsAsRsvp: { select: { id: true, name: true, slug: true } },
       eventsAsGuestbook: { select: { id: true, name: true, slug: true } },
@@ -528,6 +541,45 @@ router.post('/assign/:eventId', asyncHandler(async (req, res) => {
   });
 
   res.json({ event: updatedEvent, message: 'Templates assigned and assets copied successfully' });
+}));
+
+/**
+ * GET /api/templates/:id/assets
+ * List assets files for a template
+ */
+router.get('/:id/assets', asyncHandler(async (req, res) => {
+  const template = await prisma.template.findUnique({
+    where: { id: req.params.id },
+    select: { assetsPath: true },
+  });
+
+  if (!template || !template.assetsPath) {
+    return res.json({ assets: [] });
+  }
+
+  try {
+    const assetsDir = path.join(process.cwd(), template.assetsPath);
+    if (!fs.existsSync(assetsDir)) {
+      return res.json({ assets: [] });
+    }
+
+    const files = fs.readdirSync(assetsDir);
+    const assets = files.map(file => {
+      const filePath = path.join(assetsDir, file);
+      const stats = fs.statSync(filePath);
+      return {
+        name: file,
+        size: stats.size,
+        isDirectory: stats.isDirectory(),
+        modified: stats.mtime,
+      };
+    });
+
+    res.json({ assets });
+  } catch (error) {
+    console.error('Error reading assets directory:', error);
+    res.json({ assets: [] });
+  }
 }));
 
 export default router;

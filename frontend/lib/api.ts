@@ -95,6 +95,7 @@ export const templatesApi = {
   delete: (id: string) => api.delete(`/templates/${id}`),
   duplicate: (id: string) => api.post(`/templates/${id}/duplicate`),
   assign: (eventId: string, data: any) => api.post(`/events/${eventId}/templates`, data),
+  listAssets: (id: string) => api.get(`/templates/${id}/assets`),
 };
 
 // RSVP API

@@ -7,6 +7,59 @@ import { getEventTemplate } from '../utils/template-helper.js';
 
 const router = Router();
 
+// Event select fields for public routes (includes template IDs)
+const EVENT_PUBLIC_SELECT = {
+  id: true,
+  slug: true,
+  name: true,
+  description: true,
+  date: true,
+  endDate: true,
+  timezone: true,
+  venue: true,
+  ownerName: true,
+  ownerEmail: true,
+  ownerPhone: true,
+  organizationName: true,
+  primaryColor: true,
+  secondaryColor: true,
+  accentColor: true,
+  phase: true,
+  phaseOverride: true,
+  invitationEnabled: true,
+  rsvpEnabled: true,
+  guestbookEnabled: true,
+  checkInEnabled: true,
+  invitationOnly: true,
+  isArchived: true,
+  invitationTemplateId: true,
+  rsvpTemplateId: true,
+  guestbookTemplateId: true,
+  guestbookVideoTemplateId: true,
+  guestbookAudioTemplateId: true,
+  guestbookPhotoTemplateId: true,
+  boothTemplateId: true,
+  boothVideoTemplateId: true,
+  boothAudioTemplateId: true,
+  boothPhotoTemplateId: true,
+  thankYouTemplateId: true,
+  liveLandingTemplateId: true,
+  eventEndedTemplateId: true,
+  ownerAccessToken: true,
+  maxRecordingDuration: true,
+  minRecordingDuration: true,
+  maxPhotosPerGuest: true,
+  maxPhotosPerBoothSession: true,
+  boothShutterCountdown: true,
+  reelEnabled: true,
+  notifyOnRsvp: true,
+  notifyOnCheckIn: true,
+  notifyOnGuestbook: true,
+  emailNotifications: true,
+  smsNotifications: true,
+  whatsappNotifications: true,
+};
+
 /**
  * GET /api/public/event/:slug
  * Get public event information
@@ -14,12 +67,7 @@ const router = Router();
 router.get('/event/:slug', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
-    include: {
-      invitationTemplate: true,
-      rsvpTemplate: true,
-      guestbookTemplate: true,
-      thankYouTemplate: true,
-    },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -69,6 +117,7 @@ router.get('/event/:slug', asyncHandler(async (req, res) => {
 router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -177,6 +226,7 @@ router.get('/event/:slug/invitation', asyncHandler(async (req, res) => {
 router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -293,6 +343,7 @@ async function renderEventTemplate(
 router.get('/event/:slug/rsvp', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -332,6 +383,7 @@ router.get('/event/:slug/rsvp', asyncHandler(async (req, res) => {
 router.get('/event/:slug/guestbook', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -377,6 +429,7 @@ router.get('/event/:slug/guestbook', asyncHandler(async (req, res) => {
 router.get('/event/:slug/guestbook/video', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -423,6 +476,7 @@ router.get('/event/:slug/guestbook/video', asyncHandler(async (req, res) => {
 router.get('/event/:slug/guestbook/audio', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -469,6 +523,7 @@ router.get('/event/:slug/guestbook/audio', asyncHandler(async (req, res) => {
 router.get('/event/:slug/guestbook/photo', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -514,6 +569,7 @@ router.get('/event/:slug/guestbook/photo', asyncHandler(async (req, res) => {
 router.get('/event/:slug/booth', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -559,6 +615,7 @@ router.get('/event/:slug/booth', asyncHandler(async (req, res) => {
 router.get('/event/:slug/booth/video', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -607,6 +664,7 @@ router.get('/event/:slug/booth/video', asyncHandler(async (req, res) => {
 router.get('/event/:slug/booth/audio', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -653,6 +711,7 @@ router.get('/event/:slug/booth/audio', asyncHandler(async (req, res) => {
 router.get('/event/:slug/booth/photo', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -699,6 +758,7 @@ router.get('/event/:slug/booth/photo', asyncHandler(async (req, res) => {
 router.get('/event/:slug/live', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {
@@ -740,6 +800,7 @@ router.get('/event/:slug/live', asyncHandler(async (req, res) => {
 router.get('/event/:slug/ended', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: req.params.slug },
+    select: EVENT_PUBLIC_SELECT,
   });
 
   if (!event) {

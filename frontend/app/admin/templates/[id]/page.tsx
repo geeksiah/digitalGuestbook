@@ -13,6 +13,8 @@ interface Template {
   htmlContent: string;
   cssContent: string | null;
   jsContent: string | null;
+  assetsPath: string | null;
+  thumbnailPath: string | null;
   isDefault: boolean;
 }
 
@@ -40,6 +42,7 @@ export default function EditTemplatePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [template, setTemplate] = useState<Template | null>(null);
+  const [assetsFiles, setAssetsFiles] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -72,11 +75,26 @@ export default function EditTemplatePage() {
         jsContent: t.jsContent || '',
         isDefault: t.isDefault,
       });
+
+      // Fetch assets files if assetsPath exists
+      if (t.assetsPath) {
+        await fetchAssetsFiles(templateId);
+      }
     } catch (error) {
       toast.error('Failed to load template');
       router.push('/admin/templates');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAssetsFiles = async (templateId: string) => {
+    try {
+      const response = await templatesApi.listAssets(templateId);
+      setAssetsFiles(response.data.assets.map((asset: any) => asset.name));
+    } catch (error) {
+      console.error('Failed to load assets:', error);
+      setAssetsFiles([]);
     }
   };
 
@@ -238,6 +256,31 @@ export default function EditTemplatePage() {
               placeholder="// Your JavaScript here..."
             />
           </div>
+
+          {/* Assets */}
+          {template?.assetsPath && assetsFiles.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-surface-700 mb-1">
+                Template Assets
+              </label>
+              <div className="border border-surface-200 rounded-lg p-4 bg-surface-50">
+                <p className="text-sm text-surface-600 mb-3">
+                  The following files are included in this template:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {assetsFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 text-sm text-surface-700">
+                      <span className="w-2 h-2 bg-navy-500 rounded-full flex-shrink-0"></span>
+                      <span className="font-mono">{file}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-surface-500 mt-3">
+                  Assets path: {template.assetsPath}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <input

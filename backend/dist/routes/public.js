@@ -9,6 +9,58 @@ const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const phase_js_1 = require("../utils/phase.js");
 const template_helper_js_1 = require("../utils/template-helper.js");
 const router = (0, express_1.Router)();
+// Event select fields for public routes (includes template IDs)
+const EVENT_PUBLIC_SELECT = {
+    id: true,
+    slug: true,
+    name: true,
+    description: true,
+    date: true,
+    endDate: true,
+    timezone: true,
+    venue: true,
+    ownerName: true,
+    ownerEmail: true,
+    ownerPhone: true,
+    organizationName: true,
+    primaryColor: true,
+    secondaryColor: true,
+    accentColor: true,
+    phase: true,
+    phaseOverride: true,
+    invitationEnabled: true,
+    rsvpEnabled: true,
+    guestbookEnabled: true,
+    checkInEnabled: true,
+    invitationOnly: true,
+    isArchived: true,
+    invitationTemplateId: true,
+    rsvpTemplateId: true,
+    guestbookTemplateId: true,
+    guestbookVideoTemplateId: true,
+    guestbookAudioTemplateId: true,
+    guestbookPhotoTemplateId: true,
+    boothTemplateId: true,
+    boothVideoTemplateId: true,
+    boothAudioTemplateId: true,
+    boothPhotoTemplateId: true,
+    thankYouTemplateId: true,
+    liveLandingTemplateId: true,
+    eventEndedTemplateId: true,
+    ownerAccessToken: true,
+    maxRecordingDuration: true,
+    minRecordingDuration: true,
+    maxPhotosPerGuest: true,
+    maxPhotosPerBoothSession: true,
+    boothShutterCountdown: true,
+    reelEnabled: true,
+    notifyOnRsvp: true,
+    notifyOnCheckIn: true,
+    notifyOnGuestbook: true,
+    emailNotifications: true,
+    smsNotifications: true,
+    whatsappNotifications: true,
+};
 /**
  * GET /api/public/event/:slug
  * Get public event information
@@ -16,12 +68,7 @@ const router = (0, express_1.Router)();
 router.get('/event/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
-        include: {
-            invitationTemplate: true,
-            rsvpTemplate: true,
-            guestbookTemplate: true,
-            thankYouTemplate: true,
-        },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -66,6 +113,7 @@ router.get('/event/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
 router.get('/event/:slug/invitation', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -161,6 +209,7 @@ router.get('/event/:slug/invitation', (0, errorHandler_js_1.asyncHandler)(async 
 router.get('/event/:slug/thank-you', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -252,6 +301,7 @@ async function renderEventTemplate(event, templateType, templateId, templateData
 router.get('/event/:slug/rsvp', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -285,6 +335,7 @@ router.get('/event/:slug/rsvp', (0, errorHandler_js_1.asyncHandler)(async (req, 
 router.get('/event/:slug/guestbook', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -323,6 +374,7 @@ router.get('/event/:slug/guestbook', (0, errorHandler_js_1.asyncHandler)(async (
 router.get('/event/:slug/guestbook/video', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -362,6 +414,7 @@ router.get('/event/:slug/guestbook/video', (0, errorHandler_js_1.asyncHandler)(a
 router.get('/event/:slug/guestbook/audio', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -401,6 +454,7 @@ router.get('/event/:slug/guestbook/audio', (0, errorHandler_js_1.asyncHandler)(a
 router.get('/event/:slug/guestbook/photo', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -439,6 +493,7 @@ router.get('/event/:slug/guestbook/photo', (0, errorHandler_js_1.asyncHandler)(a
 router.get('/event/:slug/booth', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -477,6 +532,7 @@ router.get('/event/:slug/booth', (0, errorHandler_js_1.asyncHandler)(async (req,
 router.get('/event/:slug/booth/video', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -518,6 +574,7 @@ router.get('/event/:slug/booth/video', (0, errorHandler_js_1.asyncHandler)(async
 router.get('/event/:slug/booth/audio', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -557,6 +614,7 @@ router.get('/event/:slug/booth/audio', (0, errorHandler_js_1.asyncHandler)(async
 router.get('/event/:slug/booth/photo', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -596,6 +654,7 @@ router.get('/event/:slug/booth/photo', (0, errorHandler_js_1.asyncHandler)(async
 router.get('/event/:slug/live', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -630,6 +689,7 @@ router.get('/event/:slug/live', (0, errorHandler_js_1.asyncHandler)(async (req, 
 router.get('/event/:slug/ended', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: req.params.slug },
+        select: EVENT_PUBLIC_SELECT,
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
