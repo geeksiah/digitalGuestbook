@@ -249,7 +249,7 @@ async function renderEventTemplate(
 
   // Debug: log which template was selected for rendering
   try {
-    console.info(`[Render] event=${event.id} templateType=${templateType} assignedId=${templateId} selectedTemplate=${template?.id || 'none'} type=${template?.type || 'none'}`);
+    console.info(`[Render] event=${event.id} templateType=${templateType} assignedId=${templateId} selectedTemplate=${template?.id || 'none'} type=${template?.type || 'none'} isDefault=${template?.isDefault} htmlLength=${template?.htmlContent ? template.htmlContent.length : 0} assetsPath=${template?.assetsPath || 'none'}`);
   } catch (e) {
     console.info('[Render] Selected template (unable to stringify)');
   }

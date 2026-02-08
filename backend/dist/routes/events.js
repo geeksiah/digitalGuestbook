@@ -433,6 +433,13 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
     }
+    // Debug: log incoming assignment payload
+    try {
+        console.info(`[Events] Assign templates request for event=${eventId} body=${JSON.stringify(req.body)}`);
+    }
+    catch (e) {
+        console.info('[Events] Assign templates request (unable to stringify body)');
+    }
     // Import template assignment logic
     const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
     // Validate template IDs and types
@@ -467,6 +474,8 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
     await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
     await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
     await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
+    // Debug: log validated template assignments before copying/updating
+    console.info(`[Events] Validated template assignments for event=${eventId}: ${JSON.stringify(templateAssignments)}`);
     // Copy template assets to event-specific directory for isolation
     // This ensures Event A's templates don't leak into Event B
     await copyTemplateAssetsForEvent(eventId, {
@@ -503,6 +512,14 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
             eventEndedTemplate: true,
         },
     });
+    console.info(`[Events] Updated event ${eventId} templates: ${JSON.stringify({
+        invitationTemplateId: updatedEvent.invitationTemplateId,
+        rsvpTemplateId: updatedEvent.rsvpTemplateId,
+        guestbookTemplateId: updatedEvent.guestbookTemplateId,
+        thankYouTemplateId: updatedEvent.thankYouTemplateId,
+        liveLandingTemplateId: updatedEvent.liveLandingTemplateId,
+        eventEndedTemplateId: updatedEvent.eventEndedTemplateId,
+    })}`);
     // Create audit log
     await prisma_js_1.default.auditLog.create({
         data: {

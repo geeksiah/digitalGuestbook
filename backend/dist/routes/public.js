@@ -219,6 +219,13 @@ router.get('/event/:slug/thank-you', (0, errorHandler_js_1.asyncHandler)(async (
 // Helper function to render template with event data
 async function renderEventTemplate(event, templateType, templateId, templateData, res) {
     const template = await (0, template_helper_js_1.getEventTemplate)(templateType, templateId);
+    // Debug: log which template was selected for rendering
+    try {
+        console.info(`[Render] event=${event.id} templateType=${templateType} assignedId=${templateId} selectedTemplate=${template?.id || 'none'} type=${template?.type || 'none'}`);
+    }
+    catch (e) {
+        console.info('[Render] Selected template (unable to stringify)');
+    }
     if (!template) {
         return res.json({
             template: null,

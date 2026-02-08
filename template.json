@@ -1,0 +1,27 @@
+﻿{
+  "template": {
+    "id": "c1d63718-a271-400a-aa7f-c7d5e852fe4e",
+    "name": "HandG",
+    "description": null,
+    "type": "INVITATION",
+    "htmlContent": "<div>Template content</div>",
+    "cssContent": null,
+    "jsContent": null,
+    "assetsPath": "templates/archives/92b86e8235076f44012ff351f3e19f89",
+    "thumbnailPath": null,
+    "variables": null,
+    "isDefault": false,
+    "createdAt": "2026-02-08T16:34:18.916Z",
+    "updatedAt": "2026-02-08T16:34:18.916Z",
+    "eventsAsInvitation": [
+      {
+        "id": "2c57953f-9fd1-4c84-b589-3c77e1b96328",
+        "name": "Huggel and Bridget",
+        "slug": "huggel-and-bridget"
+      }
+    ],
+    "eventsAsRsvp": [],
+    "eventsAsGuestbook": [],
+    "eventsAsThankYou": []
+  }
+}
