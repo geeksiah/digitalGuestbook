@@ -267,6 +267,8 @@ import { getSiteUrl } from './utils/siteUrl.js';
 const allowedOrigins = [
   getSiteUrl(),
   'https://digiguestbook.netlify.app',
+  // Production frontend origin for EventPeepo
+  'https://app.eventpeepo.com',
   process.env.CORS_ORIGIN,
   process.env.FRONTEND_URL,
   process.env.SITE_URL,
