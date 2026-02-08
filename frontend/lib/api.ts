@@ -195,6 +195,8 @@ export const ticketingApi = {
   updateTicket: (id: string, data: any) => api.patch(`/tickets/${id}`, data),
   deleteTicket: (id: string) => api.delete(`/tickets/${id}`),
   stats: (eventId: string) => api.get(`/tickets/event/${eventId}/stats`),
+  getTicketTypes: (eventId: string) =>
+    api.get(`/tickets/event/${eventId}/types`),
 };
 
 // Owners API (admin)

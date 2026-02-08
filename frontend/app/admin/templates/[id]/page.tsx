@@ -18,6 +18,13 @@ interface Template {
   isDefault: boolean;
 }
 
+interface TemplateFile {
+  name: string;
+  type: string;
+  size?: number;
+  editable: boolean;
+}
+
 const typeLabels: Record<string, string> = {
   INVITATION: 'Invitation',
   RSVP: 'RSVP Form',
@@ -42,7 +49,7 @@ export default function EditTemplatePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [template, setTemplate] = useState<Template | null>(null);
-  const [assetsFiles, setAssetsFiles] = useState<string[]>([]);
+  const [templateFiles, setTemplateFiles] = useState<TemplateFile[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -76,9 +83,9 @@ export default function EditTemplatePage() {
         isDefault: t.isDefault,
       });
 
-      // Fetch assets files if assetsPath exists
+      // Fetch template files if assetsPath exists
       if (t.assetsPath) {
-        await fetchAssetsFiles(templateId);
+        await fetchTemplateFiles(templateId);
       }
     } catch (error) {
       toast.error('Failed to load template');
@@ -88,13 +95,13 @@ export default function EditTemplatePage() {
     }
   };
 
-  const fetchAssetsFiles = async (templateId: string) => {
+  const fetchTemplateFiles = async (templateId: string) => {
     try {
-      const response = await templatesApi.listAssets(templateId);
-      setAssetsFiles(response.data.assets.map((asset: any) => asset.name));
+      const response = await templatesApi.getFiles(templateId);
+      setTemplateFiles(response.data.files || []);
     } catch (error) {
-      console.error('Failed to load assets:', error);
-      setAssetsFiles([]);
+      console.error('Failed to load template files:', error);
+      setTemplateFiles([]);
     }
   };
 
@@ -142,6 +149,9 @@ export default function EditTemplatePage() {
   if (!template) {
     return null;
   }
+
+  // Filter only asset files (not the main template files)
+  const assetFiles = templateFiles.filter(f => f.name.startsWith('assets/'));
 
   return (
     <div className="space-y-6">
@@ -258,25 +268,35 @@ export default function EditTemplatePage() {
           </div>
 
           {/* Assets */}
-          {template?.assetsPath && assetsFiles.length > 0 && (
+          {template?.assetsPath && assetFiles.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-surface-700 mb-1">
                 Template Assets
               </label>
               <div className="border border-surface-200 rounded-lg p-4 bg-surface-50">
                 <p className="text-sm text-surface-600 mb-3">
-                  The following files are included in this template:
+                  The following asset files are included in this template:
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {assetsFiles.map((file, index) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {assetFiles.map((file, index) => (
                     <div key={index} className="flex items-center gap-2 text-sm text-surface-700">
                       <span className="w-2 h-2 bg-navy-500 rounded-full flex-shrink-0"></span>
-                      <span className="font-mono">{file}</span>
+                      <span className="font-mono truncate" title={file.name}>
+                        {file.name.replace('assets/', '')}
+                      </span>
+                      {file.size && (
+                        <span className="text-xs text-surface-500 ml-auto">
+                          {(file.size / 1024).toFixed(1)}KB
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
                 <p className="text-xs text-surface-500 mt-3">
                   Assets path: {template.assetsPath}
+                </p>
+                <p className="text-xs text-surface-400 mt-1">
+                  Note: Assets cannot be edited here. To update assets, upload a new template ZIP.
                 </p>
               </div>
             </div>

@@ -125,7 +125,8 @@ router.post('/', asyncHandler(async (req, res) => {
  * Update template
  */
 router.patch('/:id', asyncHandler(async (req, res) => {
-  const data = updateTemplateSchema.parse(req.body);
+  // Use partial schema to allow optional updates
+  const data = updateTemplateSchema.partial().parse(req.body);
 
   const existing = await prisma.template.findUnique({
     where: { id: req.params.id },
