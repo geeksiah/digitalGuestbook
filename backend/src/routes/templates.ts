@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import AdmZip from 'adm-zip';
+import sharp from 'sharp'; // npm install sharp
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
@@ -16,9 +17,6 @@ router.use(authenticateAdmin);
 /**
  * GET /api/templates
  * List all templates with optional type filter
- * Query params:
- *   - type: filter by template type
- *   - includeContent: if 'true', include HTML/CSS/JS content for previews
  */
 router.get('/', asyncHandler(async (req, res) => {
   const { type, includeContent } = req.query;
@@ -34,6 +32,8 @@ router.get('/', asyncHandler(async (req, res) => {
     description: true,
     type: true,
     isDefault: true,
+    assetsPath: true,
+    thumbnailPath: true,
     createdAt: true,
     updatedAt: true,
     _count: {
@@ -46,7 +46,7 @@ router.get('/', asyncHandler(async (req, res) => {
     },
   };
 
-  // Include content if requested (for thumbnail previews)
+  // Include content if requested
   if (includeContent === 'true') {
     selectFields.htmlContent = true;
     selectFields.cssContent = true;
@@ -83,20 +83,7 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const template = await prisma.template.findUnique({
     where: { id: req.params.id },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      type: true,
-      htmlContent: true,
-      cssContent: true,
-      jsContent: true,
-      assetsPath: true,
-      thumbnailPath: true,
-      variables: true,
-      isDefault: true,
-      createdAt: true,
-      updatedAt: true,
+    include: {
       eventsAsInvitation: { select: { id: true, name: true, slug: true } },
       eventsAsRsvp: { select: { id: true, name: true, slug: true } },
       eventsAsGuestbook: { select: { id: true, name: true, slug: true } },
@@ -111,213 +98,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
   res.json({ template });
 }));
 
-import { uploadFileFromPath, BUCKETS, fileExists, listFiles, getSignedUrl, isSupabaseConfigured } from '../services/supabaseStorage.js';
-
-// Configure multer for template ZIP uploads
-const templatesDir = path.join(process.cwd(), 'templates');
-if (!fs.existsSync(templatesDir)) {
-  fs.mkdirSync(templatesDir, { recursive: true });
-}
-
-const upload = multer({
-  dest: path.join(templatesDir, 'uploads'),
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only ZIP files are allowed'));
-    }
-  },
-});
-
-/**
- * POST /api/templates/upload
- * Upload template as ZIP file and extract
- */
-router.post('/upload', upload.single('template'), asyncHandler(async (req, res) => {
-  if (!req.file) {
-    throw new AppError('No file uploaded', 400);
-  }
-
-  const { name, description, type } = req.body;
-  
-  if (!name || !name.trim()) {
-    if (fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    throw new AppError('Template name is required', 400);
-  }
-
-  if (!type) {
-    if (fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    throw new AppError('Template type is required', 400);
-  }
-
-  // Validate template type
-  const validTypes = ['INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED'];
-  if (!validTypes.includes(type)) {
-    if (fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    throw new AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);
-  }
-
-  try {
-    // Verify ZIP file is valid
-    let zip: AdmZip;
-    try {
-      zip = new AdmZip(req.file.path);
-      const zipEntries = zip.getEntries();
-      if (zipEntries.length === 0) {
-        throw new Error('ZIP file is empty');
-      }
-    } catch (zipError: any) {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      throw new AppError(`Invalid ZIP file: ${zipError.message}`, 400);
-    }
-
-    // Extract ZIP
-    const extractPath = path.join(templatesDir, 'archives', req.file.filename);
-    if (fs.existsSync(extractPath)) {
-      fs.rmSync(extractPath, { recursive: true, force: true });
-    }
-    fs.mkdirSync(extractPath, { recursive: true });
-    zip.extractAllTo(extractPath, true);
-
-    // Look for template files
-    const indexPath = path.join(extractPath, 'index.html');
-    const cssPath = path.join(extractPath, 'styles.css');
-    const jsPath = path.join(extractPath, 'script.js');
-    const thumbnailPath = path.join(extractPath, 'thumbnail.png');
-
-    let htmlContent = '<div>Template content</div>';
-    let cssContent = '';
-    let jsContent = '';
-    let thumbnailPathRel = null;
-
-    if (fs.existsSync(indexPath)) {
-      htmlContent = fs.readFileSync(indexPath, 'utf-8');
-    } else {
-      // Try to find HTML file
-      const files = fs.readdirSync(extractPath);
-      const htmlFile = files.find(f => f.endsWith('.html'));
-      if (htmlFile) {
-        htmlContent = fs.readFileSync(path.join(extractPath, htmlFile), 'utf-8');
-      }
-    }
-
-    if (fs.existsSync(cssPath)) {
-      cssContent = fs.readFileSync(cssPath, 'utf-8');
-    } else {
-      const files = fs.readdirSync(extractPath);
-      const cssFile = files.find(f => f.endsWith('.css'));
-      if (cssFile) {
-        cssContent = fs.readFileSync(path.join(extractPath, cssFile), 'utf-8');
-      }
-    }
-
-    if (fs.existsSync(jsPath)) {
-      jsContent = fs.readFileSync(jsPath, 'utf-8');
-    } else {
-      const files = fs.readdirSync(extractPath);
-      const jsFile = files.find(f => f.endsWith('.js'));
-      if (jsFile) {
-        jsContent = fs.readFileSync(path.join(extractPath, jsFile), 'utf-8');
-      }
-    }
-
-    // Check for thumbnail
-    const imageFiles = fs.readdirSync(extractPath).filter(f => 
-      /\.(png|jpg|jpeg|gif|webp)$/i.test(f)
-    );
-    if (imageFiles.length > 0) {
-      thumbnailPathRel = `templates/archives/${req.file.filename}/${imageFiles[0]}`;
-    }
-
-    // Relative path from project root (kept for compatibility)
-    const assetsPathRel = `templates/archives/${req.file.filename}`;
-
-    // If Supabase is configured, upload extracted files to Supabase TEMPLATES bucket
-    if (isSupabaseConfigured()) {
-      // Recursively upload files under extractPath preserving folder structure under templates/archives/<id>/...
-      const uploadRecursive = async (dir: string, relativeRoot: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const full = path.join(dir, entry.name);
-          const rel = path.posix.join(relativeRoot, entry.name);
-          if (entry.isDirectory()) {
-            await uploadRecursive(full, rel);
-          } else if (entry.isFile()) {
-            // Upload to Supabase under the same path (templates/archives/<id>/...)
-            try {
-              await uploadFileFromPath(BUCKETS.TEMPLATES, rel, full);
-            } catch (err) {
-              const msg = (err && (err as any).message) ? (err as any).message : String(err);
-              console.error('[Templates] Failed to upload file to Supabase:', rel, msg);
-            }
-          }
-        }
-      };
-
-      // Start uploading files. Use folder root `templates/archives/<id>` and upload contents under that path.
-      const rootRel = `templates/archives/${req.file.filename}`.replace(/\\/g, '/');
-      await uploadRecursive(extractPath, rootRel);
-
-      // After uploading to Supabase we can remove the local extracted files to save space
-      try {
-        fs.rmSync(extractPath, { recursive: true, force: true });
-      } catch (err) {
-        const msg = (err && (err as any).message) ? (err as any).message : String(err);
-        console.warn('[Templates] Failed to remove local extracted files:', msg);
-      }
-    }
-
-    // If setting as default, unset other defaults of same type
-    if (req.body.isDefault === 'true' || req.body.isDefault === true) {
-      await prisma.template.updateMany({
-        where: { type, isDefault: true },
-        data: { isDefault: false },
-      });
-    }
-
-    const template = await prisma.template.create({
-      data: {
-        name,
-        description: description || null,
-        type,
-        htmlContent,
-        cssContent: cssContent || null,
-        jsContent: jsContent || null,
-        // Store the assetsPath (keeps same path string). When Supabase is enabled, files are stored in the TEMPLATES bucket
-        assetsPath: assetsPathRel || null,
-        thumbnailPath: thumbnailPathRel || null,
-        isDefault: req.body.isDefault === 'true' || req.body.isDefault === true,
-      } as any, // Temporary type assertion until Prisma client is regenerated
-    });
-
-    // Clean up uploaded ZIP
-    fs.unlinkSync(req.file.path);
-
-    res.status(201).json({ template, message: 'Template uploaded and extracted successfully' });
-  } catch (error: any) {
-    // Clean up on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    throw new AppError(`Failed to process template: ${error.message}`, 400);
-  }
-}));
-
 /**
  * POST /api/templates
- * Create new template (manual HTML/CSS/JS input)
+ * Create new template
  */
 router.post('/', asyncHandler(async (req, res) => {
   const data = createTemplateSchema.parse(req.body);
@@ -436,6 +219,8 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
       htmlContent: source.htmlContent,
       cssContent: source.cssContent,
       jsContent: source.jsContent,
+      assetsPath: source.assetsPath,
+      thumbnailPath: source.thumbnailPath,
       variables: source.variables,
       isDefault: false,
     },
@@ -444,246 +229,464 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
   res.status(201).json({ template });
 }));
 
+// ============================================
+// TEMPLATE UPLOAD & ASSET MANAGEMENT
+// ============================================
+
+const templatesDir = path.join(process.cwd(), 'templates');
+if (!fs.existsSync(templatesDir)) {
+  fs.mkdirSync(templatesDir, { recursive: true });
+}
+
+const upload = multer({
+  dest: path.join(templatesDir, 'uploads'),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only ZIP files are allowed'));
+    }
+  },
+});
+
 /**
- * POST /api/templates/assign/:eventId
- * Assign templates to an event (with per-event asset isolation)
+ * POST /api/templates/upload
+ * Upload template as ZIP file and extract
+ * IMPROVED: Better asset handling, thumbnail generation, preview support
  */
-router.post('/assign/:eventId', asyncHandler(async (req, res) => {
-  const { eventId } = req.params;
-  const {
-    invitationTemplateId,
-    rsvpTemplateId,
-    guestbookTemplateId,
-    guestbookVideoTemplateId,
-    guestbookAudioTemplateId,
-    guestbookPhotoTemplateId,
-    boothTemplateId,
-    boothVideoTemplateId,
-    boothAudioTemplateId,
-    boothPhotoTemplateId,
-    thankYouTemplateId,
-    liveLandingTemplateId,
-    eventEndedTemplateId,
-  } = req.body;
-
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-  });
-
-  if (!event) {
-    throw new AppError('Event not found', 404);
+router.post('/upload', upload.single('template'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError('No file uploaded', 400);
   }
 
-  // Validate template IDs and types
-  const templateAssignments: any = {};
-
-  // Helper to validate and add template
-  const validateAndAdd = async (
-    templateId: string | null | undefined, 
-    fieldName: string, 
-    expectedType: string, 
-    requiresService?: { enabled: boolean; name: string }
-  ) => {
-    if (templateId === null) {
-      // Explicitly set to null to remove assignment
-      templateAssignments[fieldName] = null;
-      return;
+  const { name, description, type } = req.body;
+  
+  // Validation
+  if (!name || !name.trim()) {
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
     }
-    if (!templateId) return;
-    
-    if (requiresService && !requiresService.enabled) {
-      throw new AppError(`Cannot assign ${expectedType} template - ${requiresService.name} service is disabled`, 400);
-    }
-    
-    const template = await prisma.template.findUnique({ where: { id: templateId } });
-    if (!template || template.type !== expectedType) {
-      throw new AppError(`Invalid ${expectedType} template`, 400);
-    }
-    templateAssignments[fieldName] = templateId;
-  };
-
-  await validateAndAdd(invitationTemplateId, 'invitationTemplateId', 'INVITATION', 
-    { enabled: event.invitationEnabled, name: 'invitation' });
-  await validateAndAdd(rsvpTemplateId, 'rsvpTemplateId', 'RSVP', 
-    { enabled: event.rsvpEnabled, name: 'RSVP' });
-  await validateAndAdd(guestbookTemplateId, 'guestbookTemplateId', 'GUESTBOOK', 
-    { enabled: event.guestbookEnabled, name: 'guestbook' });
-  await validateAndAdd(guestbookVideoTemplateId, 'guestbookVideoTemplateId', 'GUESTBOOK_VIDEO', 
-    { enabled: event.guestbookEnabled, name: 'guestbook' });
-  await validateAndAdd(guestbookAudioTemplateId, 'guestbookAudioTemplateId', 'GUESTBOOK_AUDIO', 
-    { enabled: event.guestbookEnabled, name: 'guestbook' });
-  await validateAndAdd(guestbookPhotoTemplateId, 'guestbookPhotoTemplateId', 'GUESTBOOK_PHOTO', 
-    { enabled: event.guestbookEnabled, name: 'guestbook' });
-  await validateAndAdd(boothTemplateId, 'boothTemplateId', 'BOOTH', 
-    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
-  await validateAndAdd(boothVideoTemplateId, 'boothVideoTemplateId', 'BOOTH_VIDEO', 
-    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
-  await validateAndAdd(boothAudioTemplateId, 'boothAudioTemplateId', 'BOOTH_AUDIO', 
-    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
-  await validateAndAdd(boothPhotoTemplateId, 'boothPhotoTemplateId', 'BOOTH_PHOTO', 
-    { enabled: event.guestbookEnabled, name: 'guestbook/booth' });
-  await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
-  await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
-  await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
-
-  // Copy template assets to event-specific directory for isolation using service
-  const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
-  await copyTemplateAssetsForEvent(eventId, {
-    invitationTemplateId,
-    rsvpTemplateId,
-    guestbookTemplateId,
-    guestbookVideoTemplateId,
-    guestbookAudioTemplateId,
-    guestbookPhotoTemplateId,
-    boothTemplateId,
-    boothVideoTemplateId,
-    boothAudioTemplateId,
-    boothPhotoTemplateId,
-    thankYouTemplateId,
-    liveLandingTemplateId,
-    eventEndedTemplateId,
-  });
-
-  const updatedEvent = await prisma.event.update({
-    where: { id: eventId },
-    data: templateAssignments,
-    include: {
-      invitationTemplate: true,
-      rsvpTemplate: true,
-      guestbookTemplate: true,
-      guestbookVideoTemplate: true,
-      guestbookAudioTemplate: true,
-      guestbookPhotoTemplate: true,
-      boothTemplate: true,
-      boothVideoTemplate: true,
-      boothAudioTemplate: true,
-      boothPhotoTemplate: true,
-      thankYouTemplate: true,
-      liveLandingTemplate: true,
-      eventEndedTemplate: true,
-    },
-  });
-
-  // Create audit log
-  await prisma.auditLog.create({
-    data: {
-      eventId,
-      adminId: req.admin!.id,
-      action: 'TEMPLATES_ASSIGNED',
-      entityType: 'EVENT',
-      entityId: eventId,
-      details: JSON.stringify(templateAssignments),
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-    },
-  });
-
-  res.json({ event: updatedEvent, message: 'Templates assigned and assets copied successfully' });
-}));
-
-// Serve template asset files publicly via API
-router.get('/assets/:assetPath(*)', asyncHandler(async (req, res) => {
-  const assetPath = req.params.assetPath as string;
-  if (!assetPath) {
-    throw new AppError('Asset path required', 400);
+    throw new AppError('Template name is required', 400);
   }
 
-  // Resolve and secure path
-  const templatesDir = path.join(process.cwd(), 'templates');
-    const fullPath = path.resolve(process.cwd(), assetPath);
-
-  if (!fullPath.startsWith(templatesDir)) {
-    throw new AppError('Invalid asset path', 403);
+  if (!type) {
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    throw new AppError('Template type is required', 400);
   }
 
-    // If the path looks like a local templates path, ensure it stays inside the templates folder
-    if (fullPath.startsWith(templatesDir)) {
-      if (fs.existsSync(fullPath)) {
-        return res.sendFile(fullPath);
+  // Validate template type
+  const validTypes = [
+    'INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO', 
+    'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO', 
+    'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED'
+  ];
+  
+  if (!validTypes.includes(type)) {
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    throw new AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);
+  }
+
+  try {
+    // Verify ZIP file is valid
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(req.file.path);
+      const zipEntries = zip.getEntries();
+      if (zipEntries.length === 0) {
+        throw new Error('ZIP file is empty');
       }
-      // If file missing locally and Supabase is configured, try to serve from Supabase
+    } catch (zipError: any) {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      throw new AppError(`Invalid ZIP file: ${zipError.message}`, 400);
     }
 
-    // Fallback: if Supabase is configured, attempt to serve the asset from the TEMPLATES bucket
-    if (isSupabaseConfigured()) {
-      try {
-        // Normalize to Supabase key (we keep same path structure inside bucket)
-        const normalized = assetPath.replace(/^\/+/, '').replace(/\\/g, '/');
-        const exists = await fileExists(BUCKETS.TEMPLATES, normalized);
-        if (exists) {
-          const signed = await getSignedUrl(BUCKETS.TEMPLATES, normalized, 60 * 60); // 1 hour
-          return res.redirect(signed);
+    // Create unique template ID
+    const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Extract ZIP to permanent location
+    const extractPath = path.join(templatesDir, templateId);
+    if (fs.existsSync(extractPath)) {
+      fs.rmSync(extractPath, { recursive: true, force: true });
+    }
+    fs.mkdirSync(extractPath, { recursive: true });
+    zip.extractAllTo(extractPath, true);
+
+    console.log(`[Templates] Extracted ZIP to ${extractPath}`);
+
+    // Look for template files
+    const indexPath = path.join(extractPath, 'index.html');
+    const cssPath = path.join(extractPath, 'styles.css');
+    const jsPath = path.join(extractPath, 'script.js');
+
+    let htmlContent = '';
+    let cssContent = '';
+    let jsContent = '';
+
+    // Find HTML file (required)
+    if (fs.existsSync(indexPath)) {
+      htmlContent = fs.readFileSync(indexPath, 'utf-8');
+    } else {
+      // Try to find any HTML file
+      const files = fs.readdirSync(extractPath);
+      const htmlFile = files.find(f => f.toLowerCase().endsWith('.html'));
+      if (htmlFile) {
+        htmlContent = fs.readFileSync(path.join(extractPath, htmlFile), 'utf-8');
+      } else {
+        throw new AppError('No HTML file found in ZIP', 400);
+      }
+    }
+
+    // Find CSS file (optional)
+    if (fs.existsSync(cssPath)) {
+      cssContent = fs.readFileSync(cssPath, 'utf-8');
+    } else {
+      const files = fs.readdirSync(extractPath);
+      const cssFile = files.find(f => f.toLowerCase().endsWith('.css'));
+      if (cssFile) {
+        cssContent = fs.readFileSync(path.join(extractPath, cssFile), 'utf-8');
+      }
+    }
+
+    // Find JS file (optional)
+    if (fs.existsSync(jsPath)) {
+      jsContent = fs.readFileSync(jsPath, 'utf-8');
+    } else {
+      const files = fs.readdirSync(extractPath);
+      const jsFile = files.find(f => f.toLowerCase().endsWith('.js'));
+      if (jsFile) {
+        jsContent = fs.readFileSync(path.join(extractPath, jsFile), 'utf-8');
+      }
+    }
+
+    // Generate thumbnail from first image found or create placeholder
+    let thumbnailPath: string | null = null;
+    
+    const findThumbnail = (dir: string): string | null => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        
+        if (entry.isDirectory() && entry.name !== 'node_modules') {
+          const found = findThumbnail(fullPath);
+          if (found) return found;
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
+            // Prioritize files named 'thumbnail', 'preview', or 'cover'
+            if (/thumbnail|preview|cover/i.test(entry.name)) {
+              return fullPath;
+            }
+            // Otherwise return first image found
+            if (!thumbnailPath) {
+              return fullPath;
+            }
+          }
         }
-      } catch (err) {
-        const msg = (err && (err as any).message) ? (err as any).message : String(err);
-        console.error('[Templates] Supabase asset serve error:', msg);
+      }
+      return null;
+    };
+
+    const sourceThumbnail = findThumbnail(extractPath);
+    
+    if (sourceThumbnail) {
+      // Generate optimized thumbnail
+      const thumbnailFilename = `${templateId}_thumbnail.jpg`;
+      const thumbnailOutputPath = path.join(templatesDir, 'thumbnails', thumbnailFilename);
+      
+      const thumbnailsDir = path.join(templatesDir, 'thumbnails');
+      if (!fs.existsSync(thumbnailsDir)) {
+        fs.mkdirSync(thumbnailsDir, { recursive: true });
+      }
+
+      try {
+        await sharp(sourceThumbnail)
+          .resize(400, 300, { fit: 'cover' })
+          .jpeg({ quality: 80 })
+          .toFile(thumbnailOutputPath);
+        
+        thumbnailPath = `templates/thumbnails/${thumbnailFilename}`;
+        console.log(`[Templates] Generated thumbnail at ${thumbnailPath}`);
+      } catch (thumbError) {
+        console.error('[Templates] Failed to generate thumbnail:', thumbError);
       }
     }
 
-    throw new AppError('Asset not found', 404);
+    // Store relative assets path (from templates directory)
+    const assetsPath = `templates/${templateId}`;
+
+    // Create template record in database
+    const template = await prisma.template.create({
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        type,
+        htmlContent,
+        cssContent: cssContent || null,
+        jsContent: jsContent || null,
+        assetsPath,
+        thumbnailPath,
+        isDefault: false,
+      },
+    });
+
+    // Clean up uploaded file
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    console.log(`[Templates] Created template id=${template.id} name=${template.name} type=${template.type}`);
+
+    res.json({ 
+      template,
+      message: 'Template uploaded successfully',
+      assets: {
+        path: assetsPath,
+        thumbnail: thumbnailPath,
+        hasCSS: !!cssContent,
+        hasJS: !!jsContent,
+      }
+    });
+
+  } catch (error: any) {
+    // Clean up on error
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    console.error('[Templates] Upload failed:', error);
+    throw error;
+  }
 }));
 
 /**
- * GET /api/templates/:id/assets
- * List assets files for a template
+ * GET /api/templates/:id/assets/*
+ * Serve template assets (images, fonts, etc.)
  */
-router.get('/:id/assets', asyncHandler(async (req, res) => {
+router.get('/:id/assets/*', asyncHandler(async (req, res) => {
+  const templateId = req.params.id;
+  const assetPath = req.params[0]; // Everything after /assets/
+
   const template = await prisma.template.findUnique({
-    where: { id: req.params.id },
+    where: { id: templateId },
     select: { assetsPath: true },
   });
 
   if (!template || !template.assetsPath) {
-    return res.json({ assets: [] });
+    throw new AppError('Template or assets not found', 404);
   }
 
-    try {
-      // If Supabase is configured and the local assets directory is missing, try listing from Supabase
-      const assetsDir = path.join(process.cwd(), template.assetsPath);
-      if (fs.existsSync(assetsDir)) {
-        const files = fs.readdirSync(assetsDir);
-        const assets = files.map(file => {
-          const filePath = path.join(assetsDir, file);
-          const stats = fs.statSync(filePath);
-          return {
-            name: file,
-            size: stats.size,
-            isDirectory: stats.isDirectory(),
-            modified: stats.mtime,
-          };
-        });
-        return res.json({ assets });
-      }
+  // Construct full file path
+  const fullPath = path.join(
+    process.cwd(),
+    template.assetsPath,
+    assetPath
+  );
 
-      if (isSupabaseConfigured()) {
-        // Try to list files from Supabase under the same path
-        const normalized = template.assetsPath.replace(/^\/+/, '').replace(/\\/g, '/');
-        const files = await listFiles(BUCKETS.TEMPLATES, normalized);
-        const assets = await Promise.all(files.map(async (f: any) => {
-          // For each file, get a signed URL for preview (short lived)
-          const filePath = normalized.endsWith('/') ? `${normalized}${f.name}` : `${normalized}/${f.name}`;
-          let url = '';
-          try {
-            url = await getSignedUrl(BUCKETS.TEMPLATES, filePath, 60 * 60);
-          } catch (e) {
-            url = '';
-          }
-          return {
-            name: f.name,
-            id: f.id,
-            updated_at: f.updated_at,
-            created_at: f.created_at,
-            url,
-          };
-        }));
-        return res.json({ assets });
-      }
+  // Security: ensure path is within template directory
+  const templateDir = path.join(process.cwd(), template.assetsPath);
+  const resolvedPath = path.resolve(fullPath);
+  
+  if (!resolvedPath.startsWith(templateDir)) {
+    throw new AppError('Invalid asset path', 403);
+  }
 
-      return res.json({ assets: [] });
-    } catch (error) {
-      console.error('Error reading assets directory:', error);
-      res.json({ assets: [] });
+  // Check if file exists
+  if (!fs.existsSync(resolvedPath)) {
+    throw new AppError('Asset not found', 404);
+  }
+
+  // Serve the file
+  res.sendFile(resolvedPath);
+}));
+
+/**
+ * GET /api/templates/:id/preview
+ * Get template preview/thumbnail
+ */
+router.get('/:id/preview', asyncHandler(async (req, res) => {
+  const template = await prisma.template.findUnique({
+    where: { id: req.params.id },
+    select: { thumbnailPath: true, assetsPath: true, name: true },
+  });
+
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+
+  if (template.thumbnailPath) {
+    const thumbnailFullPath = path.join(process.cwd(), template.thumbnailPath);
+    
+    if (fs.existsSync(thumbnailFullPath)) {
+      return res.sendFile(thumbnailFullPath);
     }
+  }
+
+  // Return placeholder if no thumbnail
+  res.status(404).json({ 
+    message: 'No preview available',
+    template: {
+      id: req.params.id,
+      name: template.name,
+    }
+  });
+}));
+
+/**
+ * GET /api/templates/:id/files
+ * List all files in template (for editing)
+ */
+router.get('/:id/files', asyncHandler(async (req, res) => {
+  const template = await prisma.template.findUnique({
+    where: { id: req.params.id },
+    select: { assetsPath: true, htmlContent: true, cssContent: true, jsContent: true },
+  });
+
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+
+  const files: any[] = [];
+
+  // Add main template files
+  files.push({
+    name: 'index.html',
+    type: 'html',
+    size: template.htmlContent.length,
+    editable: true,
+  });
+
+  if (template.cssContent) {
+    files.push({
+      name: 'styles.css',
+      type: 'css',
+      size: template.cssContent.length,
+      editable: true,
+    });
+  }
+
+  if (template.jsContent) {
+    files.push({
+      name: 'script.js',
+      type: 'javascript',
+      size: template.jsContent.length,
+      editable: true,
+    });
+  }
+
+  // List assets if directory exists
+  if (template.assetsPath) {
+    const assetsFullPath = path.join(process.cwd(), template.assetsPath);
+    
+    if (fs.existsSync(assetsFullPath)) {
+      const listFiles = (dir: string, basePath: string = '') => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const relativePath = path.join(basePath, entry.name);
+          const fullPath = path.join(dir, entry.name);
+          
+          if (entry.isDirectory()) {
+            files.push({
+              name: relativePath,
+              type: 'directory',
+              editable: false,
+            });
+            listFiles(fullPath, relativePath);
+          } else {
+            const stats = fs.statSync(fullPath);
+            const ext = path.extname(entry.name).toLowerCase();
+            
+            files.push({
+              name: relativePath,
+              type: ext.slice(1) || 'file',
+              size: stats.size,
+              editable: ['.html', '.css', '.js', '.json', '.txt', '.md'].includes(ext),
+            });
+          }
+        }
+      };
+
+      listFiles(assetsFullPath, 'assets');
+    }
+  }
+
+  res.json({ files });
+}));
+
+/**
+ * GET /api/templates/:id/file-content
+ * Get content of a specific file in template
+ */
+router.get('/:id/file-content', asyncHandler(async (req, res) => {
+  const { filePath } = req.query;
+
+  if (!filePath || typeof filePath !== 'string') {
+    throw new AppError('File path is required', 400);
+  }
+
+  const template = await prisma.template.findUnique({
+    where: { id: req.params.id },
+    select: { htmlContent: true, cssContent: true, jsContent: true, assetsPath: true },
+  });
+
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+
+  // Handle main template files
+  if (filePath === 'index.html') {
+    return res.json({ content: template.htmlContent });
+  }
+  if (filePath === 'styles.css') {
+    return res.json({ content: template.cssContent || '' });
+  }
+  if (filePath === 'script.js') {
+    return res.json({ content: template.jsContent || '' });
+  }
+
+  // Handle asset files
+  if (template.assetsPath && filePath.startsWith('assets/')) {
+    const fullPath = path.join(
+      process.cwd(),
+      template.assetsPath,
+      filePath.replace('assets/', '')
+    );
+
+    // Security check
+    const templateDir = path.join(process.cwd(), template.assetsPath);
+    const resolvedPath = path.resolve(fullPath);
+    
+    if (!resolvedPath.startsWith(templateDir)) {
+      throw new AppError('Invalid file path', 403);
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
+      throw new AppError('File not found', 404);
+    }
+
+    // Check if file is text-based
+    const ext = path.extname(filePath).toLowerCase();
+    const textExtensions = ['.html', '.css', '.js', '.json', '.txt', '.md', '.xml', '.svg'];
+    
+    if (textExtensions.includes(ext)) {
+      const content = fs.readFileSync(resolvedPath, 'utf-8');
+      return res.json({ content });
+    } else {
+      throw new AppError('File type not supported for editing', 400);
+    }
+  }
+
+  throw new AppError('File not found', 404);
 }));
 
 export default router;

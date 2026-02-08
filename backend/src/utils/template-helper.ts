@@ -1,48 +1,87 @@
 import prisma from '../utils/prisma.js';
 
+/**
+ * Get template for an event page
+ * CRITICAL FIX: Only return assigned template, NO automatic fallback to defaults
+ * This ensures events use their explicitly assigned templates
+ */
 export async function getEventTemplate(
   templateType: string,
   assignedTemplateId: string | null | undefined
-) {
-  try {
-    // 1. Try assigned template first
-    if (assignedTemplateId) {
-      const assigned = await prisma.template.findUnique({
-        where: { id: assignedTemplateId },
-      });
-
-      if (!assigned) {
-        console.info(`[TemplateHelper] Assigned template id=${assignedTemplateId} not found`);
-      } else {
-        // If the types match, use it
-        if (assigned.type === templateType) {
-          return assigned;
-        }
-
-        // If types mismatch but the template contains HTML content (you may have pasted HTML),
-        // prefer using the assigned template so admin-pasted templates still render.
-        if (assigned.htmlContent && assigned.htmlContent.trim().length > 0) {
-          console.warn(`[TemplateHelper] Assigned template id=${assigned.id} has type=${assigned.type} which does not match expected=${templateType}, but contains htmlContent; using assigned template.`);
-          return assigned;
-        }
-
-        console.info(`[TemplateHelper] Assigned template id=${assigned.id} type=${assigned.type} does not match expected=${templateType}; falling back to default template.`);
-      }
-    }
-
-    // 2. Fallback to default
-    const def = await prisma.template.findFirst({
-      where: { type: templateType, isDefault: true },
-    });
-
-    if (!def) {
-      console.info(`[TemplateHelper] No default template found for type=${templateType}`);
-    }
-
-    return def || null;
-  } catch (err) {
-    const msg = (err && (err as any).message) ? (err as any).message : String(err);
-    console.error('[TemplateHelper] Error resolving template:', msg);
-    throw err;
+): Promise<any | null> {
+  // If no template assigned, return null (let caller handle fallback)
+  if (!assignedTemplateId) {
+    console.warn(`[TemplateHelper] No template assigned for type=${templateType}`);
+    return null;
   }
+
+  // Get the assigned template
+  const assigned = await prisma.template.findUnique({
+    where: { id: assignedTemplateId }
+  });
+
+  if (!assigned) {
+    console.error(`[TemplateHelper] Assigned template not found: id=${assignedTemplateId} type=${templateType}`);
+    return null;
+  }
+
+  // CRITICAL: Verify type matches to prevent wrong template being served
+  if (assigned.type !== templateType) {
+    console.error(
+      `[TemplateHelper] Template type mismatch: assigned=${assignedTemplateId} ` +
+      `expectedType=${templateType} actualType=${assigned.type}`
+    );
+    return null;
+  }
+
+  console.info(
+    `[TemplateHelper] Using assigned template: id=${assigned.id} ` +
+    `type=${assigned.type} name=${assigned.name}`
+  );
+  
+  return assigned;
+}
+
+/**
+ * Get default template as explicit fallback
+ * Use this when you WANT the default, not as an automatic fallback
+ */
+export async function getDefaultTemplate(templateType: string) {
+  const defaultTemplate = await prisma.template.findFirst({
+    where: { 
+      type: templateType, 
+      isDefault: true 
+    }
+  });
+
+  if (!defaultTemplate) {
+    console.warn(`[TemplateHelper] No default template found for type=${templateType}`);
+  }
+
+  return defaultTemplate;
+}
+
+/**
+ * Get template with explicit fallback behavior
+ * This gives callers control over when to use defaults
+ */
+export async function getEventTemplateWithFallback(
+  templateType: string,
+  assignedTemplateId: string | null | undefined,
+  useDefaultFallback: boolean = false
+) {
+  // Try assigned template first
+  const assigned = await getEventTemplate(templateType, assignedTemplateId);
+  
+  if (assigned) {
+    return assigned;
+  }
+
+  // Only fall back to default if explicitly requested
+  if (useDefaultFallback) {
+    console.info(`[TemplateHelper] Falling back to default for type=${templateType}`);
+    return await getDefaultTemplate(templateType);
+  }
+
+  return null;
 }
