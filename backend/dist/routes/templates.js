@@ -102,6 +102,7 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     }
     res.json({ template });
 }));
+const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 // Configure multer for template ZIP uploads
 const templatesDir = path_1.default.join(process.cwd(), 'templates');
 if (!fs_1.default.existsSync(templatesDir)) {
@@ -218,8 +219,43 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
         if (imageFiles.length > 0) {
             thumbnailPathRel = `templates/archives/${req.file.filename}/${imageFiles[0]}`;
         }
-        // Relative path from project root
+        // Relative path from project root (kept for compatibility)
         const assetsPathRel = `templates/archives/${req.file.filename}`;
+        // If Supabase is configured, upload extracted files to Supabase TEMPLATES bucket
+        if ((0, supabaseStorage_js_1.isSupabaseConfigured)()) {
+            // Recursively upload files under extractPath preserving folder structure under templates/archives/<id>/...
+            const uploadRecursive = async (dir, relativeRoot) => {
+                const entries = fs_1.default.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    const full = path_1.default.join(dir, entry.name);
+                    const rel = path_1.default.posix.join(relativeRoot, entry.name);
+                    if (entry.isDirectory()) {
+                        await uploadRecursive(full, rel);
+                    }
+                    else if (entry.isFile()) {
+                        // Upload to Supabase under the same path (templates/archives/<id>/...)
+                        try {
+                            await (0, supabaseStorage_js_1.uploadFileFromPath)(supabaseStorage_js_1.BUCKETS.TEMPLATES, rel, full);
+                        }
+                        catch (err) {
+                            const msg = (err && err.message) ? err.message : String(err);
+                            console.error('[Templates] Failed to upload file to Supabase:', rel, msg);
+                        }
+                    }
+                }
+            };
+            // Start uploading files. Use folder root `templates/archives/<id>` and upload contents under that path.
+            const rootRel = `templates/archives/${req.file.filename}`.replace(/\\/g, '/');
+            await uploadRecursive(extractPath, rootRel);
+            // After uploading to Supabase we can remove the local extracted files to save space
+            try {
+                fs_1.default.rmSync(extractPath, { recursive: true, force: true });
+            }
+            catch (err) {
+                const msg = (err && err.message) ? err.message : String(err);
+                console.warn('[Templates] Failed to remove local extracted files:', msg);
+            }
+        }
         // If setting as default, unset other defaults of same type
         if (req.body.isDefault === 'true' || req.body.isDefault === true) {
             await prisma_js_1.default.template.updateMany({
@@ -235,6 +271,7 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
                 htmlContent,
                 cssContent: cssContent || null,
                 jsContent: jsContent || null,
+                // Store the assetsPath (keeps same path string). When Supabase is enabled, files are stored in the TEMPLATES bucket
                 assetsPath: assetsPathRel || null,
                 thumbnailPath: thumbnailPathRel || null,
                 isDefault: req.body.isDefault === 'true' || req.body.isDefault === true,
@@ -466,10 +503,30 @@ router.get('/assets/:assetPath(*)', (0, errorHandler_js_1.asyncHandler)(async (r
     if (!fullPath.startsWith(templatesDir)) {
         throw new errorHandler_js_1.AppError('Invalid asset path', 403);
     }
-    if (!fs_1.default.existsSync(fullPath)) {
-        throw new errorHandler_js_1.AppError('Asset not found', 404);
+    // If the path looks like a local templates path, ensure it stays inside the templates folder
+    if (fullPath.startsWith(templatesDir)) {
+        if (fs_1.default.existsSync(fullPath)) {
+            return res.sendFile(fullPath);
+        }
+        // If file missing locally and Supabase is configured, try to serve from Supabase
     }
-    res.sendFile(fullPath);
+    // Fallback: if Supabase is configured, attempt to serve the asset from the TEMPLATES bucket
+    if ((0, supabaseStorage_js_1.isSupabaseConfigured)()) {
+        try {
+            // Normalize to Supabase key (we keep same path structure inside bucket)
+            const normalized = assetPath.replace(/^\/+/, '').replace(/\\/g, '/');
+            const exists = await (0, supabaseStorage_js_1.fileExists)(supabaseStorage_js_1.BUCKETS.TEMPLATES, normalized);
+            if (exists) {
+                const signed = await (0, supabaseStorage_js_1.getSignedUrl)(supabaseStorage_js_1.BUCKETS.TEMPLATES, normalized, 60 * 60); // 1 hour
+                return res.redirect(signed);
+            }
+        }
+        catch (err) {
+            const msg = (err && err.message) ? err.message : String(err);
+            console.error('[Templates] Supabase asset serve error:', msg);
+        }
+    }
+    throw new errorHandler_js_1.AppError('Asset not found', 404);
 }));
 /**
  * GET /api/templates/:id/assets
@@ -484,22 +541,47 @@ router.get('/:id/assets', (0, errorHandler_js_1.asyncHandler)(async (req, res) =
         return res.json({ assets: [] });
     }
     try {
+        // If Supabase is configured and the local assets directory is missing, try listing from Supabase
         const assetsDir = path_1.default.join(process.cwd(), template.assetsPath);
-        if (!fs_1.default.existsSync(assetsDir)) {
-            return res.json({ assets: [] });
+        if (fs_1.default.existsSync(assetsDir)) {
+            const files = fs_1.default.readdirSync(assetsDir);
+            const assets = files.map(file => {
+                const filePath = path_1.default.join(assetsDir, file);
+                const stats = fs_1.default.statSync(filePath);
+                return {
+                    name: file,
+                    size: stats.size,
+                    isDirectory: stats.isDirectory(),
+                    modified: stats.mtime,
+                };
+            });
+            return res.json({ assets });
         }
-        const files = fs_1.default.readdirSync(assetsDir);
-        const assets = files.map(file => {
-            const filePath = path_1.default.join(assetsDir, file);
-            const stats = fs_1.default.statSync(filePath);
-            return {
-                name: file,
-                size: stats.size,
-                isDirectory: stats.isDirectory(),
-                modified: stats.mtime,
-            };
-        });
-        res.json({ assets });
+        if ((0, supabaseStorage_js_1.isSupabaseConfigured)()) {
+            // Try to list files from Supabase under the same path
+            const normalized = template.assetsPath.replace(/^\/+/, '').replace(/\\/g, '/');
+            const files = await (0, supabaseStorage_js_1.listFiles)(supabaseStorage_js_1.BUCKETS.TEMPLATES, normalized);
+            const assets = await Promise.all(files.map(async (f) => {
+                // For each file, get a signed URL for preview (short lived)
+                const filePath = normalized.endsWith('/') ? `${normalized}${f.name}` : `${normalized}/${f.name}`;
+                let url = '';
+                try {
+                    url = await (0, supabaseStorage_js_1.getSignedUrl)(supabaseStorage_js_1.BUCKETS.TEMPLATES, filePath, 60 * 60);
+                }
+                catch (e) {
+                    url = '';
+                }
+                return {
+                    name: f.name,
+                    id: f.id,
+                    updated_at: f.updated_at,
+                    created_at: f.created_at,
+                    url,
+                };
+            }));
+            return res.json({ assets });
+        }
+        return res.json({ assets: [] });
     }
     catch (error) {
         console.error('Error reading assets directory:', error);
