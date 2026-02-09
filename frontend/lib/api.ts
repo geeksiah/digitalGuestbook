@@ -223,7 +223,11 @@ export const ownersApi = {
 export const adminApi = {
   dashboard: () => api.get('/admin/dashboard'),
   sales: (params?: any) => api.get('/admin/sales', { params }),
+  getSales: (params?: any) => api.get('/admin/sales', { params }),
   payouts: (params?: any) => api.get('/admin/payouts', { params }),
+  getPayouts: (params?: any) => api.get('/admin/payouts', { params }),
+  processPayout: (id: string, data: any) => api.post(`/admin/payouts/${id}/process`, data),
+  rejectPayout: (id: string, reason: string) => api.post(`/admin/payouts/${id}/reject`, { reason }),
   users: (params?: any) => api.get('/admin/users', { params }),
 };
 
@@ -239,23 +243,74 @@ export const eventOwnerApi = {
 // Owner auth / dashboard APIs (owner account area)
 export const ownerAuthApi = {
   login: (email: string, password: string) =>
-    axios.post(`${API_BASE_URL}/api/owner/auth/login`, { email, password }),
+    axios.post(`${API_BASE_URL}/api/owner-auth/login`, { email, password }),
+  register: (data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-auth/register`, data),
   me: (token: string) =>
-    axios.get(`${API_BASE_URL}/api/owner/auth/me`, {
+    axios.get(`${API_BASE_URL}/api/owner-auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     }),
+  setupPassword: (email: string, password: string) =>
+    axios.post(`${API_BASE_URL}/api/owner-auth/setup-password`, { email, password }),
+  changePassword: (currentPassword: string, newPassword: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+    return axios.post(`${API_BASE_URL}/api/owner-auth/change-password`,
+      { currentPassword, newPassword },
+      { headers: { Authorization: token ? `Bearer ${token}` : '' } }
+    );
+  },
+  updateProfile: (data: any) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+    return axios.put(`${API_BASE_URL}/api/owner-auth/profile`, data, {
+      headers: { Authorization: token ? `Bearer ${token}` : '' },
+    });
+  },
+  requestPasswordReset: (email: string, reason?: string) =>
+    axios.post(`${API_BASE_URL}/api/owner-auth/request-password-reset`, { email, reason }),
 };
 
+const getOwnerToken = () =>
+  typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+
+const ownerHeaders = () => ({
+  Authorization: `Bearer ${getOwnerToken() || ''}`,
+});
+
+const getOwnerToken = () =>
+  typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+
+const ownerHeaders = () => ({
+  Authorization: `Bearer ${getOwnerToken() || ''}`,
+});
+
 export const ownerDashboardApi = {
-  events: (token: string, params?: any) =>
-    axios.get(`${API_BASE_URL}/api/owner/events`, {
-      params,
-      headers: { Authorization: `Bearer ${token}` },
+  events: (token?: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
+      params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
     }),
-  payouts: (token: string, params?: any) =>
-    axios.get(`${API_BASE_URL}/api/owner/payouts`, {
-      params,
-      headers: { Authorization: `Bearer ${token}` },
+  getEvents: (params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
+      params, headers: ownerHeaders(),
+    }),
+  payouts: (token?: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, {
+      params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
+    }),
+  getPayouts: (params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, {
+      params, headers: ownerHeaders(),
+    }),
+  requestPayout: (data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/payouts`, data, {
+      headers: ownerHeaders(),
+    }),
+  getWallet: () =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/wallet`, {
+      headers: ownerHeaders(),
+    }),
+  updateWallet: (data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet`, data, {
+      headers: ownerHeaders(),
     }),
 };
 
