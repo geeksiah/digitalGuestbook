@@ -165,6 +165,8 @@ export const guestbookApi = {
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     ),
+  generateSessionQR: (eventId: string, deviceId: string, sessionStart: string) =>
+    axios.post(`${API_BASE_URL}/api/guestbook/${eventId}/booth/session-qr`, { deviceId, sessionStart }),
 };
 
 // Couple Portal API
@@ -189,19 +191,26 @@ export const settingsApi = {
 
 // Ticketing API (admin/owner)
 export const ticketingApi = {
+  // Existing
   listTickets: (eventId: string) => api.get(`/tickets/event/${eventId}`),
   getTicket: (id: string) => api.get(`/tickets/${id}`),
   createTicket: (eventId: string, data: any) => api.post(`/tickets/event/${eventId}`, data),
   updateTicket: (id: string, data: any) => api.patch(`/tickets/${id}`, data),
   deleteTicket: (id: string) => api.delete(`/tickets/${id}`),
   stats: (eventId: string) => api.get(`/tickets/event/${eventId}/stats`),
-  getTicketTypes: (eventId: string) =>
-    api.get(`/tickets/event/${eventId}/types`),
+  getTicketTypes: (eventId: string) => api.get(`/tickets/event/${eventId}/types`),
   // Custom Fields
-getCustomFields: (eventId: string) => api.get(`/ticketing/events/${eventId}/fields`),
-createCustomField: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/fields`, data),
-updateCustomField: (eventId: string, fieldId: string, data: any) => api.put(`/ticketing/events/${eventId}/fields/${fieldId}`, data),
-deleteCustomField: (eventId: string, fieldId: string) => api.delete(`/ticketing/events/${eventId}/fields/${fieldId}`),
+  getCustomFields: (eventId: string) => api.get(`/ticketing/events/${eventId}/fields`),
+  createCustomField: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/fields`, data),
+  updateCustomField: (eventId: string, fieldId: string, data: any) => api.put(`/ticketing/events/${eventId}/fields/${fieldId}`, data),
+  deleteCustomField: (eventId: string, fieldId: string) => api.delete(`/ticketing/events/${eventId}/fields/${fieldId}`),
+  // NEW — aliases used by TicketsTab.tsx
+  createTicketType: (eventId: string, data: any) => api.post(`/tickets/event/${eventId}`, data),
+  updateTicketType: (eventId: string, id: string, data: any) => api.patch(`/tickets/${id}`, data),
+  deleteTicketType: (eventId: string, id: string) => api.delete(`/tickets/${id}`),
+  // Payment gateway methods
+  getPaymentGateway: (eventId: string) => api.get(`/payment-gateways/event/${eventId}`),
+  updatePaymentGateway: (eventId: string, data: any) => api.post(`/payment-gateways/event/${eventId}`, data),
 };
 
 // Owners API (admin)
@@ -233,11 +242,40 @@ export const adminApi = {
 
 // Event Owner “token” portal API (no admin_token; uses token in URL)
 export const eventOwnerApi = {
+  // Existing
   getEvent: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}`),
   getMedia: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/media`),
   getTickets: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/tickets`),
   getSales: (token: string, params?: any) =>
     axios.get(`${API_BASE_URL}/api/event-owner/${token}/sales`, { params }),
+  // NEW — missing methods
+  getRsvps: (token: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/rsvps`, { params }),
+  reviewRsvp: (token: string, rsvpId: string, status: 'APPROVED' | 'REJECTED') =>
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/rsvps/${rsvpId}/review`, { status }),
+  getCheckIns: (token: string) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/checkins`),
+  getWallet: (token: string) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/wallet`),
+  updateWallet: (token: string, data: any) =>
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/wallet`, data),
+  getPayouts: (token: string) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/payouts`),
+  requestPayout: (token: string, amount: number, notes?: string) =>
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/payouts/request`, { amount, notes }),
+  cancelPayout: (token: string, payoutId: string) =>
+    axios.delete(`${API_BASE_URL}/api/event-owner/${token}/payouts/${payoutId}`),
+  getReels: (token: string) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/reels`),
+  getReelStatus: (token: string, jobId: string) =>
+    axios.get(`${API_BASE_URL}/api/event-owner/${token}/reel/${jobId}/status`),
+};
+
+export const promoCodeApi = {
+  list: (eventId: string) => api.get(`/promo-codes/event/${eventId}`),
+  create: (eventId: string, data: any) => api.post(`/promo-codes/event/${eventId}`, data),
+  update: (id: string, data: any) => api.patch(`/promo-codes/${id}`, data),
+  delete: (id: string) => api.delete(`/promo-codes/${id}`),
 };
 
 // Owner auth / dashboard APIs (owner account area)
@@ -250,6 +288,12 @@ export const ownerAuthApi = {
     axios.get(`${API_BASE_URL}/api/owner-auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     }),
+  getMe: () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+    return axios.get(`${API_BASE_URL}/api/owner-auth/me`, {
+      headers: { Authorization: token ? `Bearer ${token}` : '' },
+    });
+  },
   setupPassword: (email: string, password: string) =>
     axios.post(`${API_BASE_URL}/api/owner-auth/setup-password`, { email, password }),
   changePassword: (currentPassword: string, newPassword: string) => {
@@ -277,17 +321,23 @@ const ownerHeaders = () => ({
 });
 
 export const ownerDashboardApi = {
+  // Existing (keep backward compat)
   events: (token?: string, params?: any) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
       params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
     }),
+  payouts: (token?: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, {
+      params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
+    }),
+  // NEW — methods called without explicit token (use stored token)
   getEvents: (params?: any) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
       params, headers: ownerHeaders(),
     }),
-  payouts: (token?: string, params?: any) =>
-    axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, {
-      params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
+  getEvent: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, {
+      headers: ownerHeaders(),
     }),
   getPayouts: (params?: any) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, {
@@ -303,6 +353,26 @@ export const ownerDashboardApi = {
     }),
   updateWallet: (data: any) =>
     axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet`, data, {
+      headers: ownerHeaders(),
+    }),
+  getStats: () =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/stats`, {
+      headers: ownerHeaders(),
+    }),
+  getRsvps: (eventId: string, params?: any) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps`, {
+      params, headers: ownerHeaders(),
+    }),
+  getMedia: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, {
+      headers: ownerHeaders(),
+    }),
+  getCheckIns: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/checkins`, {
+      headers: ownerHeaders(),
+    }),
+  getTickets: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/tickets`, {
       headers: ownerHeaders(),
     }),
 };

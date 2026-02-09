@@ -80,9 +80,9 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     const verifyInterval = setInterval(() => {
       const token = localStorage.getItem('owner_token');
       if (token && token !== 'null' && token !== 'undefined') {
-        ownerAuthApi.getMe().then((response) => {
+        ownerAuthApi.getMe().then((response: any) => {
           setAuth(token, response.data.owner);
-        }).catch((error) => {
+        }).catch((error: any) => {
           // Only clear if it's a 401 (unauthorized)
           if (error.response?.status === 401) {
             localStorage.removeItem('owner_token');
