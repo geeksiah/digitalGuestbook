@@ -276,13 +276,6 @@ const ownerHeaders = () => ({
   Authorization: `Bearer ${getOwnerToken() || ''}`,
 });
 
-const getOwnerToken = () =>
-  typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
-
-const ownerHeaders = () => ({
-  Authorization: `Bearer ${getOwnerToken() || ''}`,
-});
-
 export const ownerDashboardApi = {
   events: (token?: string, params?: any) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
