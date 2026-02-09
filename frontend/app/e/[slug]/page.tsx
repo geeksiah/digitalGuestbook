@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
-import BackendTemplateFrame from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { formatDate } from '@/lib/utils';
 
 interface EventData {
