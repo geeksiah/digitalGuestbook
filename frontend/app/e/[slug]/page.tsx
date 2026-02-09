@@ -41,60 +41,52 @@ interface EventData {
 
 export default function EventPage() {
   const params = useParams();
-  const slug = params?.slug as string;
-
+  const slug = params.slug as string;
+  
+  // ALL HOOKS AT THE TOP - UNCONDITIONALLY
   const [data, setData] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Backend template check for invitation (PRE_EVENT / LIVE)
   const [checkedInvitationTemplate, setCheckedInvitationTemplate] = useState(false);
   const [useInvitationTemplate, setUseInvitationTemplate] = useState(false);
 
+  // Backend template check for invitation
   useEffect(() => {
     let cancelled = false;
-
     const check = async () => {
       try {
-        const API_BASE_URL =
-          process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/invitation`);
         const ct = res.headers.get('content-type') || '';
-
         if (!cancelled && res.ok && ct.includes('text/html')) {
           setUseInvitationTemplate(true);
         }
-      } catch {
+      } catch (e) {
         // ignore
       } finally {
         if (!cancelled) setCheckedInvitationTemplate(true);
       }
     };
-
     if (slug) check();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [slug]);
 
   useEffect(() => {
-    if (!slug) return;
+    const fetchEvent = async () => {
+      try {
+        const response = await publicApi.getEvent(slug);
+        setData(response.data);
+      } catch (err: any) {
+        setError(err.response?.data?.error || 'Event not found');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     fetchEvent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  const fetchEvent = async () => {
-    try {
-      const response = await publicApi.getEvent(slug);
-      setData(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Event not found');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // RENDER LOGIC AFTER ALL HOOKS
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center">
@@ -129,17 +121,12 @@ export default function EventPage() {
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-1/2 -right-1/4 w-[500px] h-[500px] rounded-full bg-primary-500/10 blur-3xl" />
         </div>
-
+        
         {/* Content */}
         <div className="relative bg-white max-w-lg rounded-2xl shadow-elegant p-12 text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-primary-500/20 flex items-center justify-center mb-6">
             <svg className="w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </div>
           <h1 className="text-3xl font-display font-bold text-navy-900 mb-4">
@@ -160,11 +147,7 @@ export default function EventPage() {
   }
 
   // If invitation template exists on backend, render it for PRE_EVENT or LIVE
-  if (
-    (event.phase === 'PRE_EVENT' || event.phase === 'LIVE') &&
-    checkedInvitationTemplate &&
-    useInvitationTemplate
-  ) {
+  if ((event.phase === 'PRE_EVENT' || event.phase === 'LIVE') && checkedInvitationTemplate && useInvitationTemplate) {
     return <BackendTemplateFrame slug={slug} endpoint="invitation" />;
   }
 
@@ -198,12 +181,7 @@ export default function EventPage() {
               {/* Date */}
               <div className="flex items-center justify-center text-surface-600 mb-2">
                 <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <span className="text-lg">
                   {formatDate(event.date, 'EEEE, MMMM d, yyyy')}
@@ -219,18 +197,8 @@ export default function EventPage() {
               {event.venue && (
                 <div className="flex items-center justify-center text-surface-600 mb-8">
                   <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   <span>{event.venue}</span>
                 </div>
@@ -252,7 +220,7 @@ export default function EventPage() {
 
               {/* CTAs based on phase */}
               <div className="space-y-4">
-                {/* RSVP Button - PRE_EVENT only, optional when invitation-only is false */}
+                {/* RSVP Button */}
                 {event.capabilities.canSubmitRsvp && urls.rsvp && (
                   <Link
                     href={`/e/${event.slug}/rsvp`}
@@ -262,7 +230,7 @@ export default function EventPage() {
                   </Link>
                 )}
 
-                {/* Guestbook Button - LIVE only, accessible without code when invitation-only is false */}
+                {/* Guestbook Button */}
                 {event.capabilities.canAccessGuestbook && urls.guestbook && (
                   <Link
                     href={`/e/${event.slug}/guestbook${!event.invitationOnly ? '' : '?accessCode=REQUIRED'}`}
@@ -291,9 +259,9 @@ export default function EventPage() {
 
           {/* Footer */}
           <div className="text-center mt-8 space-y-2">
-            <img
-              src="/img/logo-light.svg"
-              alt="EventPeepo"
+            <img 
+              src="/img/logo-light.svg" 
+              alt="EventPeepo" 
               className="h-6 w-auto mx-auto opacity-80"
             />
             <p className="text-surface-500 text-sm">

@@ -317,7 +317,7 @@ export default function EventDetailPage() {
   const fetchSales = async () => {
     try {
       setLoadingSales(true);
-      const r = await adminApi.getSales({ eventId });
+      const r = await adminApi.sales({ eventId });
       setSales(r.data.sales || []);
       setSalesStats(r.data.stats || null);
     } catch {
