@@ -9,8 +9,6 @@ import { authenticateAdmin } from '../middleware/auth.js';
 import { createTemplateSchema, updateTemplateSchema } from '../utils/validation.js';
 import {
   uploadToSupabase,
-  getPublicUrl,
-  getSignedUrl,
   deleteFromSupabase,
   listFiles,
   downloadFile,
@@ -57,6 +55,18 @@ function getMimeType(filePath: string): string {
   return MIME_MAP[ext] || 'application/octet-stream';
 }
 
+function normalizeSupabasePath(p: string): string {
+  return String(p || '')
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\//, '')
+    .replace(/\/$/, '');
+}
+
+function baseHasAssetsFolder(base: string): boolean {
+  return /(^|\/)assets$/.test(normalizeSupabasePath(base));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PUBLIC ROUTES (no auth) — must come BEFORE router.use(authenticateAdmin)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,67 +75,73 @@ function getMimeType(filePath: string): string {
  * GET /api/templates/:id/assets/*
  * Serve template assets — PUBLIC (no auth).
  *
- * STRATEGY: The 'templates' Supabase bucket is PRIVATE, so we can't give
- * guests a direct public URL. Instead this route acts as a proxy:
- *   1. Look up the template's assetsPath (Supabase folder prefix)
- *   2. Download the requested file from Supabase
- *   3. Stream it to the browser with correct Content-Type and cache headers
- *
- * If Supabase is not configured (dev mode), falls back to local filesystem.
+ * If Supabase is configured, download from private bucket and stream it.
+ * Falls back to local filesystem (dev only).
  */
 router.get('/:id/assets/*', asyncHandler(async (req, res) => {
   const templateId = req.params.id;
-  const assetPath = req.params[0]; // Everything after /assets/
+  const assetPath = req.params[0];
 
-  if (!assetPath) {
-    throw new AppError('Asset path is required', 400);
-  }
+  if (!assetPath) throw new AppError('Asset path is required', 400);
 
   const template = await prisma.template.findUnique({
     where: { id: templateId },
     select: { assetsPath: true },
   });
 
-  if (!template || !template.assetsPath) {
-    throw new AppError('Template or assets not found', 404);
-  }
+  if (!template?.assetsPath) throw new AppError('Template or assets not found', 404);
 
-  // Security: prevent path traversal
+  // Prevent traversal
   const normalized = assetPath.replace(/\.\./g, '').replace(/\/\//g, '/');
   if (normalized !== assetPath || assetPath.includes('..')) {
     throw new AppError('Invalid asset path', 403);
   }
 
-  // ── Try Supabase first ──
+  // Supabase (preferred)
   if (isSupabaseConfigured()) {
-    try {
-      const supabasePath = `${template.assetsPath}/${normalized}`.replace(/\/+/g, '/').replace(/^\//, '');
-      const fileBuffer = await downloadFile(BUCKETS.TEMPLATES, supabasePath);
+    const base = normalizeSupabasePath(template.assetsPath);
+    const rel = normalizeSupabasePath(normalized);
 
-      const contentType = getMimeType(normalized);
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // 24h
+    // Backward compatible:
+    // - new: assetsPath = "tpl_xxx/assets" -> use base/rel
+    // - old: assetsPath = "tpl_xxx" -> try base/rel AND base/assets/rel
+    const candidates = baseHasAssetsFolder(base)
+      ? [`${base}/${rel}`]
+      : [`${base}/${rel}`, `${base}/assets/${rel}`];
+
+    let fileBuffer: Buffer | null = null;
+    let usedPath: string | null = null;
+
+    for (const key of candidates) {
+      try {
+        fileBuffer = await downloadFile(BUCKETS.TEMPLATES, key);
+        usedPath = key;
+        break;
+      } catch {
+        // try next candidate
+      }
+    }
+
+    if (fileBuffer) {
+      res.setHeader('Content-Type', getMimeType(rel));
+      res.setHeader('Cache-Control', 'public, max-age=86400');
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Template-Asset-Path', usedPath!);
       res.send(fileBuffer);
       return;
-    } catch (err: any) {
-      console.warn(`[Templates] Supabase asset not found: ${template.assetsPath}/${normalized} — ${err.message}`);
-      // Fall through to local filesystem
     }
+
+    console.warn(`[Templates] Supabase asset not found. Tried: ${candidates.join(' | ')}`);
+    // fall through to local
   }
 
-  // ── Fallback: local filesystem (dev only) ──
+  // Local fallback (dev only)
   const fullPath = path.join(process.cwd(), template.assetsPath, normalized);
   const templateDir = path.join(process.cwd(), template.assetsPath);
   const resolvedPath = path.resolve(fullPath);
 
-  if (!resolvedPath.startsWith(templateDir)) {
-    throw new AppError('Invalid asset path', 403);
-  }
-
-  if (!fs.existsSync(resolvedPath)) {
-    throw new AppError('Asset not found', 404);
-  }
+  if (!resolvedPath.startsWith(templateDir)) throw new AppError('Invalid asset path', 403);
+  if (!fs.existsSync(resolvedPath)) throw new AppError('Asset not found', 404);
 
   res.setHeader('Cache-Control', 'public, max-age=86400');
   res.sendFile(resolvedPath);
@@ -138,32 +154,26 @@ router.get('/:id/assets/*', asyncHandler(async (req, res) => {
 router.get('/:id/preview', asyncHandler(async (req, res) => {
   const template = await prisma.template.findUnique({
     where: { id: req.params.id },
-    select: { thumbnailPath: true, assetsPath: true, name: true },
+    select: { thumbnailPath: true, name: true },
   });
 
-  if (!template) {
-    throw new AppError('Template not found', 404);
-  }
+  if (!template) throw new AppError('Template not found', 404);
 
   if (template.thumbnailPath) {
-    // Try Supabase
     if (isSupabaseConfigured()) {
       try {
-        const fileBuffer = await downloadFile(BUCKETS.TEMPLATES, template.thumbnailPath);
+        const fileBuffer = await downloadFile(BUCKETS.TEMPLATES, normalizeSupabasePath(template.thumbnailPath));
         res.setHeader('Content-Type', 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=86400');
         res.send(fileBuffer);
         return;
       } catch {
-        // Fall through to local
+        // fall through
       }
     }
 
-    // Local fallback
     const thumbnailFullPath = path.join(process.cwd(), template.thumbnailPath);
-    if (fs.existsSync(thumbnailFullPath)) {
-      return res.sendFile(thumbnailFullPath);
-    }
+    if (fs.existsSync(thumbnailFullPath)) return res.sendFile(thumbnailFullPath);
   }
 
   res.status(404).json({
@@ -324,12 +334,15 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     throw new AppError(`Cannot delete template in use by ${totalUsage} event(s)`, 400);
   }
 
-  // Delete assets from Supabase
+  // Delete files in Supabase assets folder (non-recursive as per your constraint)
   if (template.assetsPath && isSupabaseConfigured()) {
     try {
-      const files = await listFiles(BUCKETS.TEMPLATES, template.assetsPath);
-      for (const file of files) {
-        await deleteFromSupabase(BUCKETS.TEMPLATES, `${template.assetsPath}/${file.name}`);
+      const base = normalizeSupabasePath(template.assetsPath);
+      const files = await listFiles(BUCKETS.TEMPLATES, base);
+
+      for (const f of files) {
+        const key = `${base}/${normalizeSupabasePath(f.name)}`.replace(/\/+/g, '/');
+        await deleteFromSupabase(BUCKETS.TEMPLATES, key);
       }
     } catch (err) {
       console.warn(`[Templates] Failed to delete Supabase assets for ${template.id}:`, err);
@@ -342,6 +355,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 
 /**
  * POST /api/templates/:id/duplicate
+ * NOTE: This shares the same assetsPath (same Supabase folder). Keep if intended.
  */
 router.post('/:id/duplicate', asyncHandler(async (req, res) => {
   const source = await prisma.template.findUnique({
@@ -357,7 +371,7 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
       htmlContent: source.htmlContent,
       cssContent: source.cssContent,
       jsContent: source.jsContent,
-      assetsPath: source.assetsPath, // shares same Supabase folder
+      assetsPath: source.assetsPath,
       thumbnailPath: source.thumbnailPath,
       variables: source.variables,
       isDefault: false,
@@ -371,34 +385,15 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
 // TEMPLATE UPLOAD — ZIP extraction → Supabase Storage
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Use memory storage — we upload to Supabase, not local disk
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only ZIP files are allowed'));
-    }
+    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) cb(null, true);
+    else cb(new Error('Only ZIP files are allowed'));
   },
 });
 
-/**
- * POST /api/templates/upload
- * Upload template ZIP → extract in memory → upload all files to Supabase.
- *
- * Supabase structure:
- *   templates bucket:
- *     {templateId}/index.html
- *     {templateId}/assets/images/bg.jpg
- *     {templateId}/assets/fonts/...
- *     {templateId}/thumbnail.jpg
- *
- * The DB stores:
- *   assetsPath = "{templateId}"   (Supabase folder prefix)
- *   thumbnailPath = "{templateId}/thumbnail.jpg"
- */
 router.post('/upload', upload.single('template'), asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError('No file uploaded', 400);
 
@@ -412,12 +407,10 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO',
     'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED',
   ];
-
   if (!validTypes.includes(type)) {
     throw new AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);
   }
 
-  // Parse ZIP from memory buffer
   let zip: AdmZip;
   try {
     zip = new AdmZip(req.file.buffer);
@@ -427,47 +420,37 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
   }
 
   const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const supabasePrefix = templateId; // Folder in Supabase "templates" bucket
+  const supabasePrefix = templateId;
 
-  // ── Detect wrapper directory ──
   const entries = zip.getEntries();
   let wrapperPrefix = '';
 
-  // Check if all files are inside a single top-level directory
+  // Detect wrapper directory
   const topLevelDirs = new Set<string>();
   const topLevelFiles: string[] = [];
   for (const entry of entries) {
     const parts = entry.entryName.split('/').filter(Boolean);
-    if (entry.isDirectory && parts.length === 1) {
-      topLevelDirs.add(parts[0]);
-    } else if (!entry.isDirectory && parts.length === 1) {
-      topLevelFiles.push(parts[0]);
-    } else if (parts.length > 1) {
-      topLevelDirs.add(parts[0]);
-    }
+    if (entry.isDirectory && parts.length === 1) topLevelDirs.add(parts[0]);
+    else if (!entry.isDirectory && parts.length === 1) topLevelFiles.push(parts[0]);
+    else if (parts.length > 1) topLevelDirs.add(parts[0]);
   }
-
   if (topLevelDirs.size === 1 && topLevelFiles.length === 0) {
     wrapperPrefix = [...topLevelDirs][0] + '/';
     console.log(`[Templates] Detected wrapper directory: ${wrapperPrefix}`);
   }
 
-  // ── Extract content ──
+  const stripWrapper = (entryName: string): string => {
+    if (wrapperPrefix && entryName.startsWith(wrapperPrefix)) return entryName.slice(wrapperPrefix.length);
+    return entryName;
+  };
+
   let htmlContent = '';
   let cssContent = '';
   let jsContent = '';
   let thumbnailPath: string | null = null;
   const uploadedFiles: string[] = [];
 
-  // Helper: strip wrapper prefix from entry name
-  const stripWrapper = (entryName: string): string => {
-    if (wrapperPrefix && entryName.startsWith(wrapperPrefix)) {
-      return entryName.slice(wrapperPrefix.length);
-    }
-    return entryName;
-  };
-
-  // ── Pass 1: Find HTML/CSS/JS content files ──
+  // Pass 1: load html/css/js
   for (const entry of entries) {
     if (entry.isDirectory) continue;
     if (entry.entryName.includes('__MACOSX')) continue;
@@ -478,19 +461,16 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     const lowerName = relativePath.toLowerCase();
     const baseName = path.basename(lowerName);
 
-    // HTML (required)
     if (!htmlContent && (baseName === 'index.html' || lowerName.endsWith('.html'))) {
       htmlContent = entry.getData().toString('utf-8');
     }
 
-    // CSS (optional)
     if (!cssContent && ['styles.css', 'style.css', 'main.css', 'index.css'].includes(baseName)) {
       cssContent = entry.getData().toString('utf-8');
     } else if (!cssContent && lowerName.endsWith('.css')) {
       cssContent = entry.getData().toString('utf-8');
     }
 
-    // JS (optional)
     if (!jsContent && ['script.js', 'main.js', 'index.js', 'app.js'].includes(baseName)) {
       jsContent = entry.getData().toString('utf-8');
     } else if (!jsContent && lowerName.endsWith('.js') && !lowerName.includes('node_modules')) {
@@ -498,11 +478,9 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     }
   }
 
-  if (!htmlContent) {
-    throw new AppError('No HTML file found in ZIP', 400);
-  }
+  if (!htmlContent) throw new AppError('No HTML file found in ZIP', 400);
 
-  // ── Pass 2: Upload ALL files to Supabase ──
+  // Pass 2: upload files
   if (isSupabaseConfigured()) {
     let firstImagePath: string | null = null;
 
@@ -513,7 +491,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
       const relativePath = stripWrapper(entry.entryName);
       if (!relativePath) continue;
 
-      const supabasePath = `${supabasePrefix}/${relativePath}`;
+      const supabasePath = normalizeSupabasePath(`${supabasePrefix}/${relativePath}`);
       const contentType = getMimeType(relativePath);
       const fileBuffer = entry.getData();
 
@@ -524,35 +502,28 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
         });
         uploadedFiles.push(relativePath);
 
-        // Track first image for thumbnail
         if (!firstImagePath && /\.(jpe?g|png|webp|gif)$/i.test(relativePath)) {
-          // Prefer files named thumbnail/preview/cover
-          if (/thumbnail|preview|cover/i.test(path.basename(relativePath))) {
-            firstImagePath = supabasePath;
-          } else if (!firstImagePath) {
-            firstImagePath = supabasePath;
-          }
+          if (/thumbnail|preview|cover/i.test(path.basename(relativePath))) firstImagePath = supabasePath;
+          else if (!firstImagePath) firstImagePath = supabasePath;
         }
       } catch (err: any) {
         console.warn(`[Templates] Failed to upload ${supabasePath}: ${err.message}`);
       }
     }
 
-    // Use first image as thumbnail (or generate later)
-    if (firstImagePath) {
-      thumbnailPath = firstImagePath;
-    }
-
+    if (firstImagePath) thumbnailPath = firstImagePath;
     console.log(`[Templates] Uploaded ${uploadedFiles.length} files to Supabase bucket "${BUCKETS.TEMPLATES}" prefix="${supabasePrefix}"`);
   } else {
-    // Fallback: local disk (development only)
     console.warn('[Templates] Supabase not configured — falling back to local disk');
     const extractPath = path.join(process.cwd(), 'templates', templateId);
     fs.mkdirSync(extractPath, { recursive: true });
     zip.extractAllTo(extractPath, true);
   }
 
-  // ── Create DB record ──
+  // Store assetsPath as the assets folder (preferred)
+  const hasAssetsFolder = uploadedFiles.some(p => p === 'assets' || p.startsWith('assets/'));
+  const assetsPathForDb = hasAssetsFolder ? `${supabasePrefix}/assets` : supabasePrefix;
+
   const template = await prisma.template.create({
     data: {
       name: name.trim(),
@@ -561,19 +532,17 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
       htmlContent,
       cssContent: cssContent || null,
       jsContent: jsContent || null,
-      assetsPath: supabasePrefix,      // Supabase folder prefix
-      thumbnailPath,                    // Supabase path to thumbnail
+      assetsPath: assetsPathForDb,
+      thumbnailPath,
       isDefault: false,
     },
   });
-
-  console.log(`[Templates] Created template id=${template.id} name=${template.name} type=${template.type} files=${uploadedFiles.length}`);
 
   res.json({
     template,
     message: 'Template uploaded successfully',
     assets: {
-      path: supabasePrefix,
+      path: assetsPathForDb,
       thumbnail: thumbnailPath,
       hasCSS: !!cssContent,
       hasJS: !!jsContent,
@@ -583,13 +552,8 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
   });
 }));
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// FILE LISTING & CONTENT (admin)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 /**
  * GET /api/templates/:id/files
- * List all files in template
  */
 router.get('/:id/files', asyncHandler(async (req, res) => {
   const template = await prisma.template.findUnique({
@@ -602,21 +566,25 @@ router.get('/:id/files', asyncHandler(async (req, res) => {
   const files: any[] = [];
 
   files.push({ name: 'index.html', type: 'html', size: template.htmlContent.length, editable: true });
-  if (template.cssContent) {
-    files.push({ name: 'styles.css', type: 'css', size: template.cssContent.length, editable: true });
-  }
-  if (template.jsContent) {
-    files.push({ name: 'script.js', type: 'javascript', size: template.jsContent.length, editable: true });
-  }
+  if (template.cssContent) files.push({ name: 'styles.css', type: 'css', size: template.cssContent.length, editable: true });
+  if (template.jsContent) files.push({ name: 'script.js', type: 'javascript', size: template.jsContent.length, editable: true });
 
-  // List from Supabase
   if (template.assetsPath && isSupabaseConfigured()) {
     try {
-      const supabaseFiles = await listFiles(BUCKETS.TEMPLATES, template.assetsPath);
+      const base = normalizeSupabasePath(template.assetsPath);
+      const supabaseFiles = await listFiles(BUCKETS.TEMPLATES, base);
+
       for (const f of supabaseFiles) {
         const ext = path.extname(f.name).toLowerCase();
+
+        const displayName = baseHasAssetsFolder(base)
+          ? `assets/${f.name}`
+          : f.name.startsWith('assets/')
+            ? f.name
+            : `assets/${f.name}`;
+
         files.push({
-          name: `assets/${f.name}`,
+          name: displayName.replace(/\/+/g, '/'),
           type: ext.slice(1) || 'file',
           size: f.metadata?.size || 0,
           editable: ['.html', '.css', '.js', '.json', '.txt', '.md'].includes(ext),
@@ -627,41 +595,11 @@ router.get('/:id/files', asyncHandler(async (req, res) => {
     }
   }
 
-  // Fallback: local filesystem
-  if (template.assetsPath && !isSupabaseConfigured()) {
-    const assetsFullPath = path.join(process.cwd(), template.assetsPath);
-    if (fs.existsSync(assetsFullPath)) {
-      const listLocal = (dir: string, basePath: string = '') => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const relativePath = path.join(basePath, entry.name);
-          const fullPath = path.join(dir, entry.name);
-
-          if (entry.isDirectory()) {
-            files.push({ name: relativePath, type: 'directory', editable: false });
-            listLocal(fullPath, relativePath);
-          } else {
-            const stats = fs.statSync(fullPath);
-            const ext = path.extname(entry.name).toLowerCase();
-            files.push({
-              name: relativePath,
-              type: ext.slice(1) || 'file',
-              size: stats.size,
-              editable: ['.html', '.css', '.js', '.json', '.txt', '.md'].includes(ext),
-            });
-          }
-        }
-      };
-      listLocal(assetsFullPath, 'assets');
-    }
-  }
-
   res.json({ files });
 }));
 
 /**
  * GET /api/templates/:id/file-content
- * Get content of a specific file
  */
 router.get('/:id/file-content', asyncHandler(async (req, res) => {
   const { filePath } = req.query;
@@ -677,41 +615,26 @@ router.get('/:id/file-content', asyncHandler(async (req, res) => {
 
   if (!template) throw new AppError('Template not found', 404);
 
-  // Main files from DB
   if (filePath === 'index.html') return res.json({ content: template.htmlContent });
   if (filePath === 'styles.css') return res.json({ content: template.cssContent || '' });
   if (filePath === 'script.js') return res.json({ content: template.jsContent || '' });
 
-  // Asset files from Supabase
   if (template.assetsPath && filePath.startsWith('assets/')) {
-    const relativePath = filePath.replace('assets/', '');
+    const relativePath = filePath.replace(/^assets\//, '');
     const ext = path.extname(filePath).toLowerCase();
     const textExtensions = ['.html', '.css', '.js', '.json', '.txt', '.md', '.xml', '.svg'];
 
-    if (!textExtensions.includes(ext)) {
-      throw new AppError('File type not supported for editing', 400);
-    }
+    if (!textExtensions.includes(ext)) throw new AppError('File type not supported for editing', 400);
 
     if (isSupabaseConfigured()) {
       try {
-        const buffer = await downloadFile(BUCKETS.TEMPLATES, `${template.assetsPath}/${relativePath}`);
+        const key = `${normalizeSupabasePath(template.assetsPath)}/${normalizeSupabasePath(relativePath)}`;
+        const buffer = await downloadFile(BUCKETS.TEMPLATES, key);
         return res.json({ content: buffer.toString('utf-8') });
       } catch {
         throw new AppError('File not found in storage', 404);
       }
     }
-
-    // Local fallback
-    const fullPath = path.join(process.cwd(), template.assetsPath, relativePath);
-    const templateDir = path.join(process.cwd(), template.assetsPath);
-    const resolvedPath = path.resolve(fullPath);
-
-    if (!resolvedPath.startsWith(templateDir) || !fs.existsSync(resolvedPath)) {
-      throw new AppError('File not found', 404);
-    }
-
-    const content = fs.readFileSync(resolvedPath, 'utf-8');
-    return res.json({ content });
   }
 
   throw new AppError('File not found', 404);
