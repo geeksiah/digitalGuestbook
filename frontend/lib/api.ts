@@ -197,6 +197,11 @@ export const ticketingApi = {
   stats: (eventId: string) => api.get(`/tickets/event/${eventId}/stats`),
   getTicketTypes: (eventId: string) =>
     api.get(`/tickets/event/${eventId}/types`),
+  // Custom Fields
+getCustomFields: (eventId: string) => api.get(`/ticketing/events/${eventId}/fields`),
+createCustomField: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/fields`, data),
+updateCustomField: (eventId: string, fieldId: string, data: any) => api.put(`/ticketing/events/${eventId}/fields/${fieldId}`, data),
+deleteCustomField: (eventId: string, fieldId: string) => api.delete(`/ticketing/events/${eventId}/fields/${fieldId}`),
 };
 
 // Owners API (admin)
