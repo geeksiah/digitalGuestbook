@@ -47,11 +47,11 @@ export default function RSVPPage() {
   const params = useParams();
   const slug = params?.slug as string;
 
-// Backend template check — if a custom template is assigned, render it
+  // Backend template check — if a custom template is assigned, render it
+  // IMPORTANT: This hook MUST be called before any conditional returns
   const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'rsvp');
 
-  
-
+  // ALL other hooks must come BEFORE any conditional returns
   const [formData, setFormData] = useState<FormData | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -150,7 +150,6 @@ export default function RSVPPage() {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
       if (formData.rsvpMode === 'paid') {
-        // Handle paid ticket purchase
         const ticketArray = Object.entries(selectedTickets)
           .filter(([_, qty]) => qty > 0)
           .map(([ticketTypeId, quantity]) => ({
@@ -164,25 +163,18 @@ export default function RSVPPage() {
           return;
         }
 
-        // Process payment based on gateway
         let paymentReference = '';
         
-        // TODO: Integrate actual payment SDKs (Stripe, Paystack, Flutterwave, etc.)
-        // For now, we'll show a placeholder
         if (gateway.gateway === 'stripe' && gateway.publicKey) {
-          // Stripe Checkout would go here
           alert('Stripe payment integration required');
           return;
         } else if (gateway.gateway === 'paystack' && gateway.publicKey) {
-          // Paystack payment would go here
           alert('Paystack payment integration required');
           return;
         } else if (gateway.gateway === 'flutterwave' && gateway.publicKey) {
-          // Flutterwave payment would go here
           alert('Flutterwave payment integration required');
           return;
         } else {
-          // For testing - generate mock payment reference
           paymentReference = `TEST_${Date.now()}`;
         }
 
@@ -190,9 +182,7 @@ export default function RSVPPage() {
           `${API_BASE_URL}/api/ticketing/public/${slug}/checkout`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               primaryName: formValues.primaryName,
               secondaryName: formValues.secondaryName,
@@ -222,12 +212,9 @@ export default function RSVPPage() {
           alert(error.message || 'Failed to process ticket purchase');
         }
       } else {
-        // Handle free RSVP
         const rsvpResponse = await fetch(`${API_BASE_URL}/api/rsvp/${slug}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             primaryName: formValues.primaryName,
             secondaryName: formValues.secondaryName,
@@ -258,13 +245,18 @@ export default function RSVPPage() {
     }
   };
 
-if (templateLoading) {
+  // ─── Conditional renders (AFTER all hooks) ────────────────────────────────
+
+  // FIX: Show spinner while template check is loading (prevents default UI flash)
+  if (templateLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
       </div>
     );
   }
+
+  // If backend template is available, render it
   if (hasTemplate) {
     return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
   }

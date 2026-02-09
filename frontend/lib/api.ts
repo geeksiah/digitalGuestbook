@@ -63,7 +63,7 @@ export const templatesApi = {
     api.get('/templates', { params: { type, includeContent: includeContent ? 'true' : undefined } }),
   get: (id: string) => api.get(`/templates/${id}`),
   create: (data: any) => api.post('/templates', data),
-  update: (id: string, data: any) => api.put(`/templates/${id}`, data),
+update: (id: string, data: any) => api.patch(`/templates/${id}`, data),
   delete: (id: string) => api.delete(`/templates/${id}`),
   duplicate: (id: string) => api.post(`/templates/${id}/duplicate`),
   assign: (eventId: string, data: any) => api.post(`/events/${eventId}/templates`, data),

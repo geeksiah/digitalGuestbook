@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import BackendTemplateFrame from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
@@ -30,38 +30,12 @@ export default function ThankYouPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // FIX: Use the hook from BackendTemplateFrame (consistent with other pages)
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'thank-you');
+
   useEffect(() => {
     fetchEvent();
   }, [slug]);
-
-  // Backend template check (render backend HTML if assigned)
-  const [checkedTemplate, setCheckedTemplate] = useState(false);
-  const [useBackendTemplate, setUseBackendTemplate] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/thank-you`);
-        const ct = res.headers.get('content-type') || '';
-        if (!cancelled && res.ok && ct.includes('text/html')) {
-          setUseBackendTemplate(true);
-        }
-      } catch (e) {
-        // ignore
-      } finally {
-        if (!cancelled) setCheckedTemplate(true);
-      }
-    };
-
-    if (slug) check();
-    return () => { cancelled = true; };
-  }, [slug]);
-
-  if (checkedTemplate && useBackendTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="thank-you" />;
-  }
 
   const fetchEvent = async () => {
     try {
@@ -74,12 +48,19 @@ export default function ThankYouPage() {
     }
   };
 
-  if (loading) {
+  // FIX: Show loading spinner while checking for backend template
+  // This prevents the default UI from flashing before the template loads
+  if (templateLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
       </div>
     );
+  }
+
+  // FIX: If backend template is available, render it immediately (no flash)
+  if (hasTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="thank-you" />;
   }
 
   if (error || !event) {
@@ -202,4 +183,3 @@ export default function ThankYouPage() {
     </div>
   );
 }
-

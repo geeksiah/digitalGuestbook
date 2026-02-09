@@ -54,6 +54,14 @@ const EVENT_PUBLIC_SELECT = {
 
 // ─── Helper: standard template data ────────────────────────────────────────────
 function buildTemplateData(event: any, currentPhase: string, capabilities: any) {
+  // Frontend URL for navigation links inside templates
+  const frontendUrl = (
+    process.env.FRONTEND_URL ||
+    process.env.SITE_URL ||
+    process.env.APP_URL ||
+    ''
+  ).replace(/\/+$/, '');
+
   return {
     event: {
       name: event.name,
@@ -78,13 +86,19 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
     phase: currentPhase,
     capabilities,
     urls: {
-      rsvp: `/e/${event.slug}/rsvp`,
-      guestbook: `/e/${event.slug}/guestbook`,
-      booth: `/e/${event.slug}/booth`,
-      thankYou: `/e/${event.slug}/thanks`,
-      invitation: `/e/${event.slug}`,
-      live: `/e/${event.slug}/live`,
-      checkIn: `/e/${event.slug}/checkin`,
+      rsvp: `${frontendUrl}/e/${event.slug}/rsvp`,
+      guestbook: `${frontendUrl}/e/${event.slug}/guestbook`,
+      booth: `${frontendUrl}/e/${event.slug}/booth`,
+      thankYou: `${frontendUrl}/e/${event.slug}/thanks`,
+      invitation: `${frontendUrl}/e/${event.slug}`,
+      live: `${frontendUrl}/e/${event.slug}/live`,
+      checkIn: `${frontendUrl}/e/${event.slug}/checkin`,
+      guestbookVideo: `${frontendUrl}/e/${event.slug}/guestbook/video`,
+      guestbookAudio: `${frontendUrl}/e/${event.slug}/guestbook/audio`,
+      guestbookPhoto: `${frontendUrl}/e/${event.slug}/guestbook/photo`,
+      boothVideo: `${frontendUrl}/e/${event.slug}/booth/video`,
+      boothAudio: `${frontendUrl}/e/${event.slug}/booth/audio`,
+      boothPhoto: `${frontendUrl}/e/${event.slug}/booth/photo`,
     },
   };
 }
@@ -161,35 +175,56 @@ async function renderEventTemplate(
 
   html = replaceVariables(html, templateData);
 
-  // CRITICAL FIX: Resolve asset paths
+  // CRITICAL FIX: Resolve asset paths using FULL backend URL
+  // The HTML is fetched by the frontend (app.eventpeepo.com) and rendered there.
+  // Relative /api/ paths would resolve against the frontend domain and 404.
+  // We must use absolute URLs pointing to the backend.
   if (template.assetsPath) {
+    const backendUrl = (
+      process.env.API_URL ||
+      process.env.BACKEND_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      ''
+    ).replace(/\/+$/, '');
+
+    const assetBase = backendUrl
+      ? `${backendUrl}/api/templates/${template.id}/assets/`
+      : `/api/templates/${template.id}/assets/`;
+
     // Pattern 1: src="./assets/..." or src="../assets/..."
     html = html.replace(
       /(src|href)=["'](\.\/|\.\.\/)?assets\//g,
-      `$1="/api/templates/${template.id}/assets/`
+      `$1="${assetBase}`
     );
 
     // Pattern 2: src="/assets/..."
     html = html.replace(
       /(src|href)=["']\/assets\//g,
-      `$1="/api/templates/${template.id}/assets/`
+      `$1="${assetBase}`
     );
 
-    // Pattern 3: CSS url() references in inline styles
+    // Pattern 3: bare filenames like src="MCS_9627.jpeg" (no assets/ prefix)
+    // These are relative to the template root — rewrite to asset endpoint
+    html = html.replace(
+      /(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi,
+      `$1="${assetBase}$2"`
+    );
+
+    // Pattern 4: CSS url() references in inline styles
     html = html.replace(
       /url\(['"]?(?:\.\/|\.\.\/)?assets\//g,
-      `url('/api/templates/${template.id}/assets/`
+      `url('${assetBase}`
     );
 
-    // Pattern 4: CSS url() references in separate cssContent
+    // Pattern 5: CSS url() in separate cssContent
     if (template.cssContent) {
       template.cssContent = template.cssContent.replace(
         /url\(['"]?(?:\.\/|\.\.\/)?assets\//g,
-        `url('/api/templates/${template.id}/assets/`
+        `url('${assetBase}`
       );
     }
 
-    console.info(`[Render] Resolved asset paths for template=${template.id}`);
+    console.info(`[Render] Resolved asset paths for template=${template.id} base=${assetBase}`);
   }
 
   // Inject CSS

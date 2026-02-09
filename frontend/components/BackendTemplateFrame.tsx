@@ -3,6 +3,15 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL } from "@/lib/api";
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FRONTEND URL — used for navigation links inside templates
+// The backend (API_BASE_URL) serves template HTML and assets.
+// Navigation links (href="/e/slug/guestbook") must point to the FRONTEND, not the backend.
+// ═══════════════════════════════════════════════════════════════════════════════
+const FRONTEND_URL = typeof window !== "undefined"
+  ? window.location.origin
+  : (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || "");
+
 interface Props {
   slug: string;
   endpoint: string;
@@ -13,8 +22,9 @@ interface Props {
 /**
  * Hook: check if a backend template is available, and if so, fetch its HTML.
  *
- * When the backend has a template assigned, it responds with Content-Type: text/html.
- * When no template is assigned, it responds with JSON { template: null, data: {...} }.
+ * PERFORMANCE FIX: Uses a HEAD request first to check availability quickly,
+ * then only fetches the full HTML if available. This prevents slow page loads
+ * when no template is assigned.
  */
 export function useBackendTemplate(slug: string, endpoint: string) {
   const [loading, setLoading] = useState(true);
@@ -31,17 +41,30 @@ export function useBackendTemplate(slug: string, endpoint: string) {
 
       try {
         const url = `${API_BASE_URL}/api/public/event/${slug}/${endpoint}`;
-        const res = await fetch(url, { cache: "no-store" });
-        const ct = res.headers.get("content-type") || "";
+
+        // Step 1: Quick HEAD request to check if template exists
+        // This returns instantly vs downloading the entire HTML
+        const headRes = await fetch(url, { method: "HEAD", cache: "no-store" });
+        const ct = headRes.headers.get("content-type") || "";
 
         if (cancelled) return;
 
-        if (res.ok && ct.includes("text/html")) {
+        if (!headRes.ok || !ct.includes("text/html")) {
+          // No template assigned — backend returns JSON, not HTML
+          setAvailable(false);
+          setLoading(false);
+          return;
+        }
+
+        // Step 2: Template exists — fetch the full HTML
+        const res = await fetch(url, { cache: "no-store" });
+        if (cancelled) return;
+
+        if (res.ok) {
           const text = await res.text();
           if (cancelled) return;
 
-          // Rewrite + base fallback
-          setHtml(rewriteTemplateHtml(text, API_BASE_URL));
+          setHtml(rewriteTemplateHtml(text, API_BASE_URL, FRONTEND_URL));
           setAvailable(true);
         } else {
           setAvailable(false);
@@ -87,21 +110,19 @@ function parseTemplateHtml(html: string): {
 }
 
 /**
- * Robust URL rewriting + <base> fallback.
+ * CRITICAL FIX: URL rewriting with TWO base URLs.
  *
- * Fixes:
- * - src/href/action/poster
- * - srcset
- * - CSS url()
- * - meta content (og:image etc)
- * - link preload href
+ * - ASSET URLs (images, CSS, JS, fonts) → point to backend (apiBase)
+ * - NAVIGATION URLs (/e/slug/guestbook, /e/slug/rsvp) → point to frontend (frontendBase)
  *
- * Injects a <base href="API_BASE_URL/"> into <head> if missing.
+ * Without this distinction, clicking "Back to Invitation" or "Open Guestbook" in a
+ * template navigates to the backend API server (which returns JSON, not a page).
  */
-function rewriteTemplateHtml(fullHtml: string, apiBase: string): string {
-  const base = apiBase.replace(/\/+$/, ""); // no trailing slash
+function rewriteTemplateHtml(fullHtml: string, apiBase: string, frontendBase: string): string {
+  const api = apiBase.replace(/\/+$/, "");
+  const fe = frontendBase.replace(/\/+$/, "");
 
-  const skip = (url: string) => {
+  const isAbsolute = (url: string) => {
     const t = url.trim();
     return (
       !t ||
@@ -116,60 +137,151 @@ function rewriteTemplateHtml(fullHtml: string, apiBase: string): string {
     );
   };
 
-  const toAbs = (url: string) => {
-    if (skip(url)) return url;
-    if (url.startsWith("/")) return `${base}${url}`;
-    return `${base}/${url}`;
+  // Detect if a URL is an asset (images, CSS, JS, fonts, API paths)
+  const isAssetUrl = (url: string): boolean => {
+    const t = url.trim().toLowerCase();
+    // API paths — always backend
+    if (t.startsWith("/api/")) return true;
+    if (t.startsWith("/uploads/")) return true;
+    if (t.startsWith("/templates/")) return true;
+    // File extensions that are assets
+    const assetExts = /\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|otf|mp4|webm|mp3|wav|ogg|pdf|json)(\?.*)?$/i;
+    if (assetExts.test(t)) return true;
+    // CSS url() references are always assets
+    return false;
+  };
+
+  // Detect if a URL is a navigation link (event pages)
+  const isNavUrl = (url: string): boolean => {
+    const t = url.trim();
+    // Event pages: /e/slug/...
+    if (t.startsWith("/e/")) return true;
+    // Root-relative paths that aren't assets
+    if (t.startsWith("/") && !isAssetUrl(t)) return true;
+    // Query params like ?mode=audio — these are navigation in templates
+    if (t.startsWith("?")) return true;
+    return false;
+  };
+
+  const toAssetUrl = (url: string) => {
+    if (isAbsolute(url)) return url;
+    if (url.startsWith("/")) return `${api}${url}`;
+    return `${api}/${url}`;
+  };
+
+  const toNavUrl = (url: string) => {
+    if (isAbsolute(url)) return url;
+    if (url.startsWith("/")) return `${fe}${url}`;
+    // Relative nav URLs — shouldn't happen often but handle gracefully
+    return `${fe}/${url}`;
+  };
+
+  const rewriteUrl = (url: string, context: "href" | "src" | "action" | "poster" | "css" | "meta"): string => {
+    if (isAbsolute(url)) return url;
+
+    // href is the tricky one — could be navigation OR asset
+    if (context === "href") {
+      // <link rel="stylesheet" href="style.css"> — asset
+      // <a href="/e/slug/guestbook"> — navigation
+      // <a href="?mode=audio"> — navigation
+      if (isAssetUrl(url)) return toAssetUrl(url);
+      if (isNavUrl(url)) return toNavUrl(url);
+      // Default: if it has a file extension, treat as asset; otherwise navigation
+      if (/\.[a-z0-9]+(\?.*)?$/i.test(url)) return toAssetUrl(url);
+      return toNavUrl(url);
+    }
+
+    // src, poster = always assets
+    if (context === "src" || context === "poster") return toAssetUrl(url);
+
+    // action = form action, usually navigation
+    if (context === "action") return toNavUrl(url);
+
+    // css url() = always assets
+    if (context === "css") return toAssetUrl(url);
+
+    // meta content = usually assets (og:image etc)
+    if (context === "meta") return toAssetUrl(url);
+
+    return toAssetUrl(url);
   };
 
   let html = fullHtml;
 
-  // 1) Attributes: src/href/action/poster
+  // 1) Rewrite <link> tags separately — href in <link> is always an asset
   html = html.replace(
-    /(src|href|action|poster)=["']([^"']+)["']/gi,
-    (match, attr, url) => {
-      if (skip(url)) return match;
-      return `${attr}="${toAbs(url)}"`;
+    /<link([^>]*?)href=["']([^"']+)["']([^>]*?)>/gi,
+    (match, pre, url, post) => {
+      if (isAbsolute(url)) return match;
+      return `<link${pre}href="${toAssetUrl(url)}"${post}>`;
     }
   );
 
-  // 2) srcset="a.jpg 1x, b.jpg 2x"
+  // 2) Rewrite <a> tags separately — href in <a> is navigation
+  html = html.replace(
+    /<a([^>]*?)href=["']([^"']+)["']([^>]*?)>/gi,
+    (match, pre, url, post) => {
+      if (isAbsolute(url)) return match;
+      return `<a${pre}href="${rewriteUrl(url, "href")}"${post}>`;
+    }
+  );
+
+  // 3) Rewrite src attributes — always assets
+  html = html.replace(
+    /\bsrc=["']([^"']+)["']/gi,
+    (match, url) => {
+      if (isAbsolute(url)) return match;
+      return `src="${toAssetUrl(url)}"`;
+    }
+  );
+
+  // 4) Rewrite action/poster — action=nav, poster=asset
+  html = html.replace(
+    /\b(action|poster)=["']([^"']+)["']/gi,
+    (match, attr, url) => {
+      if (isAbsolute(url)) return match;
+      const ctx = attr.toLowerCase() as "action" | "poster";
+      return `${attr}="${rewriteUrl(url, ctx)}"`;
+    }
+  );
+
+  // 5) srcset
   html = html.replace(/srcset=["']([^"']+)["']/gi, (match, srcset) => {
     const rewritten = srcset
       .split(",")
       .map((entry: string) => {
-  const parts = entry.trim().split(/\s+/);
+        const parts = entry.trim().split(/\s+/);
         const u = parts[0];
         const desc = parts.slice(1).join(" ");
-        if (skip(u)) return entry.trim();
-        const abs = toAbs(u);
+        if (isAbsolute(u)) return entry.trim();
+        const abs = toAssetUrl(u);
         return desc ? `${abs} ${desc}` : abs;
       })
       .join(", ");
     return `srcset="${rewritten}"`;
   });
 
-  // 3) CSS url(...)
+  // 6) CSS url(...)
   html = html.replace(/url\(\s*["']?([^)"']+)["']?\s*\)/gi, (match, url) => {
-    if (skip(url)) return match;
-    return `url("${toAbs(url)}")`;
+    if (isAbsolute(url)) return match;
+    return `url("${toAssetUrl(url)}")`;
   });
 
-  // 4) meta content="assets/bg.jpg" for og:image etc
+  // 7) meta content for og:image etc
   html = html.replace(
     /<meta([^>]+?)content=["']([^"']+)["']([^>]*?)>/gi,
     (match, pre, content, post) => {
-      if (skip(content)) return match;
-      return `<meta${pre}content="${toAbs(content)}"${post}>`;
+      if (isAbsolute(content)) return match;
+      if (!isAssetUrl(content)) return match; // Don't rewrite non-asset meta
+      return `<meta${pre}content="${toAssetUrl(content)}"${post}>`;
     }
   );
 
-  // 5) Ensure <base> exists (fallback resolver)
-  // Put it as the first element inside <head>.
+  // 8) Inject <base> pointing to API for any remaining unmatched relative URLs
   if (/<head[^>]*>/i.test(html) && !/<base\s/i.test(html)) {
     html = html.replace(
       /<head([^>]*)>/i,
-      `<head$1><base href="${base}/" />`
+      `<head$1><base href="${api}/" />`
     );
   }
 
@@ -178,19 +290,16 @@ function rewriteTemplateHtml(fullHtml: string, apiBase: string): string {
 
 /**
  * Execute scripts inside a container (inline + external) in document context.
- * We replace each <script> node with a new one to trigger execution.
  */
 function executeScripts(container: HTMLElement) {
   const scripts = Array.from(container.querySelectorAll("script"));
   scripts.forEach((oldScript) => {
     const newScript = document.createElement("script");
 
-    // Copy attributes
     Array.from(oldScript.attributes).forEach((attr) => {
       newScript.setAttribute(attr.name, attr.value);
     });
 
-    // Copy inline content
     if (oldScript.textContent && !newScript.src) {
       newScript.textContent = oldScript.textContent;
     }
@@ -200,8 +309,7 @@ function executeScripts(container: HTMLElement) {
 }
 
 /**
- * Apply body attributes safely (merge only what template needs).
- * Returns cleanup function.
+ * Apply body attributes safely.
  */
 function applyBodyAttrs(bodyAttrs: string) {
   const prev = {
@@ -238,23 +346,16 @@ function applyBodyAttrs(bodyAttrs: string) {
   }
 
   return () => {
-    // Remove only classes we added
     addedClasses.forEach((cls) => document.body.classList.remove(cls));
-    // Remove only tpl attrs we added
     prev.tplAttrs.forEach((name) => document.body.removeAttribute(name));
-
-    // Restore style exactly
     if (prev.style) document.body.setAttribute("style", prev.style);
     else document.body.removeAttribute("style");
-
-    // Restore className exactly (safer than trying to diff everything)
     document.body.className = prev.className;
   };
 }
 
 /**
  * Inject head elements into document.head with cleanup.
- * Adds a marker attribute to reliably remove later.
  */
 function injectHead(headContent: string) {
   const temp = document.createElement("div");
@@ -293,27 +394,23 @@ export default function BackendTemplateFrame({ slug, endpoint, className, fallba
   const { loading, available, html } = useBackendTemplate(slug, endpoint);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Parse once per html change
   const parsed = useMemo(() => {
     if (!html) return null;
     return parseTemplateHtml(html);
   }, [html]);
 
-  // Inject head + body attrs + execute scripts once the body has rendered
   useLayoutEffect(() => {
     if (!parsed || !containerRef.current) return;
 
     const cleanupHead = injectHead(parsed.headContent);
     const cleanupBody = applyBodyAttrs(parsed.bodyAttrs);
 
-    // Wait 1 frame so the DOM is settled, then execute scripts
     const raf = requestAnimationFrame(() => {
       if (!containerRef.current) return;
 
       executeScripts(containerRef.current);
 
       // SPA fix: templates that bind init to window.load won't run.
-      // Trigger a synthetic load so their init path runs.
       window.dispatchEvent(new Event("load"));
     });
 

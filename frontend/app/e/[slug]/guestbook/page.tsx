@@ -38,6 +38,19 @@ export default function GuestbookPage() {
 
   // Backend template check (render backend HTML if assigned)
  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'guestbook');
+// Show loading spinner while checking for backend template
+if (templateLoading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+    </div>
+  );
+}
+
+// If backend template is available, render it instead of default UI
+if (hasTemplate) {
+  return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
+}
 
   
 
