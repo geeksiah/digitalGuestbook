@@ -350,9 +350,9 @@ router.get('/event/:slug/live', asyncHandler(async (req, res) => {
   const currentPhase = calculateEventPhase(event);
   const capabilities = getPhaseCapabilities(currentPhase);
 
-  // Live landing only during LIVE phase
+  // Live landing only during LIVE phase — return JSON (not redirect) so fetch() works
   if (currentPhase !== 'LIVE') {
-    return res.redirect(`/e/${event.slug}`);
+    return res.json({ template: null, phase: currentPhase, message: 'Event is not in LIVE phase' });
   }
 
   const templateData = buildTemplateData(event, currentPhase, capabilities);
@@ -371,9 +371,9 @@ router.get('/event/:slug/ended', asyncHandler(async (req, res) => {
   const currentPhase = calculateEventPhase(event);
   const capabilities = getPhaseCapabilities(currentPhase);
 
-  // Ended page only during POST_EVENT phase
+  // Ended page only during POST_EVENT — return JSON (not redirect) so fetch() works
   if (currentPhase !== 'POST_EVENT') {
-    return res.redirect(`/e/${event.slug}`);
+    return res.json({ template: null, phase: currentPhase, message: 'Event is not in POST_EVENT phase' });
   }
 
   const templateData = buildTemplateData(event, currentPhase, capabilities);
@@ -621,9 +621,9 @@ router.get('/event/:slug/thank-you', asyncHandler(async (req, res) => {
   const event = await fetchPublicEvent(req.params.slug);
   const currentPhase = calculateEventPhase(event);
 
-  // Thank-you page is only for POST_EVENT phase
+  // Thank-you page is only for POST_EVENT phase — return JSON (not redirect)
   if (currentPhase !== 'POST_EVENT') {
-    return res.redirect(`/e/${event.slug}`);
+    return res.json({ template: null, phase: currentPhase, message: 'Event is not in POST_EVENT phase' });
   }
 
   const capabilities = getPhaseCapabilities(currentPhase);
