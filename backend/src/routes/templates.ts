@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import AdmZip from 'adm-zip';
-import sharp from 'sharp'; // npm install sharp
+import sharp from 'sharp';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
@@ -11,7 +11,82 @@ import { createTemplateSchema, updateTemplateSchema } from '../utils/validation.
 
 const router = Router();
 
-// All routes require admin authentication
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC ROUTES (no auth required) — must come BEFORE router.use(authenticateAdmin)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/templates/:id/assets/*
+ * Serve template assets (images, fonts, etc.) — PUBLIC, no auth required.
+ * These are referenced by rendered templates served to guest browsers.
+ */
+router.get('/:id/assets/*', asyncHandler(async (req, res) => {
+  const templateId = req.params.id;
+  const assetPath = req.params[0]; // Everything after /assets/
+
+  const template = await prisma.template.findUnique({
+    where: { id: templateId },
+    select: { assetsPath: true },
+  });
+
+  if (!template || !template.assetsPath) {
+    throw new AppError('Template or assets not found', 404);
+  }
+
+  // Construct full file path
+  const fullPath = path.join(process.cwd(), template.assetsPath, assetPath);
+
+  // Security: ensure path is within template directory
+  const templateDir = path.join(process.cwd(), template.assetsPath);
+  const resolvedPath = path.resolve(fullPath);
+
+  if (!resolvedPath.startsWith(templateDir)) {
+    throw new AppError('Invalid asset path', 403);
+  }
+
+  // Check if file exists
+  if (!fs.existsSync(resolvedPath)) {
+    throw new AppError('Asset not found', 404);
+  }
+
+  // Set proper cache headers for assets
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+
+  // Serve the file with correct MIME type
+  res.sendFile(resolvedPath);
+}));
+
+/**
+ * GET /api/templates/:id/preview
+ * Get template preview/thumbnail — PUBLIC for template previews.
+ */
+router.get('/:id/preview', asyncHandler(async (req, res) => {
+  const template = await prisma.template.findUnique({
+    where: { id: req.params.id },
+    select: { thumbnailPath: true, assetsPath: true, name: true },
+  });
+
+  if (!template) {
+    throw new AppError('Template not found', 404);
+  }
+
+  if (template.thumbnailPath) {
+    const thumbnailFullPath = path.join(process.cwd(), template.thumbnailPath);
+    if (fs.existsSync(thumbnailFullPath)) {
+      return res.sendFile(thumbnailFullPath);
+    }
+  }
+
+  // Return placeholder if no thumbnail
+  res.status(404).json({
+    message: 'No preview available',
+    template: { id: req.params.id, name: template.name },
+  });
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROTECTED ROUTES — all routes below require admin authentication
+// ═══════════════════════════════════════════════════════════════════════════════
 router.use(authenticateAdmin);
 
 /**
@@ -321,7 +396,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     fs.mkdirSync(extractPath, { recursive: true });
     zip.extractAllTo(extractPath, true);
 
-console.log(`[Templates] Extracted ZIP to ${extractPath}`);
+    console.log(`[Templates] Extracted ZIP to ${extractPath}`);
 
     // ── WRAPPER DIRECTORY DETECTION ──
     // When users zip a folder (zip -r template.zip my-template/),
@@ -508,78 +583,8 @@ console.log(`[Templates] Extracted ZIP to ${extractPath}`);
   }
 }));
 
-/**
- * GET /api/templates/:id/assets/*
- * Serve template assets (images, fonts, etc.)
- */
-router.get('/:id/assets/*', asyncHandler(async (req, res) => {
-  const templateId = req.params.id;
-  const assetPath = req.params[0]; // Everything after /assets/
-
-  const template = await prisma.template.findUnique({
-    where: { id: templateId },
-    select: { assetsPath: true },
-  });
-
-  if (!template || !template.assetsPath) {
-    throw new AppError('Template or assets not found', 404);
-  }
-
-  // Construct full file path
-  const fullPath = path.join(
-    process.cwd(),
-    template.assetsPath,
-    assetPath
-  );
-
-  // Security: ensure path is within template directory
-  const templateDir = path.join(process.cwd(), template.assetsPath);
-  const resolvedPath = path.resolve(fullPath);
-  
-  if (!resolvedPath.startsWith(templateDir)) {
-    throw new AppError('Invalid asset path', 403);
-  }
-
-  // Check if file exists
-  if (!fs.existsSync(resolvedPath)) {
-    throw new AppError('Asset not found', 404);
-  }
-
-  // Serve the file
-  res.sendFile(resolvedPath);
-}));
-
-/**
- * GET /api/templates/:id/preview
- * Get template preview/thumbnail
- */
-router.get('/:id/preview', asyncHandler(async (req, res) => {
-  const template = await prisma.template.findUnique({
-    where: { id: req.params.id },
-    select: { thumbnailPath: true, assetsPath: true, name: true },
-  });
-
-  if (!template) {
-    throw new AppError('Template not found', 404);
-  }
-
-  if (template.thumbnailPath) {
-    const thumbnailFullPath = path.join(process.cwd(), template.thumbnailPath);
-    
-    if (fs.existsSync(thumbnailFullPath)) {
-      return res.sendFile(thumbnailFullPath);
-    }
-  }
-
-  // Return placeholder if no thumbnail
-  res.status(404).json({ 
-    message: 'No preview available',
-    template: {
-      id: req.params.id,
-      name: template.name,
-    }
-  });
-}));
+// NOTE: /:id/assets/* and /:id/preview are registered as PUBLIC routes
+// at the top of this file (before authenticateAdmin). No duplicates here.
 
 /**
  * GET /api/templates/:id/files

@@ -76,11 +76,6 @@ npm install
 npm run dev
 ```
 
-### 3. Access the Platform
-
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001
-- **Admin Login**: admin@example.com / admin123
 
 ## 📋 Event Phases
 
