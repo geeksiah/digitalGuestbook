@@ -321,51 +321,90 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     fs.mkdirSync(extractPath, { recursive: true });
     zip.extractAllTo(extractPath, true);
 
-    console.log(`[Templates] Extracted ZIP to ${extractPath}`);
+console.log(`[Templates] Extracted ZIP to ${extractPath}`);
 
-    // Look for template files
-    const indexPath = path.join(extractPath, 'index.html');
-    const cssPath = path.join(extractPath, 'styles.css');
-    const jsPath = path.join(extractPath, 'script.js');
+    // ── WRAPPER DIRECTORY DETECTION ──
+    // When users zip a folder (zip -r template.zip my-template/),
+    // the ZIP extracts to extractPath/my-template/index.html
+    let contentRoot = extractPath;
+    const topEntries = fs.readdirSync(extractPath, { withFileTypes: true });
+    const topDirs = topEntries.filter(e => e.isDirectory() && e.name !== '__MACOSX');
+    const topFiles = topEntries.filter(e => e.isFile());
+    if (topDirs.length === 1 && topFiles.length === 0) {
+      contentRoot = path.join(extractPath, topDirs[0].name);
+      console.log(`[Templates] Detected wrapper directory, content root: ${contentRoot}`);
+    }
+
+    // ── RECURSIVE FILE FINDER ──
+    const findFileRecursive = (dir: string, extensions: string[]): string | null => {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile()) {
+            const ext = path.extname(entry.name).toLowerCase();
+            if (extensions.includes(ext)) {
+              return path.join(dir, entry.name);
+            }
+          }
+        }
+        for (const entry of entries) {
+          if (entry.isDirectory() && !['node_modules', '__MACOSX', '.git'].includes(entry.name)) {
+            const found = findFileRecursive(path.join(dir, entry.name), extensions);
+            if (found) return found;
+          }
+        }
+      } catch { /* ignore */ }
+      return null;
+    };
 
     let htmlContent = '';
     let cssContent = '';
     let jsContent = '';
 
     // Find HTML file (required)
+    const indexPath = path.join(contentRoot, 'index.html');
     if (fs.existsSync(indexPath)) {
       htmlContent = fs.readFileSync(indexPath, 'utf-8');
     } else {
-      // Try to find any HTML file
-      const files = fs.readdirSync(extractPath);
-      const htmlFile = files.find(f => f.toLowerCase().endsWith('.html'));
-      if (htmlFile) {
-        htmlContent = fs.readFileSync(path.join(extractPath, htmlFile), 'utf-8');
+      const found = findFileRecursive(contentRoot, ['.html'])
+                 || findFileRecursive(extractPath, ['.html']);
+      if (found) {
+        htmlContent = fs.readFileSync(found, 'utf-8');
       } else {
         throw new AppError('No HTML file found in ZIP', 400);
       }
     }
 
     // Find CSS file (optional)
-    if (fs.existsSync(cssPath)) {
-      cssContent = fs.readFileSync(cssPath, 'utf-8');
-    } else {
-      const files = fs.readdirSync(extractPath);
-      const cssFile = files.find(f => f.toLowerCase().endsWith('.css'));
-      if (cssFile) {
-        cssContent = fs.readFileSync(path.join(extractPath, cssFile), 'utf-8');
+    const cssChecks = ['styles.css', 'style.css', 'main.css', 'index.css'];
+    let cssFound = false;
+    for (const cssName of cssChecks) {
+      const p = path.join(contentRoot, cssName);
+      if (fs.existsSync(p)) {
+        cssContent = fs.readFileSync(p, 'utf-8');
+        cssFound = true;
+        break;
       }
+    }
+    if (!cssFound) {
+      const found = findFileRecursive(contentRoot, ['.css']);
+      if (found) cssContent = fs.readFileSync(found, 'utf-8');
     }
 
     // Find JS file (optional)
-    if (fs.existsSync(jsPath)) {
-      jsContent = fs.readFileSync(jsPath, 'utf-8');
-    } else {
-      const files = fs.readdirSync(extractPath);
-      const jsFile = files.find(f => f.toLowerCase().endsWith('.js'));
-      if (jsFile) {
-        jsContent = fs.readFileSync(path.join(extractPath, jsFile), 'utf-8');
+    const jsChecks = ['script.js', 'main.js', 'index.js', 'app.js'];
+    let jsFound = false;
+    for (const jsName of jsChecks) {
+      const p = path.join(contentRoot, jsName);
+      if (fs.existsSync(p)) {
+        jsContent = fs.readFileSync(p, 'utf-8');
+        jsFound = true;
+        break;
       }
+    }
+    if (!jsFound) {
+      const found = findFileRecursive(contentRoot, ['.js']);
+      if (found) jsContent = fs.readFileSync(found, 'utf-8');
     }
 
     // Generate thumbnail from first image found or create placeholder
@@ -397,7 +436,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
       return null;
     };
 
-    const sourceThumbnail = findThumbnail(extractPath);
+    const sourceThumbnail = findThumbnail(contentRoot);
     
     if (sourceThumbnail) {
       // Generate optimized thumbnail

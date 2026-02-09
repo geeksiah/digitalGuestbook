@@ -15,9 +15,6 @@ interface Props {
  *
  * When the backend has a template assigned, it responds with Content-Type: text/html.
  * When no template is assigned, it responds with JSON { template: null, data: {...} }.
- *
- * We fetch the HTML content and store it so we can render via srcdoc — this
- * completely avoids the X-Frame-Options cross-origin iframe issue.
  */
 export function useBackendTemplate(slug: string, endpoint: string) {
   const [loading, setLoading] = useState(true);
@@ -42,6 +39,7 @@ export function useBackendTemplate(slug: string, endpoint: string) {
         if (res.ok && ct.includes('text/html')) {
           const text = await res.text();
           if (cancelled) return;
+          // Rewrite relative asset URLs to point to the backend
           setHtml(rewriteAssetUrls(text, API_BASE_URL));
           setAvailable(true);
         } else {
@@ -115,56 +113,142 @@ function rewriteAssetUrls(html: string, apiBase: string): string {
     }
   );
 
-  // Inject <base> as catch-all
-  if (result.includes('<head>')) {
-    result = result.replace('<head>', `<head><base href="${apiBase}/">`);
-  } else if (result.includes('<html>')) {
-    result = result.replace('<html>', `<html><head><base href="${apiBase}/"></head>`);
-  } else {
-    result = `<head><base href="${apiBase}/"></head>${result}`;
-  }
-
   return result;
 }
 
 /**
- * Renders backend template HTML inside a sandboxed iframe using srcdoc.
- *
- * srcdoc embeds the HTML inline — the browser treats it as same-origin,
- * completely bypassing X-Frame-Options and CSP frame-ancestors restrictions.
+ * Extract content between <head>...</head> and <body>...</body> from a full HTML document.
+ * Returns { headContent, bodyContent, bodyAttrs } so we can inject them properly.
+ */
+function parseTemplateHtml(html: string): {
+  headContent: string;
+  bodyContent: string;
+  bodyAttrs: string;
+  fullHtml: string;
+} {
+  // Extract <head> inner content
+  const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+  const headContent = headMatch ? headMatch[1] : '';
+
+  // Extract <body> inner content and attributes
+  const bodyMatch = html.match(/<body([^>]*)>([\s\S]*?)<\/body>/i);
+  const bodyAttrs = bodyMatch ? bodyMatch[1] : '';
+  const bodyContent = bodyMatch ? bodyMatch[2] : html;
+
+  return { headContent, bodyContent, bodyAttrs, fullHtml: html };
+}
+
+/**
+ * Renders backend template HTML by taking over the entire page.
+ * 
+ * APPROACH: Instead of using an iframe (which causes scrolling issues, height 
+ * miscalculation, content clipping, and distortion), we:
+ * 
+ * 1. Parse the template HTML to extract <head> and <body> content
+ * 2. Inject <head> elements (styles, meta tags, fonts) into the document head
+ * 3. Render <body> content directly into the page via dangerouslySetInnerHTML
+ * 4. Execute any <script> tags found in the template
+ * 5. Clean up injected head elements on unmount
+ * 
+ * This gives the template FULL control of the page — no iframe sandbox,
+ * no scrolling issues, no height problems, no distortion.
  */
 export default function BackendTemplateFrame({ slug, endpoint, className, fallback }: Props) {
   const { loading, available, html } = useBackendTemplate(slug, endpoint);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const injectedElementsRef = useRef<HTMLElement[]>([]);
 
-  // Auto-resize iframe to match content height
+  // Inject head elements and execute scripts when HTML is available
   useEffect(() => {
-    if (!iframeRef.current || !html) return;
-    const iframe = iframeRef.current;
+    if (!html || !containerRef.current) return;
 
-    const handleLoad = () => {
-      try {
-        const doc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (!doc?.body) return;
+    const { headContent, bodyContent } = parseTemplateHtml(html);
 
-        const resize = () => {
-          const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
-          iframe.style.height = `${Math.max(h, 100)}px`;
-        };
+    // ── 1. Inject <head> content (styles, fonts, meta) into document.head ──
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = headContent;
+    const injected: HTMLElement[] = [];
 
-        const ro = new ResizeObserver(resize);
-        ro.observe(doc.body);
-        resize();
-      } catch { /* ignore */ }
+    // Process each element in <head>
+    Array.from(tempDiv.children).forEach((el) => {
+      const tagName = el.tagName.toLowerCase();
+      
+      // Skip title and meta charset (keep Next.js ones)
+      if (tagName === 'title') return;
+      if (tagName === 'meta' && el.getAttribute('charset')) return;
+
+      // Clone and inject into document head
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.setAttribute('data-template-injected', 'true');
+      document.head.appendChild(clone);
+      injected.push(clone);
+    });
+
+    injectedElementsRef.current = injected;
+
+    // ── 2. Execute <script> tags in the body content ──
+    // dangerouslySetInnerHTML doesn't execute scripts, so we do it manually
+    const container = containerRef.current;
+    const scripts = container.querySelectorAll('script');
+    scripts.forEach((originalScript) => {
+      const newScript = document.createElement('script');
+      // Copy all attributes
+      Array.from(originalScript.attributes).forEach((attr) => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      // Copy inline content
+      if (originalScript.textContent) {
+        newScript.textContent = originalScript.textContent;
+      }
+      originalScript.parentNode?.replaceChild(newScript, originalScript);
+    });
+
+    // ── 3. Apply body attributes (class, style, data-* etc.) ──
+    const { bodyAttrs } = parseTemplateHtml(html);
+    if (bodyAttrs.trim()) {
+      const tempBody = document.createElement('body');
+      // Parse attributes by creating a temporary element
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = `<div ${bodyAttrs}></div>`;
+      const attrSource = wrapper.firstElementChild;
+      if (attrSource) {
+        Array.from(attrSource.attributes).forEach((attr) => {
+          // Add template body classes/styles to actual body
+          if (attr.name === 'class') {
+            attr.value.split(/\s+/).forEach(cls => {
+              if (cls) document.body.classList.add(cls);
+            });
+          } else if (attr.name === 'style') {
+            document.body.style.cssText += '; ' + attr.value;
+          } else {
+            document.body.setAttribute(`data-tpl-${attr.name}`, attr.value);
+          }
+        });
+      }
+    }
+
+    // ── Cleanup on unmount ──
+    return () => {
+      // Remove injected head elements
+      injectedElementsRef.current.forEach((el) => {
+        try { el.remove(); } catch { /* ignore */ }
+      });
+      injectedElementsRef.current = [];
+
+      // Remove body classes/styles we added
+      document.body.removeAttribute('style');
+      // Remove data-tpl-* attributes
+      Array.from(document.body.attributes).forEach((attr) => {
+        if (attr.name.startsWith('data-tpl-')) {
+          document.body.removeAttribute(attr.name);
+        }
+      });
     };
-
-    iframe.addEventListener('load', handleLoad);
-    return () => iframe.removeEventListener('load', handleLoad);
   }, [html]);
 
   if (loading) {
     return fallback || (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
       </div>
     );
@@ -172,15 +256,15 @@ export default function BackendTemplateFrame({ slug, endpoint, className, fallba
 
   if (!available || !html) return null;
 
+  const { bodyContent } = parseTemplateHtml(html);
+
+  // Render the template body content directly — NO iframe
   return (
-    <div className={className || 'w-full'} style={{ minHeight: '100vh' }}>
-      <iframe
-        ref={iframeRef}
-        srcDoc={html}
-        title={`event-${slug}-${endpoint}`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-        style={{ width: '100%', minHeight: '100vh', border: 'none', display: 'block' }}
-      />
-    </div>
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ minHeight: '100vh' }}
+      dangerouslySetInnerHTML={{ __html: bodyContent }}
+    />
   );
 }

@@ -46,20 +46,11 @@ interface FormData {
 export default function RSVPPage() {
   const params = useParams();
   const slug = params?.slug as string;
-  
+
 // Backend template check — if a custom template is assigned, render it
   const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'rsvp');
 
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
-      </div>
-    );
-  }
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
-  }
+  
 
   const [formData, setFormData] = useState<FormData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -266,6 +257,17 @@ export default function RSVPPage() {
       setSubmitting(false);
     }
   };
+
+if (templateLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+  if (hasTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
+  }
 
   if (loading) {
     return (
