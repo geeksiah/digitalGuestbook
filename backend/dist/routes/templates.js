@@ -8,13 +8,74 @@ const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const adm_zip_1 = __importDefault(require("adm-zip"));
-const sharp_1 = __importDefault(require("sharp")); // npm install sharp
+const sharp_1 = __importDefault(require("sharp"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const validation_js_1 = require("../utils/validation.js");
 const router = (0, express_1.Router)();
-// All routes require admin authentication
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC ROUTES (no auth required) — must come BEFORE router.use(authenticateAdmin)
+// ═══════════════════════════════════════════════════════════════════════════════
+/**
+ * GET /api/templates/:id/assets/*
+ * Serve template assets (images, fonts, etc.) — PUBLIC, no auth required.
+ * These are referenced by rendered templates served to guest browsers.
+ */
+router.get('/:id/assets/*', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const templateId = req.params.id;
+    const assetPath = req.params[0]; // Everything after /assets/
+    const template = await prisma_js_1.default.template.findUnique({
+        where: { id: templateId },
+        select: { assetsPath: true },
+    });
+    if (!template || !template.assetsPath) {
+        throw new errorHandler_js_1.AppError('Template or assets not found', 404);
+    }
+    // Construct full file path
+    const fullPath = path_1.default.join(process.cwd(), template.assetsPath, assetPath);
+    // Security: ensure path is within template directory
+    const templateDir = path_1.default.join(process.cwd(), template.assetsPath);
+    const resolvedPath = path_1.default.resolve(fullPath);
+    if (!resolvedPath.startsWith(templateDir)) {
+        throw new errorHandler_js_1.AppError('Invalid asset path', 403);
+    }
+    // Check if file exists
+    if (!fs_1.default.existsSync(resolvedPath)) {
+        throw new errorHandler_js_1.AppError('Asset not found', 404);
+    }
+    // Set proper cache headers for assets
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+    // Serve the file with correct MIME type
+    res.sendFile(resolvedPath);
+}));
+/**
+ * GET /api/templates/:id/preview
+ * Get template preview/thumbnail — PUBLIC for template previews.
+ */
+router.get('/:id/preview', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const template = await prisma_js_1.default.template.findUnique({
+        where: { id: req.params.id },
+        select: { thumbnailPath: true, assetsPath: true, name: true },
+    });
+    if (!template) {
+        throw new errorHandler_js_1.AppError('Template not found', 404);
+    }
+    if (template.thumbnailPath) {
+        const thumbnailFullPath = path_1.default.join(process.cwd(), template.thumbnailPath);
+        if (fs_1.default.existsSync(thumbnailFullPath)) {
+            return res.sendFile(thumbnailFullPath);
+        }
+    }
+    // Return placeholder if no thumbnail
+    res.status(404).json({
+        message: 'No preview available',
+        template: { id: req.params.id, name: template.name },
+    });
+}));
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROTECTED ROUTES — all routes below require admin authentication
+// ═══════════════════════════════════════════════════════════════════════════════
 router.use(auth_js_1.authenticateAdmin);
 /**
  * GET /api/templates
@@ -452,62 +513,8 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
         throw error;
     }
 }));
-/**
- * GET /api/templates/:id/assets/*
- * Serve template assets (images, fonts, etc.)
- */
-router.get('/:id/assets/*', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const templateId = req.params.id;
-    const assetPath = req.params[0]; // Everything after /assets/
-    const template = await prisma_js_1.default.template.findUnique({
-        where: { id: templateId },
-        select: { assetsPath: true },
-    });
-    if (!template || !template.assetsPath) {
-        throw new errorHandler_js_1.AppError('Template or assets not found', 404);
-    }
-    // Construct full file path
-    const fullPath = path_1.default.join(process.cwd(), template.assetsPath, assetPath);
-    // Security: ensure path is within template directory
-    const templateDir = path_1.default.join(process.cwd(), template.assetsPath);
-    const resolvedPath = path_1.default.resolve(fullPath);
-    if (!resolvedPath.startsWith(templateDir)) {
-        throw new errorHandler_js_1.AppError('Invalid asset path', 403);
-    }
-    // Check if file exists
-    if (!fs_1.default.existsSync(resolvedPath)) {
-        throw new errorHandler_js_1.AppError('Asset not found', 404);
-    }
-    // Serve the file
-    res.sendFile(resolvedPath);
-}));
-/**
- * GET /api/templates/:id/preview
- * Get template preview/thumbnail
- */
-router.get('/:id/preview', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const template = await prisma_js_1.default.template.findUnique({
-        where: { id: req.params.id },
-        select: { thumbnailPath: true, assetsPath: true, name: true },
-    });
-    if (!template) {
-        throw new errorHandler_js_1.AppError('Template not found', 404);
-    }
-    if (template.thumbnailPath) {
-        const thumbnailFullPath = path_1.default.join(process.cwd(), template.thumbnailPath);
-        if (fs_1.default.existsSync(thumbnailFullPath)) {
-            return res.sendFile(thumbnailFullPath);
-        }
-    }
-    // Return placeholder if no thumbnail
-    res.status(404).json({
-        message: 'No preview available',
-        template: {
-            id: req.params.id,
-            name: template.name,
-        }
-    });
-}));
+// NOTE: /:id/assets/* and /:id/preview are registered as PUBLIC routes
+// at the top of this file (before authenticateAdmin). No duplicates here.
 /**
  * GET /api/templates/:id/files
  * List all files in template (for editing)
