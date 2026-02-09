@@ -214,6 +214,9 @@ export const ownersApi = {
   // common pattern: assign/unassign owner to event
   assignToEvent: (eventId: string, ownerId: string) =>
     api.post(`/events/${eventId}/owner`, { ownerId }),
+    resendWelcomeEmail: (id: string) => api.post(`/owners/${id}/resend-welcome-email`),
+  changePassword: (id: string, newPassword: string) =>
+    api.post(`/owners/${id}/change-password`, { newPassword }),
 };
 
 // Admin API (admin dashboards, payouts, sales, etc.)
