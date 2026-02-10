@@ -10,7 +10,6 @@ import { generateVideoThumbnailFromBuffer } from '../services/thumbnailGenerator
 
 const router = Router();
 
-// Configure multer to use memory storage (we'll upload directly to Supabase)
 const storage = multer.memoryStorage();
 
 const upload = multer({
@@ -19,28 +18,18 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB max
   },
   fileFilter: (req, file, cb) => {
-    // --- LENIENT MIME TYPE CHECK FOR IOS/ANDROID ---
-    // 1. Sanitize: Remove codecs parameters (e.g., "video/mp4; codecs=hvc1" -> "video/mp4")
+    // LENIENT FILTER: Allow anything that looks like valid media
+    // This solves the issue of mobile devices sending complex MIME types (e.g. video/mp4; codecs=...)
     const mimeType = file.mimetype.split(';')[0].trim().toLowerCase();
-
-    // 2. Define Allowed Base Types
-    const allowedExactTypes = [
-      'video/webm', 'video/mp4', 'video/quicktime', 'video/x-matroska', 'video/3gpp',
-      'audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'
-    ];
-
-    // 3. Logic: Allow if exact match OR if it starts with valid media prefix (most lenient)
+    
     if (
-      allowedExactTypes.includes(mimeType) || 
       mimeType.startsWith('video/') || 
       mimeType.startsWith('audio/') || 
       mimeType.startsWith('image/')
     ) {
       cb(null, true);
     } else {
-      // Log the rejected type for debugging purposes
-      console.warn(`[Guestbook] Rejected file type: ${file.mimetype} (sanitized: ${mimeType})`);
+      console.warn(`[Guestbook] Rejected file type: ${file.mimetype}`);
       cb(new Error(`Invalid file type: ${file.mimetype}`));
     }
   },
@@ -48,7 +37,6 @@ const upload = multer({
 
 /**
  * Middleware to verify guestbook access
- * @param requireAccessCode - Whether to require access code for invitation-only events (default: true)
  */
 const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => asyncHandler(async (req, res, next) => {
   const event = await prisma.event.findFirst({
@@ -58,7 +46,6 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
         { slug: req.params.eventId },
       ],
     },
-    // Include booth templates for booth mode
     include: !requireAccessCode ? {
       boothTemplate: true,
       boothVideoTemplate: true,
@@ -75,15 +62,11 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
     throw new AppError('Guestbook is not enabled for this event', 400);
   }
 
-  // Verify event is in LIVE phase per SRS Section 9
   const currentPhase = calculateEventPhase(event);
   if (!canAccessGuestbook(currentPhase)) {
     throw new AppError('Guestbook is only available during the live event', 400);
   }
 
-  // For invitation-only events, verify guest has valid invitation (unless booth mode)
-  // Booth/kiosk mode never requires access code
-  // When invitation-only is false, guestbook is accessible without code
   if (event.invitationOnly && requireAccessCode) {
     const { accessCode } = req.query;
     
@@ -103,24 +86,18 @@ const createGuestbookAccessMiddleware = (requireAccessCode: boolean = true) => a
       throw new AppError('Invalid or unauthorized access code', 401);
     }
 
-    // Attach invitation to request for reference
     (req as any).invitation = invitation;
   }
-  // If invitation-only is false, guestbook is accessible without code (already handled by the condition above)
 
   (req as any).event = event;
   next();
 });
 
-// Standard guestbook access middleware (requires access code for invitation-only events)
 const verifyGuestbookAccess = createGuestbookAccessMiddleware(true);
-
-// Booth mode access middleware (no access code required - kiosk mode)
 const verifyBoothAccess = createGuestbookAccessMiddleware(false);
 
 /**
  * GET /api/guestbook/:eventId/config
- * Get guestbook configuration for an event
  */
 router.get('/:eventId/config', verifyGuestbookAccess, asyncHandler(async (req, res) => {
   const event = (req as any).event;
@@ -139,8 +116,6 @@ router.get('/:eventId/config', verifyGuestbookAccess, asyncHandler(async (req, r
 
 /**
  * POST /api/guestbook/:eventId/upload
- * Upload media (video, audio, or photo)
- * Per SRS Section 9.2
  */
 router.post(
   '/:eventId/upload',
@@ -163,7 +138,6 @@ router.post(
       duration: req.body.duration ? parseInt(req.body.duration) : undefined,
     });
 
-    // Check photo limits for PERSONAL mode
     if (metadata.type === 'PHOTO' && metadata.captureMode === 'PERSONAL' && metadata.deviceId) {
       const uploadedPhotos = await prisma.mediaAsset.count({
         where: {
@@ -182,9 +156,6 @@ router.post(
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname) || '.bin';
     
-    // Sanitize Guest Name for Filename:
-    // 1. If name exists, sanitize it.
-    // 2. If name is missing/empty, default to 'guest'.
     let safeGuestName = 'guest';
     if (metadata.guestName && metadata.guestName.trim().length > 0) {
         safeGuestName = metadata.guestName.trim().replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
@@ -194,8 +165,7 @@ router.post(
     const storagePath = `${event.id}/${fileName}`;
 
     try {
-      // Upload to Supabase Storage
-      const { path: storedPath, publicUrl } = await uploadToSupabase(
+      const { path: storedPath } = await uploadToSupabase(
         BUCKETS.MEDIA,
         storagePath,
         file.buffer,
@@ -204,13 +174,12 @@ router.post(
           metadata: {
             eventId: event.id,
             type: metadata.type,
-            guestName: metadata.guestName || 'Anonymous', // Store 'Anonymous' in metadata if empty
+            guestName: metadata.guestName || 'Anonymous',
             originalName: file.originalname,
           },
         }
       );
 
-      // Generate thumbnail for videos
       let thumbnailPath: string | null = null;
       if (metadata.type === 'VIDEO') {
         try {
@@ -220,17 +189,13 @@ router.post(
           thumbnailPath = await generateVideoThumbnailFromBuffer(
             file.buffer,
             thumbnailStoragePath,
-            1 // Extract frame at 1 second
+            1 
           );
-          
-          console.log(`[Guestbook] Generated thumbnail for video: ${thumbnailPath}`);
         } catch (thumbError: any) {
           console.error('[Guestbook] Failed to generate video thumbnail:', thumbError.message);
-          // Continue without thumbnail - video will still be uploaded
         }
       }
 
-      // Create media asset record
       const mediaAsset = await prisma.mediaAsset.create({
         data: {
           eventId: event.id,
@@ -238,7 +203,7 @@ router.post(
           guestName: metadata.guestName || 'Anonymous',
           guestEmail: metadata.guestEmail,
           fileName: fileName,
-          filePath: storedPath, 
+          filePath: storedPath,
           fileSize: file.size,
           mimeType: file.mimetype,
           duration: metadata.duration,
@@ -249,7 +214,6 @@ router.post(
         },
       });
 
-      // Create audit log
       await prisma.auditLog.create({
         data: {
           eventId: event.id,
@@ -279,10 +243,6 @@ router.post(
   })
 );
 
-/**
- * GET /api/guestbook/:eventId/quota
- * Check remaining upload quota for a device
- */
 router.get('/:eventId/quota', verifyGuestbookAccess, asyncHandler(async (req, res) => {
   const event = (req as any).event;
   const { deviceId } = req.query;
@@ -313,15 +273,9 @@ router.get('/:eventId/quota', verifyGuestbookAccess, asyncHandler(async (req, re
   });
 }));
 
-/**
- * GET /api/guestbook/:eventId/booth
- * Get booth mode configuration (no access code required - kiosk mode)
- * UPDATED: Now includes maxPhotosPerSession and shutterCountdown from event settings
- */
 router.get('/:eventId/booth', verifyBoothAccess, asyncHandler(async (req, res) => {
   const event = (req as any).event;
 
-  // Helper to format template data
   const formatTemplate = (template: any) => template ? {
     id: template.id,
     name: template.name,
@@ -337,16 +291,11 @@ router.get('/:eventId/booth', verifyBoothAccess, asyncHandler(async (req, res) =
       eventName: event.name,
       maxRecordingDuration: event.maxRecordingDuration,
       minRecordingDuration: event.minRecordingDuration,
-      // Booth-specific photo limit per session
       maxPhotosPerSession: event.maxPhotosPerBoothSession || 10,
-      // Shutter countdown timer
       shutterCountdown: event.boothShutterCountdown || 3,
-      // Event branding colors
       primaryColor: event.primaryColor || '#6366f1',
       secondaryColor: event.secondaryColor || '#e0e7ff',
-      // Main booth template (for menu/welcome screens)
       template: formatTemplate(event.boothTemplate),
-      // Specific page templates
       videoTemplate: formatTemplate(event.boothVideoTemplate),
       audioTemplate: formatTemplate(event.boothAudioTemplate),
       photoTemplate: formatTemplate(event.boothPhotoTemplate),
@@ -354,11 +303,6 @@ router.get('/:eventId/booth', verifyBoothAccess, asyncHandler(async (req, res) =
   });
 }));
 
-/**
- * POST /api/guestbook/:eventId/booth/upload
- * Upload media in booth mode (no access code required)
- * UPDATED: Validates photo count per session using session tracking
- */
 router.post(
   '/:eventId/booth/upload',
   verifyBoothAccess,
@@ -375,14 +319,13 @@ router.post(
       type: req.body.type,
       guestName: req.body.guestName,
       guestEmail: req.body.guestEmail,
-      captureMode: 'BOOTH', // Force booth mode
+      captureMode: 'BOOTH',
       deviceId: req.body.deviceId,
       duration: req.body.duration ? parseInt(req.body.duration) : undefined,
     });
 
-    // For photos, check session limit (using deviceId + timestamp window)
     if (metadata.type === 'PHOTO' && metadata.deviceId) {
-      const sessionWindow = 30 * 60 * 1000; // 30 minute session window
+      const sessionWindow = 30 * 60 * 1000;
       const sessionStart = new Date(Date.now() - sessionWindow);
       
       const photosInSession = await prisma.mediaAsset.count({
@@ -398,7 +341,6 @@ router.post(
       const maxPhotosPerSession = event.maxPhotosPerBoothSession || 10;
       
       if (photosInSession >= maxPhotosPerSession) {
-        // With memory storage, no file to delete - just throw error
         throw new AppError(
           `Maximum ${maxPhotosPerSession} photos per session. Please start a new session.`,
           400
@@ -406,11 +348,9 @@ router.post(
       }
     }
 
-    // Generate unique filename with Guest Name (Booth)
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname) || '.bin';
     
-    // Sanitize Guest Name for Filename
     let safeGuestName = 'booth-guest';
     if (metadata.guestName && metadata.guestName.trim().length > 0) {
         safeGuestName = metadata.guestName.trim().replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
@@ -420,7 +360,6 @@ router.post(
     const storagePath = `${event.id}/${fileName}`;
 
     try {
-      // Upload to Supabase Storage
       const { path: storedPath } = await uploadToSupabase(
         BUCKETS.MEDIA,
         storagePath,
@@ -437,7 +376,6 @@ router.post(
         }
       );
 
-      // Generate thumbnail for videos
       let thumbnailPath: string | null = null;
       if (metadata.type === 'VIDEO') {
         try {
@@ -447,17 +385,13 @@ router.post(
           thumbnailPath = await generateVideoThumbnailFromBuffer(
             file.buffer,
             thumbnailStoragePath,
-            1 // Extract frame at 1 second
+            1
           );
-          
-          console.log(`[Booth] Generated thumbnail for video: ${thumbnailPath}`);
         } catch (thumbError: any) {
           console.error('[Booth] Failed to generate video thumbnail:', thumbError.message);
-          // Continue without thumbnail - video will still be uploaded
         }
       }
 
-      // Create media asset record
       const mediaAsset = await prisma.mediaAsset.create({
         data: {
           eventId: event.id,
@@ -465,7 +399,7 @@ router.post(
           guestName: metadata.guestName || 'Booth Guest',
           guestEmail: metadata.guestEmail,
           fileName: fileName,
-          filePath: storedPath, // Store Supabase path
+          filePath: storedPath,
           fileSize: file.size,
           mimeType: file.mimetype,
           duration: metadata.duration,
@@ -476,7 +410,6 @@ router.post(
         },
       });
 
-      // Create audit log
       await prisma.auditLog.create({
         data: {
           eventId: event.id,
@@ -507,10 +440,6 @@ router.post(
   })
 );
 
-/**
- * POST /api/guestbook/:eventId/booth/session-qr
- * Generate QR code for downloading all photos from a session
- */
 router.post('/:eventId/booth/session-qr', verifyBoothAccess, asyncHandler(async (req, res) => {
   const event = (req as any).event;
   const { deviceId, sessionStart } = req.body;
