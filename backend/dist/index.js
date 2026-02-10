@@ -56,7 +56,6 @@ async function initializeDatabase() {
             }
             console.warn('[Database] Connection test failed, tables may not exist yet:', dbError.message);
             console.warn('[Database] Waiting for schema sync...');
-            // Wait a bit for prisma db push to complete if it's still running
             await new Promise(resolve => setTimeout(resolve, 3000));
         }
         // Try to check if admin table exists by attempting a count
@@ -66,7 +65,6 @@ async function initializeDatabase() {
         }
         catch (error) {
             if (error.code === 'P2021') {
-                // Table doesn't exist yet - schema sync is likely still running
                 console.warn('[Database] Admin table does not exist yet. Schema may still be syncing.');
                 console.warn('[Database] Skipping seed data initialization for now.');
                 return;
@@ -75,7 +73,6 @@ async function initializeDatabase() {
         }
         if (adminCount === 0) {
             console.log('🌱 No admin found, creating default admin...');
-            // Validate required environment variables in production
             if (process.env.NODE_ENV === 'production') {
                 if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'admin123') {
                     throw new Error('ADMIN_PASSWORD must be set in production environment. Please set a secure password.');
@@ -84,8 +81,8 @@ async function initializeDatabase() {
                     throw new Error('ADMIN_EMAIL must be set in production environment. Please set a valid email address.');
                 }
             }
-            const adminPassword = process.env.ADMIN_PASSWORD || 'admin123'; // Only for development
-            const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com'; // Only for development
+            const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+            const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
             const adminName = process.env.ADMIN_NAME || 'Platform Admin';
             const passwordHash = await bcryptjs_1.default.hash(adminPassword, 12);
             await prisma_js_1.default.admin.create({
@@ -125,7 +122,6 @@ async function initializeDatabase() {
         }
         // Create default email provider from environment variables if none exists
         const emailProviderCount = await prisma_js_1.default.emailProvider.count();
-        // Check for both DEFAULT_EMAIL_* and legacy SMTP_* variables
         const smtpHost = process.env.DEFAULT_EMAIL_HOST || process.env.SMTP_HOST;
         const smtpPort = process.env.DEFAULT_EMAIL_PORT || process.env.SMTP_PORT || '587';
         const smtpUser = process.env.DEFAULT_EMAIL_USER || process.env.SMTP_USER;
@@ -149,7 +145,6 @@ async function initializeDatabase() {
                 },
             });
             console.log('✅ Default email provider created from environment variables');
-            // Enable email in system settings
             await prisma_js_1.default.systemSettings.update({
                 where: { id: 'default' },
                 data: { emailEnabled: true },
@@ -160,7 +155,6 @@ async function initializeDatabase() {
             console.log('ℹ️  No email provider configured. Set SMTP_HOST and SMTP_USER (or DEFAULT_EMAIL_*) to enable email notifications.');
         }
         else {
-            // If provider exists but email is disabled, check if we should enable it
             const hasActiveProvider = await prisma_js_1.default.emailProvider.findFirst({
                 where: { isActive: true, isDefault: true },
             });
@@ -180,8 +174,6 @@ async function initializeDatabase() {
         const eventCount = await prisma_js_1.default.event.count();
         if (eventCount === 0) {
             console.log('🌱 Creating sample event...');
-            // Using type assertion for ownerName/ownerAccessToken - Prisma client types may be stale
-            // These fields exist in schema and will be available at runtime
             const event = await prisma_js_1.default.event.create({
                 data: {
                     slug: 'sample-wedding',
@@ -233,27 +225,26 @@ const errorHandler_js_1 = require("./middleware/errorHandler.js");
 const requestLogger_js_1 = require("./middleware/requestLogger.js");
 const auth_js_2 = require("./middleware/auth.js");
 const app = (0, express_1.default)();
-// Render.com sets PORT=10000 by default for web services
-// Follow Render.com recommendation: use process.env.PORT with fallback
 const port = Number(process.env.PORT) || 10000;
 // Trust proxy (required for rate limiting behind reverse proxy like Render)
-// Only trust the first proxy (Render.com) to prevent IP spoofing
 app.set('trust proxy', 1);
 // Request Compression (gzip)
 app.use((0, compression_1.default)());
 // Security Middleware
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" },
-    contentSecurityPolicy: false, // Allow templates to load resources
+    contentSecurityPolicy: false,
 }));
-// CORS Configuration
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORS Configuration — FIXED: single unified allowedOrigins, no duplicate
+// ═══════════════════════════════════════════════════════════════════════════════
 const siteUrl_js_1 = require("./utils/siteUrl.js");
 const allowedOrigins = [
     (0, siteUrl_js_1.getSiteUrl)(),
     'https://digiguestbook.netlify.app',
-    // Production frontend origin for EventPeepo
     'https://app.eventpeepo.com',
-    process.env.CORS_ORIGIN,
+    // Include any comma-separated values from CORS_ORIGIN
+    ...(process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean),
     process.env.FRONTEND_URL,
     process.env.SITE_URL,
     process.env.APP_URL,
@@ -262,45 +253,42 @@ const allowedOrigins = [
 if (process.env.NODE_ENV === 'development') {
     allowedOrigins.push('http://localhost:3000');
 }
+// Deduplicate
+const uniqueOrigins = [...new Set(allowedOrigins)];
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, etc.)
+        // Allow requests with no origin (mobile apps, curl, server-to-server)
         if (!origin)
             return callback(null, true);
-        // Check if origin matches allowed origins or patterns
-        const isAllowed = allowedOrigins.some(allowed => {
-            if (allowed.includes('*')) {
-                const pattern = new RegExp('^' + allowed.replace(/\*/g, '.*') + '$');
-                return pattern.test(origin);
+        if (uniqueOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        // Allow any *.eventpeepo.com subdomain
+        try {
+            if (/\.eventpeepo\.com$/.test(new URL(origin).hostname)) {
+                return callback(null, true);
             }
-            return origin === allowed || origin.startsWith(allowed);
-        });
-        if (isAllowed) {
-            callback(null, true);
         }
-        else {
-            console.log(`CORS blocked origin: ${origin}`);
-            callback(null, true); // Allow anyway in production for now
+        catch {
+            // Invalid URL — fall through to deny
         }
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token', 'x-owner-token', 'X-Requested-With'],
-    exposedHeaders: ['Content-Disposition', 'Content-Type'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token'],
 }));
-// Rate Limiting (Non-Functional: Stable during high usage)
+// Rate Limiting
 const limiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
-    // Use a custom key generator that works with trust proxy
     keyGenerator: (req) => {
-        // Get IP from X-Forwarded-For header (first IP when trust proxy is set)
         return req.ip || req.socket.remoteAddress || 'unknown';
     },
-    // Skip trust proxy validation warning
     validate: {
         trustProxy: false,
     },
@@ -311,12 +299,9 @@ const authLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     max: 10,
     message: { error: 'Too many authentication attempts, please try again later.' },
-    // Use a custom key generator that works with trust proxy
     keyGenerator: (req) => {
-        // Get IP from X-Forwarded-For header (first IP when trust proxy is set)
         return req.ip || req.socket.remoteAddress || 'unknown';
     },
-    // Skip trust proxy validation warning
     validate: {
         trustProxy: false,
     },
@@ -349,7 +334,6 @@ app.get('/health', async (req, res) => {
         checks: {},
     };
     try {
-        // Database Health Check
         const { checkDatabaseHealth } = await import('./utils/prisma.js');
         const startDbCheck = Date.now();
         const dbHealthy = await checkDatabaseHealth();
@@ -359,7 +343,6 @@ app.get('/health', async (req, res) => {
             status: dbHealthy ? 'pass' : 'fail',
             responseTime: `${dbCheckTime}ms`,
         };
-        // File System Health Check
         const fsChecks = {};
         const requiredDirs = ['uploads/media', 'generated/reels', 'templates/archives', 'data'];
         for (const dir of requiredDirs) {
@@ -379,7 +362,6 @@ app.get('/health', async (req, res) => {
             }
         }
         healthStatus.checks.filesystem = fsChecks;
-        // FFmpeg Check (for reel generation)
         try {
             const { spawn } = await import('child_process');
             const ffmpegCheck = spawn('ffmpeg', ['-version']);
@@ -400,7 +382,6 @@ app.get('/health', async (req, res) => {
             healthStatus.services.ffmpeg = 'unavailable';
             healthStatus.checks.ffmpeg = { status: 'fail', message: 'FFmpeg not installed' };
         }
-        // Memory Usage
         const memUsage = process.memoryUsage();
         healthStatus.resources = {
             memory: {
@@ -410,7 +391,6 @@ app.get('/health', async (req, res) => {
             },
             uptime: `${Math.round(process.uptime())}s`,
         };
-        // Determine overall status
         const allChecks = Object.values(healthStatus.checks).flat();
         const hasFailures = allChecks.some((check) => check.status === 'fail');
         healthStatus.status = hasFailures ? (dbHealthy ? 'degraded' : 'unhealthy') : 'healthy';
@@ -428,7 +408,6 @@ app.get('/health/detailed', auth_js_2.authenticateAdmin, async (req, res) => {
     try {
         const { checkDatabaseHealth } = await import('./utils/prisma.js');
         const dbHealthy = await checkDatabaseHealth();
-        // Database stats
         const [eventCount, rsvpCount, mediaCount, templateCount] = await Promise.all([
             prisma_js_1.default.event.count(),
             prisma_js_1.default.rSVP.count(),
@@ -463,39 +442,23 @@ app.get('/health/detailed', auth_js_2.authenticateAdmin, async (req, res) => {
     }
 });
 // API Routes
-// Authentication
 app.use('/api/auth', auth_js_1.default);
-// Admin Routes (protected)
 app.use('/api/admin', admin_js_1.default);
-// Event Management (protected)
 app.use('/api/events', events_js_1.default);
-// Template Management (protected)
 app.use('/api/templates', templates_js_1.default);
-// RSVP System
 app.use('/api/rsvp', rsvp_js_1.default);
-// Invitation Pass
 app.use('/api/invitations', invitations_js_1.default);
-// Check-In System
 app.use('/api/checkin', checkin_js_1.default);
-// Guestbook
 app.use('/api/guestbook', guestbook_js_1.default);
-// Media Management
 app.use('/api/media', media_js_1.default);
-// Event Owner Portal
 app.use('/api/event-owner', event_owner_js_1.default);
-// Public Event Pages
 app.use('/api/public', public_js_1.default);
-// System Settings (admin only)
 app.use('/api/settings', settings_js_1.default);
-// Ticketing & Custom Fields
 app.use('/api/ticketing', ticketing_js_1.default);
 app.use('/api/payment-gateways', payment_gateways_js_1.default);
 app.use('/api/promo-codes', promo_codes_js_1.default);
-// Owner Management (protected)
 app.use('/api/owners', owners_js_1.default);
-// Owner Authentication (public routes)
 app.use('/api/owner-auth', owner_auth_js_1.default);
-// Owner Dashboard (protected)
 app.use('/api/owner-dashboard', owner_dashboard_js_1.default);
 // 404 Handler
 app.use((req, res) => {
@@ -504,9 +467,7 @@ app.use((req, res) => {
 // Global Error Handler
 app.use(errorHandler_js_1.errorHandler);
 // Start Server
-// Render.com requires binding to 0.0.0.0 explicitly for Docker services
 try {
-    // Validate environment variables before starting
     validateEnvironmentVariables();
     console.log(`[Server] Starting server...`);
     console.log(`[Server] PORT environment variable: ${process.env.PORT || 'not set (using default 10000)'}`);
@@ -516,16 +477,14 @@ try {
         console.log(`✅ Server listening on port ${port}`);
         console.log(`✅ Server bound to 0.0.0.0:${port}`);
         console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`✅ Allowed CORS origins: ${uniqueOrigins.join(', ')}`);
         console.log(`✅ Ready to accept connections`);
-        // Initialize database after server starts (non-blocking)
         setTimeout(() => {
             initializeDatabase().catch((error) => {
                 console.error('[Database] Initialization failed (non-fatal):', error);
-                // Don't crash the server if initialization fails
             });
-        }, 1000); // Wait 1 second before initializing DB
+        }, 1000);
     });
-    // Handle server errors
     server.on('error', (error) => {
         console.error(`[Server] ❌ Error starting server:`, error);
         if (error.code === 'EADDRINUSE') {
@@ -533,12 +492,10 @@ try {
         }
         process.exit(1);
     });
-    // Handle server listening state
     server.on('listening', () => {
         const address = server.address();
         console.log(`[Server] ✅ Server is listening on:`, address);
     });
-    // Graceful shutdown
     process.on('SIGTERM', () => {
         console.log('[Server] SIGTERM received, shutting down gracefully...');
         server.close(() => {

@@ -1,93 +1,105 @@
 "use strict";
+// backend/src/services/supabaseStorage.ts
+// ─── FULL REPLACEMENT ──────────────────────────────────────────────────────────
+// Changes from original:
+//   1. Added createSignedUploadUrl() for client-direct uploads
+//   2. Added getMediaPublicUrl() convenience helper
+//   3. Aggressive cacheControl for media uploads (1 year, immutable)
+//   4. ensureBucketExists uses a local Set to avoid repeated API calls under load
+//   5. TEMPLATES bucket is now PUBLIC (per spec)
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initializeBuckets = exports.ensureBucketExists = exports.downloadFile = exports.listFiles = exports.fileExists = exports.deleteFromSupabase = exports.getPublicUrl = exports.getSignedUrl = exports.uploadFileFromPath = exports.uploadToSupabase = exports.BUCKETS = exports.isSupabaseConfigured = void 0;
+exports.initializeBuckets = exports.ensureBucketExists = exports.downloadFile = exports.listFiles = exports.fileExists = exports.deleteFromSupabase = exports.getPublicUrl = exports.getSignedUrl = exports.uploadFileFromPath = exports.buildPublicUrl = exports.createSignedUploadUrl = exports.uploadToSupabase = exports.BUCKETS = exports.isSupabaseConfigured = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
-// Supabase client singleton
+// ── Supabase client singleton ──────────────────────────────────────────────────
 let supabaseClient = null;
-/**
- * Check if Supabase is configured
- */
 const isSupabaseConfigured = () => {
     return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 };
 exports.isSupabaseConfigured = isSupabaseConfigured;
 const getSupabaseClient = () => {
-    if (supabaseClient) {
+    if (supabaseClient)
         return supabaseClient;
-    }
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !supabaseKey) {
-        console.warn('[Supabase Storage] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY not set - storage operations will fail');
-        throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for storage operations. Please configure these in your environment variables.');
+        throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for storage operations.');
     }
     supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-        },
+        auth: { autoRefreshToken: false, persistSession: false },
     });
     return supabaseClient;
 };
-/**
- * Storage bucket configuration
- *
- * Bucket Naming Guidelines:
- * - Use lowercase letters, numbers, and hyphens only
- * - Keep names descriptive but concise
- * - Must be unique within your Supabase project
- * - Cannot be changed after creation (need to recreate)
- */
+// ── Bucket configuration ───────────────────────────────────────────────────────
 exports.BUCKETS = {
-    MEDIA: 'media-assets', // Event media (photos, videos, audio) - PUBLIC for direct access
-    REELS: 'generated-reels', // Generated video reels - PRIVATE (require authentication)
-    TEMPLATES: 'templates', // Template files - PRIVATE (admin only)
-    PDFS: 'invitation-pdfs', // Generated PDF invitations - PRIVATE (sensitive data)
+    MEDIA: 'media-assets',
+    REELS: 'generated-reels',
+    TEMPLATES: 'templates',
+    PDFS: 'invitation-pdfs',
 };
-/**
- * Upload a file to Supabase Storage
- */
+// ── Upload (existing, kept for backward compat + server-side usage) ────────────
 const uploadToSupabase = async (bucket, filePath, fileBuffer, options = {}) => {
     const supabase = getSupabaseClient();
-    // Ensure bucket exists
     await (0, exports.ensureBucketExists)(bucket);
-    // Normalize path (remove leading slash, use forward slashes)
     const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
-    // Upload file
-    const { data, error } = await supabase.storage
-        .from(bucket)
-        .upload(normalizedPath, fileBuffer, {
+    const { data, error } = await supabase.storage.from(bucket).upload(normalizedPath, fileBuffer, {
         contentType: options.contentType || 'application/octet-stream',
         metadata: options.metadata || {},
         upsert: options.upsert || false,
-        cacheControl: '3600', // Cache for 1 hour
+        cacheControl: options.cacheControl || '31536000, immutable', // 1 year
     });
     if (error) {
         console.error(`[Supabase Storage] Upload error for ${bucket}/${normalizedPath}:`, error);
         throw new Error(`Failed to upload file to Supabase: ${error.message}`);
     }
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(normalizedPath);
-    return {
-        path: normalizedPath,
-        publicUrl: publicUrlData.publicUrl,
-    };
+    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(normalizedPath);
+    return { path: normalizedPath, publicUrl: publicUrlData.publicUrl };
 };
 exports.uploadToSupabase = uploadToSupabase;
+// ── NEW: Create a signed upload URL so the CLIENT can upload directly ──────────
 /**
- * Upload from local filesystem to Supabase Storage
+ * Creates a short-lived signed URL that allows the client to PUT a file
+ * directly to Supabase Storage without the backend buffering the data.
+ *
+ * The Supabase JS SDK's `createSignedUploadUrl` returns { signedUrl, token, path }.
+ * The client PUTs with header `Authorization: Bearer <token>`.
  */
+const createSignedUploadUrl = async (bucket, storagePath, options) => {
+    const supabase = getSupabaseClient();
+    await (0, exports.ensureBucketExists)(bucket);
+    const normalizedPath = storagePath.replace(/^\/+/, '').replace(/\\/g, '/');
+    const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUploadUrl(normalizedPath, { upsert: options?.upsert ?? false });
+    if (error) {
+        console.error(`[Supabase Storage] Signed upload URL error: ${bucket}/${normalizedPath}`, error);
+        throw new Error(`Failed to create signed upload URL: ${error.message}`);
+    }
+    return {
+        signedUrl: data.signedUrl,
+        token: data.token,
+        path: normalizedPath,
+    };
+};
+exports.createSignedUploadUrl = createSignedUploadUrl;
+// ── NEW: Convenience public URL builder ────────────────────────────────────────
+/**
+ * Build the public URL for a media asset without an API call.
+ * Works for any public bucket.
+ */
+const buildPublicUrl = (bucket, storagePath) => {
+    const base = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+    const normalized = storagePath.replace(/^\/+/, '').replace(/\\/g, '/');
+    return `${base}/storage/v1/object/public/${bucket}/${normalized}`;
+};
+exports.buildPublicUrl = buildPublicUrl;
+// ── Upload from local filesystem ───────────────────────────────────────────────
 const uploadFileFromPath = async (bucket, filePath, localFilePath, options = {}) => {
-    // Read file from local filesystem
     const fileBuffer = fs_1.default.readFileSync(localFilePath);
-    // Determine content type from extension if not provided
     const ext = path_1.default.extname(localFilePath).toLowerCase();
     const contentTypeMap = {
         '.jpg': 'image/jpeg',
@@ -103,187 +115,122 @@ const uploadFileFromPath = async (bucket, filePath, localFilePath, options = {})
         '.pdf': 'application/pdf',
         '.zip': 'application/zip',
     };
-    const contentType = options.contentType || contentTypeMap[ext] || 'application/octet-stream';
     return (0, exports.uploadToSupabase)(bucket, filePath, fileBuffer, {
-        contentType,
+        contentType: options.contentType || contentTypeMap[ext] || 'application/octet-stream',
         metadata: options.metadata,
     });
 };
 exports.uploadFileFromPath = uploadFileFromPath;
-/**
- * Download a file from Supabase Storage
- * Returns a signed URL that expires after specified seconds (default 1 hour)
- */
+// ── Signed download URL ────────────────────────────────────────────────────────
 const getSignedUrl = async (bucket, filePath, expiresIn = 3600) => {
     const supabase = getSupabaseClient();
-    // Normalize path
     const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
     const { data, error } = await supabase.storage
         .from(bucket)
         .createSignedUrl(normalizedPath, expiresIn);
     if (error) {
-        console.error(`[Supabase Storage] Signed URL error for ${bucket}/${normalizedPath}:`, error);
         throw new Error(`Failed to create signed URL: ${error.message}`);
     }
     return data.signedUrl;
 };
 exports.getSignedUrl = getSignedUrl;
-/**
- * Get public URL for a file (no expiration, requires bucket to be public)
- */
+// ── Public URL (requires public bucket) ────────────────────────────────────────
 const getPublicUrl = (bucket, filePath) => {
     const supabase = getSupabaseClient();
-    // Normalize path
     const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
-    const { data } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(normalizedPath);
+    const { data } = supabase.storage.from(bucket).getPublicUrl(normalizedPath);
     return data.publicUrl;
 };
 exports.getPublicUrl = getPublicUrl;
-/**
- * Delete a file from Supabase Storage
- */
+// ── Delete ─────────────────────────────────────────────────────────────────────
 const deleteFromSupabase = async (bucket, filePath) => {
     const supabase = getSupabaseClient();
-    // Normalize path
     const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
-    const { error } = await supabase.storage
-        .from(bucket)
-        .remove([normalizedPath]);
+    const { error } = await supabase.storage.from(bucket).remove([normalizedPath]);
     if (error) {
-        console.error(`[Supabase Storage] Delete error for ${bucket}/${normalizedPath}:`, error);
-        // Don't throw - file might not exist, log and continue
-        console.warn(`[Supabase Storage] File may not exist: ${bucket}/${normalizedPath}`);
+        console.warn(`[Supabase Storage] Delete error for ${bucket}/${normalizedPath}:`, error.message);
     }
 };
 exports.deleteFromSupabase = deleteFromSupabase;
-/**
- * Check if a file exists in Supabase Storage
- */
+// ── File exists ────────────────────────────────────────────────────────────────
 const fileExists = async (bucket, filePath) => {
     const supabase = getSupabaseClient();
-    // Normalize path
     const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
     const { data, error } = await supabase.storage
         .from(bucket)
-        .list(path_1.default.dirname(normalizedPath) || '.', {
-        search: path_1.default.basename(normalizedPath),
-    });
-    if (error) {
+        .list(path_1.default.dirname(normalizedPath) || '.', { search: path_1.default.basename(normalizedPath) });
+    if (error)
         return false;
-    }
-    return data ? data.some(file => file.name === path_1.default.basename(normalizedPath)) : false;
+    return data ? data.some((file) => file.name === path_1.default.basename(normalizedPath)) : false;
 };
 exports.fileExists = fileExists;
-/**
- * List files in a bucket folder
- */
+// ── List files ─────────────────────────────────────────────────────────────────
 const listFiles = async (bucket, folderPath = '') => {
     const supabase = getSupabaseClient();
-    // Normalize path
     const normalizedPath = folderPath.replace(/^\/+/, '').replace(/\\/g, '/');
     const { data, error } = await supabase.storage
         .from(bucket)
-        .list(normalizedPath || '.', {
-        sortBy: { column: 'created_at', order: 'desc' },
-    });
-    if (error) {
-        console.error(`[Supabase Storage] List error for ${bucket}/${normalizedPath}:`, error);
+        .list(normalizedPath || '.', { sortBy: { column: 'created_at', order: 'desc' } });
+    if (error)
         throw new Error(`Failed to list files: ${error.message}`);
-    }
     return data || [];
 };
 exports.listFiles = listFiles;
-/**
- * Download file content as buffer
- */
+// ── Download file ──────────────────────────────────────────────────────────────
 const downloadFile = async (bucket, filePath) => {
     const supabase = getSupabaseClient();
-    // Normalize path
     const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
-    const { data, error } = await supabase.storage
-        .from(bucket)
-        .download(normalizedPath);
-    if (error) {
-        console.error(`[Supabase Storage] Download error for ${bucket}/${normalizedPath}:`, error);
+    const { data, error } = await supabase.storage.from(bucket).download(normalizedPath);
+    if (error)
         throw new Error(`Failed to download file: ${error.message}`);
-    }
-    // Convert Blob to Buffer
     const arrayBuffer = await data.arrayBuffer();
     return Buffer.from(arrayBuffer);
 };
 exports.downloadFile = downloadFile;
-/**
- * Ensure bucket exists, create if it doesn't
- */
+// ── Bucket initialization (cached to avoid repeated API calls under load) ──────
+const initializedBuckets = new Set();
 const ensureBucketExists = async (bucket) => {
+    if (initializedBuckets.has(bucket))
+        return; // fast path
     const supabase = getSupabaseClient();
-    // Check if bucket exists
     const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-    if (listError) {
-        console.error('[Supabase Storage] Error listing buckets:', listError);
+    if (listError)
         throw new Error(`Failed to check buckets: ${listError.message}`);
+    const exists = buckets?.some((b) => b.name === bucket);
+    if (exists) {
+        initializedBuckets.add(bucket);
+        return;
     }
-    const bucketExists = buckets?.some(b => b.name === bucket);
-    if (!bucketExists) {
-        console.log(`[Supabase Storage] Creating bucket: ${bucket}`);
-        // Determine if bucket should be public based on type and security requirements
-        // PUBLIC buckets: Direct URL access without authentication (use for public content)
-        // PRIVATE buckets: Require signed URLs or authentication (use for sensitive data)
-        const publicBuckets = [exports.BUCKETS.MEDIA]; // Media is public (event photos/videos for guests to view)
-        const isPublic = publicBuckets.includes(bucket);
-        // Security note:
-        // - MEDIA: Public (event photos/videos are meant to be shared)
-        // - REELS: Private (generated content, may contain sensitive moments)
-        // - TEMPLATES: Private (admin assets, intellectual property)
-        // - PDFS: Private (invitations contain access codes, personal info)
-        // Configure bucket-specific settings
-        const bucketConfig = {
-            public: isPublic,
-        };
-        // Set file size limits and MIME types per bucket
-        if (bucket === exports.BUCKETS.MEDIA) {
-            bucketConfig.fileSizeLimit = 50 * 1024 * 1024; // 50MB for media files
-            bucketConfig.allowedMimeTypes = ['image/*', 'video/*', 'audio/*'];
-        }
-        else if (bucket === exports.BUCKETS.REELS) {
-            // No size limit for reels (can be large)
-            bucketConfig.allowedMimeTypes = ['video/*'];
-        }
-        else if (bucket === exports.BUCKETS.TEMPLATES) {
-            bucketConfig.fileSizeLimit = 50 * 1024 * 1024; // 50MB for templates
-            bucketConfig.allowedMimeTypes = [
-                'application/zip',
-                'text/html',
-                'text/css',
-                'application/javascript',
-                'application/json',
-            ];
-        }
-        else if (bucket === exports.BUCKETS.PDFS) {
-            bucketConfig.fileSizeLimit = 10 * 1024 * 1024; // 10MB for PDFs
-            bucketConfig.allowedMimeTypes = ['application/pdf'];
-        }
-        const { error: createError } = await supabase.storage.createBucket(bucket, bucketConfig);
-        if (createError) {
-            // Bucket might already exist (race condition), check again
-            const { data: buckets2 } = await supabase.storage.listBuckets();
-            const stillMissing = !buckets2?.some(b => b.name === bucket);
-            if (stillMissing) {
-                console.error(`[Supabase Storage] Failed to create bucket ${bucket}:`, createError);
-                throw new Error(`Failed to create bucket: ${createError.message}`);
-            }
-        }
-        else {
-            console.log(`[Supabase Storage] Bucket created: ${bucket} (public: ${isPublic})`);
+    console.log(`[Supabase Storage] Creating bucket: ${bucket}`);
+    // PUBLIC buckets: MEDIA (guest content) and TEMPLATES (per spec)
+    const publicBuckets = [exports.BUCKETS.MEDIA, exports.BUCKETS.TEMPLATES];
+    const isPublic = publicBuckets.includes(bucket);
+    const bucketConfig = { public: isPublic };
+    if (bucket === exports.BUCKETS.MEDIA) {
+        bucketConfig.fileSizeLimit = 50 * 1024 * 1024;
+        bucketConfig.allowedMimeTypes = ['image/*', 'video/*', 'audio/*'];
+    }
+    else if (bucket === exports.BUCKETS.TEMPLATES) {
+        bucketConfig.fileSizeLimit = 50 * 1024 * 1024;
+    }
+    else if (bucket === exports.BUCKETS.PDFS) {
+        bucketConfig.fileSizeLimit = 10 * 1024 * 1024;
+        bucketConfig.allowedMimeTypes = ['application/pdf'];
+    }
+    const { error: createError } = await supabase.storage.createBucket(bucket, bucketConfig);
+    if (createError) {
+        // Race condition — check again
+        const { data: buckets2 } = await supabase.storage.listBuckets();
+        if (!buckets2?.some((b) => b.name === bucket)) {
+            throw new Error(`Failed to create bucket: ${createError.message}`);
         }
     }
+    else {
+        console.log(`[Supabase Storage] Bucket created: ${bucket} (public: ${isPublic})`);
+    }
+    initializedBuckets.add(bucket);
 };
 exports.ensureBucketExists = ensureBucketExists;
-/**
- * Initialize all required buckets
- */
 const initializeBuckets = async () => {
     console.log('[Supabase Storage] Initializing buckets...');
     for (const bucket of Object.values(exports.BUCKETS)) {
@@ -291,8 +238,7 @@ const initializeBuckets = async () => {
             await (0, exports.ensureBucketExists)(bucket);
         }
         catch (error) {
-            console.error(`[Supabase Storage] Failed to initialize bucket ${bucket}:`, error.message);
-            // Don't throw - continue with other buckets
+            console.error(`[Supabase Storage] Failed to init bucket ${bucket}:`, error.message);
         }
     }
     console.log('[Supabase Storage] Bucket initialization complete');

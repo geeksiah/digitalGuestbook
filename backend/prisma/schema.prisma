@@ -795,7 +795,7 @@ model MediaAsset {
   duration Int? // seconds (for video/audio)
 
   // Processing Status
-  status        String  @default("UPLOADED") // UPLOADED | PROCESSING | READY | FAILED
+  status      String   @default("UPLOADING") // UPLOADING | READY | FAILED | PROCESSING_THUMBNAIL
   thumbnailPath String?
 
   // Access Mode (SRS Section 9.1)
@@ -811,6 +811,10 @@ model MediaAsset {
   // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   downloadToken BoothDownloadToken?
+@@index([eventId, type, deviceId, createdAt])
+@@index([eventId, captureMode, deviceId, createdAt])
+@@index([eventId, status])
+
 }
 
 // ============================================

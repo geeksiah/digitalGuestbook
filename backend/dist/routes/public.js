@@ -55,6 +55,11 @@ const EVENT_PUBLIC_SELECT = {
 };
 // ─── Helper: standard template data ────────────────────────────────────────────
 function buildTemplateData(event, currentPhase, capabilities) {
+    // Frontend URL for navigation links inside templates
+    const frontendUrl = (process.env.FRONTEND_URL ||
+        process.env.SITE_URL ||
+        process.env.APP_URL ||
+        '').replace(/\/+$/, '');
     return {
         event: {
             name: event.name,
@@ -79,13 +84,19 @@ function buildTemplateData(event, currentPhase, capabilities) {
         phase: currentPhase,
         capabilities,
         urls: {
-            rsvp: `/e/${event.slug}/rsvp`,
-            guestbook: `/e/${event.slug}/guestbook`,
-            booth: `/e/${event.slug}/booth`,
-            thankYou: `/e/${event.slug}/thanks`,
-            invitation: `/e/${event.slug}`,
-            live: `/e/${event.slug}/live`,
-            checkIn: `/e/${event.slug}/checkin`,
+            rsvp: `${frontendUrl}/e/${event.slug}/rsvp`,
+            guestbook: `${frontendUrl}/e/${event.slug}/guestbook`,
+            booth: `${frontendUrl}/e/${event.slug}/booth`,
+            thankYou: `${frontendUrl}/e/${event.slug}/thanks`,
+            invitation: `${frontendUrl}/e/${event.slug}`,
+            live: `${frontendUrl}/e/${event.slug}/live`,
+            checkIn: `${frontendUrl}/e/${event.slug}/checkin`,
+            guestbookVideo: `${frontendUrl}/e/${event.slug}/guestbook/video`,
+            guestbookAudio: `${frontendUrl}/e/${event.slug}/guestbook/audio`,
+            guestbookPhoto: `${frontendUrl}/e/${event.slug}/guestbook/photo`,
+            boothVideo: `${frontendUrl}/e/${event.slug}/booth/video`,
+            boothAudio: `${frontendUrl}/e/${event.slug}/booth/audio`,
+            boothPhoto: `${frontendUrl}/e/${event.slug}/booth/photo`,
         },
     };
 }
@@ -142,19 +153,32 @@ async function renderEventTemplate(event, templateType, templateId, templateData
         });
     };
     html = replaceVariables(html, templateData);
-    // CRITICAL FIX: Resolve asset paths
+    // CRITICAL FIX: Resolve asset paths using FULL backend URL
+    // The HTML is fetched by the frontend (app.eventpeepo.com) and rendered there.
+    // Relative /api/ paths would resolve against the frontend domain and 404.
+    // We must use absolute URLs pointing to the backend.
     if (template.assetsPath) {
+        const backendUrl = (process.env.API_URL ||
+            process.env.BACKEND_URL ||
+            process.env.RENDER_EXTERNAL_URL ||
+            '').replace(/\/+$/, '');
+        const assetBase = backendUrl
+            ? `${backendUrl}/api/templates/${template.id}/assets/`
+            : `/api/templates/${template.id}/assets/`;
         // Pattern 1: src="./assets/..." or src="../assets/..."
-        html = html.replace(/(src|href)=["'](\.\/|\.\.\/)?assets\//g, `$1="/api/templates/${template.id}/assets/`);
+        html = html.replace(/(src|href)=["'](\.\/|\.\.\/)?assets\//g, `$1="${assetBase}`);
         // Pattern 2: src="/assets/..."
-        html = html.replace(/(src|href)=["']\/assets\//g, `$1="/api/templates/${template.id}/assets/`);
-        // Pattern 3: CSS url() references in inline styles
-        html = html.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('/api/templates/${template.id}/assets/`);
-        // Pattern 4: CSS url() references in separate cssContent
+        html = html.replace(/(src|href)=["']\/assets\//g, `$1="${assetBase}`);
+        // Pattern 3: bare filenames like src="MCS_9627.jpeg" (no assets/ prefix)
+        // These are relative to the template root — rewrite to asset endpoint
+        html = html.replace(/(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi, `$1="${assetBase}$2"`);
+        // Pattern 4: CSS url() references in inline styles
+        html = html.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBase}`);
+        // Pattern 5: CSS url() in separate cssContent
         if (template.cssContent) {
-            template.cssContent = template.cssContent.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('/api/templates/${template.id}/assets/`);
+            template.cssContent = template.cssContent.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBase}`);
         }
-        console.info(`[Render] Resolved asset paths for template=${template.id}`);
+        console.info(`[Render] Resolved asset paths for template=${template.id} base=${assetBase}`);
     }
     // Inject CSS
     if (template.cssContent) {
@@ -261,9 +285,9 @@ router.get('/event/:slug/live', (0, errorHandler_js_1.asyncHandler)(async (req, 
     const event = await fetchPublicEvent(req.params.slug);
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    // Live landing only during LIVE phase
+    // Live landing only during LIVE phase — return JSON (not redirect) so fetch() works
     if (currentPhase !== 'LIVE') {
-        return res.redirect(`/e/${event.slug}`);
+        return res.json({ template: null, phase: currentPhase, message: 'Event is not in LIVE phase' });
     }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'LIVE_LANDING', event.liveLandingTemplateId, templateData, res);
@@ -277,9 +301,9 @@ router.get('/event/:slug/ended', (0, errorHandler_js_1.asyncHandler)(async (req,
     const event = await fetchPublicEvent(req.params.slug);
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    // Ended page only during POST_EVENT phase
+    // Ended page only during POST_EVENT — return JSON (not redirect) so fetch() works
     if (currentPhase !== 'POST_EVENT') {
-        return res.redirect(`/e/${event.slug}`);
+        return res.json({ template: null, phase: currentPhase, message: 'Event is not in POST_EVENT phase' });
     }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'EVENT_ENDED', event.eventEndedTemplateId, templateData, res);
@@ -430,9 +454,9 @@ router.get('/event/:slug/booth/photo', (0, errorHandler_js_1.asyncHandler)(async
 router.get('/event/:slug/thank-you', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
-    // Thank-you page is only for POST_EVENT phase
+    // Thank-you page is only for POST_EVENT phase — return JSON (not redirect)
     if (currentPhase !== 'POST_EVENT') {
-        return res.redirect(`/e/${event.slug}`);
+        return res.json({ template: null, phase: currentPhase, message: 'Event is not in POST_EVENT phase' });
     }
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
     const templateData = buildTemplateData(event, currentPhase, capabilities);
