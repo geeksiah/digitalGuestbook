@@ -19,24 +19,28 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB max
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = [
-      'video/webm',
-      'video/mp4',
-      'video/quicktime',
-      'audio/webm',
-      'audio/mp3',
-      'audio/mpeg',
-      'audio/wav',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
+    // --- LENIENT MIME TYPE CHECK ---
+    // 1. Sanitize: Remove codecs parameters (e.g., "video/mp4; codecs=hvc1" -> "video/mp4")
+    const mimeType = file.mimetype.split(';')[0].trim().toLowerCase();
+
+    // 2. Define Allowed Base Types (as a reference)
+    const allowedExactTypes = [
+      'video/webm', 'video/mp4', 'video/quicktime', 'video/x-matroska', 'video/3gpp',
+      'audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'
     ];
-    
-    if (allowedTypes.includes(file.mimetype)) {
+
+    // 3. Logic: Allow if exact match OR if it starts with valid media prefix (most lenient for mobile compatibility)
+    if (
+      allowedExactTypes.includes(mimeType) || 
+      mimeType.startsWith('video/') || 
+      mimeType.startsWith('audio/') || 
+      mimeType.startsWith('image/')
+    ) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type'));
+      console.warn(`[Guestbook] Rejected file type: ${file.mimetype} (sanitized: ${mimeType})`);
+      cb(new Error(`Invalid file type: ${file.mimetype}`));
     }
   },
 });
@@ -175,7 +179,7 @@ router.post(
 
     // Generate unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname) || '.bin';
     const fileName = `media-${uniqueSuffix}${ext}`;
     const storagePath = `${event.id}/${fileName}`;
 
@@ -394,7 +398,7 @@ router.post(
 
     // Generate unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname) || '.bin';
     const fileName = `booth-${uniqueSuffix}${ext}`;
     const storagePath = `${event.id}/${fileName}`;
 

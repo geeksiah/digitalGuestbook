@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Playfair_Display } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
+import ServiceWorkerRegister from "./_components/ServiceWorkerRegister";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -22,14 +23,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <body className="font-sans">
+        <ServiceWorkerRegister /> {/* ✅ ADD THIS */}
         {children}
         <Toaster
           position="top-right"
