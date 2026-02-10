@@ -19,18 +19,18 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB max
   },
   fileFilter: (req, file, cb) => {
-    // --- LENIENT MIME TYPE CHECK ---
+    // --- LENIENT MIME TYPE CHECK FOR IOS/ANDROID ---
     // 1. Sanitize: Remove codecs parameters (e.g., "video/mp4; codecs=hvc1" -> "video/mp4")
     const mimeType = file.mimetype.split(';')[0].trim().toLowerCase();
 
-    // 2. Define Allowed Base Types (as a reference)
+    // 2. Define Allowed Base Types
     const allowedExactTypes = [
       'video/webm', 'video/mp4', 'video/quicktime', 'video/x-matroska', 'video/3gpp',
       'audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
       'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'
     ];
 
-    // 3. Logic: Allow if exact match OR if it starts with valid media prefix (most lenient for mobile compatibility)
+    // 3. Logic: Allow if exact match OR if it starts with valid media prefix (most lenient)
     if (
       allowedExactTypes.includes(mimeType) || 
       mimeType.startsWith('video/') || 
@@ -39,6 +39,7 @@ const upload = multer({
     ) {
       cb(null, true);
     } else {
+      // Log the rejected type for debugging purposes
       console.warn(`[Guestbook] Rejected file type: ${file.mimetype} (sanitized: ${mimeType})`);
       cb(new Error(`Invalid file type: ${file.mimetype}`));
     }
@@ -177,10 +178,19 @@ router.post(
       }
     }
 
-    // Generate unique filename
+    // Generate unique filename with Guest Name logic
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname) || '.bin';
-    const fileName = `media-${uniqueSuffix}${ext}`;
+    
+    // Sanitize Guest Name for Filename:
+    // 1. If name exists, sanitize it.
+    // 2. If name is missing/empty, default to 'guest'.
+    let safeGuestName = 'guest';
+    if (metadata.guestName && metadata.guestName.trim().length > 0) {
+        safeGuestName = metadata.guestName.trim().replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    }
+    
+    const fileName = `${safeGuestName}-${uniqueSuffix}${ext}`;
     const storagePath = `${event.id}/${fileName}`;
 
     try {
@@ -194,7 +204,7 @@ router.post(
           metadata: {
             eventId: event.id,
             type: metadata.type,
-            guestName: metadata.guestName || '',
+            guestName: metadata.guestName || 'Anonymous', // Store 'Anonymous' in metadata if empty
             originalName: file.originalname,
           },
         }
@@ -204,7 +214,7 @@ router.post(
       let thumbnailPath: string | null = null;
       if (metadata.type === 'VIDEO') {
         try {
-          const thumbnailFileName = `thumb-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+          const thumbnailFileName = `thumb-${safeGuestName}-${Date.now()}.jpg`;
           const thumbnailStoragePath = `${event.id}/${thumbnailFileName}`;
           
           thumbnailPath = await generateVideoThumbnailFromBuffer(
@@ -225,10 +235,10 @@ router.post(
         data: {
           eventId: event.id,
           type: metadata.type,
-          guestName: metadata.guestName,
+          guestName: metadata.guestName || 'Anonymous',
           guestEmail: metadata.guestEmail,
-          fileName: file.originalname,
-          filePath: storedPath, // Store Supabase path
+          fileName: fileName,
+          filePath: storedPath, 
           fileSize: file.size,
           mimeType: file.mimetype,
           duration: metadata.duration,
@@ -248,7 +258,7 @@ router.post(
           entityId: mediaAsset.id,
           details: JSON.stringify({
             type: metadata.type,
-            guestName: metadata.guestName,
+            guestName: metadata.guestName || 'Anonymous',
             captureMode: metadata.captureMode,
           }),
         },
@@ -396,10 +406,17 @@ router.post(
       }
     }
 
-    // Generate unique filename
+    // Generate unique filename with Guest Name (Booth)
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname) || '.bin';
-    const fileName = `booth-${uniqueSuffix}${ext}`;
+    
+    // Sanitize Guest Name for Filename
+    let safeGuestName = 'booth-guest';
+    if (metadata.guestName && metadata.guestName.trim().length > 0) {
+        safeGuestName = metadata.guestName.trim().replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    }
+    
+    const fileName = `${safeGuestName}-${uniqueSuffix}${ext}`;
     const storagePath = `${event.id}/${fileName}`;
 
     try {
@@ -424,7 +441,7 @@ router.post(
       let thumbnailPath: string | null = null;
       if (metadata.type === 'VIDEO') {
         try {
-          const thumbnailFileName = `thumb-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+          const thumbnailFileName = `thumb-${safeGuestName}-${Date.now()}.jpg`;
           const thumbnailStoragePath = `${event.id}/${thumbnailFileName}`;
           
           thumbnailPath = await generateVideoThumbnailFromBuffer(
@@ -447,7 +464,7 @@ router.post(
           type: metadata.type,
           guestName: metadata.guestName || 'Booth Guest',
           guestEmail: metadata.guestEmail,
-          fileName: file.originalname,
+          fileName: fileName,
           filePath: storedPath, // Store Supabase path
           fileSize: file.size,
           mimeType: file.mimetype,
