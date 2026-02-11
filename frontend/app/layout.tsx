@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     url: SITE_URL,
     title: "Bespoke Digital Experiences.",
     description:
-      "Your event's digital layer, handled. We design bespoke invitation suites and ensure seamless on-site access. You host; we manage the tech.",
+      "Your event's digital layer, handled. We design bespoke event solutions and ensure seamless on-site access. You host; we manage the tech.",
     siteName: "EventPeepo",
     images: [
       {

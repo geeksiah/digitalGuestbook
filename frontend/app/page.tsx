@@ -983,7 +983,7 @@ export default function HomePage() {
               </h1>
               
               <p className="max-w-xl mx-auto lg:mx-0 text-lg text-gray-600 mb-10 leading-relaxed font-medium">
-                Your event's digital layer, handled. We design bespoke invitation suites and ensure seamless on-site access. You host; we manage the tech.
+                Your event's digital layer, handled. We design bespoke event solutions and ensure seamless on-site access. You host; we manage the tech.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
