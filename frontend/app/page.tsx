@@ -1,5 +1,4 @@
 import React from 'react';
-import Link from 'next/link';
 
 // --- Brand Configuration ---
 const BRAND = {
@@ -36,13 +35,17 @@ const Icons = {
   Shield: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" /></svg>,
   Users: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>,
   Chart: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>,
-  Sparkles: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
+  Sparkles: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>,
+  Home: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>,
+  Grid: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z" /></svg>,
+  Settings: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.11v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.11V11.37c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  Brush: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a16.001 16.001 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" /></svg>
 };
 
 // --- ANIMATED MOCKUPS (CSS-Only) ---
 
 const MockupPhone = ({ className }: { className?: string }) => (
-  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-2xl h-[380px] w-[210px] shadow-[0_30px_60px_-12px_rgba(6,57,50,0.4)] flex flex-col overflow-hidden animate-float bg-white", className)}>
+  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-[2.5rem] h-[380px] w-[210px] shadow-[0_30px_60px_-12px_rgba(6,57,50,0.4)] flex flex-col overflow-hidden animate-float bg-white", className)}>
     <div className="h-[16px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-md">
       <div className="h-[8px] w-[50px] bg-[#042823] rounded-b-md"></div>
     </div>
@@ -82,101 +85,125 @@ const MockupPhone = ({ className }: { className?: string }) => (
   </div>
 );
 
-// New Stylized Invite for "Features" Section
+// New "Builder/Editor" Style Mockup for the Invitation Section
 const MockupInviteDesign = ({ className }: { className?: string }) => (
-  <div className={cn("relative border-[#063932] bg-[#063932] border-[6px] rounded-2xl h-[380px] w-[210px] shadow-2xl flex flex-col overflow-hidden bg-white", className)}>
-    <div className="h-[16px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-md">
-      <div className="h-[8px] w-[50px] bg-[#042823] rounded-b-md"></div>
-    </div>
-    
-    {/* Screen Content - Stylized Invite */}
-    <div className="flex-1 relative overflow-hidden bg-[#FAF7F2] flex flex-col">
-       {/* Background Pattern */}
-       <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#063932] to-transparent"></div>
-       
-       {/* Illustration Area */}
-       <div className="flex-1 w-full relative flex items-end justify-center pt-8 px-4">
-          {/* Minimalist Vector Couple - Dark Skinned */}
-          <svg viewBox="0 0 200 200" className="w-full h-auto drop-shadow-sm z-10">
-            {/* Arch Background */}
-            <path d="M50 200 L50 100 A50 50 0 0 1 150 100 L150 200 Z" fill="#E8E2D2" />
-            
-            {/* Man */}
-            <path d="M55,200 C55,140 70,110 90,110 C100,110 110,115 115,130 L115,200 Z" fill="#063932" />
-            <circle cx="90" cy="80" r="18" fill="#3D2314" />
-            
-            {/* Woman */}
-            <path d="M100,200 C100,160 110,130 130,130 C150,130 160,150 160,200 Z" fill="#FFFFFF" />
-            <circle cx="130" cy="95" r="16" fill="#4E2F1D" />
-            
-            {/* Woman's Hair (Elegant Updo) */}
-            <path d="M114,95 C114,75 146,75 146,95 C146,110 135,115 130,115 C120,115 114,105 114,95 Z" fill="#1A1A1A" />
-            <circle cx="130" cy="75" r="14" fill="#1A1A1A" />
-            
-            {/* Gold Accent */}
-            <circle cx="125" cy="145" r="4" fill="#d4af37" />
-            <circle cx="132" cy="148" r="3" fill="#d4af37" />
-            <circle cx="128" cy="152" r="4" fill="#d4af37" />
-          </svg>
+  <div className={cn("relative bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden h-[400px] w-full max-w-md", className)}>
+    {/* Editor Header */}
+    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white shrink-0">
+       <div className="flex gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+          <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
        </div>
-       
-       {/* Typography Area */}
-       <div className="h-[35%] bg-white flex flex-col items-center justify-center p-4 text-center z-10 space-y-3 border-t border-[#063932]/10">
-          <div className="text-[9px] tracking-[0.2em] uppercase text-[#063932]/70 font-sans font-bold">Save the Date</div>
-          <div className="font-serif">
-            <div className="text-2xl font-bold text-[#063932] leading-none">Kwasi</div>
-            <div className="text-sm italic text-[#d4af37] leading-none my-1">&</div>
-            <div className="text-2xl font-bold text-[#063932] leading-none">Afua</div>
+       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invitation Builder</div>
+       <div className="w-12"></div>
+    </div>
+
+    {/* Editor Body */}
+    <div className="flex flex-1 overflow-hidden">
+       {/* Left Sidebar (Controls) */}
+       <div className="w-1/3 bg-gray-50 border-r border-gray-100 p-4 flex flex-col gap-4">
+          <div className="space-y-2">
+             <div className="text-[9px] font-bold text-gray-400 uppercase">Template</div>
+             <div className="bg-white border border-[#063932] rounded p-2 text-[10px] font-bold text-[#063932] shadow-sm flex items-center justify-between">
+                <span>Minimalist</span>
+                <Icons.Check className="w-3 h-3"/>
+             </div>
+             <div className="bg-white border border-gray-200 rounded p-2 text-[10px] font-medium text-gray-500">Floral Classic</div>
           </div>
-          <div className="text-[10px] font-semibold text-[#063932] font-sans">Sept 14, 2026</div>
+          
+          <div className="space-y-2">
+             <div className="text-[9px] font-bold text-gray-400 uppercase">Typography</div>
+             <div className="flex gap-2">
+                <div className="h-6 w-6 bg-[#063932] rounded-full border-2 border-white shadow-sm ring-1 ring-gray-200"></div>
+                <div className="h-6 w-6 bg-[#d4af37] rounded-full border border-gray-200"></div>
+                <div className="h-6 w-6 bg-black rounded-full border border-gray-200"></div>
+             </div>
+          </div>
+
+          <div className="mt-auto space-y-2">
+             <div className="w-full bg-[#063932] text-white py-2 rounded text-[10px] font-bold text-center">Save Changes</div>
+          </div>
+       </div>
+
+       {/* Right Canvas (Preview) */}
+       <div className="flex-1 bg-[#F3F4F6] p-6 flex items-center justify-center relative overflow-hidden">
+          <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(#063932 1px, transparent 1px)', backgroundSize: '12px 12px' }}></div>
+          
+          {/* The Invite Card */}
+          <div className="bg-white w-[180px] h-[260px] shadow-xl rounded-sm p-4 text-center flex flex-col items-center justify-center relative z-10 border border-gray-100">
+             <div className="text-[8px] uppercase tracking-[0.2em] text-gray-400 mb-4">You're Invited</div>
+             <h3 className="font-serif text-2xl text-[#063932] leading-none mb-1">Kwasi</h3>
+             <span className="font-serif text-xs text-[#d4af37] italic">&</span>
+             <h3 className="font-serif text-2xl text-[#063932] leading-none mt-1 mb-4">Afua</h3>
+             <div className="w-8 h-[1px] bg-gray-200 mb-3"></div>
+             <div className="text-[8px] font-bold text-gray-600">SATURDAY</div>
+             <div className="text-[10px] font-bold text-[#063932] mb-1">SEPT 14</div>
+             <div className="text-[8px] text-gray-400">ACCRA, GHANA</div>
+          </div>
        </div>
     </div>
   </div>
 );
 
 const MockupDashboard = ({ className }: { className?: string }) => (
-  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden flex flex-col font-sans w-full", className)}>
+  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden flex flex-col font-sans w-full h-full", className)}>
     {/* Header */}
     <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white shrink-0">
       <div className="flex gap-1.5">
-        <div className="w-2 h-2 rounded-full bg-red-400"></div>
-        <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-        <div className="w-2 h-2 rounded-full bg-green-400"></div>
+        <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+        <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+        <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
       </div>
-      <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</div>
+      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Admin Panel</div>
+      <div className="w-8"></div>
     </div>
     
     {/* Body */}
-    <div className="flex flex-1 overflow-hidden min-h-[250px]">
-      {/* Sidebar - Added for horizontal proportionality */}
-      <div className="w-[120px] border-r border-gray-100 bg-gray-50/50 p-4 hidden sm:flex flex-col gap-3 shrink-0">
-        <div className="h-2 w-full bg-gray-200 rounded-sm mb-2"></div>
-        <div className="h-2 w-3/4 bg-gray-200 rounded-sm"></div>
-        <div className="h-2 w-5/6 bg-gray-200 rounded-sm"></div>
-        <div className="h-2 w-2/3 bg-gray-200 rounded-sm"></div>
-        <div className="mt-auto h-6 w-full bg-[#063932]/10 rounded border border-[#063932]/20"></div>
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sidebar - Detailed now */}
+      <div className="w-[110px] border-r border-gray-100 bg-gray-50/30 py-4 flex flex-col gap-1 shrink-0">
+        {[
+          { icon: Icons.Home, label: "Overview", active: true },
+          { icon: Icons.Users, label: "Guests", active: false },
+          { icon: Icons.Grid, label: "Seating", active: false },
+          { icon: Icons.Chart, label: "Analytics", active: false },
+        ].map((item, i) => (
+          <div key={i} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${item.active ? 'border-r-2 border-[#063932] bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+            <item.icon className={`w-3.5 h-3.5 ${item.active ? 'text-[#063932]' : 'text-gray-400'}`} />
+            <span className={`text-[9px] font-bold ${item.active ? 'text-[#063932]' : 'text-gray-500'}`}>{item.label}</span>
+          </div>
+        ))}
+        
+        <div className="mt-auto px-3">
+           <div className="flex items-center gap-2 py-2 border-t border-gray-100">
+              <Icons.Settings className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-[9px] font-bold text-gray-500">Settings</span>
+           </div>
+           <div className="h-8 w-full bg-gray-200 rounded mt-2"></div>
+        </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-5 flex flex-col gap-4 overflow-hidden">
+      <div className="flex-1 p-5 flex flex-col gap-5 overflow-hidden">
         <div className="flex justify-between items-center">
-          <h4 className="text-xs font-bold text-[#063932]">Live Overview</h4>
-          <div className="px-2 py-0.5 rounded border border-green-100 bg-green-50 text-green-700 text-[9px] font-bold flex items-center gap-1.5">
+          <h4 className="text-sm font-bold text-[#063932]">Live Overview</h4>
+          <div className="px-2 py-1 rounded border border-green-100 bg-green-50 text-green-700 text-[10px] font-bold flex items-center gap-1.5 shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
             Active
           </div>
         </div>
         
-        {/* Stats Row */}
+        {/* Stats Row - Match uploaded image style */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Invited", val: "150", color: "bg-blue-50 text-blue-700 border-blue-100" },
-            { label: "Yes", val: "112", color: "bg-emerald-50 text-emerald-700 border-emerald-100" },
-            { label: "Pending", val: "38", color: "bg-amber-50 text-amber-700 border-amber-100" },
+            { label: "INVITED", val: "150", bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100" },
+            { label: "YES", val: "112", bg: "bg-green-50", text: "text-green-600", border: "border-green-100" },
+            { label: "PENDING", val: "38", bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-100" },
           ].map((stat, i) => (
-            <div key={i} className={`rounded-lg p-3 border ${stat.color.split(' ')[2] || 'border-gray-100'} ${stat.color.split(' ')[0]}`}>
-              <div className="text-[9px] text-gray-500 mb-1 font-semibold uppercase tracking-wide">{stat.label}</div>
-              <div className={`text-xl font-extrabold ${stat.color.split(' ')[1]}`}>{stat.val}</div>
+            <div key={i} className={`rounded-xl p-3 border ${stat.border} ${stat.bg} flex flex-col items-center justify-center text-center shadow-sm`}>
+              <div className="text-[8px] text-gray-500 mb-1 font-bold uppercase tracking-wide opacity-70">{stat.label}</div>
+              <div className={`text-2xl font-black ${stat.text}`}>{stat.val}</div>
             </div>
           ))}
         </div>
@@ -184,14 +211,14 @@ const MockupDashboard = ({ className }: { className?: string }) => (
         {/* List */}
         <div className="space-y-3 mt-1">
           {[1, 2, 3].map((_, i) => (
-            <div key={i} className="flex items-center justify-between pb-2 border-b border-gray-50 last:border-0">
+            <div key={i} className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0">
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
                   {String.fromCharCode(65 + i)}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <div className="w-24 h-2 bg-gray-200 rounded-sm"></div>
-                  <div className="w-16 h-1.5 bg-gray-100 rounded-sm"></div>
+                  <div className="w-24 h-2 bg-gray-100 rounded-full"></div>
+                  <div className="w-16 h-1.5 bg-gray-50 rounded-full"></div>
                 </div>
               </div>
               <div className="px-2 py-1 bg-green-50 rounded text-[9px] font-bold text-green-700">Confirmed</div>
@@ -258,7 +285,8 @@ export default function HomePage() {
       </nav>
 
       {/* --- Hero Section --- */}
-      <section className="relative pt-36 pb-20 lg:pt-48 lg:pb-32 bg-[#F8FAFC] overflow-hidden border-b border-gray-100">
+      {/* 1. Reduced spacing (pt-36 -> pt-20, lg:pt-48 -> lg:pt-32) */}
+      <section className="relative pt-20 pb-20 lg:pt-32 lg:pb-32 bg-[#F8FAFC] overflow-hidden border-b border-gray-100">
         {/* Background Gradients */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#063932]/5 rounded-full blur-[100px] translate-x-1/3 -translate-y-1/3"></div>
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-[80px] -translate-x-1/4 translate-y-1/4"></div>
@@ -267,7 +295,7 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             
             {/* Left: Text Content */}
-            <div className="text-center lg:text-left">
+            <div className="text-center lg:text-left mt-10 lg:mt-0">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-[#063932] leading-[1.1] tracking-tight mb-6">
                 Bespoke Digital <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#063932] to-[#0d6e61]">Experiences.</span>
@@ -281,8 +309,9 @@ export default function HomePage() {
                 <a href="/admin/login" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]" target="_blank" rel="noopener noreferrer">
                   Client Dashboard
                 </a>
+                {/* 5. CTA Text Change */}
                 <a href="https://eventpeepo.com/#contact" className="h-14 px-10 rounded-xl bg-white border border-gray-200 text-[#063932] font-bold text-base flex items-center justify-center gap-2 hover:border-gray-300 transition-all hover:bg-gray-50 shadow-sm min-w-[200px]" target="_blank" rel="noopener noreferrer">
-                  Contact Us
+                  Start Your Project
                 </a>
               </div>
               
@@ -306,7 +335,7 @@ export default function HomePage() {
                   <MockupPhone />
                 </div>
                 {/* Dashboard Mockup (Back) - Scaled up, pushed left proportionally */}
-                <div className="absolute left-[-20px] lg:left-[-380px] bottom-12 z-10 w-[300px] lg:w-[680px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
+                <div className="absolute left-[-20px] lg:left-[-380px] bottom-12 z-10 w-[300px] lg:w-[680px] h-[400px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
                   <MockupDashboard />
                 </div>
               </div>
@@ -345,7 +374,8 @@ export default function HomePage() {
                 </ul>
               </div>
               <div className="relative w-full md:w-1/2 flex justify-center items-center mt-10 md:mt-0">
-                <div className="transform scale-100 transition-transform duration-700 group-hover:-translate-y-2">
+                {/* 3. Improved UI for Invitations */}
+                <div className="transform scale-100 transition-transform duration-700 group-hover:-translate-y-2 w-full">
                   <MockupInviteDesign />
                 </div>
               </div>
@@ -360,8 +390,9 @@ export default function HomePage() {
               <p className="text-gray-600 mb-8 text-sm leading-relaxed">
                 We provide you with a real-time dashboard to monitor your guest list. Track confirmed RSVPs, dietary requirements, and +1s instantly.
               </p>
-              <div className="flex-1 relative w-full mt-auto">
-                <div className="transition-transform duration-500 group-hover:scale-105 w-full px-2">
+              {/* 4. Fixed Distortion using h-[300px] and better container sizing */}
+              <div className="flex-1 relative w-full mt-auto flex justify-center">
+                <div className="transition-transform duration-500 group-hover:scale-105 w-full h-[320px]">
                   <MockupDashboard />
                 </div>
               </div>
