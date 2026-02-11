@@ -5,6 +5,8 @@ import {
   BadgeCheck,
   Globe,
 } from "lucide-react";
+// --- LOGO COMPONENT ---
+import { EventPeepoLogo } from "@/components/EventPeepoLogo";
 
 // --- Utilities ---
 function cn(...classes: Array<string | undefined | null | false>) {
@@ -18,21 +20,7 @@ const BRAND = {
   accent: "#d4af37",
 };
 
-// --- LOGO COMPONENT ---
-const EventPeepoLogo = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 40 40"
-    fill="none"
-    className={className}
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <rect width="40" height="40" rx="10" fill={BRAND.green} />
-    <path d="M12 12H28" stroke="white" strokeWidth="3" strokeLinecap="round" />
-    <path d="M12 20H24" stroke="white" strokeWidth="3" strokeLinecap="round" />
-    <path d="M12 28H28" stroke="white" strokeWidth="3" strokeLinecap="round" />
-  </svg>
-);
+
 
 // --- Inline SVG Icons (your existing set) ---
 const InlineIcons = {
@@ -956,7 +944,7 @@ export default function HomePage() {
       <nav className="fixed w-full z-50 top-0 bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
           <a href="#" className="flex items-center gap-3 group">
-            <EventPeepoLogo className="w-10 h-10 group-hover:scale-105 transition-transform" />
+            <EventPeepoLogo className="w-10 h-auto text-[#063932] group-hover:scale-105 transition-transform" />
             <span className="font-bold text-xl tracking-tight text-[#063932]">EventPeepo.</span>
           </a>
 
@@ -1221,7 +1209,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
-                <EventPeepoLogo className="w-8 h-8" />
+                <EventPeepoLogo className="w-8 h-auto" />
                 <span className="font-bold text-xl text-[#063932]">EventPeepo.</span>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed max-w-[200px]">
