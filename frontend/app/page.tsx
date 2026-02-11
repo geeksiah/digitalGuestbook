@@ -42,9 +42,9 @@ const Icons = {
 // --- ANIMATED MOCKUPS (CSS-Only) ---
 
 const MockupPhone = ({ className }: { className?: string }) => (
-  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-[2.5rem] h-[380px] w-[210px] shadow-[0_30px_60px_-12px_rgba(6,57,50,0.4)] flex flex-col overflow-hidden animate-float bg-white", className)}>
-    <div className="h-[20px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-lg">
-      <div className="h-[12px] w-[60px] bg-[#042823] rounded-b-lg"></div>
+  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-2xl h-[380px] w-[210px] shadow-[0_30px_60px_-12px_rgba(6,57,50,0.4)] flex flex-col overflow-hidden animate-float bg-white", className)}>
+    <div className="h-[16px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-md">
+      <div className="h-[8px] w-[50px] bg-[#042823] rounded-b-md"></div>
     </div>
     {/* Screen */}
     <div className="flex-1 bg-white relative overflow-hidden font-sans flex flex-col">
@@ -84,44 +84,60 @@ const MockupPhone = ({ className }: { className?: string }) => (
 
 // New Stylized Invite for "Features" Section
 const MockupInviteDesign = ({ className }: { className?: string }) => (
-  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-[2.5rem] h-[380px] w-[210px] shadow-2xl flex flex-col overflow-hidden bg-white", className)}>
-    <div className="h-[20px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-lg">
-      <div className="h-[12px] w-[60px] bg-[#042823] rounded-b-lg"></div>
+  <div className={cn("relative border-[#063932] bg-[#063932] border-[6px] rounded-2xl h-[380px] w-[210px] shadow-2xl flex flex-col overflow-hidden bg-white", className)}>
+    <div className="h-[16px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-md">
+      <div className="h-[8px] w-[50px] bg-[#042823] rounded-b-md"></div>
     </div>
+    
     {/* Screen Content - Stylized Invite */}
-    <div className="flex-1 relative overflow-hidden font-serif bg-[#FAF7F2] flex flex-col">
+    <div className="flex-1 relative overflow-hidden bg-[#FAF7F2] flex flex-col">
        {/* Background Pattern */}
-       <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#063932] to-transparent"></div>
+       <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#063932] to-transparent"></div>
        
-       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center z-10 space-y-6">
-          <div className="text-[10px] tracking-[0.3em] uppercase text-[#063932]/70">Save the Date</div>
-          <div>
-            <div className="text-3xl font-bold text-[#063932] leading-none font-serif">Kwasi</div>
-            <div className="text-lg italic text-[#d4af37] font-serif">&</div>
-            <div className="text-3xl font-bold text-[#063932] leading-none font-serif">Afua</div>
-          </div>
-          
-          <div className="w-8 h-[1px] bg-[#063932]/20 my-2"></div>
-          
-          <div className="space-y-1">
-            <div className="text-xs font-semibold text-[#063932]">September 14, 2026</div>
-            <div className="text-[10px] text-[#063932]/80 uppercase tracking-widest">Accra, Ghana</div>
-          </div>
+       {/* Illustration Area */}
+       <div className="flex-1 w-full relative flex items-end justify-center pt-8 px-4">
+          {/* Minimalist Vector Couple - Dark Skinned */}
+          <svg viewBox="0 0 200 200" className="w-full h-auto drop-shadow-sm z-10">
+            {/* Arch Background */}
+            <path d="M50 200 L50 100 A50 50 0 0 1 150 100 L150 200 Z" fill="#E8E2D2" />
+            
+            {/* Man */}
+            <path d="M55,200 C55,140 70,110 90,110 C100,110 110,115 115,130 L115,200 Z" fill="#063932" />
+            <circle cx="90" cy="80" r="18" fill="#3D2314" />
+            
+            {/* Woman */}
+            <path d="M100,200 C100,160 110,130 130,130 C150,130 160,150 160,200 Z" fill="#FFFFFF" />
+            <circle cx="130" cy="95" r="16" fill="#4E2F1D" />
+            
+            {/* Woman's Hair (Elegant Updo) */}
+            <path d="M114,95 C114,75 146,75 146,95 C146,110 135,115 130,115 C120,115 114,105 114,95 Z" fill="#1A1A1A" />
+            <circle cx="130" cy="75" r="14" fill="#1A1A1A" />
+            
+            {/* Gold Accent */}
+            <circle cx="125" cy="145" r="4" fill="#d4af37" />
+            <circle cx="132" cy="148" r="3" fill="#d4af37" />
+            <circle cx="128" cy="152" r="4" fill="#d4af37" />
+          </svg>
        </div>
        
-       <div className="p-4 z-10">
-          <div className="w-full border border-[#063932] text-[#063932] py-2 rounded text-[10px] font-bold text-center uppercase tracking-wide">
-            Open Invitation
+       {/* Typography Area */}
+       <div className="h-[35%] bg-white flex flex-col items-center justify-center p-4 text-center z-10 space-y-3 border-t border-[#063932]/10">
+          <div className="text-[9px] tracking-[0.2em] uppercase text-[#063932]/70 font-sans font-bold">Save the Date</div>
+          <div className="font-serif">
+            <div className="text-2xl font-bold text-[#063932] leading-none">Kwasi</div>
+            <div className="text-sm italic text-[#d4af37] leading-none my-1">&</div>
+            <div className="text-2xl font-bold text-[#063932] leading-none">Afua</div>
           </div>
+          <div className="text-[10px] font-semibold text-[#063932] font-sans">Sept 14, 2026</div>
        </div>
     </div>
   </div>
 );
 
 const MockupDashboard = ({ className }: { className?: string }) => (
-  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden w-full flex flex-col font-sans", className)}>
+  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden flex flex-col font-sans w-full", className)}>
     {/* Header */}
-    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white">
+    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white shrink-0">
       <div className="flex gap-1.5">
         <div className="w-2 h-2 rounded-full bg-red-400"></div>
         <div className="w-2 h-2 rounded-full bg-amber-400"></div>
@@ -129,46 +145,59 @@ const MockupDashboard = ({ className }: { className?: string }) => (
       </div>
       <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</div>
     </div>
+    
     {/* Body */}
-    <div className="p-5 flex-1 flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <h4 className="text-xs font-bold text-[#063932]">Live Overview</h4>
-        <div className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-[9px] font-bold border border-green-100 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
-          Active
-        </div>
-      </div>
-      
-      {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { label: "Invited", val: "150", color: "bg-blue-50 text-blue-700" },
-          { label: "Yes", val: "112", color: "bg-emerald-50 text-emerald-700" },
-          { label: "Pending", val: "38", color: "bg-amber-50 text-amber-700" },
-        ].map((stat, i) => (
-          <div key={i} className="bg-gray-50 rounded-lg p-2 border border-gray-100">
-            <div className="text-[8px] text-gray-500 mb-0.5 font-semibold uppercase">{stat.label}</div>
-            <div className={`text-base font-extrabold ${stat.color.split(' ')[1]}`}>{stat.val}</div>
-          </div>
-        ))}
+    <div className="flex flex-1 overflow-hidden min-h-[250px]">
+      {/* Sidebar - Added for horizontal proportionality */}
+      <div className="w-[120px] border-r border-gray-100 bg-gray-50/50 p-4 hidden sm:flex flex-col gap-3 shrink-0">
+        <div className="h-2 w-full bg-gray-200 rounded-sm mb-2"></div>
+        <div className="h-2 w-3/4 bg-gray-200 rounded-sm"></div>
+        <div className="h-2 w-5/6 bg-gray-200 rounded-sm"></div>
+        <div className="h-2 w-2/3 bg-gray-200 rounded-sm"></div>
+        <div className="mt-auto h-6 w-full bg-[#063932]/10 rounded border border-[#063932]/20"></div>
       </div>
 
-      {/* List */}
-      <div className="space-y-2">
-        {[1, 2, 3].map((_, i) => (
-          <div key={i} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500">
-                {String.fromCharCode(65 + i)}
-              </div>
-              <div className="flex flex-col gap-1">
-                <div className="w-16 h-2 bg-gray-200 rounded"></div>
-                <div className="w-10 h-1.5 bg-gray-100 rounded"></div>
-              </div>
-            </div>
-            <div className="px-1.5 py-0.5 bg-green-50 rounded text-[8px] font-bold text-green-700">Confirmed</div>
+      {/* Main Content */}
+      <div className="flex-1 p-5 flex flex-col gap-4 overflow-hidden">
+        <div className="flex justify-between items-center">
+          <h4 className="text-xs font-bold text-[#063932]">Live Overview</h4>
+          <div className="px-2 py-0.5 rounded border border-green-100 bg-green-50 text-green-700 text-[9px] font-bold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
+            Active
           </div>
-        ))}
+        </div>
+        
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Invited", val: "150", color: "bg-blue-50 text-blue-700 border-blue-100" },
+            { label: "Yes", val: "112", color: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+            { label: "Pending", val: "38", color: "bg-amber-50 text-amber-700 border-amber-100" },
+          ].map((stat, i) => (
+            <div key={i} className={`rounded-lg p-3 border ${stat.color.split(' ')[2] || 'border-gray-100'} ${stat.color.split(' ')[0]}`}>
+              <div className="text-[9px] text-gray-500 mb-1 font-semibold uppercase tracking-wide">{stat.label}</div>
+              <div className={`text-xl font-extrabold ${stat.color.split(' ')[1]}`}>{stat.val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* List */}
+        <div className="space-y-3 mt-1">
+          {[1, 2, 3].map((_, i) => (
+            <div key={i} className="flex items-center justify-between pb-2 border-b border-gray-50 last:border-0">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                  {String.fromCharCode(65 + i)}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="w-24 h-2 bg-gray-200 rounded-sm"></div>
+                  <div className="w-16 h-1.5 bg-gray-100 rounded-sm"></div>
+                </div>
+              </div>
+              <div className="px-2 py-1 bg-green-50 rounded text-[9px] font-bold text-green-700">Confirmed</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   </div>
@@ -272,12 +301,12 @@ export default function HomePage() {
               
               {/* Composition Container */}
               <div className="relative z-10 flex items-end justify-center lg:justify-end">
-                {/* Phone Mockup (Front) - Centered on Mobile, Pushed on Desktop */}
-                <div className="z-20 transform scale-100 lg:scale-125 lg:translate-x-10 origin-bottom">
+                {/* Phone Mockup (Front) - Scaled down slightly */}
+                <div className="z-20 transform scale-90 lg:scale-95 lg:translate-x-12 origin-bottom">
                   <MockupPhone />
                 </div>
-                {/* Dashboard Mockup (Back) - Increased Size for Desktop */}
-                <div className="absolute left-[-50px] lg:left-[-180px] bottom-10 z-10 w-[320px] lg:w-[480px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
+                {/* Dashboard Mockup (Back) - Scaled up, pushed left proportionally */}
+                <div className="absolute left-[-20px] lg:left-[-380px] bottom-12 z-10 w-[300px] lg:w-[680px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
                   <MockupDashboard />
                 </div>
               </div>
@@ -300,7 +329,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 auto-rows-[auto]">
             
             {/* Feature 1: Digital Invitations (Large) */}
-            <div className="md:col-span-2 rounded-3xl bg-[#F8FAFC] border border-gray-100 overflow-hidden relative group min-h-[500px] p-10 flex flex-col md:flex-row hover:border-[#063932]/20 transition-colors duration-500">
+            <div className="md:col-span-2 rounded-2xl bg-[#F8FAFC] border border-gray-100 overflow-hidden relative group min-h-[500px] p-10 flex flex-col md:flex-row hover:border-[#063932]/20 transition-colors duration-500">
               <div className="relative z-10 flex-1 pr-0 md:pr-10">
                 <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center mb-6 text-[#063932]">
                   <Icons.Envelope className="w-6 h-6" />
@@ -323,7 +352,7 @@ export default function HomePage() {
             </div>
 
             {/* Feature 2: Analytics (Tall) */}
-            <div className="rounded-3xl bg-white border border-gray-200 p-8 shadow-sm flex flex-col relative overflow-hidden group min-h-[500px] hover:shadow-xl transition-shadow duration-500">
+            <div className="rounded-2xl bg-white border border-gray-200 p-8 shadow-sm flex flex-col relative overflow-hidden group min-h-[500px] hover:shadow-xl transition-shadow duration-500">
               <div className="w-12 h-12 bg-[#F0FDF4] rounded-xl flex items-center justify-center mb-6 text-green-600">
                 <Icons.Chart className="w-6 h-6" />
               </div>
@@ -339,7 +368,7 @@ export default function HomePage() {
             </div>
 
             {/* Feature 3: Security */}
-            <div className="rounded-3xl bg-[#063932] text-white p-10 flex flex-col justify-between group overflow-hidden min-h-[400px]">
+            <div className="rounded-2xl bg-[#063932] text-white p-10 flex flex-col justify-between group overflow-hidden min-h-[400px]">
               <div>
                 <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 backdrop-blur-sm">
                   <Icons.QrCode className="w-6 h-6 text-white" />
@@ -357,7 +386,7 @@ export default function HomePage() {
             </div>
 
             {/* Feature 4: Guestbook */}
-            <div className="md:col-span-2 rounded-3xl bg-white border border-gray-200 p-10 flex flex-col md:flex-row items-center gap-12 shadow-sm min-h-[400px] group hover:border-gray-300 transition-colors">
+            <div className="md:col-span-2 rounded-2xl bg-white border border-gray-200 p-10 flex flex-col md:flex-row items-center gap-12 shadow-sm min-h-[400px] group hover:border-gray-300 transition-colors">
               <div className="flex-1 space-y-6">
                 <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
                   <Icons.Users className="w-6 h-6" />
@@ -369,9 +398,9 @@ export default function HomePage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3 pt-2">
-                    <span className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-xs font-bold text-gray-600">Video Messages</span>
-                    <span className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-xs font-bold text-gray-600">Voice Notes</span>
-                    <span className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-xs font-bold text-gray-600">Photo Gallery</span>
+                    <span className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold text-gray-600">Video Messages</span>
+                    <span className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold text-gray-600">Voice Notes</span>
+                    <span className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold text-gray-600">Photo Gallery</span>
                 </div>
               </div>
               <div className="flex-1 w-full h-64 bg-gray-50 rounded-2xl border border-gray-100 relative overflow-hidden flex items-center justify-center">
@@ -443,7 +472,7 @@ export default function HomePage() {
             Every event is unique. We tailor our packages to align with your specific scale, requirements, and budget, ensuring you get exactly what you need for a flawless event.
           </p>
           
-          <div className="bg-[#F8FAFC] rounded-3xl p-10 border border-gray-100 max-w-2xl mx-auto shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-[#F8FAFC] rounded-2xl p-10 border border-gray-100 max-w-2xl mx-auto shadow-sm hover:shadow-md transition-shadow">
             <h3 className="text-xl font-bold text-[#063932] mb-6 text-left">Solutions we provide</h3>
             <ul className="grid sm:grid-cols-2 gap-y-4 gap-x-8 text-left text-sm text-gray-600 mb-10">
               <li className="flex items-center gap-3"><div className="p-0.5 bg-green-100 rounded-full"><Icons.Check className="w-3 h-3 text-green-700"/></div> Unlimited Guests</li>
