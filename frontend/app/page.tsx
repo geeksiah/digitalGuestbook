@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 // --- Brand Configuration ---
 const BRAND = {
@@ -87,148 +87,812 @@ const MockupPhone = ({ className }: { className?: string }) => (
 
 // New "Builder/Editor" Style Mockup for the Invitation Section
 const MockupInviteDesign = ({ className }: { className?: string }) => (
-  <div className={cn("relative bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col overflow-hidden h-[400px] w-full max-w-md", className)}>
-    {/* Editor Header */}
-    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white shrink-0">
-       <div className="flex gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
-       </div>
-       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invitation Builder</div>
-       <div className="w-12"></div>
-    </div>
-
-    {/* Editor Body */}
-    <div className="flex flex-1 overflow-hidden">
-       {/* Left Sidebar (Controls) */}
-       <div className="w-1/3 bg-gray-50 border-r border-gray-100 p-4 flex flex-col gap-4">
-          <div className="space-y-2">
-             <div className="text-[9px] font-bold text-gray-400 uppercase">Template</div>
-             <div className="bg-white border border-[#063932] rounded p-2 text-[10px] font-bold text-[#063932] shadow-sm flex items-center justify-between">
-                <span>Minimalist</span>
-                <Icons.Check className="w-3 h-3"/>
-             </div>
-             <div className="bg-white border border-gray-200 rounded p-2 text-[10px] font-medium text-gray-500">Floral Classic</div>
-          </div>
-          
-          <div className="space-y-2">
-             <div className="text-[9px] font-bold text-gray-400 uppercase">Typography</div>
-             <div className="flex gap-2">
-                <div className="h-6 w-6 bg-[#063932] rounded-full border-2 border-white shadow-sm ring-1 ring-gray-200"></div>
-                <div className="h-6 w-6 bg-[#d4af37] rounded-full border border-gray-200"></div>
-                <div className="h-6 w-6 bg-black rounded-full border border-gray-200"></div>
-             </div>
-          </div>
-
-          <div className="mt-auto space-y-2">
-             <div className="w-full bg-[#063932] text-white py-2 rounded text-[10px] font-bold text-center">Save Changes</div>
-          </div>
-       </div>
-
-       {/* Right Canvas (Preview) */}
-       <div className="flex-1 bg-[#F3F4F6] p-6 flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(#063932 1px, transparent 1px)', backgroundSize: '12px 12px' }}></div>
-          
-          {/* The Invite Card */}
-          <div className="bg-white w-[180px] h-[260px] shadow-xl rounded-sm p-4 text-center flex flex-col items-center justify-center relative z-10 border border-gray-100">
-             <div className="text-[8px] uppercase tracking-[0.2em] text-gray-400 mb-4">You're Invited</div>
-             <h3 className="font-serif text-2xl text-[#063932] leading-none mb-1">Kwasi</h3>
-             <span className="font-serif text-xs text-[#d4af37] italic">&</span>
-             <h3 className="font-serif text-2xl text-[#063932] leading-none mt-1 mb-4">Afua</h3>
-             <div className="w-8 h-[1px] bg-gray-200 mb-3"></div>
-             <div className="text-[8px] font-bold text-gray-600">SATURDAY</div>
-             <div className="text-[10px] font-bold text-[#063932] mb-1">SEPT 14</div>
-             <div className="text-[8px] text-gray-400">ACCRA, GHANA</div>
-          </div>
-       </div>
-    </div>
-  </div>
-);
-
-const MockupDashboard = ({ className }: { className?: string }) => (
-  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden flex flex-col font-sans w-full h-full", className)}>
-    {/* Header */}
-    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white shrink-0">
+  <div
+    className={cn(
+      "relative bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden w-full",
+      "h-[420px] sm:h-[440px] md:h-[420px]",
+      className
+    )}
+  >
+    {/* Window/Header */}
+    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white">
       <div className="flex gap-1.5">
-        <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-        <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-        <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+        <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+        <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+        <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
       </div>
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Admin Panel</div>
-      <div className="w-8"></div>
+
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">
+          White-label Invitation Studio
+        </span>
+        <span className="text-[10px] font-bold text-gray-300">•</span>
+        <span className="text-[10px] font-bold text-gray-600 truncate max-w-[150px]">
+          Kwasi & Afua Wedding
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="hidden sm:inline-flex text-[10px] font-bold text-gray-400">
+          Status:
+        </span>
+        <span className="text-[10px] font-extrabold px-2 py-1 rounded border border-green-100 bg-green-50 text-green-700 flex items-center gap-1.5 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          Live
+        </span>
+      </div>
     </div>
-    
+
     {/* Body */}
-    <div className="flex flex-1 overflow-hidden">
-      {/* Sidebar - Detailed now */}
-      <div className="w-[110px] border-r border-gray-100 bg-gray-50/30 py-4 flex flex-col gap-1 shrink-0">
-        {[
-          { icon: Icons.Home, label: "Overview", active: true },
-          { icon: Icons.Users, label: "Guests", active: false },
-          { icon: Icons.Grid, label: "Seating", active: false },
-          { icon: Icons.Chart, label: "Analytics", active: false },
-        ].map((item, i) => (
-          <div key={i} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${item.active ? 'border-r-2 border-[#063932] bg-blue-50/50' : 'hover:bg-gray-50'}`}>
-            <item.icon className={`w-3.5 h-3.5 ${item.active ? 'text-[#063932]' : 'text-gray-400'}`} />
-            <span className={`text-[9px] font-bold ${item.active ? 'text-[#063932]' : 'text-gray-500'}`}>{item.label}</span>
+    <div className="flex h-[calc(100%-40px)] overflow-hidden">
+      {/* Left Panel: Managed service workflow + white-label details */}
+      <div className="hidden md:flex w-[280px] border-r border-gray-100 bg-gray-50/30 p-4 flex-col gap-4">
+        {/* White-label block */}
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
+            White-label setup
           </div>
-        ))}
-        
-        <div className="mt-auto px-3">
-           <div className="flex items-center gap-2 py-2 border-t border-gray-100">
-              <Icons.Settings className="w-3.5 h-3.5 text-gray-400" />
-              <span className="text-[9px] font-bold text-gray-500">Settings</span>
-           </div>
-           <div className="h-8 w-full bg-gray-200 rounded mt-2"></div>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 p-5 flex flex-col gap-5 overflow-hidden">
-        <div className="flex justify-between items-center">
-          <h4 className="text-sm font-bold text-[#063932]">Live Overview</h4>
-          <div className="px-2 py-1 rounded border border-green-100 bg-green-50 text-green-700 text-[10px] font-bold flex items-center gap-1.5 shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
-            Active
-          </div>
-        </div>
-        
-        {/* Stats Row - Match uploaded image style */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "INVITED", val: "150", bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100" },
-            { label: "YES", val: "112", bg: "bg-green-50", text: "text-green-600", border: "border-green-100" },
-            { label: "PENDING", val: "38", bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-100" },
-          ].map((stat, i) => (
-            <div key={i} className={`rounded-xl p-3 border ${stat.border} ${stat.bg} flex flex-col items-center justify-center text-center shadow-sm`}>
-              <div className="text-[8px] text-gray-500 mb-1 font-bold uppercase tracking-wide opacity-70">{stat.label}</div>
-              <div className={`text-2xl font-black ${stat.text}`}>{stat.val}</div>
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-bold text-gray-500">Client brand</div>
+              <div className="text-[10px] font-extrabold text-[#063932]">
+                Afua & Co.
+              </div>
             </div>
-          ))}
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-bold text-gray-500">Custom subdomain</div>
+              <div className="text-[10px] font-extrabold text-gray-700">
+                invite.afuaco.com
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-bold text-gray-500">SSL</div>
+              <div className="text-[10px] font-extrabold text-green-700">
+                Secured
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* List */}
-        <div className="space-y-3 mt-1">
-          {[1, 2, 3].map((_, i) => (
-            <div key={i} className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
-                  {String.fromCharCode(65 + i)}
+        {/* Managed pipeline (this replaces "builder controls") */}
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
+            Managed delivery
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {[
+              { label: "Design crafted", done: true, meta: "Responsive • App-like" },
+              { label: "Domain connected", done: true, meta: "Subdomain • DNS" },
+              { label: "Deployed", done: true, meta: "Fast CDN delivery" },
+              { label: "Reminders scheduled", done: true, meta: "WhatsApp + SMS" },
+            ].map((s, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <div
+                  className={cn(
+                    "mt-0.5 w-4 h-4 rounded flex items-center justify-center border",
+                    s.done
+                      ? "bg-[#063932] border-[#063932]"
+                      : "bg-white border-gray-200"
+                  )}
+                >
+                  {s.done ? (
+                    <Icons.Check className="w-3 h-3 text-white" />
+                  ) : (
+                    <div className="w-2 h-2 rounded-full bg-gray-200" />
+                  )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <div className="w-24 h-2 bg-gray-100 rounded-full"></div>
-                  <div className="w-16 h-1.5 bg-gray-50 rounded-full"></div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-extrabold text-gray-800">
+                    {s.label}
+                  </div>
+                  <div className="text-[9px] font-bold text-gray-400 truncate">
+                    {s.meta}
+                  </div>
                 </div>
               </div>
-              <div className="px-2 py-1 bg-green-50 rounded text-[9px] font-bold text-green-700">Confirmed</div>
+            ))}
+          </div>
+        </div>
+
+        {/* Reminders panel */}
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
+              Automated reminders
             </div>
-          ))}
+            <span className="text-[9px] font-extrabold text-gray-600">
+              Enabled
+            </span>
+          </div>
+
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded bg-green-50 border border-green-100 flex items-center justify-center">
+                  <Icons.MessageCircle className="w-3.5 h-3.5 text-green-700" />
+                </div>
+                <div className="text-[10px] font-bold text-gray-700">WhatsApp</div>
+              </div>
+              <div className="text-[10px] font-extrabold text-gray-600">
+                T-48h, T-6h
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded bg-blue-50 border border-blue-100 flex items-center justify-center">
+                  <Icons.Smartphone className="w-3.5 h-3.5 text-blue-700" />
+                </div>
+                <div className="text-[10px] font-bold text-gray-700">SMS</div>
+              </div>
+              <div className="text-[10px] font-extrabold text-gray-600">
+                RSVP follow-up
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Small “delivered by” badge */}
+        <div className="mt-auto rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
+            Managed by
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-[10px] font-extrabold text-[#063932]">
+              EventPeepo Studio
+            </span>
+            <span className="text-[9px] font-bold text-gray-400">White-label</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Right: Preview area (mobile-first, app-like) */}
+      <div className="flex-1 bg-[#F3F4F6] p-4 sm:p-6 flex items-center justify-center relative overflow-hidden">
+        {/* Premium subtle grid */}
+        <div
+          className="absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage: "radial-gradient(#063932 1px, transparent 1px)",
+            backgroundSize: "14px 14px",
+          }}
+        />
+
+        {/* Preview wrapper (responsive device-like) */}
+        <div className="relative z-10 w-full max-w-[340px] sm:max-w-[380px]">
+          {/* Preview top bar */}
+          <div className="bg-white border border-gray-100 rounded-t-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">
+                  Live invitation preview
+                </div>
+                <div className="text-[10px] font-bold text-gray-600 truncate">
+                  invite.afuaco.com
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-[10px] font-extrabold text-gray-600">
+                  Mobile
+                </div>
+                <div className="px-2 py-1 rounded border border-green-100 bg-green-50 text-[10px] font-extrabold text-green-700">
+                  Fast
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* App-like invite preview */}
+          <div className="bg-white border-x border-b border-gray-100 rounded-b-2xl shadow-xl overflow-hidden">
+            {/* Hero image area (dummy but realistic) */}
+            <div className="relative h-40 sm:h-44 bg-gradient-to-br from-[#063932] via-[#0b4a41] to-[#063932]">
+              <div className="absolute inset-0 opacity-20"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(135deg, rgba(212,175,55,0.18) 0%, rgba(255,255,255,0) 55%)",
+                }}
+              />
+              <div className="absolute top-3 left-3 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white/12 border border-white/20 flex items-center justify-center">
+                  <Icons.Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div className="text-[10px] font-extrabold text-white/90">
+                  Kwasi & Afua
+                </div>
+              </div>
+
+              <div className="absolute bottom-3 left-4 right-4">
+                <div className="text-[10px] font-bold text-white/80">
+                  Wedding Celebration
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-white leading-tight">
+                  You&apos;re Invited
+                </div>
+                <div className="text-[10px] font-bold text-white/80 mt-1">
+                  Sat • Sept 14 • Accra, Ghana
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 sm:p-5">
+              {/* Info cards */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+                  <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
+                    Venue
+                  </div>
+                  <div className="text-[11px] font-extrabold text-gray-800 mt-1">
+                    Fiesta Royale
+                  </div>
+                  <div className="text-[10px] font-bold text-gray-500">
+                    Spintex Rd
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+                  <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
+                    Time
+                  </div>
+                  <div className="text-[11px] font-extrabold text-gray-800 mt-1">
+                    1:00 PM
+                  </div>
+                  <div className="text-[10px] font-bold text-gray-500">
+                    Reception • 4:00 PM
+                  </div>
+                </div>
+              </div>
+
+              {/* RSVP bar */}
+              <div className="mt-3 rounded-xl border border-gray-100 bg-white p-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-extrabold text-gray-800">
+                    RSVP Status
+                  </div>
+                  <div className="text-[10px] font-bold text-gray-500 truncate">
+                    Response tracking + approval gating
+                  </div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-lg bg-[#063932] text-white text-[10px] font-extrabold shadow-sm">
+                  Respond
+                </div>
+              </div>
+
+              {/* Reminders note (ties to section copy) */}
+              <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 p-3 flex items-start gap-2">
+                <div className="mt-0.5 w-6 h-6 rounded-lg bg-white border border-amber-100 flex items-center justify-center">
+                  <Icons.Bell className="w-3.5 h-3.5 text-amber-700" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-extrabold text-amber-900">
+                    Automated reminders scheduled
+                  </div>
+                  <div className="text-[10px] font-bold text-amber-800/80">
+                    WhatsApp + SMS • Guests receive updates automatically.
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer micro */}
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-[9px] font-bold text-gray-400">
+                  White-label • Your brand first
+                </div>
+                <div className="text-[9px] font-extrabold text-gray-500">
+                  Secured SSL
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile-only “service chips” (so it still communicates on small screens) */}
+          <div className="md:hidden mt-3 flex flex-wrap gap-2 justify-center">
+            {[
+              { label: "Full White-label", Icon: Icons.BadgeCheck },
+              { label: "Custom Subdomain", Icon: Icons.Globe },
+              { label: "WhatsApp/SMS", Icon: Icons.MessageCircle },
+            ].map((c, i) => (
+              <div
+                key={i}
+                className="px-3 py-1.5 rounded-full border border-gray-200 bg-white text-[10px] font-extrabold text-gray-600 flex items-center gap-1.5 shadow-sm"
+              >
+                <c.Icon className="w-3.5 h-3.5 text-[#063932]" />
+                {c.label}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   </div>
 );
+
+const MockupDashboard2 = ({ className }: { className?: string }) => (
+  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden w-full flex flex-col font-sans", className)}>
+    {/* Header */}
+    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white">
+      <div className="flex gap-1.5">
+        <div className="w-2 h-2 rounded-full bg-red-400"></div>
+        <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+        <div className="w-2 h-2 rounded-full bg-green-400"></div>
+      </div>
+      <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</div>
+    </div>
+    {/* Body */}
+    <div className="p-5 flex-1 flex flex-col gap-4">
+      <div className="flex justify-between items-center">
+        <h4 className="text-xs font-bold text-[#063932]">Live Overview</h4>
+        <div className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-[9px] font-bold border border-green-100 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
+          Active
+        </div>
+      </div>
+      
+      {/* Stats Row */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "Invited", val: "150", color: "bg-blue-50 text-blue-700" },
+          { label: "Yes", val: "112", color: "bg-emerald-50 text-emerald-700" },
+          { label: "Pending", val: "38", color: "bg-amber-50 text-amber-700" },
+        ].map((stat, i) => (
+          <div key={i} className="bg-gray-50 rounded-lg p-2 border border-gray-100">
+            <div className="text-[8px] text-gray-500 mb-0.5 font-semibold uppercase">{stat.label}</div>
+            <div className={`text-base font-extrabold ${stat.color.split(' ')[1]}`}>{stat.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* List */}
+      <div className="space-y-2">
+        {[1, 2, 3].map((_, i) => (
+          <div key={i} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500">
+                {String.fromCharCode(65 + i)}
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="w-16 h-2 bg-gray-200 rounded"></div>
+                <div className="w-10 h-1.5 bg-gray-100 rounded"></div>
+              </div>
+            </div>
+            <div className="px-1.5 py-0.5 bg-green-50 rounded text-[8px] font-bold text-green-700">Confirmed</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+
+const MockupDashboard = ({ className }: { className?: string }) => {
+  // -------------------------
+  // Dummy "real" data (replaceable)
+  // -------------------------
+  const event = useMemo(
+    () => ({
+      name: "Huggel & Bridget — The Union",
+      dateLabel: "Sat, Feb 14 • Ablekuma",
+      status: "Active" as const,
+      lastSync: "2 min ago",
+      plan: "Premium",
+      slug: "huggel-and-bridget",
+      host: "Huggel A.",
+    }),
+    []
+  );
+
+  const guests = useMemo(
+    () =>
+      [
+        {
+          id: "G-001",
+          name: "Ama Serwaa",
+          email: "ama.serwaa@gmail.com",
+          rsvp: "YES" as const,
+          partySize: 2,
+          invitedAt: "Jan 21",
+          updatedAt: "Today, 10:12",
+          tag: "Family",
+          table: "Table 03",
+          checkedIn: true,
+        },
+        {
+          id: "G-002",
+          name: "Kojo Mensah",
+          email: "kojo.mensah@yahoo.com",
+          rsvp: "YES" as const,
+          partySize: 1,
+          invitedAt: "Jan 22",
+          updatedAt: "Today, 09:41",
+          tag: "Friends",
+          table: "Table 06",
+          checkedIn: false,
+        },
+        {
+          id: "G-003",
+          name: "Esi Agyapong",
+          email: "esi.agyapong@gmail.com",
+          rsvp: "PENDING" as const,
+          partySize: 1,
+          invitedAt: "Jan 23",
+          updatedAt: "Yesterday, 18:03",
+          tag: "Colleagues",
+          table: "—",
+          checkedIn: false,
+        },
+        {
+          id: "G-004",
+          name: "Nana Kusi",
+          email: "nanakusi@outlook.com",
+          rsvp: "NO" as const,
+          partySize: 1,
+          invitedAt: "Jan 23",
+          updatedAt: "Jan 26",
+          tag: "VIP",
+          table: "—",
+          checkedIn: false,
+        },
+        {
+          id: "G-005",
+          name: "Akosua Owusu",
+          email: "akosua.owusu@gmail.com",
+          rsvp: "YES" as const,
+          partySize: 3,
+          invitedAt: "Jan 24",
+          updatedAt: "Today, 08:20",
+          tag: "Family",
+          table: "Table 01",
+          checkedIn: true,
+        },
+        {
+          id: "G-006",
+          name: "Kwaku Appiah",
+          email: "kwaku.appiah@gmail.com",
+          rsvp: "PENDING" as const,
+          partySize: 2,
+          invitedAt: "Jan 25",
+          updatedAt: "Jan 30",
+          tag: "Friends",
+          table: "—",
+          checkedIn: false,
+        },
+        {
+          id: "G-007",
+          name: "Mawuli D.",
+          email: "mawuli.d@gmail.com",
+          rsvp: "YES" as const,
+          partySize: 1,
+          invitedAt: "Jan 26",
+          updatedAt: "Today, 11:02",
+          tag: "Colleagues",
+          table: "Table 04",
+          checkedIn: false,
+        },
+        {
+          id: "G-008",
+          name: "Adjoa Boadi",
+          email: "adjoa.boadi@gmail.com",
+          rsvp: "PENDING" as const,
+          partySize: 1,
+          invitedAt: "Jan 27",
+          updatedAt: "Yesterday, 12:10",
+          tag: "Friends",
+          table: "—",
+          checkedIn: false,
+        },
+      ] as const,
+    []
+  );
+
+  const metrics = useMemo(() => {
+    const invited = guests.length;
+    const yes = guests.filter((g) => g.rsvp === "YES").length;
+    const pending = guests.filter((g) => g.rsvp === "PENDING").length;
+    const no = guests.filter((g) => g.rsvp === "NO").length;
+    const checkedIn = guests.filter((g) => g.checkedIn).length;
+    const seats = guests.reduce((acc, g) => acc + g.partySize, 0);
+
+    return {
+      invited,
+      yes,
+      pending,
+      no,
+      checkedIn,
+      seats,
+      yesRate: invited ? Math.round((yes / invited) * 100) : 0,
+    };
+  }, [guests]);
+
+  const recentActivity = useMemo(() => {
+    // prioritize "Today", then "Yesterday", then older
+    const score = (t: string) =>
+      t.startsWith("Today") ? 3 : t.startsWith("Yesterday") ? 2 : 1;
+
+    return [...guests]
+      .sort((a, b) => score(b.updatedAt) - score(a.updatedAt))
+      .slice(0, 4);
+  }, [guests]);
+
+  const rsvpPill = (rsvp: "YES" | "PENDING" | "NO") => {
+    if (rsvp === "YES")
+      return "bg-green-50 text-green-700 border border-green-100";
+    if (rsvp === "PENDING")
+      return "bg-amber-50 text-amber-700 border border-amber-100";
+    return "bg-rose-50 text-rose-700 border border-rose-100";
+  };
+
+  const initials = (name: string) => {
+    const parts = name.trim().split(/\s+/);
+    const a = parts[0]?.[0] ?? "E";
+    const b = parts[1]?.[0] ?? "";
+    return (a + b).toUpperCase();
+  };
+
+  return (
+    <div
+      className={cn(
+        "bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden flex flex-col font-sans w-full h-full",
+        className
+      )}
+    >
+      {/* Header */}
+      <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white shrink-0">
+        <div className="flex gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            EventPeepo Dashboard
+          </span>
+          <span className="text-[10px] font-bold text-gray-300">•</span>
+          <span className="text-[10px] font-bold text-gray-500 truncate max-w-[160px]">
+            {event.name}
+          </span>
+        </div>
+
+        <div className="text-[10px] font-bold text-gray-400">
+          Sync: <span className="text-gray-500">{event.lastSync}</span>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-[110px] border-r border-gray-100 bg-gray-50/30 py-4 flex flex-col gap-1 shrink-0">
+          {[
+            { icon: Icons.Home, label: "Overview", active: true },
+            { icon: Icons.Users, label: "Guests", active: false },
+            { icon: Icons.Grid, label: "Seating", active: false },
+            { icon: Icons.Chart, label: "Analytics", active: false },
+          ].map((item, i) => (
+            <div
+              key={i}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 cursor-pointer",
+                item.active
+                  ? "border-r-2 border-[#063932] bg-blue-50/50"
+                  : "hover:bg-gray-50"
+              )}
+            >
+              <item.icon
+                className={cn(
+                  "w-3.5 h-3.5",
+                  item.active ? "text-[#063932]" : "text-gray-400"
+                )}
+              />
+              <span
+                className={cn(
+                  "text-[9px] font-bold",
+                  item.active ? "text-[#063932]" : "text-gray-500"
+                )}
+              >
+                {item.label}
+              </span>
+            </div>
+          ))}
+
+          {/* Sidebar footer: Settings + Real event card */}
+          <div className="mt-auto px-3">
+            <div className="flex items-center gap-2 py-2 border-t border-gray-100">
+              <Icons.Settings className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-[9px] font-bold text-gray-500">
+                Settings
+              </span>
+            </div>
+
+            <div className="mt-2 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[9px] font-extrabold text-[#063932] leading-tight truncate">
+                    {event.name}
+                  </div>
+                  <div className="text-[8px] font-bold text-gray-400 mt-1 truncate">
+                    {event.dateLabel}
+                  </div>
+                </div>
+                <div className="shrink-0 text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-100">
+                  {event.plan}
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between">
+                <div className="text-[8px] font-bold text-gray-500">
+                  Host: <span className="text-gray-700">{event.host}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      event.status === "Active" ? "bg-green-500" : "bg-gray-300"
+                    )}
+                  />
+                  <span className="text-[8px] font-extrabold text-gray-600">
+                    {event.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 p-5 flex flex-col gap-5 overflow-hidden">
+          <div className="flex justify-between items-center">
+            <div className="flex flex-col">
+              <h4 className="text-sm font-bold text-[#063932]">
+                Live Overview
+              </h4>
+              <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                {metrics.checkedIn} checked-in • {metrics.seats} seats reserved •{" "}
+                {metrics.yesRate}% acceptance
+              </div>
+            </div>
+
+            <div className="px-2 py-1 rounded border border-green-100 bg-green-50 text-green-700 text-[10px] font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative" />
+              Active
+            </div>
+          </div>
+
+          {/* Stats Row */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              {
+                label: "INVITED",
+                val: String(metrics.invited),
+                bg: "bg-blue-50",
+                text: "text-blue-600",
+                border: "border-blue-100",
+              },
+              {
+                label: "YES",
+                val: String(metrics.yes),
+                bg: "bg-green-50",
+                text: "text-green-600",
+                border: "border-green-100",
+              },
+              {
+                label: "PENDING",
+                val: String(metrics.pending),
+                bg: "bg-amber-50",
+                text: "text-amber-600",
+                border: "border-amber-100",
+              },
+            ].map((stat, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "rounded-xl p-3 border flex flex-col items-center justify-center text-center shadow-sm",
+                  stat.border,
+                  stat.bg
+                )}
+              >
+                <div className="text-[8px] text-gray-500 mb-1 font-bold uppercase tracking-wide opacity-70">
+                  {stat.label}
+                </div>
+                <div className={cn("text-2xl font-black", stat.text)}>
+                  {stat.val}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recent Guest Activity (real data) */}
+          <div className="space-y-3 mt-1 overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">
+                Recent Activity
+              </div>
+              <div className="text-[9px] font-bold text-gray-400">
+                Total: <span className="text-gray-600">{metrics.invited}</span>
+              </div>
+            </div>
+
+            {recentActivity.map((g) => (
+              <div
+                key={g.id}
+                className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-600 shrink-0">
+                    {initials(g.name)}
+                  </div>
+
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="text-[10px] font-extrabold text-gray-800 truncate max-w-[150px]">
+                        {g.name}
+                      </div>
+                      <div className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-100 shrink-0">
+                        {g.tag}
+                      </div>
+                    </div>
+
+                    <div className="text-[9px] font-bold text-gray-400 truncate max-w-[200px]">
+                      {g.email} • Party {g.partySize} • {g.table}
+                    </div>
+
+                    <div className="text-[8px] font-bold text-gray-300">
+                      Updated:{" "}
+                      <span className="text-gray-400">{g.updatedAt}</span>
+                      <span className="text-gray-300"> • </span>
+                      Invited:{" "}
+                      <span className="text-gray-400">{g.invitedAt}</span>
+                      {g.checkedIn ? (
+                        <>
+                          <span className="text-gray-300"> • </span>
+                          <span className="text-green-600 font-extrabold">
+                            Checked-in
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={cn(
+                    "px-2 py-1 rounded text-[9px] font-extrabold shrink-0",
+                    rsvpPill(g.rsvp)
+                  )}
+                >
+                  {g.rsvp === "YES"
+                    ? "Confirmed"
+                    : g.rsvp === "PENDING"
+                    ? "Pending"
+                    : "Declined"}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tiny footer hint (optional, premium touch) */}
+          <div className="mt-auto pt-1 flex items-center justify-between text-[9px] font-bold text-gray-400">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded bg-gray-50 border border-gray-100 text-gray-500">
+                {metrics.checkedIn}/{metrics.yes} checked-in
+              </span>
+              <span className="px-2 py-1 rounded bg-gray-50 border border-gray-100 text-gray-500">
+                Seats: {metrics.seats}
+              </span>
+            </div>
+            <div className="text-gray-400">
+              Event: <span className="text-gray-500">{event.slug}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 const MockupScanner = () => (
   <div className="relative w-40 h-40 bg-white rounded-2xl shadow-xl border border-gray-200 flex items-center justify-center overflow-hidden">
@@ -393,7 +1057,7 @@ export default function HomePage() {
               {/* 4. Fixed Distortion using h-[300px] and better container sizing */}
               <div className="flex-1 relative w-full mt-auto flex justify-center">
                 <div className="transition-transform duration-500 group-hover:scale-105 w-full h-[320px]">
-                  <MockupDashboard />
+                  <MockupDashboard2 />
                 </div>
               </div>
             </div>
