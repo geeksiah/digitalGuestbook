@@ -13,7 +13,6 @@ const BRAND = {
 // --- LOGO COMPONENT ---
 const EventPeepoLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-    {/* Placeholder: Rounded square with abstract E */}
     <rect width="40" height="40" rx="10" fill={BRAND.green} />
     <path d="M12 12H28" stroke="white" strokeWidth="3" strokeLinecap="round"/>
     <path d="M12 20H24" stroke="white" strokeWidth="3" strokeLinecap="round"/>
@@ -42,8 +41,8 @@ const Icons = {
 
 // --- ANIMATED MOCKUPS (CSS-Only) ---
 
-const MockupPhone = () => (
-  <div className="relative mx-auto border-[#063932] bg-[#063932] border-[8px] rounded-[2.5rem] h-[400px] w-[220px] shadow-[0_30px_60px_-12px_rgba(6,57,50,0.4)] flex flex-col overflow-hidden animate-float">
+const MockupPhone = ({ className }: { className?: string }) => (
+  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-[2.5rem] h-[380px] w-[210px] shadow-[0_30px_60px_-12px_rgba(6,57,50,0.4)] flex flex-col overflow-hidden animate-float bg-white", className)}>
     <div className="h-[20px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-lg">
       <div className="h-[12px] w-[60px] bg-[#042823] rounded-b-lg"></div>
     </div>
@@ -51,30 +50,30 @@ const MockupPhone = () => (
     <div className="flex-1 bg-white relative overflow-hidden font-sans flex flex-col">
       {/* Invite Header */}
       <div className="h-[45%] bg-[#F8FAFC] p-4 pt-10 flex flex-col items-center justify-center text-center border-b border-gray-100">
-        <div className="text-[9px] text-[#063932]/60 font-bold uppercase tracking-widest mb-3">You are invited</div>
-        <div className="text-2xl text-[#063932] font-extrabold leading-tight mb-2 font-serif">Sarah <br/>& James</div>
-        <div className="text-[10px] text-gray-400 font-medium tracking-wide">THE ROYAL UNION</div>
+        <div className="text-[8px] text-[#063932]/60 font-bold uppercase tracking-widest mb-3">You are invited</div>
+        <div className="text-2xl text-[#063932] font-extrabold leading-tight mb-2 font-serif">Kwasi <br/>& Afua</div>
+        <div className="text-[9px] text-gray-400 font-medium tracking-wide">THE UNION</div>
       </div>
       {/* Details */}
-      <div className="p-5 space-y-4 flex-1">
-        <div className="flex justify-between items-end border-b border-gray-100 pb-3">
+      <div className="p-4 space-y-3 flex-1">
+        <div className="flex justify-between items-end border-b border-gray-100 pb-2">
           <div>
-            <div className="text-[9px] text-gray-400 uppercase tracking-wide font-bold mb-0.5">Date</div>
-            <div className="text-xs font-bold text-[#063932]">Sept 14, 2026</div>
+            <div className="text-[8px] text-gray-400 uppercase tracking-wide font-bold mb-0.5">Date</div>
+            <div className="text-[10px] font-bold text-[#063932]">Sept 14, 2026</div>
           </div>
           <div className="text-right">
-            <div className="text-[9px] text-gray-400 uppercase tracking-wide font-bold mb-0.5">Time</div>
-            <div className="text-xs font-bold text-[#063932]">4:00 PM</div>
+            <div className="text-[8px] text-gray-400 uppercase tracking-wide font-bold mb-0.5">Time</div>
+            <div className="text-[10px] font-bold text-[#063932]">4:00 PM</div>
           </div>
         </div>
         <div className="space-y-1">
-          <div className="text-[9px] text-gray-400 uppercase tracking-wide font-bold">Venue</div>
-          <div className="text-xs font-bold text-[#063932]">The Grand Estate, Accra</div>
-          <div className="text-[9px] text-[#063932] underline cursor-pointer hover:text-opacity-80">View Map</div>
+          <div className="text-[8px] text-gray-400 uppercase tracking-wide font-bold">Venue</div>
+          <div className="text-[10px] font-bold text-[#063932]">The Grand Estate, Accra</div>
+          <div className="text-[8px] text-[#063932] underline">View Map</div>
         </div>
         {/* RSVP Button */}
         <div className="pt-2 mt-auto">
-          <div className="w-full bg-[#063932] text-white py-3 rounded-lg text-[10px] font-bold text-center shadow-lg cursor-pointer transition-transform active:scale-95">
+          <div className="w-full bg-[#063932] text-white py-2 rounded-lg text-[9px] font-bold text-center shadow-lg">
             Confirm Attendance
           </div>
         </div>
@@ -83,56 +82,55 @@ const MockupPhone = () => (
   </div>
 );
 
-const MockupDashboard = () => (
-  <div className="bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden w-full h-full flex flex-col font-sans">
+const MockupDashboard = ({ className }: { className?: string }) => (
+  <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden w-full flex flex-col font-sans", className)}>
     {/* Header */}
-    <div className="h-12 border-b border-gray-100 flex items-center px-5 justify-between bg-white">
+    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white">
       <div className="flex gap-1.5">
-        <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-        <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-        <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+        <div className="w-2 h-2 rounded-full bg-red-400"></div>
+        <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+        <div className="w-2 h-2 rounded-full bg-green-400"></div>
       </div>
-      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">EventPeepo Admin</div>
+      <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</div>
     </div>
     {/* Body */}
-    <div className="p-6 flex-1 flex flex-col gap-5">
+    <div className="p-5 flex-1 flex flex-col gap-4">
       <div className="flex justify-between items-center">
-        <h4 className="text-sm font-bold text-[#063932]">Live Overview</h4>
-        <div className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-ping absolute opacity-75"></span>
-          <span className="w-2 h-2 rounded-full bg-green-500 relative"></span>
+        <h4 className="text-xs font-bold text-[#063932]">Live Overview</h4>
+        <div className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-[9px] font-bold border border-green-100 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
           Active
         </div>
       </div>
       
       {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         {[
           { label: "Invited", val: "150", color: "bg-blue-50 text-blue-700" },
           { label: "Yes", val: "112", color: "bg-emerald-50 text-emerald-700" },
           { label: "Pending", val: "38", color: "bg-amber-50 text-amber-700" },
         ].map((stat, i) => (
-          <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-            <div className="text-[9px] text-gray-500 mb-1 font-semibold uppercase">{stat.label}</div>
-            <div className={`text-lg font-extrabold ${stat.color.split(' ')[1]}`}>{stat.val}</div>
+          <div key={i} className="bg-gray-50 rounded-lg p-2 border border-gray-100">
+            <div className="text-[8px] text-gray-500 mb-0.5 font-semibold uppercase">{stat.label}</div>
+            <div className={`text-base font-extrabold ${stat.color.split(' ')[1]}`}>{stat.val}</div>
           </div>
         ))}
       </div>
 
-      {/* List with loading animation */}
-      <div className="space-y-3">
+      {/* List */}
+      <div className="space-y-2">
         {[1, 2, 3].map((_, i) => (
-          <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+          <div key={i} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500">
                 {String.fromCharCode(65 + i)}
               </div>
-              <div className="flex flex-col gap-1.5">
-                <div className="w-24 h-2.5 bg-gray-200 rounded animate-pulse"></div>
-                <div className="w-16 h-2 bg-gray-100 rounded"></div>
+              <div className="flex flex-col gap-1">
+                <div className="w-16 h-2 bg-gray-200 rounded"></div>
+                <div className="w-10 h-1.5 bg-gray-100 rounded"></div>
               </div>
             </div>
-            <div className="px-2 py-1 bg-green-50 rounded text-[9px] font-bold text-green-700">Confirmed</div>
+            <div className="px-1.5 py-0.5 bg-green-50 rounded text-[8px] font-bold text-green-700">Confirmed</div>
           </div>
         ))}
       </div>
@@ -141,19 +139,14 @@ const MockupDashboard = () => (
 );
 
 const MockupScanner = () => (
-  <div className="relative w-48 h-48 bg-white rounded-2xl shadow-xl border border-gray-200 flex items-center justify-center overflow-hidden">
-    <div className="absolute inset-0 border-[16px] border-black/5"></div>
+  <div className="relative w-40 h-40 bg-white rounded-2xl shadow-xl border border-gray-200 flex items-center justify-center overflow-hidden">
+    <div className="absolute inset-0 border-[12px] border-black/5"></div>
     {/* Scanning Line Animation */}
-    <div className="absolute top-0 left-0 right-0 h-1 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] z-10 animate-scan"></div>
+    <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] z-10 animate-scan"></div>
     
     <div className="text-center p-4">
-      <Icons.QrCode className="w-16 h-16 text-gray-800 mx-auto mb-2 opacity-80" />
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Scanning...</div>
-    </div>
-    
-    {/* Success overlay (simulated) */}
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md flex items-center gap-1 animate-bounce-slow">
-      <Icons.Check className="w-3 h-3" /> Valid
+      <Icons.QrCode className="w-12 h-12 text-gray-800 mx-auto mb-2 opacity-80" />
+      <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Scanning...</div>
     </div>
   </div>
 );
@@ -169,10 +162,8 @@ export default function HomePage() {
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         @keyframes scan { 0% { top: 10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 90%; opacity: 0; } }
-        @keyframes bounce-slow { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -5px); } }
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-scan { animation: scan 2s linear infinite; }
-        .animate-bounce-slow { animation: bounce-slow 3s ease-in-out infinite; }
         html { scroll-behavior: smooth; }
       `}} />
 
@@ -191,49 +182,72 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <a href="https://eventpeepo.com/#contact" className="bg-[#063932] text-white text-sm font-bold px-6 py-2.5 rounded-lg hover:bg-[#084d43] transition-all shadow-lg hover:shadow-[#063932]/20 active:scale-95">
+            <a href="https://eventpeepo.com/#contact" className="text-sm font-bold text-gray-500 hover:text-[#063932] transition-colors hidden sm:block" target="_blank" rel="noopener noreferrer">
               Contact Us
+            </a>
+            <a href="/admin/login" className="bg-[#063932] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#084d43] transition-all shadow-lg hover:shadow-[#063932]/20 active:scale-95" target="_blank" rel="noopener noreferrer">
+              Client Dashboard
             </a>
           </div>
         </div>
       </nav>
 
       {/* --- Hero Section --- */}
-      <section className="relative pt-36 pb-24 lg:pt-48 lg:pb-36 bg-[#F8FAFC] overflow-hidden border-b border-gray-100">
+      <section className="relative pt-36 pb-20 lg:pt-48 lg:pb-32 bg-[#F8FAFC] overflow-hidden border-b border-gray-100">
         {/* Background Gradients */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#063932]/5 rounded-full blur-[100px] translate-x-1/3 -translate-y-1/3 animate-pulse"></div>
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#063932]/5 rounded-full blur-[100px] translate-x-1/3 -translate-y-1/3"></div>
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-[80px] -translate-x-1/4 translate-y-1/4"></div>
 
-        <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-gray-200 shadow-sm mb-8">
-            <span className="w-2 h-2 rounded-full bg-[#063932] animate-pulse"></span>
-            <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Premium Managed Service</span>
-          </div>
-          
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold text-[#063932] leading-[1.1] tracking-tight mb-8">
-            Bespoke Digital <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#063932] to-[#0d6e61]">Experiences.</span>
-          </h1>
-          
-          <p className="max-w-2xl mx-auto text-lg md:text-xl text-gray-600 mb-12 leading-relaxed font-medium">
-            We build and manage your event's digital layer. From white-labeled invitation suites to military-grade on-site access control. You host the event, we handle the technology.
-          </p>
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            
+            {/* Left: Text Content */}
+            <div className="text-center lg:text-left">
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-[#063932] leading-[1.1] tracking-tight mb-6">
+                Bespoke Digital <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#063932] to-[#0d6e61]">Experiences.</span>
+              </h1>
+              
+              <p className="max-w-xl mx-auto lg:mx-0 text-lg text-gray-600 mb-10 leading-relaxed font-medium">
+                Your event's digital layer, handled. We design bespoke invitation suites and ensure seamless on-site access. You host; we manage the tech.
+              </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <a href="https://eventpeepo.com/#contact" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]">
-              Start Your Project
-            </a>
-            <a href="/e/sample-wedding" className="h-14 px-10 rounded-xl bg-white border border-gray-200 text-[#063932] font-bold text-base flex items-center justify-center gap-2 hover:border-gray-300 transition-all hover:bg-gray-50 shadow-sm min-w-[200px]">
-              <Icons.Play className="w-5 h-5" />
-              Live Demo
-            </a>
-          </div>
-          
-          <div className="mt-16 pt-8 border-t border-gray-200/60 max-w-lg mx-auto">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Trusted Partner For Events In</p>
-            <div className="flex justify-center gap-4 text-[#063932] font-bold opacity-80 text-sm tracking-wide">
-              <span>ACCRA</span> <span className="text-gray-300">•</span> <span>LAGOS</span> <span className="text-gray-300">•</span> <span>ABIDJAN</span>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
+                <a href="https://eventpeepo.com/#contact" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]" target="_blank" rel="noopener noreferrer">
+                  Start Your Project
+                </a>
+                <a href="/e/sample-wedding" className="h-14 px-10 rounded-xl bg-white border border-gray-200 text-[#063932] font-bold text-base flex items-center justify-center gap-2 hover:border-gray-300 transition-all hover:bg-gray-50 shadow-sm min-w-[200px]" target="_blank" rel="noopener noreferrer">
+                  <Icons.Play className="w-5 h-5" />
+                  Live Demo
+                </a>
+              </div>
+              
+              <div className="mt-12 pt-8 border-t border-gray-200/60 max-w-lg mx-auto lg:mx-0">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Trusted Partner For Events In</p>
+                <div className="flex justify-center lg:justify-start gap-4 text-[#063932] font-bold opacity-80 text-sm tracking-wide">
+                  <span>ACCRA</span> <span className="text-gray-300">•</span> <span>LAGOS</span> <span className="text-gray-300">•</span> <span>ABIDJAN</span>
+                </div>
+              </div>
             </div>
+
+            {/* Right: Visual Composition */}
+            <div className="relative flex justify-center lg:justify-end items-center h-full min-h-[400px]">
+              {/* Background Blob */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-white/50 blur-3xl rounded-full z-0"></div>
+              
+              {/* Composition Container */}
+              <div className="relative z-10 flex items-end">
+                {/* Phone Mockup (Front) */}
+                <div className="z-20 transform translate-x-10 scale-100">
+                  <MockupPhone />
+                </div>
+                {/* Dashboard Mockup (Back) */}
+                <div className="absolute left-[-140px] bottom-10 z-10 w-[320px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
+                  <MockupDashboard />
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
@@ -244,21 +258,21 @@ export default function HomePage() {
           <div className="mb-20 md:text-center max-w-3xl md:mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold text-[#063932] mb-6 tracking-tight">Precision tools. White-glove service.</h2>
             <p className="text-lg text-gray-600 leading-relaxed">
-              We don't expect you to configure complex software. Our team sets up, customizes, and manages the platform for you, ensuring a blended experience for both event owners and attendees.
+              We've deconstructed the event management process and rebuilt it for the digital age. Every feature is designed to save you time and impress your guests.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 auto-rows-[auto]">
             
             {/* Feature 1: Digital Invitations (Large) */}
-            <div className="md:col-span-2 rounded-3xl bg-[#F8FAFC] border border-gray-100 overflow-hidden relative group min-h-[500px] p-10 flex flex-col hover:border-[#063932]/20 transition-colors duration-500">
-              <div className="relative z-10 max-w-md">
+            <div className="md:col-span-2 rounded-3xl bg-[#F8FAFC] border border-gray-100 overflow-hidden relative group min-h-[500px] p-10 flex flex-col md:flex-row hover:border-[#063932]/20 transition-colors duration-500">
+              <div className="relative z-10 flex-1 pr-0 md:pr-10">
                 <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center mb-6 text-[#063932]">
                   <Icons.Star className="w-6 h-6" />
                 </div>
                 <h3 className="text-3xl font-bold text-[#063932] mb-4">Professionally Crafted Invitations</h3>
-                <p className="text-gray-600 mb-6 leading-relaxed">
-                  Our design team builds responsive, app-like invitations that align perfectly with your brand. We handle the design, domain setup, and deployment to ensure a seamless, professional experience.
+                <p className="text-gray-600 mb-6 leading-relaxed text-sm">
+                  First impressions matter. Our design team builds responsive, app-like invitations that align perfectly with your brand. We handle the design, domain setup, and deployment to ensure a seamless, professional experience.
                 </p>
                 <ul className="space-y-3 text-sm font-semibold text-gray-500">
                   <li className="flex items-center gap-3"><div className="p-1 bg-[#063932]/10 rounded-full"><Icons.Check className="w-3 h-3 text-[#063932]"/></div> Full White-label Service</li>
@@ -266,8 +280,10 @@ export default function HomePage() {
                   <li className="flex items-center gap-3"><div className="p-1 bg-[#063932]/10 rounded-full"><Icons.Check className="w-3 h-3 text-[#063932]"/></div> Automated WhatsApp/SMS Reminders</li>
                 </ul>
               </div>
-              <div className="absolute top-1/2 right-[-20px] md:right-10 translate-y-12 md:translate-y-0 transition-transform duration-700 group-hover:-translate-y-4">
-                <MockupPhone />
+              <div className="relative w-full md:w-1/2 flex justify-center items-center mt-10 md:mt-0">
+                <div className="transform md:scale-90 lg:scale-100 transition-transform duration-700 group-hover:-translate-y-2">
+                  <MockupPhone />
+                </div>
               </div>
             </div>
 
@@ -280,8 +296,8 @@ export default function HomePage() {
               <p className="text-gray-600 mb-8 text-sm leading-relaxed">
                 We provide you with a real-time dashboard to monitor your guest list. Track confirmed RSVPs, dietary requirements, and +1s instantly.
               </p>
-              <div className="flex-1 relative w-full">
-                <div className="absolute inset-x-0 bottom-[-30px] transition-transform duration-500 group-hover:scale-105 w-full px-2">
+              <div className="flex-1 relative w-full mt-auto">
+                <div className="transition-transform duration-500 group-hover:scale-105 w-full">
                   <MockupDashboard />
                 </div>
               </div>
@@ -294,11 +310,11 @@ export default function HomePage() {
                   <Icons.QrCode className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-3">Ironclad Access</h3>
-                <p className="text-gray-300 leading-relaxed">
+                <p className="text-gray-300 leading-relaxed text-sm">
                   We generate unique, scannable QR codes for every confirmed guest. Our secure check-in system ensures zero gate-crashers and zero friction at the door.
                 </p>
               </div>
-              <div className="mt-8 flex justify-center">
+              <div className="mt-8 flex justify-center pb-4">
                  <div className="transform group-hover:scale-110 transition-transform duration-500">
                     <MockupScanner />
                  </div>
@@ -313,7 +329,7 @@ export default function HomePage() {
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-[#063932] mb-2">The Modern Guestbook</h3>
-                  <p className="text-gray-600 leading-relaxed">
+                  <p className="text-gray-600 leading-relaxed text-sm">
                     Forget pen and paper. We set up a digital portal where guests can leave heartfelt video messages, voice notes, and selfies directly from their phones. We curate these into a private digital gallery for you.
                   </p>
                 </div>
@@ -403,7 +419,7 @@ export default function HomePage() {
               <li className="flex items-center gap-3"><div className="p-0.5 bg-green-100 rounded-full"><Icons.Check className="w-3 h-3 text-green-700"/></div> Priority Support</li>
             </ul>
             <div className="flex justify-center">
-                <a href="https://eventpeepo.com/#contact" className="px-10 py-4 rounded-xl bg-[#063932] text-white font-bold hover:bg-[#084d43] transition-colors w-full sm:w-auto shadow-lg shadow-[#063932]/10">
+                <a href="https://eventpeepo.com/#contact" className="px-10 py-4 rounded-xl bg-[#063932] text-white font-bold hover:bg-[#084d43] transition-colors w-full sm:w-auto shadow-lg shadow-[#063932]/10" target="_blank" rel="noopener noreferrer">
                   Request a Quote
                 </a>
             </div>
