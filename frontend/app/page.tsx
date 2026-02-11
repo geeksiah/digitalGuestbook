@@ -89,131 +89,31 @@ const MockupInviteDesign = ({ className }: { className?: string }) => (
       <div className="h-[12px] w-[60px] bg-[#042823] rounded-b-lg"></div>
     </div>
     {/* Screen Content - Stylized Invite */}
-    <div className="flex-1 relative overflow-hidden font-serif bg-white flex flex-col">
-       {/* Illustration of Couple (Abstract SVG) */}
-       <div className="h-[45%] bg-[#F5F2EE] relative flex items-end justify-center overflow-hidden">
-          <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-[#063932] to-transparent"></div>
-          {/* Couple Illustration */}
-          <div className="relative z-10 flex items-end -mb-2">
-             {/* Groom */}
-             <div className="relative mr-[-10px] z-0">
-               <div className="w-14 h-14 bg-[#3E2723] rounded-full mx-auto mb-[-5px]"></div>
-               <div className="w-24 h-24 bg-[#0F172A] rounded-t-[3rem] mx-auto relative overflow-hidden">
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-12 bg-white clip-path-v"></div>
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#063932] rounded-full"></div>
-               </div>
-             </div>
-             {/* Bride */}
-             <div className="relative z-10">
-               <div className="w-12 h-12 bg-[#5D4037] rounded-full mx-auto mb-[-5px] relative">
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-white/80 rounded-full blur-[1px]"></div>
-               </div>
-               <div className="w-20 h-20 bg-[#F3E5F5] rounded-t-[3rem] mx-auto border-4 border-white shadow-sm relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/50 to-transparent"></div>
-               </div>
-             </div>
-          </div>
-       </div>
+    <div className="flex-1 relative overflow-hidden font-serif bg-[#FAF7F2] flex flex-col">
+       {/* Background Pattern */}
+       <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#063932] to-transparent"></div>
        
-       <div className="flex-1 flex flex-col items-center justify-center p-5 text-center z-10 space-y-4">
-          <div className="text-[8px] tracking-[0.2em] uppercase text-[#063932]/70 font-sans font-bold">The Union Of</div>
+       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center z-10 space-y-6">
+          <div className="text-[10px] tracking-[0.3em] uppercase text-[#063932]/70">Save the Date</div>
           <div>
-            <div className="text-3xl font-extrabold text-[#063932] leading-none font-serif tracking-tight">Kwasi</div>
-            <div className="text-sm italic text-[#d4af37] font-serif my-1">&</div>
-            <div className="text-3xl font-extrabold text-[#063932] leading-none font-serif tracking-tight">Afua</div>
+            <div className="text-3xl font-bold text-[#063932] leading-none font-serif">Kwasi</div>
+            <div className="text-lg italic text-[#d4af37] font-serif">&</div>
+            <div className="text-3xl font-bold text-[#063932] leading-none font-serif">Afua</div>
           </div>
           
-          <div className="w-6 h-[1px] bg-[#063932]/20"></div>
+          <div className="w-8 h-[1px] bg-[#063932]/20 my-2"></div>
           
-          <div className="space-y-0.5 font-sans">
-            <div className="text-[10px] font-bold text-[#063932] uppercase">August 24, 2026</div>
-            <div className="text-[9px] text-[#063932]/60 uppercase tracking-widest">Kempinski Gold Coast</div>
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-[#063932]">September 14, 2026</div>
+            <div className="text-[10px] text-[#063932]/80 uppercase tracking-widest">Accra, Ghana</div>
           </div>
        </div>
        
-       <div className="p-4 z-10 font-sans">
-          <div className="w-full bg-[#063932] text-white py-2.5 rounded text-[9px] font-bold text-center uppercase tracking-wide shadow-md">
-            View Details
+       <div className="p-4 z-10">
+          <div className="w-full border border-[#063932] text-[#063932] py-2 rounded text-[10px] font-bold text-center uppercase tracking-wide">
+            Open Invitation
           </div>
        </div>
-    </div>
-  </div>
-);
-
-// Hero Dashboard (Wider, Desktop style)
-const MockupHeroDashboard = ({ className }: { className?: string }) => (
-  <div className={cn("bg-white rounded-xl shadow-[0_30px_80px_rgb(0,0,0,0.12)] border border-gray-100 overflow-hidden w-full flex flex-col font-sans", className)}>
-    {/* Browser Header */}
-    <div className="h-9 border-b border-gray-100 flex items-center px-4 gap-3 bg-gray-50/50">
-      <div className="flex gap-1.5">
-        <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
-        <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
-        <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
-      </div>
-      <div className="h-5 bg-white border border-gray-200 rounded px-3 flex items-center w-64">
-        <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-        <div className="text-[8px] text-gray-400">app.eventpeepo.com/dashboard</div>
-      </div>
-    </div>
-    
-    <div className="flex flex-1 min-h-[300px]">
-      {/* Sidebar */}
-      <div className="w-16 border-r border-gray-100 bg-gray-50 flex flex-col items-center py-4 gap-4">
-        <div className="w-8 h-8 bg-[#063932] rounded-lg"></div>
-        <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow-sm"></div>
-        <div className="w-8 h-8 bg-transparent rounded-lg"></div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 p-6 bg-white flex gap-6">
-        {/* Left Column: Stats & Chart */}
-        <div className="flex-1 flex flex-col gap-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Event Overview</h2>
-              <p className="text-xs text-slate-500">Live data updates</p>
-            </div>
-            <div className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse relative"></span>
-              Live
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-             <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Guests</div>
-                <div className="text-2xl font-bold text-slate-900">450</div>
-             </div>
-             <div className="p-4 rounded-xl bg-[#F0FDF4] border border-green-100">
-                <div className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-1">Checked In</div>
-                <div className="text-2xl font-bold text-green-800">312</div>
-             </div>
-          </div>
-
-          <div className="flex-1 rounded-xl border border-slate-100 p-4 relative overflow-hidden flex items-end gap-2">
-             {/* Fake Chart */}
-             {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
-                <div key={i} className="flex-1 bg-slate-800 rounded-t-sm" style={{ height: `${h}%`, opacity: 0.1 + (i * 0.1) }}></div>
-             ))}
-          </div>
-        </div>
-
-        {/* Right Column: Guest List */}
-        <div className="w-48 border-l border-gray-100 pl-6 flex flex-col">
-           <div className="text-xs font-bold text-slate-900 mb-4">Latest Arrivals</div>
-           <div className="space-y-3">
-              {[1,2,3,4,5].map(i => (
-                 <div key={i} className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-slate-100"></div>
-                    <div className="flex-1">
-                       <div className="h-2 w-16 bg-slate-200 rounded mb-1"></div>
-                       <div className="h-1.5 w-8 bg-slate-100 rounded"></div>
-                    </div>
-                 </div>
-              ))}
-           </div>
-        </div>
-      </div>
     </div>
   </div>
 );
@@ -300,7 +200,6 @@ export default function HomePage() {
         @keyframes scan { 0% { top: 10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 90%; opacity: 0; } }
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-scan { animation: scan 2s linear infinite; }
-        .clip-path-v { clip-path: polygon(0 0, 100% 0, 50% 100%); }
         html { scroll-behavior: smooth; }
       `}} />
 
@@ -341,12 +240,12 @@ export default function HomePage() {
             {/* Left: Text Content */}
             <div className="text-center lg:text-left">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-[#063932] leading-[1.1] tracking-tight mb-6">
-                Your event's digital layer, <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#063932] to-[#0d6e61]">handled.</span>
+                Bespoke Digital <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#063932] to-[#0d6e61]">Experiences.</span>
               </h1>
               
               <p className="max-w-xl mx-auto lg:mx-0 text-lg text-gray-600 mb-10 leading-relaxed font-medium">
-                We design bespoke invitation suites and ensure seamless on-site access. You host the event, we manage the technology.
+                Your event's digital layer, handled. We design bespoke invitation suites and ensure seamless on-site access. You host; we manage the tech.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
@@ -373,13 +272,13 @@ export default function HomePage() {
               
               {/* Composition Container */}
               <div className="relative z-10 flex items-end justify-center lg:justify-end">
-                {/* Phone Mockup (Front) - Scaled normally on desktop now */}
-                <div className="z-20 transform scale-100 origin-bottom">
+                {/* Phone Mockup (Front) - Centered on Mobile, Pushed on Desktop */}
+                <div className="z-20 transform scale-100 lg:scale-125 lg:translate-x-10 origin-bottom">
                   <MockupPhone />
                 </div>
-                {/* Dashboard Mockup (Back) - Wider for Desktop feeling */}
-                <div className="absolute left-[-50px] lg:left-[-120px] bottom-10 z-10 w-[320px] lg:w-[500px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
-                  <MockupHeroDashboard />
+                {/* Dashboard Mockup (Back) - Increased Size for Desktop */}
+                <div className="absolute left-[-50px] lg:left-[-180px] bottom-10 z-10 w-[320px] lg:w-[480px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
+                  <MockupDashboard />
                 </div>
               </div>
             </div>
@@ -593,6 +492,7 @@ export default function HomePage() {
                 <li><a href="#" className="hover:text-[#063932] transition-colors">Privacy Policy</a></li>
               </ul>
             </div>
+
             <div>
               <h4 className="font-bold text-xs uppercase tracking-widest text-[#063932] mb-6">Contact</h4>
               <ul className="space-y-3 text-sm text-gray-600">
