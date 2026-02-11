@@ -593,7 +593,6 @@ export default function HomePage() {
                 <li><a href="#" className="hover:text-[#063932] transition-colors">Privacy Policy</a></li>
               </ul>
             </div>
-
             <div>
               <h4 className="font-bold text-xs uppercase tracking-widest text-[#063932] mb-6">Contact</h4>
               <ul className="space-y-3 text-sm text-gray-600">
