@@ -168,46 +168,46 @@ const MockupPhone = ({ className }: { className?: string }) => (
 const MockupInviteDesign = ({ className }: { className?: string }) => (
   <div
     className={cn(
-      "relative bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden w-full",
-      "h-[420px] sm:h-[440px] md:h-[420px]",
+      "relative bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden w-full",
+      "h-[420px] sm:h-[460px] lg:h-[420px]",
       className
     )}
   >
-    {/* Window/Header */}
-    <div className="h-10 border-b border-gray-100 flex items-center px-4 justify-between bg-white">
-      <div className="flex gap-1.5">
+    {/* Top bar */}
+    <div className="h-11 border-b border-gray-100 flex items-center px-4 bg-white">
+      <div className="flex gap-1.5 shrink-0">
         <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
         <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
         <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
       </div>
 
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">
-          White-label Invitation Studio
-        </span>
-        <span className="text-[10px] font-bold text-gray-300">•</span>
-        <span className="text-[10px] font-bold text-gray-600 truncate max-w-[150px]">
-          Kwasi & Afua Wedding
-        </span>
+      <div className="flex items-center gap-2 min-w-0 ml-3">
+        <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider truncate">
+          White-label Studio
+        </div>
+        <span className="text-gray-300 text-[10px] font-bold">•</span>
+        <div className="text-[10px] font-bold text-gray-600 truncate">
+          Kwasi & Afua
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="hidden sm:inline-flex text-[10px] font-bold text-gray-400">
+      <div className="ml-auto flex items-center gap-2 shrink-0">
+        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-gray-400">
           Status:
-        </span>
-        <span className="text-[10px] font-extrabold px-2 py-1 rounded border border-green-100 bg-green-50 text-green-700 flex items-center gap-1.5 shadow-sm">
+        </div>
+        <div className="px-2 py-1 rounded-lg border border-green-100 bg-green-50 text-green-700 text-[10px] font-extrabold flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
           Live
-        </span>
+        </div>
       </div>
     </div>
 
     {/* Body */}
-    <div className="flex h-[calc(100%-40px)] overflow-hidden">
-      {/* Left Panel: Managed service workflow + white-label details */}
-      <div className="hidden md:flex w-[280px] border-r border-gray-100 bg-gray-50/30 p-4 flex-col gap-4">
-        {/* White-label block */}
-        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+    <div className="h-[calc(100%-44px)] grid grid-cols-1 md:grid-cols-[260px_1fr]">
+      {/* Left panel */}
+      <div className="hidden md:flex border-r border-gray-100 bg-gray-50/30 p-4 flex-col gap-3">
+        {/* White-label setup */}
+        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
           <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
             White-label setup
           </div>
@@ -215,123 +215,89 @@ const MockupInviteDesign = ({ className }: { className?: string }) => (
           <div className="mt-2 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] font-bold text-gray-500">Client brand</div>
-              <div className="text-[10px] font-extrabold text-[#063932]">
-                Afua & Co.
-              </div>
+              <div className="text-[10px] font-extrabold text-[#063932]">Afua & Co.</div>
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <div className="text-[10px] font-bold text-gray-500">Custom subdomain</div>
-              <div className="text-[10px] font-extrabold text-gray-700">
-                invite.afuaco.com
-              </div>
+              <div className="text-[10px] font-bold text-gray-500">Subdomain</div>
+              <div className="text-[10px] font-extrabold text-gray-700">invite.afuaco.com</div>
             </div>
 
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] font-bold text-gray-500">SSL</div>
-              <div className="text-[10px] font-extrabold text-green-700">
-                Secured
-              </div>
+              <div className="text-[10px] font-extrabold text-green-700">Secured</div>
             </div>
           </div>
         </div>
 
-        {/* Managed pipeline (this replaces "builder controls") */}
-        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+        {/* Managed delivery */}
+        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
           <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
             Managed delivery
           </div>
 
-          <div className="mt-3 space-y-2">
+          <div className="mt-2 space-y-2">
             {[
-              { label: "Design crafted", done: true, meta: "Responsive • App-like" },
-              { label: "Domain connected", done: true, meta: "Subdomain • DNS" },
-              { label: "Deployed", done: true, meta: "Fast CDN delivery" },
-              { label: "Reminders scheduled", done: true, meta: "WhatsApp + SMS" },
+              { label: "Design crafted", meta: "Responsive • App-like" },
+              { label: "Domain connected", meta: "Subdomain • DNS" },
+              { label: "Deployed", meta: "Fast CDN delivery" },
+              { label: "Reminders scheduled", meta: "WhatsApp + SMS" },
             ].map((s, i) => (
               <div key={i} className="flex items-start gap-2">
-                <div
-                  className={cn(
-                    "mt-0.5 w-4 h-4 rounded flex items-center justify-center border",
-                    s.done
-                      ? "bg-[#063932] border-[#063932]"
-                      : "bg-white border-gray-200"
-                  )}
-                >
-                  {s.done ? (
-                    <Icons.Check className="w-3 h-3 text-white" />
-                  ) : (
-                    <div className="w-2 h-2 rounded-full bg-gray-200" />
-                  )}
+                <div className="mt-0.5 w-4 h-4 rounded-md bg-[#063932] border border-[#063932] flex items-center justify-center">
+                  <Icons.Check className="w-3 h-3 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold text-gray-800">
-                    {s.label}
-                  </div>
-                  <div className="text-[9px] font-bold text-gray-400 truncate">
-                    {s.meta}
-                  </div>
+                  <div className="text-[10px] font-extrabold text-gray-800">{s.label}</div>
+                  <div className="text-[9px] font-bold text-gray-400 truncate">{s.meta}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Reminders panel */}
-        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+        {/* Reminders (compressed so it never clips) */}
+        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
               Automated reminders
             </div>
-            <span className="text-[9px] font-extrabold text-gray-600">
-              Enabled
-            </span>
+            <div className="text-[9px] font-extrabold text-gray-600">Enabled</div>
           </div>
 
           <div className="mt-2 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-green-50 border border-green-100 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center">
                   <Icons.MessageCircle className="w-3.5 h-3.5 text-green-700" />
                 </div>
                 <div className="text-[10px] font-bold text-gray-700">WhatsApp</div>
               </div>
-              <div className="text-[10px] font-extrabold text-gray-600">
-                T-48h, T-6h
-              </div>
+              <div className="text-[10px] font-extrabold text-gray-600">T-48h, T-6h</div>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-blue-50 border border-blue-100 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
                   <Icons.Smartphone className="w-3.5 h-3.5 text-blue-700" />
                 </div>
                 <div className="text-[10px] font-bold text-gray-700">SMS</div>
               </div>
-              <div className="text-[10px] font-extrabold text-gray-600">
-                RSVP follow-up
-              </div>
+              <div className="text-[10px] font-extrabold text-gray-600">RSVP follow-up</div>
             </div>
           </div>
         </div>
 
-        {/* Small “delivered by” badge */}
-        <div className="mt-auto rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
-          <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
-            Managed by
-          </div>
-          <div className="mt-1 flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-[#063932]">
-              EventPeepo Studio
-            </span>
-            <span className="text-[9px] font-bold text-gray-400">White-label</span>
-          </div>
+        {/* Footer line instead of a full card */}
+        <div className="mt-auto pt-2 border-t border-gray-100 flex items-center justify-between">
+          <div className="text-[9px] font-extrabold text-[#063932]">EventPeepo Studio</div>
+          <div className="text-[9px] font-bold text-gray-400">White-label</div>
         </div>
       </div>
 
-      {/* Right: Preview area (mobile-first, app-like) */}
-      <div className="flex-1 bg-[#F3F4F6] p-4 sm:p-6 flex items-center justify-center relative overflow-hidden">
-        {/* Premium subtle grid */}
+      {/* Right preview (make it the hero, not a sliver) */}
+      <div className="relative bg-[#F3F4F6] p-4 sm:p-6 flex items-center justify-center overflow-hidden">
+        {/* subtle pattern */}
         <div
           className="absolute inset-0 opacity-[0.06]"
           style={{
@@ -340,14 +306,14 @@ const MockupInviteDesign = ({ className }: { className?: string }) => (
           }}
         />
 
-        {/* Preview wrapper (responsive device-like) */}
-        <div className="relative z-10 w-full max-w-[340px] sm:max-w-[380px]">
-          {/* Preview top bar */}
-          <div className="bg-white border border-gray-100 rounded-t-2xl px-4 py-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
+        {/* Centered preview card */}
+        <div className="relative z-10 w-full max-w-[460px]">
+          {/* Preview header */}
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <div className="min-w-0">
                 <div className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">
-                  Live invitation preview
+                  Client-facing invite
                 </div>
                 <div className="text-[10px] font-bold text-gray-600 truncate">
                   invite.afuaco.com
@@ -355,140 +321,124 @@ const MockupInviteDesign = ({ className }: { className?: string }) => (
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-[10px] font-extrabold text-gray-600">
-                  Mobile
+                <div className="px-2 py-1 rounded-lg border border-gray-200 bg-gray-50 text-[10px] font-extrabold text-gray-600">
+                  Mobile-first
                 </div>
-                <div className="px-2 py-1 rounded border border-green-100 bg-green-50 text-[10px] font-extrabold text-green-700">
+                <div className="px-2 py-1 rounded-lg border border-green-100 bg-green-50 text-[10px] font-extrabold text-green-700">
                   Fast
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* App-like invite preview */}
-          <div className="bg-white border-x border-b border-gray-100 rounded-b-2xl shadow-xl overflow-hidden">
-            {/* Hero image area (dummy but realistic) */}
-            <div className="relative h-40 sm:h-44 bg-gradient-to-br from-[#063932] via-[#0b4a41] to-[#063932]">
-              <div className="absolute inset-0 opacity-20"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(135deg, rgba(212,175,55,0.18) 0%, rgba(255,255,255,0) 55%)",
-                }}
-              />
-              <div className="absolute top-3 left-3 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white/12 border border-white/20 flex items-center justify-center">
-                  <Icons.Sparkles className="w-4 h-4 text-white" />
-                </div>
-                <div className="text-[10px] font-extrabold text-white/90">
-                  Kwasi & Afua
-                </div>
-              </div>
-
-              <div className="absolute bottom-3 left-4 right-4">
-                <div className="text-[10px] font-bold text-white/80">
-                  Wedding Celebration
-                </div>
-                <div className="text-xl sm:text-2xl font-black text-white leading-tight">
-                  You&apos;re Invited
-                </div>
-                <div className="text-[10px] font-bold text-white/80 mt-1">
-                  Sat • Sept 14 • Accra, Ghana
-                </div>
-              </div>
-            </div>
-
-            {/* Content */}
+            {/* Actual invite preview */}
             <div className="p-4 sm:p-5">
-              {/* Info cards */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
-                  <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
-                    Venue
+              <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-md bg-white">
+                <div className="relative h-44 sm:h-48 bg-gradient-to-br from-[#063932] via-[#0b4a41] to-[#063932]">
+                  <div
+                    className="absolute inset-0 opacity-25"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(135deg, rgba(212,175,55,0.22) 0%, rgba(255,255,255,0) 55%)",
+                    }}
+                  />
+
+                  <div className="absolute top-3 left-3 flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
+                      <Icons.Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-[10px] font-extrabold text-white/90">Kwasi & Afua</div>
                   </div>
-                  <div className="text-[11px] font-extrabold text-gray-800 mt-1">
-                    Fiesta Royale
-                  </div>
-                  <div className="text-[10px] font-bold text-gray-500">
-                    Spintex Rd
+
+                  <div className="absolute bottom-3 left-4 right-4">
+                    <div className="text-[10px] font-bold text-white/80">Wedding Celebration</div>
+                    <div className="text-2xl font-black text-white leading-tight">You&apos;re Invited</div>
+                    <div className="text-[10px] font-bold text-white/80 mt-1">
+                      Sat • Sept 14 • Accra, Ghana
+                    </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
-                  <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">
-                    Time
+                <div className="p-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+                      <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">Venue</div>
+                      <div className="text-[11px] font-extrabold text-gray-800 mt-1">Fiesta Royale</div>
+                      <div className="text-[10px] font-bold text-gray-500">Spintex Rd</div>
+                    </div>
+
+                    <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+                      <div className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider">Time</div>
+                      <div className="text-[11px] font-extrabold text-gray-800 mt-1">1:00 PM</div>
+                      <div className="text-[10px] font-bold text-gray-500">Reception • 4:00 PM</div>
+                    </div>
                   </div>
-                  <div className="text-[11px] font-extrabold text-gray-800 mt-1">
-                    1:00 PM
+
+                  <div className="mt-3 rounded-xl border border-gray-100 bg-white p-3 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-extrabold text-gray-800">RSVP</div>
+                      <div className="text-[10px] font-bold text-gray-500 truncate">
+                        Approval gating for private events
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-[#063932] text-white text-[10px] font-extrabold shadow-sm">
+                      Respond
+                    </div>
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500">
-                    Reception • 4:00 PM
+
+                  <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 p-3 flex items-start gap-2">
+                    <div className="mt-0.5 w-7 h-7 rounded-xl bg-white border border-amber-100 flex items-center justify-center">
+                      <Icons.Bell className="w-3.5 h-3.5 text-amber-700" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-extrabold text-amber-900">
+                        WhatsApp/SMS reminders included
+                      </div>
+                      <div className="text-[10px] font-bold text-amber-800/80">
+                        Guests get automated updates before the event.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between text-[9px] font-bold text-gray-400">
+                    <div>White-label • Your brand first</div>
+                    <div className="text-gray-500 flex items-center gap-1.5">
+                      <Icons.Shield className="w-3.5 h-3.5" />
+                      Secured SSL
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* RSVP bar */}
-              <div className="mt-3 rounded-xl border border-gray-100 bg-white p-3 flex items-center justify-between">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold text-gray-800">
-                    RSVP Status
+              {/* Mobile-only service chips */}
+              <div className="md:hidden mt-3 flex flex-wrap gap-2 justify-center">
+                {[
+                  { label: "Full White-label", Icon: Icons.BadgeCheck },
+                  { label: "Custom Subdomain", Icon: Icons.Globe },
+                  { label: "WhatsApp/SMS", Icon: Icons.MessageCircle },
+                ].map((c, i) => (
+                  <div
+                    key={i}
+                    className="px-3 py-1.5 rounded-full border border-gray-200 bg-white text-[10px] font-extrabold text-gray-600 flex items-center gap-1.5 shadow-sm"
+                  >
+                    <c.Icon className="w-3.5 h-3.5 text-[#063932]" />
+                    {c.label}
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500 truncate">
-                    Response tracking + approval gating
-                  </div>
-                </div>
-                <div className="px-2.5 py-1.5 rounded-lg bg-[#063932] text-white text-[10px] font-extrabold shadow-sm">
-                  Respond
-                </div>
-              </div>
-
-              {/* Reminders note (ties to section copy) */}
-              <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 p-3 flex items-start gap-2">
-                <div className="mt-0.5 w-6 h-6 rounded-lg bg-white border border-amber-100 flex items-center justify-center">
-                  <Icons.Bell className="w-3.5 h-3.5 text-amber-700" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold text-amber-900">
-                    Automated reminders scheduled
-                  </div>
-                  <div className="text-[10px] font-bold text-amber-800/80">
-                    WhatsApp + SMS • Guests receive updates automatically.
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer micro */}
-              <div className="mt-4 flex items-center justify-between">
-                <div className="text-[9px] font-bold text-gray-400">
-                  White-label • Your brand first
-                </div>
-                <div className="text-[9px] font-extrabold text-gray-500">
-                  Secured SSL
-                </div>
+                ))}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Mobile-only “service chips” (so it still communicates on small screens) */}
-          <div className="md:hidden mt-3 flex flex-wrap gap-2 justify-center">
-            {[
-              { label: "Full White-label", Icon: Icons.BadgeCheck },
-              { label: "Custom Subdomain", Icon: Icons.Globe },
-              { label: "WhatsApp/SMS", Icon: Icons.MessageCircle },
-            ].map((c, i) => (
-              <div
-                key={i}
-                className="px-3 py-1.5 rounded-full border border-gray-200 bg-white text-[10px] font-extrabold text-gray-600 flex items-center gap-1.5 shadow-sm"
-              >
-                <c.Icon className="w-3.5 h-3.5 text-[#063932]" />
-                {c.label}
-              </div>
-            ))}
-          </div>
+        {/* Small decorative “delivered” pill */}
+        <div className="absolute bottom-4 right-4 hidden sm:flex items-center gap-2 px-3 py-2 rounded-full bg-white/90 border border-gray-200 shadow-sm text-[10px] font-extrabold text-gray-600">
+          Delivered & Managed
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
         </div>
       </div>
     </div>
   </div>
 );
+
 
 const MockupDashboard2 = ({ className }: { className?: string }) => (
   <div className={cn("bg-white rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.08)] border border-gray-100 overflow-hidden w-full flex flex-col font-sans", className)}>
