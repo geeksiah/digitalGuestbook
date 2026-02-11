@@ -1069,7 +1069,7 @@ export default function HomePage() {
               <div className="relative w-full md:w-1/2 flex justify-center items-center mt-10 md:mt-0">
                 {/* 3. Improved UI for Invitations */}
                 <div className="transform scale-100 transition-transform duration-700 group-hover:-translate-y-2 w-full">
-                  <MockupInviteDesign />
+                  <MockupPhone />
                 </div>
               </div>
             </div>
