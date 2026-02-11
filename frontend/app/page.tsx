@@ -29,7 +29,7 @@ function cn(...classes: (string | undefined | null | false)[]) {
 const Icons = {
   ArrowRight: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>,
   Check: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>,
-  Star: (props: React.SVGProps<SVGSVGElement>) => <svg fill="currentColor" viewBox="0 0 24 24" {...props}><path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" /></svg>,
+  Envelope: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>,
   QrCode: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" /></svg>,
   Play: (props: React.SVGProps<SVGSVGElement>) => <svg fill="currentColor" viewBox="0 0 24 24" {...props}><path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>,
   Smartphone: (props: React.SVGProps<SVGSVGElement>) => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>,
@@ -78,6 +78,42 @@ const MockupPhone = ({ className }: { className?: string }) => (
           </div>
         </div>
       </div>
+    </div>
+  </div>
+);
+
+// New Stylized Invite for "Features" Section
+const MockupInviteDesign = ({ className }: { className?: string }) => (
+  <div className={cn("relative border-[#063932] bg-[#063932] border-[8px] rounded-[2.5rem] h-[380px] w-[210px] shadow-2xl flex flex-col overflow-hidden bg-white", className)}>
+    <div className="h-[20px] bg-[#063932] w-full absolute top-0 left-0 z-20 flex justify-center rounded-b-lg">
+      <div className="h-[12px] w-[60px] bg-[#042823] rounded-b-lg"></div>
+    </div>
+    {/* Screen Content - Stylized Invite */}
+    <div className="flex-1 relative overflow-hidden font-serif bg-[#FAF7F2] flex flex-col">
+       {/* Background Pattern */}
+       <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#063932] to-transparent"></div>
+       
+       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center z-10 space-y-6">
+          <div className="text-[10px] tracking-[0.3em] uppercase text-[#063932]/70">Save the Date</div>
+          <div>
+            <div className="text-3xl font-bold text-[#063932] leading-none font-serif">Kwasi</div>
+            <div className="text-lg italic text-[#d4af37] font-serif">&</div>
+            <div className="text-3xl font-bold text-[#063932] leading-none font-serif">Afua</div>
+          </div>
+          
+          <div className="w-8 h-[1px] bg-[#063932]/20 my-2"></div>
+          
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-[#063932]">September 14, 2026</div>
+            <div className="text-[10px] text-[#063932]/80 uppercase tracking-widest">Accra, Ghana</div>
+          </div>
+       </div>
+       
+       <div className="p-4 z-10">
+          <div className="w-full border border-[#063932] text-[#063932] py-2 rounded text-[10px] font-bold text-center uppercase tracking-wide">
+            Open Invitation
+          </div>
+       </div>
     </div>
   </div>
 );
@@ -185,7 +221,7 @@ export default function HomePage() {
             <a href="https://eventpeepo.com/#contact" className="text-sm font-bold text-gray-500 hover:text-[#063932] transition-colors hidden sm:block" target="_blank" rel="noopener noreferrer">
               Contact Us
             </a>
-            <a href="/owner/login" className="bg-[#063932] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#084d43] transition-all shadow-lg hover:shadow-[#063932]/20 active:scale-95" target="_blank" rel="noopener noreferrer">
+            <a href="/admin/login" className="bg-[#063932] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#084d43] transition-all shadow-lg hover:shadow-[#063932]/20 active:scale-95" target="_blank" rel="noopener noreferrer">
               Client Dashboard
             </a>
           </div>
@@ -213,36 +249,35 @@ export default function HomePage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
-                <a href="https://eventpeepo.com/#contact" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]" target="_blank" rel="noopener noreferrer">
-                  Start Your Project
+                <a href="/admin/login" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]" target="_blank" rel="noopener noreferrer">
+                  Client Dashboard
                 </a>
-                <a href="/e/sample-wedding" className="h-14 px-10 rounded-xl bg-white border border-gray-200 text-[#063932] font-bold text-base flex items-center justify-center gap-2 hover:border-gray-300 transition-all hover:bg-gray-50 shadow-sm min-w-[200px]" target="_blank" rel="noopener noreferrer">
-                  <Icons.Play className="w-5 h-5" />
-                  Live Demo
+                <a href="https://eventpeepo.com/#contact" className="h-14 px-10 rounded-xl bg-white border border-gray-200 text-[#063932] font-bold text-base flex items-center justify-center gap-2 hover:border-gray-300 transition-all hover:bg-gray-50 shadow-sm min-w-[200px]" target="_blank" rel="noopener noreferrer">
+                  Contact Us
                 </a>
               </div>
               
               <div className="mt-12 pt-8 border-t border-gray-200/60 max-w-lg mx-auto lg:mx-0">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Trusted Partner For Events In</p>
                 <div className="flex justify-center lg:justify-start gap-4 text-[#063932] font-bold opacity-80 text-sm tracking-wide">
-                  <span>ACCRA</span> <span className="text-gray-300">•</span> <span>LAGOS</span> <span className="text-gray-300">•</span> <span>ABIDJAN</span>
+                  <span>ACCRA</span> <span className="text-gray-300">•</span> <span>LAGOS</span> <span className="text-gray-300">•</span> <span>ABIDJAN</span> <span className="text-gray-300">•</span> <span>WORLDWIDE</span>
                 </div>
               </div>
             </div>
 
             {/* Right: Visual Composition */}
-            <div className="relative flex justify-center lg:justify-end items-center h-full min-h-[400px]">
+            <div className="relative flex justify-center lg:justify-end items-center h-full min-h-[500px] lg:min-h-[600px]">
               {/* Background Blob */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-white/50 blur-3xl rounded-full z-0"></div>
               
               {/* Composition Container */}
-              <div className="relative z-10 flex items-end">
-                {/* Phone Mockup (Front) */}
-                <div className="z-20 transform translate-x-10 scale-100">
+              <div className="relative z-10 flex items-end justify-center lg:justify-end">
+                {/* Phone Mockup (Front) - Centered on Mobile, Pushed on Desktop */}
+                <div className="z-20 transform scale-100 lg:scale-125 lg:translate-x-10 origin-bottom">
                   <MockupPhone />
                 </div>
-                {/* Dashboard Mockup (Back) */}
-                <div className="absolute left-[-140px] bottom-10 z-10 w-[320px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
+                {/* Dashboard Mockup (Back) - Increased Size for Desktop */}
+                <div className="absolute left-[-50px] lg:left-[-180px] bottom-10 z-10 w-[320px] lg:w-[480px] hidden sm:block animate-float" style={{ animationDelay: '1s' }}>
                   <MockupDashboard />
                 </div>
               </div>
@@ -268,7 +303,7 @@ export default function HomePage() {
             <div className="md:col-span-2 rounded-3xl bg-[#F8FAFC] border border-gray-100 overflow-hidden relative group min-h-[500px] p-10 flex flex-col md:flex-row hover:border-[#063932]/20 transition-colors duration-500">
               <div className="relative z-10 flex-1 pr-0 md:pr-10">
                 <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center mb-6 text-[#063932]">
-                  <Icons.Star className="w-6 h-6" />
+                  <Icons.Envelope className="w-6 h-6" />
                 </div>
                 <h3 className="text-3xl font-bold text-[#063932] mb-4">Professionally Crafted Invitations</h3>
                 <p className="text-gray-600 mb-6 leading-relaxed text-sm">
@@ -281,8 +316,8 @@ export default function HomePage() {
                 </ul>
               </div>
               <div className="relative w-full md:w-1/2 flex justify-center items-center mt-10 md:mt-0">
-                <div className="transform md:scale-90 lg:scale-100 transition-transform duration-700 group-hover:-translate-y-2">
-                  <MockupPhone />
+                <div className="transform scale-100 transition-transform duration-700 group-hover:-translate-y-2">
+                  <MockupInviteDesign />
                 </div>
               </div>
             </div>
@@ -297,7 +332,7 @@ export default function HomePage() {
                 We provide you with a real-time dashboard to monitor your guest list. Track confirmed RSVPs, dietary requirements, and +1s instantly.
               </p>
               <div className="flex-1 relative w-full mt-auto">
-                <div className="transition-transform duration-500 group-hover:scale-105 w-full">
+                <div className="transition-transform duration-500 group-hover:scale-105 w-full px-2">
                   <MockupDashboard />
                 </div>
               </div>
