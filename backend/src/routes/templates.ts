@@ -210,7 +210,18 @@ router.get('/', asyncHandler(async (req, res) => {
         eventsAsInvitation: true,
         eventsAsRsvp: true,
         eventsAsGuestbook: true,
+        eventsAsGuestbookVideo: true,
+        eventsAsGuestbookAudio: true,
+        eventsAsGuestbookPhoto: true,
+        eventsAsBooth: true,
+        eventsAsBoothVideo: true,
+        eventsAsBoothAudio: true,
+        eventsAsBoothPhoto: true,
         eventsAsThankYou: true,
+        eventsAsLiveLanding: true,
+        eventsAsEventEnded: true,
+        eventsAsItineraryPage: true,
+        eventsAsGiftingPage: true,
       },
     },
   };
@@ -233,7 +244,18 @@ router.get('/', asyncHandler(async (req, res) => {
       t._count.eventsAsInvitation +
       t._count.eventsAsRsvp +
       t._count.eventsAsGuestbook +
-      t._count.eventsAsThankYou,
+      t._count.eventsAsGuestbookVideo +
+      t._count.eventsAsGuestbookAudio +
+      t._count.eventsAsGuestbookPhoto +
+      t._count.eventsAsBooth +
+      t._count.eventsAsBoothVideo +
+      t._count.eventsAsBoothAudio +
+      t._count.eventsAsBoothPhoto +
+      t._count.eventsAsThankYou +
+      t._count.eventsAsLiveLanding +
+      t._count.eventsAsEventEnded +
+      t._count.eventsAsItineraryPage +
+      t._count.eventsAsGiftingPage,
   }));
 
   res.json({ templates: templatesWithUsage });
@@ -250,6 +272,8 @@ router.get('/:id', asyncHandler(async (req, res) => {
       eventsAsRsvp: { select: { id: true, name: true, slug: true } },
       eventsAsGuestbook: { select: { id: true, name: true, slug: true } },
       eventsAsThankYou: { select: { id: true, name: true, slug: true } },
+      eventsAsItineraryPage: { select: { id: true, name: true, slug: true } },
+      eventsAsGiftingPage: { select: { id: true, name: true, slug: true } },
     },
   });
 
@@ -316,7 +340,18 @@ router.delete('/:id', asyncHandler(async (req, res) => {
           eventsAsInvitation: true,
           eventsAsRsvp: true,
           eventsAsGuestbook: true,
+          eventsAsGuestbookVideo: true,
+          eventsAsGuestbookAudio: true,
+          eventsAsGuestbookPhoto: true,
+          eventsAsBooth: true,
+          eventsAsBoothVideo: true,
+          eventsAsBoothAudio: true,
+          eventsAsBoothPhoto: true,
           eventsAsThankYou: true,
+          eventsAsLiveLanding: true,
+          eventsAsEventEnded: true,
+          eventsAsItineraryPage: true,
+          eventsAsGiftingPage: true,
         },
       },
     },
@@ -328,7 +363,18 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     template._count.eventsAsInvitation +
     template._count.eventsAsRsvp +
     template._count.eventsAsGuestbook +
-    template._count.eventsAsThankYou;
+    template._count.eventsAsGuestbookVideo +
+    template._count.eventsAsGuestbookAudio +
+    template._count.eventsAsGuestbookPhoto +
+    template._count.eventsAsBooth +
+    template._count.eventsAsBoothVideo +
+    template._count.eventsAsBoothAudio +
+    template._count.eventsAsBoothPhoto +
+    template._count.eventsAsThankYou +
+    template._count.eventsAsLiveLanding +
+    template._count.eventsAsEventEnded +
+    template._count.eventsAsItineraryPage +
+    template._count.eventsAsGiftingPage;
 
   if (totalUsage > 0) {
     throw new AppError(`Cannot delete template in use by ${totalUsage} event(s)`, 400);
@@ -405,7 +451,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
   const validTypes = [
     'INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO',
     'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO',
-    'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED',
+    'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED', 'ITINERARY', 'GIFTING',
   ];
   if (!validTypes.includes(type)) {
     throw new AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);

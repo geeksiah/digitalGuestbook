@@ -537,6 +537,118 @@ export async function sendWhatsApp(to: string, message: string) {
   return result;
 }
 
+type WhatsAppRsvpInviteInput = {
+  eventName: string;
+  inviteUrl: string;
+  token: string;
+  reminder?: boolean;
+};
+
+function buildRsvpInviteTextMessage(input: WhatsAppRsvpInviteInput) {
+  const opener = input.reminder
+    ? `Reminder: RSVP for ${input.eventName}.`
+    : `You are invited to ${input.eventName}.`;
+
+  return (
+    `${opener}\n` +
+    `Open invite card: ${input.inviteUrl}\n` +
+    `Quick reply: YES ${input.token} or NO ${input.token}\n` +
+    `You can add party size and notes after one tap.`
+  );
+}
+
+async function sendMetaInteractiveRsvpInvite(
+  provider: WhatsappProvider,
+  to: string,
+  input: WhatsAppRsvpInviteInput
+) {
+  const response = await fetch(`https://graph.facebook.com/v18.0/${provider.phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${provider.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: to.replace(/^whatsapp:/, '').replace(/^\+/, ''),
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        header: {
+          type: 'text',
+          text: 'Event RSVP',
+        },
+        body: {
+          text: `${input.reminder ? 'Reminder' : 'Invitation'} for ${input.eventName}. Tap Yes or No.`,
+        },
+        footer: {
+          text: 'Optional details can be added after your response.',
+        },
+        action: {
+          buttons: [
+            {
+              type: 'reply',
+              reply: {
+                id: `RSVP:YES:${input.token}`,
+                title: 'Yes',
+              },
+            },
+            {
+              type: 'reply',
+              reply: {
+                id: `RSVP:NO:${input.token}`,
+                title: 'No',
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Meta interactive invite failed (${response.status}): ${errorBody}`);
+  }
+
+  const payload = await response.json() as { messages?: Array<{ id?: string }> };
+  return {
+    success: true,
+    mode: 'interactive' as const,
+    messageId: payload.messages?.[0]?.id,
+  };
+}
+
+export async function sendWhatsAppRsvpInvite(to: string, input: WhatsAppRsvpInviteInput) {
+  console.log('[WhatsApp RSVP Invite] Sending invite to:', to);
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+  if (!settings?.whatsappEnabled) {
+    return { success: false, mode: 'disabled' as const, error: 'WhatsApp not enabled' };
+  }
+
+  const provider = await getDefaultWhatsappProvider();
+  if (!provider) {
+    return { success: false, mode: 'disabled' as const, error: 'No WhatsApp provider configured' };
+  }
+
+  // Hybrid mode: native quick replies where available (Meta), fallback to deep-link + tokenized text.
+  if (provider.provider === 'meta' && provider.accessToken && provider.phoneNumberId) {
+    try {
+      const interactive = await sendMetaInteractiveRsvpInvite(provider, to, input);
+      return interactive;
+    } catch (error: any) {
+      console.warn('[WhatsApp RSVP Invite] Interactive send failed, falling back to text:', error.message);
+    }
+  }
+
+  const textMessage = buildRsvpInviteTextMessage(input);
+  const fallback = await sendWhatsappWithProvider(provider, to, textMessage);
+  return {
+    ...fallback,
+    mode: 'text' as const,
+  };
+}
+
 // ============================================
 // BROADCAST & NOTIFICATION FUNCTIONS
 // ============================================
@@ -970,6 +1082,7 @@ export default {
   sendEmail,
   sendSMS,
   sendWhatsApp,
+  sendWhatsAppRsvpInvite,
   sendEmailWithProvider,
   sendSmsWithProvider,
   sendWhatsappWithProvider,

@@ -229,6 +229,9 @@ import promoCodeRoutes from './routes/promo-codes.js';
 import ownerRoutes from './routes/owners.js';
 import ownerAuthRoutes from './routes/owner-auth.js';
 import ownerDashboardRoutes from './routes/owner-dashboard.js';
+import itineraryRoutes from './routes/itinerary.js';
+import giftingRoutes from './routes/gifting.js';
+import whatsappWebhookRoutes from './routes/whatsapp-webhooks.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -297,7 +300,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token', 'X-Owner-Token', 'X-Invite-Token'],
 }));
 
 // Rate Limiting
@@ -491,6 +494,9 @@ app.use('/api/promo-codes', promoCodeRoutes);
 app.use('/api/owners', ownerRoutes);
 app.use('/api/owner-auth', ownerAuthRoutes);
 app.use('/api/owner-dashboard', ownerDashboardRoutes);
+app.use('/api/itinerary', itineraryRoutes);
+app.use('/api/gifting', giftingRoutes);
+app.use('/api/whatsapp', whatsappWebhookRoutes);
 
 // 404 Handler
 app.use((req, res) => {

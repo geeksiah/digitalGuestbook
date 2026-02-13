@@ -53,7 +53,7 @@ const navigation = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, admin, setAuth, clearAuth } = useAuthStore();
+  const { admin, setAuth, clearAuth } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isVerifying, setIsVerifying] = useState(true);
 
@@ -129,7 +129,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (isVerifying) {
     return (
       <div className="min-h-screen bg-surface-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
       </div>
     );
   }
@@ -139,24 +139,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.push('/admin/login');
   };
 
+  const currentSection = navigation.find((item) => pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href)))?.name || 'Dashboard';
+
   return (
     <div className="min-h-screen bg-surface-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-navy-900/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-brand-950/45 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
       <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 w-64 bg-navy-900 transform transition-transform duration-300 lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200/80 shadow-soft transform transition-transform duration-300 lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center h-16 px-6">
-            <Link href="/admin" className="flex items-center space-x-3">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70">
+            <Link href="/admin" className="flex items-center space-x-3 min-w-0">
               <img 
-                src="/img/logo-light.svg" 
+                src="/img/logo-dark.svg" 
                 alt="EventPeepo" 
                 className="h-8 w-auto"
                 onError={(e) => {
@@ -167,18 +169,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }}
               />
               <div className="logo-fallback hidden items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+                <div className="w-9 h-9 rounded-lg bg-brand-900 flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">E</span>
                 </div>
-                <span className="font-semibold text-white text-lg">EventPeepo</span>
+                <span className="font-semibold text-brand-900 text-lg truncate">EventPeepo</span>
               </div>
             </Link>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1">
+          <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
             {navigation.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
               return (
@@ -187,13 +195,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'flex items-center px-3 py-2.5 rounded-lg transition-all duration-150',
+                    'flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 border',
                     isActive
-                      ? 'bg-white text-navy-900'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      ? 'bg-brand-50 text-brand-900 border-brand-100 shadow-sm'
+                      : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
                   )}
                 >
-                  {item.icon}
+                  <span className={cn(isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
                   <span className="ml-3 font-medium">{item.name}</span>
                 </Link>
               );
@@ -201,20 +209,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-white/10">
-            <div className="flex items-center">
-              <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-white/90 font-medium text-sm">
+          <div className="p-4 border-t border-surface-200/70">
+            <div className="flex items-center rounded-xl border border-surface-200 bg-surface-50 px-3 py-2.5">
+              <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center">
+                <span className="text-brand-900 font-semibold text-sm">
                   {admin?.name?.charAt(0).toUpperCase() || 'A'}
                 </span>
               </div>
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{admin?.name || 'Admin'}</p>
-                <p className="text-xs text-white/50 truncate">{admin?.email}</p>
+                <p className="text-sm font-medium text-brand-900 truncate">{admin?.name || 'Admin'}</p>
+                <p className="text-xs text-surface-500 truncate">{admin?.email}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="p-2 text-surface-500 hover:text-brand-900 hover:bg-white rounded-lg transition-colors"
                 title="Sign out"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -227,13 +235,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-[272px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white border-b border-surface-200">
-          <div className="flex items-center justify-between h-14 px-4 sm:px-6">
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-surface-200/80">
+          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
             {/* Mobile menu button */}
             <button
-              className="lg:hidden p-2 -ml-2 text-surface-500 hover:text-navy-900 hover:bg-surface-100 rounded-lg transition-colors"
+              className="lg:hidden p-2 -ml-2 text-surface-500 hover:text-brand-900 hover:bg-surface-100 rounded-lg transition-colors"
               onClick={() => setSidebarOpen(true)}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -241,7 +249,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </svg>
             </button>
 
-            <div className="flex-1" />
+            <div className="flex-1 min-w-0 ml-2 lg:ml-0">
+              <div className="hidden md:flex items-center gap-2 text-sm">
+                <span className="text-surface-500 font-medium">Admin Console</span>
+                <span className="text-surface-300">/</span>
+                <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
+              </div>
+            </div>
 
             {/* Quick actions */}
             <div className="flex items-center space-x-2">
@@ -251,12 +265,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </svg>
                 New Event
               </Link>
+              <div className="hidden sm:flex items-center justify-center w-9 h-9 rounded-full bg-brand-100 text-brand-900 text-sm font-semibold">
+                {admin?.name?.charAt(0).toUpperCase() || 'A'}
+              </div>
             </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="p-4 sm:p-6 lg:p-7">{children}</main>
       </div>
     </div>
   );

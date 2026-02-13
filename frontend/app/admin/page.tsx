@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { eventsApi } from '@/lib/api';
-import { formatDate, getPhaseLabel, getStatusColor, cn } from '@/lib/utils';
+import { formatDate, getPhaseLabel, cn } from '@/lib/utils';
+import { DashboardKpiCard, DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -71,56 +72,40 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold text-navy-900">Dashboard</h1>
-        <p className="text-surface-500 mt-1">Overview of your events and activity</p>
-      </div>
+      <DashboardPageHeader title="Dashboard" subtitle="Operational overview of events, guest engagement, and media activity" />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Events', value: stats?.totalEvents || 0, icon: Icons.calendar },
-          { label: 'Live Events', value: stats?.activeEvents || 0, icon: Icons.live },
-          { label: 'Total RSVPs', value: stats?.totalRsvps || 0, icon: Icons.users },
-          { label: 'Media Captured', value: stats?.totalMedia || 0, icon: Icons.media },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 transition-colors">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-surface-500 mb-1">{stat.label}</p>
-                <p className="text-2xl font-bold text-navy-900">{stat.value}</p>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-500">
-                {stat.icon}
-              </div>
-            </div>
-          </div>
-        ))}
+        <DashboardKpiCard label="Total Events" value={stats?.totalEvents || 0} icon={Icons.calendar} tone="blue" />
+        <DashboardKpiCard label="Live Events" value={stats?.activeEvents || 0} icon={Icons.live} tone="emerald" />
+        <DashboardKpiCard label="Total RSVPs" value={stats?.totalRsvps || 0} icon={Icons.users} tone="violet" />
+        <DashboardKpiCard label="Media Captured" value={stats?.totalMedia || 0} icon={Icons.media} tone="rose" />
       </div>
 
       {/* Recent Events */}
-      <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
-          <h2 className="text-lg font-semibold text-navy-900">Recent Events</h2>
-          <Link href="/admin/events" className="text-sm text-surface-500 hover:text-navy-900 font-medium flex items-center gap-1 transition-colors">
+      <DashboardSection
+        title="Recent Events"
+        subtitle="Latest active events with quick access to manage"
+        action={(
+          <Link href="/admin/events" className="btn-ghost !px-3 !py-2 text-sm !font-semibold">
             View All {Icons.arrow}
           </Link>
-        </div>
-
+        )}
+        contentClassName="p-0"
+      >
         {events.length === 0 ? (
-          <div className="text-center py-16">
+          <div className="text-center py-10">
             <div className="w-12 h-12 mx-auto rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 mb-4">
               {Icons.calendar}
             </div>
-            <h3 className="text-lg font-medium text-navy-900 mb-1">No events yet</h3>
+            <h3 className="text-lg font-medium text-brand-900 mb-1">No events yet</h3>
             <p className="text-surface-500 mb-4">Get started by creating your first event</p>
             <Link href="/admin/events/new" className="btn-primary">Create Event</Link>
           </div>
@@ -128,7 +113,7 @@ export default function AdminDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-surface-50 border-b border-surface-100">
+                <tr className="bg-surface-50/80 border-b border-surface-100">
                   <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Event</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Phase</th>
@@ -139,10 +124,10 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="divide-y divide-surface-100">
                 {events.slice(0, 5).map((event) => (
-                  <tr key={event.id} className="hover:bg-surface-50 transition-colors">
+                  <tr key={event.id} className="hover:bg-brand-50/30 transition-colors">
                     <td className="py-4 px-4">
                       <div>
-                        <p className="font-medium text-navy-900">{event.name}</p>
+                        <p className="font-semibold text-brand-900">{event.name}</p>
                         <p className="text-sm text-surface-400">/{event.slug}</p>
                       </div>
                     </td>
@@ -161,7 +146,7 @@ export default function AdminDashboard() {
                     <td className="py-4 px-4 text-surface-600">{event._count.rsvps}</td>
                     <td className="py-4 px-4 text-surface-600">{event._count.mediaAssets}</td>
                     <td className="py-4 px-4 text-right">
-                      <Link href={`/admin/events/${event.id}`} className="text-navy-900 hover:text-navy-700 font-medium text-sm">Manage</Link>
+                      <Link href={`/admin/events/${event.id}`} className="text-brand-900 hover:text-brand-700 font-semibold text-sm">Manage</Link>
                     </td>
                   </tr>
                 ))}
@@ -169,46 +154,48 @@ export default function AdminDashboard() {
             </table>
           </div>
         )}
-      </div>
+      </DashboardSection>
 
-      {/* Quick Links */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <Link href="/admin/events/new" className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 hover:shadow-sm transition-all group">
-          <div className="flex items-center">
-            <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-navy-900 group-hover:text-white transition-colors">
-              {Icons.plus}
+      <DashboardSection title="Operational Shortcuts" subtitle="Fast paths for common admin tasks" contentClassName="p-4">
+        <div className="grid md:grid-cols-3 gap-4">
+          <Link href="/admin/events/new" className="bg-surface-50 rounded-2xl border border-surface-200 p-5 hover:border-brand-200 hover:bg-white hover:shadow-sm hover:-translate-y-0.5 transition-all group">
+            <div className="flex items-center">
+              <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-brand-900 group-hover:text-white transition-colors">
+                {Icons.plus}
+              </div>
+              <div className="ml-4">
+                <p className="font-semibold text-brand-900">Create Event</p>
+                <p className="text-sm text-surface-500">Set up a new event</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="font-medium text-navy-900">Create Event</p>
-              <p className="text-sm text-surface-500">Set up a new event</p>
-            </div>
-          </div>
-        </Link>
+          </Link>
 
-        <Link href="/admin/templates" className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 hover:shadow-sm transition-all group">
-          <div className="flex items-center">
-            <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-navy-900 group-hover:text-white transition-colors">
-              {Icons.template}
+          <Link href="/admin/templates" className="bg-surface-50 rounded-2xl border border-surface-200 p-5 hover:border-brand-200 hover:bg-white hover:shadow-sm hover:-translate-y-0.5 transition-all group">
+            <div className="flex items-center">
+              <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-brand-900 group-hover:text-white transition-colors">
+                {Icons.template}
+              </div>
+              <div className="ml-4">
+                <p className="font-semibold text-brand-900">Manage Templates</p>
+                <p className="text-sm text-surface-500">Control presentation templates</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="font-medium text-navy-900">Manage Templates</p>
-              <p className="text-sm text-surface-500">Customize page designs</p>
-            </div>
-          </div>
-        </Link>
+          </Link>
 
-        <Link href="/admin/events" className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 hover:shadow-sm transition-all group">
-          <div className="flex items-center">
-            <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-navy-900 group-hover:text-white transition-colors">
-              {Icons.calendar}
+          <Link href="/admin/events" className="bg-surface-50 rounded-2xl border border-surface-200 p-5 hover:border-brand-200 hover:bg-white hover:shadow-sm hover:-translate-y-0.5 transition-all group">
+            <div className="flex items-center">
+              <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-brand-900 group-hover:text-white transition-colors">
+                {Icons.calendar}
+              </div>
+              <div className="ml-4">
+                <p className="font-semibold text-brand-900">All Events</p>
+                <p className="text-sm text-surface-500">View and manage every event</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="font-medium text-navy-900">All Events</p>
-              <p className="text-sm text-surface-500">View and manage events</p>
-            </div>
-          </div>
-        </Link>
-      </div>
+          </Link>
+        </div>
+      </DashboardSection>
     </div>
   );
 }
+

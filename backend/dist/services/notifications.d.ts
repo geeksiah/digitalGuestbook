@@ -83,6 +83,39 @@ export declare function sendWhatsApp(to: string, message: string): Promise<{
     sid?: undefined;
     messageId?: undefined;
 }>;
+type WhatsAppRsvpInviteInput = {
+    eventName: string;
+    inviteUrl: string;
+    token: string;
+    reminder?: boolean;
+};
+export declare function sendWhatsAppRsvpInvite(to: string, input: WhatsAppRsvpInviteInput): Promise<{
+    success: boolean;
+    mode: "interactive";
+    messageId: string | undefined;
+} | {
+    success: boolean;
+    mode: "disabled";
+    error: string;
+} | {
+    mode: "text";
+    success: boolean;
+    sid: string;
+    messageId?: undefined;
+    error?: undefined;
+} | {
+    mode: "text";
+    success: boolean;
+    messageId: string | undefined;
+    sid?: undefined;
+    error?: undefined;
+} | {
+    mode: "text";
+    success: boolean;
+    error: any;
+    sid?: undefined;
+    messageId?: undefined;
+}>;
 export declare function sendBroadcast(eventId: string, broadcastId: string, message: string, subject: string | null, channels: string[], audience: 'ALL_RSVPS' | 'APPROVED_ONLY'): Promise<{
     totalRecipients: number;
     delivered: number;
@@ -151,6 +184,7 @@ declare const _default: {
     sendEmail: typeof sendEmail;
     sendSMS: typeof sendSMS;
     sendWhatsApp: typeof sendWhatsApp;
+    sendWhatsAppRsvpInvite: typeof sendWhatsAppRsvpInvite;
     sendEmailWithProvider: typeof sendEmailWithProvider;
     sendSmsWithProvider: typeof sendSmsWithProvider;
     sendWhatsappWithProvider: typeof sendWhatsappWithProvider;

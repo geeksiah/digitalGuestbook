@@ -40,11 +40,16 @@ export default function NewEventPage() {
     company: '',
   });
   const [creatingOwner, setCreatingOwner] = useState(false);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
     description: '',
+    socialTitle: '',
+    socialDescription: '',
+    coverImageAlt: '',
     date: '',
     time: '18:00',
     endDate: '',
@@ -60,6 +65,9 @@ export default function NewEventPage() {
     maxRecordingDuration: 120,
     minRecordingDuration: 30,
     maxPhotosPerGuest: 5,
+    strictInviteOnly: false,
+    itineraryEnabled: false,
+    giftingEnabled: false,
     // Template selections
     invitationTemplateId: '',
     rsvpTemplateId: '',
@@ -70,6 +78,8 @@ export default function NewEventPage() {
     thankYouTemplateId: '',
     liveLandingTemplateId: '',
     eventEndedTemplateId: '',
+    itineraryPageTemplateId: '',
+    giftingPageTemplateId: '',
   });
 
   useEffect(() => {
@@ -107,6 +117,8 @@ export default function NewEventPage() {
           if (t.type === 'THANK_YOU') defaults.thankYouTemplateId = t.id;
           if (t.type === 'LIVE_LANDING') defaults.liveLandingTemplateId = t.id;
           if (t.type === 'EVENT_ENDED') defaults.eventEndedTemplateId = t.id;
+          if (t.type === 'ITINERARY') defaults.itineraryPageTemplateId = t.id;
+          if (t.type === 'GIFTING') defaults.giftingPageTemplateId = t.id;
         }
       });
       setFormData(prev => ({ ...prev, ...defaults }));
@@ -169,6 +181,9 @@ export default function NewEventPage() {
         name: formData.name,
         slug: formData.slug,
         description: formData.description || undefined,
+        socialTitle: formData.socialTitle || undefined,
+        socialDescription: formData.socialDescription || undefined,
+        coverImageAlt: formData.coverImageAlt || undefined,
         date: dateTime.toISOString(),
         endDate: endDateTime?.toISOString(),
         timezone: formData.timezone,
@@ -182,6 +197,9 @@ export default function NewEventPage() {
         maxRecordingDuration: formData.maxRecordingDuration,
         minRecordingDuration: formData.minRecordingDuration,
         maxPhotosPerGuest: formData.maxPhotosPerGuest,
+        strictInviteOnly: formData.strictInviteOnly,
+        itineraryEnabled: formData.itineraryEnabled,
+        giftingEnabled: formData.giftingEnabled,
         invitationTemplateId: formData.invitationTemplateId || undefined,
         rsvpTemplateId: formData.rsvpTemplateId || undefined,
         guestbookTemplateId: formData.guestbookTemplateId || undefined,
@@ -191,7 +209,18 @@ export default function NewEventPage() {
         thankYouTemplateId: formData.thankYouTemplateId || undefined,
         liveLandingTemplateId: formData.liveLandingTemplateId || undefined,
         eventEndedTemplateId: formData.eventEndedTemplateId || undefined,
+        itineraryPageTemplateId: formData.itineraryPageTemplateId || undefined,
+        giftingPageTemplateId: formData.giftingPageTemplateId || undefined,
       });
+
+      if (coverFile) {
+        const coverData = new FormData();
+        coverData.append('cover', coverFile);
+        if (formData.coverImageAlt) {
+          coverData.append('alt', formData.coverImageAlt);
+        }
+        await eventsApi.uploadCover(response.data.event.id, coverData);
+      }
 
       toast.success('Event created successfully!');
       router.push(`/admin/events/${response.data.event.id}`);
@@ -309,6 +338,57 @@ export default function NewEventPage() {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Social Title</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Title shown on social shares"
+                  value={formData.socialTitle}
+                  onChange={(e) => setFormData({ ...formData, socialTitle: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Cover Image Alt Text</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Describe the cover image"
+                  value={formData.coverImageAlt}
+                  onChange={(e) => setFormData({ ...formData, coverImageAlt: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Social Description</label>
+                <textarea
+                  rows={2}
+                  className="input"
+                  placeholder="Description shown in social previews"
+                  value={formData.socialDescription}
+                  onChange={(e) => setFormData({ ...formData, socialDescription: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Cover Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setCoverFile(file);
+                    setCoverPreview(file ? URL.createObjectURL(file) : null);
+                  }}
+                />
+                {coverPreview && (
+                  <div className="mt-3 rounded-lg border border-surface-200 overflow-hidden h-40">
+                    <img src={coverPreview} alt="Cover preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -598,6 +678,45 @@ export default function NewEventPage() {
                 onChange={(e) => setFormData({ ...formData, invitationOnly: e.target.checked })}
               />
             </label>
+
+            <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
+              <div>
+                <p className="font-medium text-navy-900">Strict Invite Mode</p>
+                <p className="text-sm text-surface-600">Require valid invite token for RSVP submission.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="w-5 h-5 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
+                checked={formData.strictInviteOnly}
+                onChange={(e) => setFormData({ ...formData, strictInviteOnly: e.target.checked })}
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
+              <div>
+                <p className="font-medium text-navy-900">Enable Itinerary</p>
+                <p className="text-sm text-surface-600">Activate attendee + MC synced itinerary tracking.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="w-5 h-5 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
+                checked={formData.itineraryEnabled}
+                onChange={(e) => setFormData({ ...formData, itineraryEnabled: e.target.checked })}
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
+              <div>
+                <p className="font-medium text-navy-900">Enable Gifting</p>
+                <p className="text-sm text-surface-600">Allow guests to gift via MoMo cash or packages.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="w-5 h-5 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
+                checked={formData.giftingEnabled}
+                onChange={(e) => setFormData({ ...formData, giftingEnabled: e.target.checked })}
+              />
+            </label>
           </div>
         </div>
 
@@ -686,6 +805,22 @@ export default function NewEventPage() {
                 label="Event Ended Page"
                 value={formData.eventEndedTemplateId}
                 onChange={(id) => setFormData({ ...formData, eventEndedTemplateId: id })}
+              />
+
+              <TemplateSelect
+                type="ITINERARY"
+                label="Itinerary Page"
+                value={formData.itineraryPageTemplateId}
+                onChange={(id) => setFormData({ ...formData, itineraryPageTemplateId: id })}
+                disabled={!formData.itineraryEnabled}
+              />
+
+              <TemplateSelect
+                type="GIFTING"
+                label="Gifting Page"
+                value={formData.giftingPageTemplateId}
+                onChange={(id) => setFormData({ ...formData, giftingPageTemplateId: id })}
+                disabled={!formData.giftingEnabled}
               />
             </div>
           )}

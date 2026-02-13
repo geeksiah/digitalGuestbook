@@ -35,6 +35,8 @@ const typeLabels: Record<string, string> = {
   BOOTH_PHOTO: 'Booth Photo',                // Add this if missing
   LIVE_LANDING: 'Live Landing Page',         // ⭐ ADD THIS
   EVENT_ENDED: 'Event Ended Page',           // ⭐ ADD THIS
+  ITINERARY: 'Itinerary Page',
+  GIFTING: 'Gifting Page',
 };
 
 const typeColors: Record<string, string> = {
@@ -51,6 +53,8 @@ const typeColors: Record<string, string> = {
   BOOTH_PHOTO: 'bg-lime-100 text-lime-700 border-lime-200',  
   LIVE_LANDING: 'bg-violet-100 text-violet-700 border-violet-200',  
   EVENT_ENDED: 'bg-rose-100 text-rose-700 border-rose-200',
+  ITINERARY: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  GIFTING: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
 };
 
 const typeIconColors: Record<string, string> = {
@@ -67,6 +71,8 @@ const typeIconColors: Record<string, string> = {
   THANK_YOU: 'bg-orange-500',
   LIVE_LANDING: 'bg-violet-500',    // ⭐ ADD THIS
   EVENT_ENDED: 'bg-rose-500',       // ⭐ ADD THIS
+  ITINERARY: 'bg-emerald-500',
+  GIFTING: 'bg-fuchsia-500',
 };
 
 type ViewMode = 'grid' | 'list';
@@ -233,6 +239,8 @@ export default function TemplatesPage() {
     guestbookAudio: templates.filter(t => t.type === 'GUESTBOOK_AUDIO').length,
     guestbookPhoto: templates.filter(t => t.type === 'GUESTBOOK_PHOTO').length,
     thankYou: templates.filter(t => t.type === 'THANK_YOU').length,
+    itinerary: templates.filter(t => t.type === 'ITINERARY').length,
+    gifting: templates.filter(t => t.type === 'GIFTING').length,
   };
 
   return (
@@ -273,6 +281,8 @@ export default function TemplatesPage() {
           { type: 'GUESTBOOK_AUDIO', count: stats.guestbookAudio },
           { type: 'GUESTBOOK_PHOTO', count: stats.guestbookPhoto },
           { type: 'THANK_YOU', count: stats.thankYou },
+          { type: 'ITINERARY', count: stats.itinerary },
+          { type: 'GIFTING', count: stats.gifting },
         ].map(({ type, count }) => (
           <button
             key={type}

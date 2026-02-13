@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { API_BASE_URL } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -61,11 +61,46 @@ export default function MediaGallery({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reelProgress, setReelProgress] = useState(0);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [optimisticallyDeletedIds, setOptimisticallyDeletedIds] = useState<string[]>([]);
+
+  const canDelete = useMemo(() => {
+    if (isAdmin || !!ownerToken) return true;
+    if (typeof window === 'undefined') return false;
+    const ownerJwtToken = localStorage.getItem('owner_token');
+    return !!(ownerJwtToken && ownerJwtToken !== 'null' && ownerJwtToken !== 'undefined');
+  }, [isAdmin, ownerToken]);
+
+  const getDeleteAuthHeaders = () => {
+    const headers: Record<string, string> = {};
+    if (isAdmin) {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+      if (!token || token === 'null' || token === 'undefined') {
+        throw new Error('Authentication required');
+      }
+      headers['Authorization'] = `Bearer ${token}`;
+      return headers;
+    }
+
+    if (ownerToken) {
+      headers['X-Owner-Token'] = ownerToken;
+      return headers;
+    }
+
+    const ownerJwtToken = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+    if (!ownerJwtToken || ownerJwtToken === 'null' || ownerJwtToken === 'undefined') {
+      throw new Error('Authentication required - Please log in again');
+    }
+    headers['Authorization'] = `Bearer ${ownerJwtToken}`;
+    return headers;
+  };
 
   // Group media by type
-  const videos = media.filter(m => m.type === 'VIDEO');
-  const audioFiles = media.filter(m => m.type === 'AUDIO');
-  const photos = media.filter(m => m.type === 'PHOTO');
+  const visibleMedia = media.filter((m) => !optimisticallyDeletedIds.includes(m.id));
+  const videos = visibleMedia.filter((m) => m.type === 'VIDEO');
+  const audioFiles = visibleMedia.filter((m) => m.type === 'AUDIO');
+  const photos = visibleMedia.filter((m) => m.type === 'PHOTO');
 
   const folders = [
     { id: 'videos', label: 'Videos', count: videos.length, icon: Icons.video, color: 'bg-rose-50 text-rose-600 border-rose-200' },
@@ -78,12 +113,30 @@ export default function MediaGallery({
       case 'videos': return videos;
       case 'audio': return audioFiles;
       case 'photos': return photos;
-      default: return media;
+      default: return visibleMedia;
     }
-  }, [viewMode, videos, audioFiles, photos, media]);
+  }, [viewMode, videos, audioFiles, photos, visibleMedia]);
 
   const currentMedia = getCurrentMedia();
   const previewMedia = previewIndex !== null ? currentMedia[previewIndex] : null;
+
+  useEffect(() => {
+    if (previewIndex !== null && previewIndex >= currentMedia.length) {
+      setPreviewIndex(currentMedia.length ? currentMedia.length - 1 : null);
+    }
+  }, [previewIndex, currentMedia.length]);
+
+  useEffect(() => {
+    if (!selectedIds.length) return;
+    const currentIds = new Set(currentMedia.map((item) => item.id));
+    setSelectedIds((prev) => prev.filter((id) => currentIds.has(id)));
+  }, [currentMedia, selectedIds.length]);
+
+  useEffect(() => {
+    if (!selectMode) {
+      setSelectedIds([]);
+    }
+  }, [selectMode]);
 
   // Keyboard navigation for lightbox
   useEffect(() => {
@@ -171,9 +224,9 @@ export default function MediaGallery({
     const toastId = 'download-all';
     try {
       // Calculate file count and size for progress estimation
-      const filesToDownload = type 
-        ? media.filter(m => m.type === type)
-        : media;
+      const filesToDownload = type
+        ? visibleMedia.filter((m) => m.type === type)
+        : visibleMedia;
       const fileCount = filesToDownload.length;
       const estimatedSize = filesToDownload.reduce((sum, m) => sum + (m.fileSize || 0), 0);
       
@@ -357,22 +410,74 @@ export default function MediaGallery({
   const handleDeleteMedia = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!confirm('Delete this media permanently?')) return;
-    
-    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
-    
+
+    setOptimisticallyDeletedIds((prev) => Array.from(new Set([...prev, id])));
+    setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== id));
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/media/${id}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      await axios.delete(`${API_BASE_URL}/api/media/${id}`, {
+        headers: getDeleteAuthHeaders(),
+        withCredentials: true,
       });
-      
-      if (!response.ok) throw new Error('Delete failed');
-      
+
       toast.success('Deleted');
       setPreviewIndex(null);
       onRefresh?.();
-    } catch {
-      toast.error('Failed to delete');
+    } catch (error: any) {
+      setOptimisticallyDeletedIds((prev) => prev.filter((deletedId) => deletedId !== id));
+      toast.error(error.response?.data?.error || error.message || 'Failed to delete');
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id)
+        ? prev.filter((selectedId) => selectedId !== id)
+        : [...prev, id]
+    ));
+  };
+
+  const handleSelectAllInView = () => {
+    setSelectedIds(currentMedia.map((item) => item.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.length) return;
+    if (!confirm(`Delete ${selectedIds.length} selected media item(s) permanently?`)) return;
+
+    const deletingIds = [...selectedIds];
+    setOptimisticallyDeletedIds((prev) => Array.from(new Set([...prev, ...deletingIds])));
+
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/media/bulk-delete`,
+        { mediaIds: deletingIds },
+        {
+          headers: getDeleteAuthHeaders(),
+          withCredentials: true,
+        }
+      );
+
+      const failedIds = (response.data?.failedIds || []).map((entry: { id: string }) => entry.id);
+      if (failedIds.length) {
+        setOptimisticallyDeletedIds((prev) => prev.filter((id) => !failedIds.includes(id)));
+        toast.error(`Deleted ${deletingIds.length - failedIds.length} item(s), ${failedIds.length} failed`);
+      } else {
+        toast.success(`Deleted ${deletingIds.length} item(s)`);
+      }
+
+      setSelectedIds([]);
+      if (!failedIds.length) {
+        setSelectMode(false);
+      }
+      onRefresh?.();
+    } catch (error: any) {
+      setOptimisticallyDeletedIds((prev) => prev.filter((id) => !deletingIds.includes(id)));
+      toast.error(error.response?.data?.error || error.message || 'Failed to bulk delete');
     }
   };
 
@@ -395,9 +500,9 @@ export default function MediaGallery({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-navy-900">Media Library</h3>
-            <p className="text-sm text-surface-500">{media.length} total items</p>
+            <p className="text-sm text-surface-500">{visibleMedia.length} total items</p>
           </div>
-          <button onClick={() => handleDownloadAll()} className="btn-outline" disabled={media.length === 0}>
+          <button onClick={() => handleDownloadAll()} className="btn-outline" disabled={visibleMedia.length === 0}>
             {Icons.downloadSmall}
             <span className="ml-2">Download All</span>
           </button>
@@ -457,7 +562,7 @@ export default function MediaGallery({
           </div>
         )}
 
-        {media.length === 0 && (
+        {visibleMedia.length === 0 && (
           <div className="bg-white rounded-xl border border-surface-200 p-16 text-center">
             <div className="w-14 h-14 mx-auto rounded-xl bg-surface-100 flex items-center justify-center text-surface-400 mb-4">{Icons.photo}</div>
             <h3 className="text-lg font-medium text-navy-900 mb-1">No media yet</h3>
@@ -481,19 +586,53 @@ export default function MediaGallery({
             <p className="text-sm text-surface-500">{currentMedia.length} item{currentMedia.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
-        {currentMedia.length > 0 && (
-          <button onClick={() => {
-            const typeMap: Record<string, 'VIDEO' | 'PHOTO' | 'AUDIO'> = {
-              videos: 'VIDEO',
-              photos: 'PHOTO',
-              audio: 'AUDIO',
-            };
-            handleDownloadAll(typeMap[viewMode]);
-          }} className="btn-outline flex items-center gap-2">
-            {Icons.downloadSmall}
-            <span>Download All</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canDelete && currentMedia.length > 0 && (
+            <>
+              <button
+                onClick={() => setSelectMode((prev) => !prev)}
+                className={cn('btn-outline', selectMode && 'border-navy-900 text-navy-900')}
+              >
+                {selectMode ? 'Exit Select' : 'Select'}
+              </button>
+              {selectMode && (
+                <>
+                  <button onClick={handleSelectAllInView} className="btn-outline">
+                    Select All
+                  </button>
+                  <button onClick={handleClearSelection} className="btn-ghost">
+                    Clear
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={!selectedIds.length}
+                    className={cn(
+                      'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      selectedIds.length
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-surface-100 text-surface-400 cursor-not-allowed'
+                    )}
+                  >
+                    Delete ({selectedIds.length})
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {currentMedia.length > 0 && (
+            <button onClick={() => {
+              const typeMap: Record<string, 'VIDEO' | 'PHOTO' | 'AUDIO'> = {
+                videos: 'VIDEO',
+                photos: 'PHOTO',
+                audio: 'AUDIO',
+              };
+              handleDownloadAll(typeMap[viewMode]);
+            }} className="btn-outline flex items-center gap-2">
+              {Icons.downloadSmall}
+              <span>Download All</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {currentMedia.length === 0 ? (
@@ -505,9 +644,34 @@ export default function MediaGallery({
           {currentMedia.map((item, index) => (
             <div key={item.id} className="group bg-white rounded-xl border border-surface-200 overflow-hidden hover:border-surface-300 hover:shadow-md transition-all">
               <div 
-                onClick={() => setPreviewIndex(index)}
+                onClick={() => {
+                  if (selectMode && canDelete) {
+                    toggleSelected(item.id);
+                    return;
+                  }
+                  setPreviewIndex(index);
+                }}
                 className="aspect-square bg-surface-100 flex items-center justify-center relative cursor-pointer overflow-hidden"
               >
+                {selectMode && canDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelected(item.id);
+                    }}
+                    className={cn(
+                      'absolute top-2 left-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors',
+                      selectedIds.includes(item.id)
+                        ? 'bg-navy-900 border-navy-900 text-white'
+                        : 'bg-white/90 border-white text-transparent'
+                    )}
+                    aria-label="Select media"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.415l-7.2 7.2a1 1 0 01-1.415 0l-3-3A1 1 0 016.504 9.49l2.293 2.293 6.493-6.493a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
                 {item.type === 'PHOTO' ? (
                   <img 
                     src={item.filePath.startsWith('http://') || item.filePath.startsWith('https://') 
@@ -542,7 +706,7 @@ export default function MediaGallery({
                   <p className="text-xs text-surface-400">{formatDate(item.createdAt, 'MMM d')}</p>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     <button onClick={(e) => handleDownload(item, e)} className="p-1.5 rounded text-surface-500 hover:text-navy-900 hover:bg-surface-100" title="Download">{Icons.downloadSmall}</button>
-                    {isAdmin && <button onClick={(e) => handleDeleteMedia(item.id, e)} className="p-1.5 rounded text-surface-400 hover:text-red-500 hover:bg-red-50" title="Delete">{Icons.trash}</button>}
+                    {canDelete && <button onClick={(e) => handleDeleteMedia(item.id, e)} className="p-1.5 rounded text-surface-400 hover:text-red-500 hover:bg-red-50" title="Delete">{Icons.trash}</button>}
                   </div>
                 </div>
               </div>
@@ -568,7 +732,7 @@ export default function MediaGallery({
               >
                 {Icons.download}
               </button>
-              {isAdmin && (
+              {canDelete && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteMedia(previewMedia.id); }}
                   className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-red-500 transition-colors"

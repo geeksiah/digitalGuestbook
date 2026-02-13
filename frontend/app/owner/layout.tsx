@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useOwnerAuthStore } from '@/lib/store';
-import { ownerAuthApi } from '@/lib/api';
+import { ownerAuthApi, ownerDashboardApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -33,9 +33,12 @@ const navigation = [
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, owner, setAuth, clearAuth } = useOwnerAuthStore();
+  const { owner, setAuth, clearAuth } = useOwnerAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isVerifying, setIsVerifying] = useState(true);
+  const [ownerEvents, setOwnerEvents] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
   useEffect(() => {
     // Skip auth check for login page
@@ -100,6 +103,48 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     };
   }, [pathname, router, setAuth, clearAuth]);
 
+  useEffect(() => {
+    if (pathname === '/owner/login' || isVerifying) return;
+
+    const fetchOwnerEvents = async () => {
+      try {
+        setLoadingEvents(true);
+        const response = await ownerDashboardApi.getEvents();
+        const events = Array.isArray(response.data?.events) ? response.data.events : [];
+        setOwnerEvents(events.map((event: any) => ({ id: event.id, name: event.name })));
+
+        const pathMatch = pathname.match(/^\/owner\/events\/([^/]+)/);
+        const pathEventId = pathMatch?.[1] || '';
+        const storedEventId = localStorage.getItem('owner_selected_event_id') || '';
+
+        const preferredEventId = pathEventId || storedEventId;
+        const exists = events.some((event: any) => event.id === preferredEventId);
+        const nextEventId = exists ? preferredEventId : (events[0]?.id || '');
+
+        setSelectedEventId(nextEventId);
+        if (nextEventId) {
+          localStorage.setItem('owner_selected_event_id', nextEventId);
+        }
+      } catch {
+        // Keep layout usable even if event list fails
+      } finally {
+        setLoadingEvents(false);
+      }
+    };
+
+    fetchOwnerEvents();
+  }, [pathname, isVerifying]);
+
+  useEffect(() => {
+    if (pathname === '/owner/login') return;
+    const pathMatch = pathname.match(/^\/owner\/events\/([^/]+)/);
+    const pathEventId = pathMatch?.[1];
+    if (pathEventId) {
+      setSelectedEventId(pathEventId);
+      localStorage.setItem('owner_selected_event_id', pathEventId);
+    }
+  }, [pathname]);
+
   // Don't show layout on login page
   if (pathname === '/owner/login') {
     return <>{children}</>;
@@ -109,7 +154,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   if (isVerifying) {
     return (
       <div className="min-h-screen bg-surface-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
       </div>
     );
   }
@@ -119,12 +164,25 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     router.push('/owner/login');
   };
 
+  const handleEventSwitch = (eventId: string) => {
+    if (eventId === '__all__') {
+      router.push('/owner/events');
+      return;
+    }
+
+    setSelectedEventId(eventId);
+    localStorage.setItem('owner_selected_event_id', eventId);
+    router.push(`/owner/events/${eventId}`);
+  };
+
+  const currentSection = navigation.find((item) => pathname === item.href || (item.href !== '/owner' && pathname.startsWith(item.href)))?.name || 'Dashboard';
+
   return (
     <div className="min-h-screen bg-surface-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-brand-950/45 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -132,13 +190,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-surface-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200/80 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70">
             <div className="flex items-center">
               <img 
                 src="/img/logo-dark.svg" 
@@ -152,15 +210,15 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                 }}
               />
               <div className="logo-fallback hidden items-center ml-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-navy-900 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">O</span>
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-900 flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">E</span>
                 </div>
-                <span className="ml-3 text-lg font-semibold text-navy-900">Owner Portal</span>
+                <span className="ml-3 text-lg font-semibold text-brand-900">EventPeepo</span>
               </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-surface-400 hover:text-surface-600"
+              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -169,7 +227,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
             {navigation.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/owner' && pathname.startsWith(item.href));
               return (
@@ -178,13 +236,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                    'flex items-center px-3 py-2.5 text-sm font-medium rounded-xl border transition-all',
                     isActive
-                      ? 'bg-navy-900 text-white'
-                      : 'text-surface-700 hover:bg-surface-100 hover:text-navy-900'
+                      ? 'bg-brand-50 text-brand-900 border-brand-100 shadow-sm'
+                      : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
                   )}
                 >
-                  <span className="mr-3">{item.icon}</span>
+                  <span className={cn('mr-3', isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
                   {item.name}
                 </Link>
               );
@@ -192,15 +250,15 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-surface-200">
-            <div className="flex items-center px-3 py-2">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-navy-100 flex items-center justify-center">
-                <span className="text-navy-700 font-medium">
+          <div className="p-4 border-t border-surface-200/70">
+            <div className="flex items-center px-3 py-2.5 rounded-xl border border-surface-200 bg-surface-50">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
+                <span className="text-brand-900 font-semibold">
                   {owner?.name?.charAt(0).toUpperCase() || 'O'}
                 </span>
               </div>
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-navy-900 truncate">{owner?.name}</p>
+                <p className="text-sm font-medium text-brand-900 truncate">{owner?.name}</p>
                 <p className="text-xs text-surface-500 truncate">{owner?.email}</p>
               </div>
             </div>
@@ -218,29 +276,50 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-[272px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white border-b border-surface-200">
-          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-surface-400 hover:text-surface-600"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <div className="flex-1" />
-            <div className="flex items-center">
-              <div className="flex items-center text-sm text-surface-600">
-                <span className="hidden sm:inline">{owner?.name}</span>
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-surface-200/80">
+          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 -ml-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="hidden xl:inline-block text-xs font-semibold uppercase tracking-wider text-surface-500">
+                  Manage Event
+                </span>
+                <select
+                  value={selectedEventId || '__all__'}
+                  onChange={(e) => handleEventSwitch(e.target.value)}
+                  disabled={loadingEvents || ownerEvents.length === 0}
+                  className="h-10 min-w-[190px] max-w-[360px] rounded-xl border border-surface-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="__all__">All events</option>
+                  {ownerEvents.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.name}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
+
+            <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
+              <span className="text-surface-500 font-medium">Owner Workspace</span>
+              <span className="text-surface-300">/</span>
+              <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
             </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="p-4 sm:p-6 lg:p-7">
           {children}
         </main>
       </div>

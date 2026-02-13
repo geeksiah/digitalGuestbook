@@ -39,6 +39,8 @@ const typeLabels: Record<string, string> = {
   THANK_YOU: 'Thank You',
   LIVE_LANDING: 'Live Landing Page',
   EVENT_ENDED: 'Event Ended Page',
+  ITINERARY: 'Itinerary Page',
+  GIFTING: 'Gifting Page',
 };
 
 export default function EditTemplatePage() {

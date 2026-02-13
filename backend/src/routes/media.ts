@@ -3,10 +3,62 @@ import archiver from 'archiver';
 import jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
-import { authenticateAdmin, authenticateCouple } from '../middleware/auth.js';
+import { authenticateAdmin } from '../middleware/auth.js';
 import { downloadFile, BUCKETS, getPublicUrl, deleteFromSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
+
+type MediaRequester =
+  | { type: 'admin'; adminId: string }
+  | { type: 'owner'; ownerId: string }
+  | { type: 'ownerToken'; ownerToken: string };
+
+const getOwnerToken = (req: any) =>
+  (req.headers['x-owner-token'] || req.headers['X-Owner-Token']) as string | undefined;
+
+const parseMediaRequester = (req: any): MediaRequester => {
+  const ownerToken = getOwnerToken(req);
+  if (ownerToken) {
+    return { type: 'ownerToken', ownerToken };
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+  let decoded: any;
+  try {
+    decoded = jwt.verify(token, jwtSecret) as any;
+  } catch {
+    throw new AppError('Unauthorized - Invalid or expired token', 401);
+  }
+
+  if (decoded.adminId) {
+    return { type: 'admin', adminId: decoded.adminId };
+  }
+
+  if (decoded.ownerId) {
+    return { type: 'owner', ownerId: decoded.ownerId };
+  }
+
+  throw new AppError('Unauthorized', 401);
+};
+
+const ensureMediaAccess = (
+  requester: MediaRequester,
+  mediaAsset: { event: { ownerId: string | null; ownerAccessToken: string } }
+) => {
+  if (requester.type === 'admin') return true;
+  if (requester.type === 'owner') {
+    if (mediaAsset.event.ownerId === requester.ownerId) return true;
+    throw new AppError('Unauthorized - You do not have access to this event', 401);
+  }
+  if (mediaAsset.event.ownerAccessToken === requester.ownerToken) return true;
+  throw new AppError('Unauthorized', 401);
+};
 
 /**
  * GET /api/media/event/:eventId
@@ -355,26 +407,112 @@ router.get('/event/:eventId/download-all', asyncHandler(async (req, res) => {
 }));
 
 /**
- * DELETE /api/media/:id
- * Delete a media asset (Admin only)
+ * POST /api/media/bulk-delete
+ * Delete many media assets (Admin / Owner JWT / Owner token)
  */
-router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+router.post('/bulk-delete', asyncHandler(async (req, res) => {
+  const mediaIds = Array.isArray(req.body?.mediaIds) ? req.body.mediaIds : [];
+  if (!mediaIds.length) {
+    throw new AppError('mediaIds must be a non-empty array', 400);
+  }
+
+  const requester = parseMediaRequester(req);
+  const mediaAssets = await prisma.mediaAsset.findMany({
+    where: { id: { in: mediaIds } },
+    include: {
+      event: {
+        select: { ownerId: true, ownerAccessToken: true },
+      },
+    },
+  });
+
+  if (mediaAssets.length === 0) {
+    throw new AppError('No media assets found', 404);
+  }
+
+  mediaAssets.forEach((asset) => ensureMediaAccess(requester, asset));
+
+  const deletedIds: string[] = [];
+  const failedIds: Array<{ id: string; reason: string }> = [];
+
+  for (const mediaAsset of mediaAssets) {
+    try {
+      try {
+        await deleteFromSupabase(BUCKETS.MEDIA, mediaAsset.filePath);
+      } catch (storageError: any) {
+        console.warn(`[Media] Bulk delete failed for file ${mediaAsset.filePath}: ${storageError.message}`);
+      }
+
+      if (mediaAsset.thumbnailPath) {
+        try {
+          await deleteFromSupabase(BUCKETS.MEDIA, mediaAsset.thumbnailPath);
+        } catch (thumbError: any) {
+          console.warn(`[Media] Bulk delete failed for thumbnail ${mediaAsset.thumbnailPath}: ${thumbError.message}`);
+        }
+      }
+
+      await prisma.mediaAsset.delete({ where: { id: mediaAsset.id } });
+      deletedIds.push(mediaAsset.id);
+
+      await prisma.auditLog.create({
+        data: {
+          eventId: mediaAsset.eventId,
+          adminId: requester.type === 'admin' ? requester.adminId : null,
+          action: 'MEDIA_BULK_DELETED',
+          entityType: 'MEDIA',
+          entityId: mediaAsset.id,
+          details: JSON.stringify({
+            type: mediaAsset.type,
+            fileName: mediaAsset.fileName,
+            actorType: requester.type,
+          }),
+        },
+      });
+    } catch (error: any) {
+      failedIds.push({ id: mediaAsset.id, reason: error.message || 'Unknown error' });
+    }
+  }
+
+  res.json({
+    message: 'Bulk delete completed',
+    deletedCount: deletedIds.length,
+    failedCount: failedIds.length,
+    deletedIds,
+    failedIds,
+  });
+}));
+
+/**
+ * DELETE /api/media/:id
+ * Delete a media asset (Admin / Owner JWT / Owner token)
+ */
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const requester = parseMediaRequester(req);
+
   const mediaAsset = await prisma.mediaAsset.findUnique({
     where: { id: req.params.id },
+    include: {
+      event: {
+        select: {
+          ownerId: true,
+          ownerAccessToken: true,
+        },
+      },
+    },
   });
 
   if (!mediaAsset) {
     throw new AppError('Media asset not found', 404);
   }
 
-  // Delete file from Supabase Storage
+  ensureMediaAccess(requester, mediaAsset);
+
   try {
     await deleteFromSupabase(BUCKETS.MEDIA, mediaAsset.filePath);
   } catch (error: any) {
     console.warn(`[Media] Failed to delete file from Supabase: ${error.message}`);
   }
 
-  // Delete thumbnail from Supabase Storage if exists
   if (mediaAsset.thumbnailPath) {
     try {
       await deleteFromSupabase(BUCKETS.MEDIA, mediaAsset.thumbnailPath);
@@ -383,22 +521,21 @@ router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
     }
   }
 
-  // Delete database record
   await prisma.mediaAsset.delete({
     where: { id: req.params.id },
   });
 
-  // Audit log
   await prisma.auditLog.create({
     data: {
       eventId: mediaAsset.eventId,
-      adminId: req.admin!.id,
+      adminId: requester.type === 'admin' ? requester.adminId : null,
       action: 'MEDIA_DELETED',
       entityType: 'MEDIA',
       entityId: mediaAsset.id,
       details: JSON.stringify({
         type: mediaAsset.type,
         fileName: mediaAsset.fileName,
+        actorType: requester.type,
       }),
     },
   });

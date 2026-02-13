@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ownerDashboardApi } from '@/lib/api';
 import { formatDate, cn } from '@/lib/utils';
+import { DashboardKpiCard, DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -85,81 +86,33 @@ export default function OwnerDashboardPage() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-navy-900">Dashboard</h1>
-        <p className="text-surface-600 mt-1">Overview of your events and statistics</p>
-      </div>
+    <div className="space-y-7">
+      <DashboardPageHeader title="Dashboard" subtitle="At-a-glance view of your event operations and guest activity" />
 
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-surface-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-surface-600">Total Events</p>
-                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalEvents}</p>
-              </div>
-              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
-                {Icons.events}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-surface-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-surface-600">Total RSVPs</p>
-                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalRsvps}</p>
-              </div>
-              <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
-                {Icons.rsvps}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-surface-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-surface-600">Check-Ins</p>
-                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalCheckIns}</p>
-              </div>
-              <div className="w-12 h-12 rounded-lg bg-violet-100 flex items-center justify-center text-violet-600">
-                {Icons.checkins}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-surface-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-surface-600">Media Assets</p>
-                <p className="text-2xl font-bold text-navy-900 mt-1">{stats.totalMedia}</p>
-              </div>
-              <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600">
-                {Icons.media}
-              </div>
-            </div>
-          </div>
+          <DashboardKpiCard label="Total Events" value={stats.totalEvents} icon={Icons.events} tone="blue" />
+          <DashboardKpiCard label="Total RSVPs" value={stats.totalRsvps} icon={Icons.rsvps} tone="emerald" />
+          <DashboardKpiCard label="Check-Ins" value={stats.totalCheckIns} icon={Icons.checkins} tone="violet" />
+          <DashboardKpiCard label="Media Assets" value={stats.totalMedia} icon={Icons.media} tone="rose" />
         </div>
       )}
 
       {/* Revenue Summary */}
       {stats && Object.keys(stats.revenueByCurrency).length > 0 && (
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">Revenue Summary</h2>
+        <DashboardSection title="Revenue Summary" subtitle="Net and gross performance by currency">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
-              <div key={currency} className="border border-surface-200 rounded-lg p-4">
-                <p className="text-sm font-medium text-surface-600 mb-2">{currency}</p>
-                <p className="text-xl font-bold text-navy-900">
+              <div key={currency} className="rounded-xl border border-surface-200 bg-white p-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all">
+                <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-surface-500 mb-2">{currency}</p>
+                <p className="text-2xl font-bold text-brand-900">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: currency,
@@ -174,19 +127,22 @@ export default function OwnerDashboardPage() {
               </div>
             ))}
           </div>
-        </div>
+        </DashboardSection>
       )}
 
       {/* Recent Events */}
-      <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-navy-900">Your Events</h2>
-          <Link href="/owner/events" className="text-sm text-navy-600 hover:text-navy-900 font-medium">
+      <DashboardSection
+        title="Your Events"
+        subtitle="Quickly open an event to manage RSVPs, media, itinerary, invites, and gifts"
+        action={(
+          <Link href="/owner/events" className="btn-ghost !px-3 !py-2 text-sm !font-semibold">
             View All
           </Link>
-        </div>
+        )}
+        contentClassName="p-0"
+      >
         {events.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-10">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
               {Icons.events}
             </div>
@@ -199,12 +155,12 @@ export default function OwnerDashboardPage() {
               <Link
                 key={event.id}
                 href={`/owner/events/${event.id}`}
-                className="block px-6 py-4 hover:bg-surface-50 transition-colors"
+                className="group block px-6 py-4 hover:bg-brand-50/30 transition-colors"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-base font-semibold text-navy-900">{event.name}</h3>
+                      <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
                       <span
                         className={cn(
                           'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
@@ -231,14 +187,14 @@ export default function OwnerDashboardPage() {
                   </div>
                   <div className="flex items-center gap-6 ml-4">
                     <div className="text-right">
-                      <p className="text-sm font-medium text-navy-900">{event._count.rsvps}</p>
+                      <p className="text-sm font-semibold text-brand-900">{event._count.rsvps}</p>
                       <p className="text-xs text-surface-500">RSVPs</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-navy-900">{event._count.checkIns}</p>
+                      <p className="text-sm font-semibold text-brand-900">{event._count.checkIns}</p>
                       <p className="text-xs text-surface-500">Check-ins</p>
                     </div>
-                    <div className="text-surface-400">
+                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors">
                       {Icons.arrow}
                     </div>
                   </div>
@@ -247,8 +203,9 @@ export default function OwnerDashboardPage() {
             ))}
           </div>
         )}
-      </div>
+      </DashboardSection>
     </div>
   );
 }
+
 

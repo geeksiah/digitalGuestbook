@@ -11,6 +11,45 @@ const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const router = (0, express_1.Router)();
+const getOwnerToken = (req) => (req.headers['x-owner-token'] || req.headers['X-Owner-Token']);
+const parseMediaRequester = (req) => {
+    const ownerToken = getOwnerToken(req);
+    if (ownerToken) {
+        return { type: 'ownerToken', ownerToken };
+    }
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw new errorHandler_js_1.AppError('Unauthorized', 401);
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+    let decoded;
+    try {
+        decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
+    }
+    catch {
+        throw new errorHandler_js_1.AppError('Unauthorized - Invalid or expired token', 401);
+    }
+    if (decoded.adminId) {
+        return { type: 'admin', adminId: decoded.adminId };
+    }
+    if (decoded.ownerId) {
+        return { type: 'owner', ownerId: decoded.ownerId };
+    }
+    throw new errorHandler_js_1.AppError('Unauthorized', 401);
+};
+const ensureMediaAccess = (requester, mediaAsset) => {
+    if (requester.type === 'admin')
+        return true;
+    if (requester.type === 'owner') {
+        if (mediaAsset.event.ownerId === requester.ownerId)
+            return true;
+        throw new errorHandler_js_1.AppError('Unauthorized - You do not have access to this event', 401);
+    }
+    if (mediaAsset.event.ownerAccessToken === requester.ownerToken)
+        return true;
+    throw new errorHandler_js_1.AppError('Unauthorized', 401);
+};
 /**
  * GET /api/media/event/:eventId
  * Get all media for an event (Admin or Couple)
@@ -332,24 +371,101 @@ router.get('/event/:eventId/download-all', (0, errorHandler_js_1.asyncHandler)(a
     await archive.finalize();
 }));
 /**
- * DELETE /api/media/:id
- * Delete a media asset (Admin only)
+ * POST /api/media/bulk-delete
+ * Delete many media assets (Admin / Owner JWT / Owner token)
  */
-router.delete('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+router.post('/bulk-delete', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const mediaIds = Array.isArray(req.body?.mediaIds) ? req.body.mediaIds : [];
+    if (!mediaIds.length) {
+        throw new errorHandler_js_1.AppError('mediaIds must be a non-empty array', 400);
+    }
+    const requester = parseMediaRequester(req);
+    const mediaAssets = await prisma_js_1.default.mediaAsset.findMany({
+        where: { id: { in: mediaIds } },
+        include: {
+            event: {
+                select: { ownerId: true, ownerAccessToken: true },
+            },
+        },
+    });
+    if (mediaAssets.length === 0) {
+        throw new errorHandler_js_1.AppError('No media assets found', 404);
+    }
+    mediaAssets.forEach((asset) => ensureMediaAccess(requester, asset));
+    const deletedIds = [];
+    const failedIds = [];
+    for (const mediaAsset of mediaAssets) {
+        try {
+            try {
+                await (0, supabaseStorage_js_1.deleteFromSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, mediaAsset.filePath);
+            }
+            catch (storageError) {
+                console.warn(`[Media] Bulk delete failed for file ${mediaAsset.filePath}: ${storageError.message}`);
+            }
+            if (mediaAsset.thumbnailPath) {
+                try {
+                    await (0, supabaseStorage_js_1.deleteFromSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, mediaAsset.thumbnailPath);
+                }
+                catch (thumbError) {
+                    console.warn(`[Media] Bulk delete failed for thumbnail ${mediaAsset.thumbnailPath}: ${thumbError.message}`);
+                }
+            }
+            await prisma_js_1.default.mediaAsset.delete({ where: { id: mediaAsset.id } });
+            deletedIds.push(mediaAsset.id);
+            await prisma_js_1.default.auditLog.create({
+                data: {
+                    eventId: mediaAsset.eventId,
+                    adminId: requester.type === 'admin' ? requester.adminId : null,
+                    action: 'MEDIA_BULK_DELETED',
+                    entityType: 'MEDIA',
+                    entityId: mediaAsset.id,
+                    details: JSON.stringify({
+                        type: mediaAsset.type,
+                        fileName: mediaAsset.fileName,
+                        actorType: requester.type,
+                    }),
+                },
+            });
+        }
+        catch (error) {
+            failedIds.push({ id: mediaAsset.id, reason: error.message || 'Unknown error' });
+        }
+    }
+    res.json({
+        message: 'Bulk delete completed',
+        deletedCount: deletedIds.length,
+        failedCount: failedIds.length,
+        deletedIds,
+        failedIds,
+    });
+}));
+/**
+ * DELETE /api/media/:id
+ * Delete a media asset (Admin / Owner JWT / Owner token)
+ */
+router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const requester = parseMediaRequester(req);
     const mediaAsset = await prisma_js_1.default.mediaAsset.findUnique({
         where: { id: req.params.id },
+        include: {
+            event: {
+                select: {
+                    ownerId: true,
+                    ownerAccessToken: true,
+                },
+            },
+        },
     });
     if (!mediaAsset) {
         throw new errorHandler_js_1.AppError('Media asset not found', 404);
     }
-    // Delete file from Supabase Storage
+    ensureMediaAccess(requester, mediaAsset);
     try {
         await (0, supabaseStorage_js_1.deleteFromSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, mediaAsset.filePath);
     }
     catch (error) {
         console.warn(`[Media] Failed to delete file from Supabase: ${error.message}`);
     }
-    // Delete thumbnail from Supabase Storage if exists
     if (mediaAsset.thumbnailPath) {
         try {
             await (0, supabaseStorage_js_1.deleteFromSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, mediaAsset.thumbnailPath);
@@ -358,21 +474,20 @@ router.delete('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHa
             console.warn(`[Media] Failed to delete thumbnail from Supabase: ${error.message}`);
         }
     }
-    // Delete database record
     await prisma_js_1.default.mediaAsset.delete({
         where: { id: req.params.id },
     });
-    // Audit log
     await prisma_js_1.default.auditLog.create({
         data: {
             eventId: mediaAsset.eventId,
-            adminId: req.admin.id,
+            adminId: requester.type === 'admin' ? requester.adminId : null,
             action: 'MEDIA_DELETED',
             entityType: 'MEDIA',
             entityId: mediaAsset.id,
             details: JSON.stringify({
                 type: mediaAsset.type,
                 fileName: mediaAsset.fileName,
+                actorType: requester.type,
             }),
         },
     });

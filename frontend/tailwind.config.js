@@ -8,6 +8,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        brand: {
+          50: '#eef6f5',
+          100: '#d6ebe7',
+          200: '#add8cf',
+          300: '#84c4b7',
+          400: '#5bb09f',
+          500: '#339c87',
+          600: '#1c806e',
+          700: '#0f6458',
+          800: '#0a4d45',
+          900: '#063932',
+          950: '#042924',
+        },
         // Premium color palette
         primary: {
           50: '#fdf9f3',

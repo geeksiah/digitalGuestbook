@@ -1,12 +1,45 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes, randomUUID } from 'crypto';
+import { promises as dns } from 'dns';
+import multer from 'multer';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { createEventSchema, updateEventSchema } from '../utils/validation.js';
 import { calculateEventPhase } from '../utils/phase.js';
+import { BUCKETS, deleteFromSupabase, getPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
+const coverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      cb(new AppError('Only image files are allowed for covers', 400));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+const normalizeDomainHost = (rawHost: string) =>
+  rawHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+
+const isValidDomainHost = (host: string) =>
+  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
+
+const resolveCoverUrl = (coverImagePath: string | null | undefined) => {
+  if (!coverImagePath) return null;
+  if (coverImagePath.startsWith('http://') || coverImagePath.startsWith('https://')) {
+    return coverImagePath;
+  }
+  try {
+    return getPublicUrl(BUCKETS.MEDIA, coverImagePath);
+  } catch {
+    return coverImagePath;
+  }
+};
 
 // All routes require admin authentication
 router.use(authenticateAdmin);
@@ -38,6 +71,9 @@ router.get('/', asyncHandler(async (req, res) => {
           mediaAssets: true,
         },
       },
+      domains: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
   });
 
@@ -45,6 +81,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const eventsWithPhase = events.map((event) => ({
     ...event,
     currentPhase: calculateEventPhase(event),
+    coverImageUrl: resolveCoverUrl(event.coverImagePath),
   }));
 
   // Filter by phase if requested
@@ -67,6 +104,13 @@ router.get('/:id', asyncHandler(async (req, res) => {
       rsvpTemplate: true,
       guestbookTemplate: true,
       thankYouTemplate: true,
+      liveLandingTemplate: true,
+      eventEndedTemplate: true,
+      itineraryPageTemplate: true,
+      giftingPageTemplate: true,
+      domains: {
+        orderBy: { createdAt: 'asc' },
+      },
       _count: {
         select: {
           rsvps: true,
@@ -86,6 +130,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
     event: {
       ...event,
       currentPhase: calculateEventPhase(event),
+      coverImageUrl: resolveCoverUrl(event.coverImagePath),
     },
   });
 }));
@@ -116,7 +161,18 @@ router.post('/', asyncHandler(async (req, res) => {
       ...data,
       date: new Date(data.date),
       endDate: data.endDate ? new Date(data.endDate) : null,
-      ownerAccessToken: crypto.randomUUID(),
+      socialTitle: data.socialTitle ?? null,
+      socialDescription: data.socialDescription ?? null,
+      coverImagePath: data.coverImagePath ?? null,
+      coverImageAlt: data.coverImageAlt ?? null,
+      ownerName: data.ownerName ?? null,
+      ownerEmail: data.ownerEmail ?? null,
+      ownerPhone: data.ownerPhone ?? null,
+      organizationName: data.organizationName ?? null,
+      itineraryTemplateId: data.itineraryTemplateId ?? null,
+      itineraryPageTemplateId: data.itineraryPageTemplateId ?? null,
+      giftingPageTemplateId: data.giftingPageTemplateId ?? null,
+      ownerAccessToken: randomUUID(),
     },
   });
 
@@ -136,6 +192,7 @@ router.post('/', asyncHandler(async (req, res) => {
     event: {
       ...event,
       currentPhase: calculateEventPhase(event),
+      coverImageUrl: resolveCoverUrl(event.coverImagePath),
     },
   });
 }));
@@ -191,7 +248,18 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   const updateData: any = {
     ...data,
     date: data.date ? new Date(data.date) : undefined,
-    endDate: data.endDate ? new Date(data.endDate) : undefined,
+    endDate: data.endDate === null ? null : data.endDate ? new Date(data.endDate) : undefined,
+    socialTitle: data.socialTitle !== undefined ? data.socialTitle : undefined,
+    socialDescription: data.socialDescription !== undefined ? data.socialDescription : undefined,
+    coverImagePath: data.coverImagePath !== undefined ? data.coverImagePath : undefined,
+    coverImageAlt: data.coverImageAlt !== undefined ? data.coverImageAlt : undefined,
+    ownerName: data.ownerName !== undefined ? data.ownerName : undefined,
+    ownerEmail: data.ownerEmail !== undefined ? data.ownerEmail : undefined,
+    ownerPhone: data.ownerPhone !== undefined ? data.ownerPhone : undefined,
+    organizationName: data.organizationName !== undefined ? data.organizationName : undefined,
+    itineraryTemplateId: data.itineraryTemplateId !== undefined ? data.itineraryTemplateId : undefined,
+    itineraryPageTemplateId: data.itineraryPageTemplateId !== undefined ? data.itineraryPageTemplateId : undefined,
+    giftingPageTemplateId: data.giftingPageTemplateId !== undefined ? data.giftingPageTemplateId : undefined,
   };
   
   if (updateData.invitationOnly === false) {
@@ -225,6 +293,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     event: {
       ...event,
       currentPhase: calculateEventPhase(event),
+      coverImageUrl: resolveCoverUrl(event.coverImagePath),
     },
   });
 }));
@@ -344,6 +413,364 @@ router.post('/:id/unarchive', asyncHandler(async (req, res) => {
   }
 
   res.json({ event });
+}));
+
+/**
+ * POST /api/events/:id/cover
+ * Upload event cover image
+ */
+router.post('/:id/cover', coverUpload.single('cover'), asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const file = req.file;
+  const alt = (req.body.alt as string | undefined)?.trim() || null;
+
+  if (!file) {
+    throw new AppError('Cover image file is required', 400);
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id },
+    select: { id: true, coverImagePath: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const safeName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  const coverPath = `events/${id}/cover-${Date.now()}-${safeName}`;
+  const upload = await uploadToSupabase(BUCKETS.MEDIA, coverPath, file.buffer, {
+    contentType: file.mimetype,
+    cacheControl: '3600',
+    upsert: true,
+  });
+
+  if (event.coverImagePath) {
+    await deleteFromSupabase(BUCKETS.MEDIA, event.coverImagePath).catch(() => null);
+  }
+
+  const updatedEvent = await prisma.event.update({
+    where: { id },
+    data: {
+      coverImagePath: upload.path,
+      coverImageAlt: alt,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId: id,
+      adminId: req.admin!.id,
+      action: 'EVENT_COVER_UPLOADED',
+      entityType: 'EVENT',
+      entityId: id,
+      details: JSON.stringify({ coverImagePath: upload.path, mimeType: file.mimetype }),
+    },
+  });
+
+  res.json({
+    event: {
+      ...updatedEvent,
+      coverImageUrl: resolveCoverUrl(updatedEvent.coverImagePath),
+    },
+  });
+}));
+
+/**
+ * DELETE /api/events/:id/cover
+ * Delete event cover image
+ */
+router.delete('/:id/cover', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const event = await prisma.event.findUnique({
+    where: { id },
+    select: { id: true, coverImagePath: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (event.coverImagePath) {
+    await deleteFromSupabase(BUCKETS.MEDIA, event.coverImagePath).catch(() => null);
+  }
+
+  const updatedEvent = await prisma.event.update({
+    where: { id },
+    data: { coverImagePath: null, coverImageAlt: null },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId: id,
+      adminId: req.admin!.id,
+      action: 'EVENT_COVER_DELETED',
+      entityType: 'EVENT',
+      entityId: id,
+    },
+  });
+
+  res.json({
+    event: {
+      ...updatedEvent,
+      coverImageUrl: null,
+    },
+  });
+}));
+
+/**
+ * GET /api/events/:eventId/domains
+ * List custom domains for an event
+ */
+router.get('/:eventId/domains', asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const domains = await prisma.eventDomain.findMany({
+    where: { eventId },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+  });
+
+  res.json({
+    domains,
+    dnsTarget: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+  });
+}));
+
+/**
+ * POST /api/events/:eventId/domains
+ * Add custom domain
+ */
+router.post('/:eventId/domains', asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+  const host = normalizeDomainHost(String(req.body.host || ''));
+  const isPrimary = Boolean(req.body.isPrimary);
+
+  if (!isValidDomainHost(host)) {
+    throw new AppError('Please provide a valid domain host', 400);
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const existing = await prisma.eventDomain.findUnique({ where: { host } });
+  if (existing) {
+    throw new AppError('Domain is already connected to another event', 400);
+  }
+
+  if (isPrimary) {
+    await prisma.eventDomain.updateMany({
+      where: { eventId },
+      data: { isPrimary: false },
+    });
+  }
+
+  const verificationToken = randomBytes(16).toString('hex');
+  const domain = await prisma.eventDomain.create({
+    data: {
+      eventId,
+      host,
+      isPrimary,
+      verificationToken,
+      status: 'PENDING_VERIFICATION',
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'EVENT_DOMAIN_ADDED',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ host }),
+    },
+  });
+
+  res.status(201).json({
+    domain,
+    verification: {
+      txtName: `_eventpeepo.${host}`,
+      txtValue: verificationToken,
+      cnameName: host.startsWith('www.') ? host : `www.${host}`,
+      cnameValue: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+    },
+  });
+}));
+
+/**
+ * POST /api/events/:eventId/domains/:domainId/verify
+ * Verify custom domain DNS records
+ */
+router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) => {
+  const { eventId, domainId } = req.params;
+  const cnameTarget = (process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com').toLowerCase();
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { id: domainId, eventId },
+  });
+
+  if (!domain) {
+    throw new AppError('Domain not found', 404);
+  }
+
+  const txtHost = `_eventpeepo.${domain.host}`;
+  let txtMatch = false;
+  let cnameMatch = false;
+  let errorMessage: string | null = null;
+
+  try {
+    const txtRecords = await dns.resolveTxt(txtHost);
+    const flat = txtRecords.flat().map((value) => value.trim());
+    txtMatch = flat.includes(domain.verificationToken);
+  } catch {
+    txtMatch = false;
+  }
+
+  try {
+    const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
+    const cnameRecords = await dns.resolveCname(cnameHost);
+    cnameMatch = cnameRecords.some((record) =>
+      record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, '')
+    );
+  } catch {
+    cnameMatch = false;
+  }
+
+  const verified = txtMatch && cnameMatch;
+  const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
+
+  if (!verified) {
+    errorMessage = 'TXT and/or CNAME records are not yet configured correctly';
+  }
+
+  const updated = await prisma.eventDomain.update({
+    where: { id: domain.id },
+    data: {
+      status,
+      verificationNotes: errorMessage,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'EVENT_DOMAIN_VERIFIED',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ host: domain.host, status, txtMatch, cnameMatch }),
+    },
+  });
+
+  res.json({
+    domain: updated,
+    verification: { txtMatch, cnameMatch, verified },
+  });
+}));
+
+/**
+ * PATCH /api/events/:eventId/domains/:domainId/primary
+ * Set primary domain for event
+ */
+router.patch('/:eventId/domains/:domainId/primary', asyncHandler(async (req, res) => {
+  const { eventId, domainId } = req.params;
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { id: domainId, eventId },
+  });
+
+  if (!domain) {
+    throw new AppError('Domain not found', 404);
+  }
+
+  if (!['VERIFIED', 'ACTIVE'].includes(domain.status)) {
+    throw new AppError('Only verified domains can be set as primary', 400);
+  }
+
+  await prisma.eventDomain.updateMany({
+    where: { eventId },
+    data: { isPrimary: false },
+  });
+
+  const updated = await prisma.eventDomain.update({
+    where: { id: domain.id },
+    data: { isPrimary: true, status: 'ACTIVE' },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'EVENT_DOMAIN_SET_PRIMARY',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ host: domain.host }),
+    },
+  });
+
+  res.json({ domain: updated });
+}));
+
+/**
+ * DELETE /api/events/:eventId/domains/:domainId
+ * Remove a custom domain
+ */
+router.delete('/:eventId/domains/:domainId', asyncHandler(async (req, res) => {
+  const { eventId, domainId } = req.params;
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { id: domainId, eventId },
+  });
+
+  if (!domain) {
+    throw new AppError('Domain not found', 404);
+  }
+
+  await prisma.eventDomain.delete({
+    where: { id: domain.id },
+  });
+
+  if (domain.isPrimary) {
+    const fallback = await prisma.eventDomain.findFirst({
+      where: { eventId, status: { in: ['VERIFIED', 'ACTIVE'] } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (fallback) {
+      await prisma.eventDomain.update({
+        where: { id: fallback.id },
+        data: { isPrimary: true, status: 'ACTIVE' },
+      });
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      adminId: req.admin!.id,
+      action: 'EVENT_DOMAIN_DELETED',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ host: domain.host }),
+    },
+  });
+
+  res.json({ message: 'Domain removed successfully' });
 }));
 
 /**
@@ -499,6 +926,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     thankYouTemplateId,
     liveLandingTemplateId,
     eventEndedTemplateId,
+    itineraryPageTemplateId,
+    giftingPageTemplateId,
   } = req.body;
 
   const event = await prisma.event.findUnique({
@@ -569,6 +998,10 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
   await validateAndAdd(thankYouTemplateId, 'thankYouTemplateId', 'THANK_YOU');
   await validateAndAdd(liveLandingTemplateId, 'liveLandingTemplateId', 'LIVE_LANDING');
   await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
+  await validateAndAdd(itineraryPageTemplateId, 'itineraryPageTemplateId', 'ITINERARY',
+    { enabled: event.itineraryEnabled, name: 'itinerary' });
+  await validateAndAdd(giftingPageTemplateId, 'giftingPageTemplateId', 'GIFTING',
+    { enabled: event.giftingEnabled, name: 'gifting' });
 
   // Debug: log validated template assignments before copying/updating
   console.info(`[Events] Validated template assignments for event=${eventId}: ${JSON.stringify(templateAssignments)}`);
@@ -589,6 +1022,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     thankYouTemplateId,
     liveLandingTemplateId,
     eventEndedTemplateId,
+    itineraryPageTemplateId,
+    giftingPageTemplateId,
   });
 
   const updatedEvent = await prisma.event.update({
@@ -608,6 +1043,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
       thankYouTemplate: true,
       liveLandingTemplate: true,
       eventEndedTemplate: true,
+      itineraryPageTemplate: true,
+      giftingPageTemplate: true,
     },
   });
 
@@ -618,6 +1055,8 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     thankYouTemplateId: updatedEvent.thankYouTemplateId,
     liveLandingTemplateId: updatedEvent.liveLandingTemplateId,
     eventEndedTemplateId: updatedEvent.eventEndedTemplateId,
+    itineraryPageTemplateId: updatedEvent.itineraryPageTemplateId,
+    giftingPageTemplateId: updatedEvent.giftingPageTemplateId,
   })}`);
 
   // Create audit log
@@ -644,7 +1083,7 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
 router.post('/:id/regenerate-owner-token', asyncHandler(async (req, res) => {
   const event = await prisma.event.update({
     where: { id: req.params.id },
-    data: { ownerAccessToken: crypto.randomUUID() },
+    data: { ownerAccessToken: randomUUID() },
   });
 
   if (!event) {
@@ -652,6 +1091,19 @@ router.post('/:id/regenerate-owner-token', asyncHandler(async (req, res) => {
   }
 
   res.json({ 
+    ownerAccessToken: event.ownerAccessToken,
+    ownerPortalUrl: `/event-owner/${event.ownerAccessToken}`,
+  });
+}));
+
+// Backward-compatible alias
+router.post('/:id/regenerate-couple-token', asyncHandler(async (req, res) => {
+  const event = await prisma.event.update({
+    where: { id: req.params.id },
+    data: { ownerAccessToken: randomUUID() },
+  });
+
+  res.json({
     ownerAccessToken: event.ownerAccessToken,
     ownerPortalUrl: `/event-owner/${event.ownerAccessToken}`,
   });

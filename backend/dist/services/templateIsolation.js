@@ -108,6 +108,8 @@ const copyTemplateAssetsForEvent = async (eventId, assignments) => {
     await copyAssets(assignments.thankYouTemplateId, 'thankYouTemplateId');
     await copyAssets(assignments.liveLandingTemplateId, 'liveLandingTemplateId');
     await copyAssets(assignments.eventEndedTemplateId, 'eventEndedTemplateId');
+    await copyAssets(assignments.itineraryPageTemplateId, 'itineraryPageTemplateId');
+    await copyAssets(assignments.giftingPageTemplateId, 'giftingPageTemplateId');
 };
 exports.copyTemplateAssetsForEvent = copyTemplateAssetsForEvent;
 /**

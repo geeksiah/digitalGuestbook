@@ -12,6 +12,8 @@ interface TemplateAssignments {
     thankYouTemplateId?: string | null;
     liveLandingTemplateId?: string | null;
     eventEndedTemplateId?: string | null;
+    itineraryPageTemplateId?: string | null;
+    giftingPageTemplateId?: string | null;
 }
 /**
  * Copy template assets to event-specific directory for isolation

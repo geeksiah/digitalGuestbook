@@ -16,6 +16,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
 import { getEventTemplate } from '../utils/template-helper.js';
+import { BUCKETS, getPublicUrl } from '../services/supabaseStorage.js';
 
 const router = Router();
 
@@ -25,6 +26,10 @@ const EVENT_PUBLIC_SELECT = {
   slug: true,
   name: true,
   description: true,
+  socialTitle: true,
+  socialDescription: true,
+  coverImagePath: true,
+  coverImageAlt: true,
   date: true,
   endDate: true,
   timezone: true,
@@ -39,6 +44,9 @@ const EVENT_PUBLIC_SELECT = {
   guestbookEnabled: true,
   checkInEnabled: true,
   invitationOnly: true,
+  strictInviteOnly: true,
+  itineraryEnabled: true,
+  giftingEnabled: true,
   isArchived: true,
   // Template assignments
   invitationTemplateId: true,
@@ -54,6 +62,8 @@ const EVENT_PUBLIC_SELECT = {
   thankYouTemplateId: true,
   liveLandingTemplateId: true,
   eventEndedTemplateId: true,
+  itineraryPageTemplateId: true,
+  giftingPageTemplateId: true,
 };
 
 // ─── Helper: standard template data ────────────────────────────────────────────
@@ -102,6 +112,8 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
       boothVideo: `${frontendUrl}/e/${event.slug}/booth/video`,
       boothAudio: `${frontendUrl}/e/${event.slug}/booth/audio`,
       boothPhoto: `${frontendUrl}/e/${event.slug}/booth/photo`,
+      itinerary: `${frontendUrl}/e/${event.slug}/itinerary`,
+      gifting: `${frontendUrl}/gift/${event.slug}`,
     },
   };
 }
@@ -126,6 +138,18 @@ function getTemplateAssetBase(templateId: string): string | null {
 
   // Supabase public URL pattern for the templates bucket
   return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/templates/${templateId}/`;
+}
+
+function resolveEventCoverUrl(coverImagePath: string | null | undefined): string | null {
+  if (!coverImagePath) return null;
+  if (coverImagePath.startsWith('http://') || coverImagePath.startsWith('https://')) {
+    return coverImagePath;
+  }
+  try {
+    return getPublicUrl(BUCKETS.MEDIA, coverImagePath);
+  } catch {
+    return coverImagePath;
+  }
 }
 
 // ─── Helper: render template ───────────────────────────────────────────────────
@@ -304,6 +328,11 @@ router.get('/event/:slug', asyncHandler(async (req, res) => {
       slug: event.slug,
       name: event.name,
       description: event.description,
+      socialTitle: event.socialTitle,
+      socialDescription: event.socialDescription,
+      coverImagePath: event.coverImagePath,
+      coverImageAlt: event.coverImageAlt,
+      coverImageUrl: resolveEventCoverUrl(event.coverImagePath),
       date: event.date,
       endDate: event.endDate,
       timezone: event.timezone,
@@ -317,14 +346,223 @@ router.get('/event/:slug', asyncHandler(async (req, res) => {
         checkIn: event.checkInEnabled,
       },
       invitationOnly: event.invitationOnly,
+      strictInviteOnly: event.strictInviteOnly,
+      itineraryEnabled: event.itineraryEnabled,
+      giftingEnabled: event.giftingEnabled,
     },
     urls: {
       rsvp: event.rsvpEnabled ? `/e/${event.slug}/rsvp` : null,
       guestbook: event.guestbookEnabled ? `/e/${event.slug}/guestbook` : null,
       booth: event.guestbookEnabled ? `/e/${event.slug}/booth` : null,
+      itinerary: event.itineraryEnabled ? `/e/${event.slug}/itinerary` : null,
+      gifting: event.giftingEnabled ? `/gift/${event.slug}` : null,
       thankYou: `/e/${event.slug}/thanks`,
     },
   });
+}));
+
+/**
+ * GET /api/public/domain/:host
+ * Resolve custom domain host to event slug
+ */
+router.get('/domain/:host', asyncHandler(async (req, res) => {
+  const host = String(req.params.host || '').trim().toLowerCase();
+  if (!host) {
+    throw new AppError('Host is required', 400);
+  }
+
+  const domain = await prisma.eventDomain.findUnique({
+    where: { host },
+    include: {
+      event: {
+        select: {
+          id: true,
+          slug: true,
+          isArchived: true,
+        },
+      },
+    },
+  });
+
+  if (!domain || !domain.event || domain.event.isArchived || !['ACTIVE', 'VERIFIED'].includes(domain.status)) {
+    return res.status(404).json({ mapped: false });
+  }
+
+  return res.json({
+    mapped: true,
+    eventId: domain.event.id,
+    slug: domain.event.slug,
+    host: domain.host,
+  });
+}));
+
+/**
+ * GET /api/public/rsvp-invite/:token
+ * Public payload for WhatsApp/deep-link invite card
+ */
+router.get('/rsvp-invite/:token', asyncHandler(async (req, res) => {
+  const token = String(req.params.token || '').trim();
+  if (!token) {
+    throw new AppError('Invite token is required', 400);
+  }
+
+  const invite = await prisma.rsvpInvite.findUnique({
+    where: { token },
+    include: {
+      event: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          description: true,
+          date: true,
+          endDate: true,
+          timezone: true,
+          venue: true,
+          socialTitle: true,
+          socialDescription: true,
+          coverImagePath: true,
+          coverImageAlt: true,
+          strictInviteOnly: true,
+          invitationOnly: true,
+        },
+      },
+    },
+  });
+
+  if (!invite) {
+    throw new AppError('Invite not found', 404);
+  }
+
+  if (invite.expiresAt && invite.expiresAt < new Date()) {
+    throw new AppError('Invite has expired', 410);
+  }
+
+  if (invite.status === 'SENT') {
+    await prisma.rsvpInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: 'OPENED',
+        openedAt: invite.openedAt || new Date(),
+      },
+    });
+  }
+
+  res.json({
+    invite: {
+      id: invite.id,
+      token: invite.token,
+      status: invite.status,
+      inviteeName: invite.inviteeName,
+      inviteePhone: invite.inviteePhone,
+      inviteeEmail: invite.inviteeEmail,
+      initialResponse: invite.initialResponse,
+      partySize: invite.partySize,
+      note: invite.note,
+      expiresAt: invite.expiresAt,
+    },
+    event: {
+      id: invite.event.id,
+      slug: invite.event.slug,
+      name: invite.event.name,
+      title: invite.event.socialTitle || invite.event.name,
+      description: invite.event.socialDescription || invite.event.description,
+      date: invite.event.date,
+      endDate: invite.event.endDate,
+      timezone: invite.event.timezone,
+      venue: invite.event.venue,
+      coverImageUrl: resolveEventCoverUrl(invite.event.coverImagePath),
+      coverImageAlt: invite.event.coverImageAlt,
+      strictInviteOnly: invite.event.strictInviteOnly,
+      invitationOnly: invite.event.invitationOnly,
+    },
+  });
+}));
+
+/**
+ * GET /api/public/event/:slug/itinerary
+ * Public attendee itinerary (read-only)
+ */
+router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      date: true,
+      venue: true,
+      itineraryEnabled: true,
+      isArchived: true,
+      itineraryItems: {
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          startsAt: true,
+          endsAt: true,
+          location: true,
+          sortOrder: true,
+          isCompleted: true,
+          completedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!event) throw new AppError('Event not found', 404);
+  if (event.isArchived) throw new AppError('This event is no longer available', 410);
+  if (!event.itineraryEnabled) throw new AppError('Itinerary is disabled for this event', 404);
+
+  const total = event.itineraryItems.length;
+  const completed = event.itineraryItems.filter((item) => item.isCompleted).length;
+
+  res.json({
+    event: {
+      id: event.id,
+      slug: event.slug,
+      name: event.name,
+      date: event.date,
+      venue: event.venue,
+    },
+    itinerary: {
+      total,
+      completed,
+      percent: total ? Math.round((completed / total) * 100) : 0,
+      items: event.itineraryItems,
+    },
+  });
+}));
+
+/**
+ * GET /api/public/event/:slug/itinerary-page
+ * Render itinerary page template (if assigned)
+ */
+router.get('/event/:slug/itinerary-page', asyncHandler(async (req, res) => {
+  const event = await fetchPublicEvent(req.params.slug);
+  if (!event.itineraryEnabled) throw new AppError('Itinerary is disabled for this event', 404);
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+  const templateData = buildTemplateData(event, currentPhase, capabilities);
+
+  await renderEventTemplate(event, 'ITINERARY', (event as any).itineraryPageTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/gifting
+ * Render gifting page template (if assigned)
+ */
+router.get('/event/:slug/gifting', asyncHandler(async (req, res) => {
+  const event = await fetchPublicEvent(req.params.slug);
+  if (!event.giftingEnabled) throw new AppError('Gifting is disabled for this event', 404);
+
+  const currentPhase = calculateEventPhase(event);
+  const capabilities = getPhaseCapabilities(currentPhase);
+  const templateData = buildTemplateData(event, currentPhase, capabilities);
+
+  await renderEventTemplate(event, 'GIFTING', (event as any).giftingPageTemplateId, templateData, res);
 }));
 
 // ─── Invitation ────────────────────────────────────────────────────────────────

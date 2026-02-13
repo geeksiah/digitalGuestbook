@@ -1,14 +1,30 @@
 import { Router } from 'express';
+import { randomBytes } from 'crypto';
+import { promises as dns } from 'dns';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateOwnerAccount } from '../middleware/auth.js';
 import { calculateEventPhase } from '../utils/phase.js';
 import { z } from 'zod';
+import { sendInvitationNotifications, sendWhatsAppRsvpInvite } from '../services/notifications.js';
+import { generateInvitationPass } from '../services/invitation.js';
 
 const router = Router();
 
 // All routes require owner authentication
 router.use(authenticateOwnerAccount);
+
+const normalizeDomainHost = (rawHost: string) =>
+  rawHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+
+const isValidDomainHost = (host: string) =>
+  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
+
+const getInvitePublicUrl = (token: string) => {
+  const frontend = (process.env.FRONTEND_URL || process.env.SITE_URL || '').replace(/\/+$/, '');
+  if (frontend) return `${frontend}/invite/${token}`;
+  return `/invite/${token}`;
+};
 
 /**
  * GET /api/owner-dashboard/events
@@ -28,6 +44,7 @@ router.get('/events', asyncHandler(async (req, res) => {
           checkIns: true,
           mediaAssets: true,
           transactions: true,
+          giftOrders: true,
         },
       },
       ticketTypes: {
@@ -73,6 +90,7 @@ router.get('/events/:eventId', asyncHandler(async (req, res) => {
           checkIns: true,
           mediaAssets: true,
           transactions: true,
+          giftOrders: true,
         },
       },
       ticketTypes: {
@@ -86,6 +104,9 @@ router.get('/events/:eventId', asyncHandler(async (req, res) => {
           quantityTotal: true,
           isActive: true,
         },
+      },
+      domains: {
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
       },
     },
   });
@@ -118,6 +139,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
           invitations: true,
           checkIns: true,
           mediaAssets: true,
+          giftOrders: true,
         },
       },
       transactions: {
@@ -129,6 +151,13 @@ router.get('/stats', asyncHandler(async (req, res) => {
           type: true,
         },
       },
+      giftOrders: {
+        select: {
+          totalAmount: true,
+          currency: true,
+          status: true,
+        },
+      },
     },
   });
 
@@ -137,6 +166,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
   const totalRsvps = events.reduce((sum, e) => sum + e._count.rsvps, 0);
   const totalCheckIns = events.reduce((sum, e) => sum + e._count.checkIns, 0);
   const totalMedia = events.reduce((sum, e) => sum + e._count.mediaAssets, 0);
+  const totalGiftOrders = events.reduce((sum, e) => sum + e._count.giftOrders, 0);
 
   // Calculate revenue
   const allTransactions = events.flatMap(e => e.transactions);
@@ -151,13 +181,25 @@ router.get('/stats', asyncHandler(async (req, res) => {
     revenueByCurrency[t.currency].net += t.netAmount;
   });
 
+  const giftingByCurrency: Record<string, { total: number; orders: number }> = {};
+  events.flatMap((e) => e.giftOrders).forEach((order) => {
+    if (order.status !== 'PAID') return;
+    if (!giftingByCurrency[order.currency]) {
+      giftingByCurrency[order.currency] = { total: 0, orders: 0 };
+    }
+    giftingByCurrency[order.currency].total += order.totalAmount;
+    giftingByCurrency[order.currency].orders += 1;
+  });
+
   res.json({
     stats: {
       totalEvents,
       totalRsvps,
       totalCheckIns,
       totalMedia,
+      totalGiftOrders,
       revenueByCurrency,
+      giftingByCurrency,
     },
   });
 }));
@@ -203,6 +245,78 @@ router.get('/events/:eventId/rsvps', asyncHandler(async (req, res) => {
   });
 
   res.json({ rsvps });
+}));
+
+/**
+ * POST /api/owner-dashboard/events/:eventId/rsvps/:rsvpId/review
+ * Owner review RSVP (approve/reject)
+ */
+router.post('/events/:eventId/rsvps/:rsvpId/review', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId, rsvpId } = req.params;
+  const status = String(req.body?.status || '').toUpperCase();
+
+  if (!['APPROVED', 'REJECTED'].includes(status)) {
+    throw new AppError('Invalid status. Must be APPROVED or REJECTED', 400);
+  }
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true, invitationOnly: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const rsvp = await prisma.rSVP.findFirst({
+    where: { id: rsvpId, eventId },
+  });
+
+  if (!rsvp) {
+    throw new AppError('RSVP not found', 404);
+  }
+
+  if (rsvp.status !== 'PENDING') {
+    throw new AppError('RSVP has already been reviewed', 400);
+  }
+
+  const updatedRsvp = await prisma.rSVP.update({
+    where: { id: rsvp.id },
+    data: {
+      status,
+      reviewedAt: new Date(),
+    },
+  });
+
+  let invitation = null;
+  if (status === 'APPROVED' && rsvp.attendance === 'YES') {
+    invitation = await generateInvitationPass(rsvp.id);
+    if (invitation) {
+      sendInvitationNotifications(invitation.id).catch((err) =>
+        console.error('[Owner RSVP Review] Failed to send invitation notifications:', err)
+      );
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: status === 'APPROVED' ? 'RSVP_APPROVED_BY_OWNER' : 'RSVP_REJECTED_BY_OWNER',
+      entityType: 'RSVP',
+      entityId: rsvp.id,
+      details: JSON.stringify({
+        ownerId,
+        guestName: rsvp.primaryName,
+      }),
+    },
+  });
+
+  res.json({
+    rsvp: updatedRsvp,
+    invitation,
+    message: status === 'APPROVED' ? 'RSVP approved successfully' : 'RSVP rejected successfully',
+  });
 }));
 
 /**
@@ -267,6 +381,419 @@ router.get('/events/:eventId/media', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/owner-dashboard/events/:eventId/domains
+ * Get custom domains for an owner event
+ */
+router.get('/events/:eventId/domains', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const domains = await prisma.eventDomain.findMany({
+    where: { eventId },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+  });
+
+  res.json({
+    domains,
+    dnsTarget: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+  });
+}));
+
+/**
+ * POST /api/owner-dashboard/events/:eventId/domains
+ * Add custom domain for owner event
+ */
+router.post('/events/:eventId/domains', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+  const host = normalizeDomainHost(String(req.body?.host || ''));
+  const isPrimary = Boolean(req.body?.isPrimary);
+
+  if (!isValidDomainHost(host)) {
+    throw new AppError('Please provide a valid domain host', 400);
+  }
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const existing = await prisma.eventDomain.findUnique({ where: { host } });
+  if (existing) throw new AppError('Domain is already connected to another event', 400);
+
+  if (isPrimary) {
+    await prisma.eventDomain.updateMany({ where: { eventId }, data: { isPrimary: false } });
+  }
+
+  const domain = await prisma.eventDomain.create({
+    data: {
+      eventId,
+      host,
+      isPrimary,
+      verificationToken: randomBytes(16).toString('hex'),
+      status: 'PENDING_VERIFICATION',
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: 'EVENT_DOMAIN_ADDED_BY_OWNER',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ ownerId, host }),
+    },
+  });
+
+  res.status(201).json({
+    domain,
+    verification: {
+      txtName: `_eventpeepo.${host}`,
+      txtValue: domain.verificationToken,
+      cnameName: host.startsWith('www.') ? host : `www.${host}`,
+      cnameValue: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+    },
+  });
+}));
+
+/**
+ * POST /api/owner-dashboard/events/:eventId/domains/:domainId/verify
+ * Verify domain DNS
+ */
+router.post('/events/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId, domainId } = req.params;
+  const cnameTarget = (process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com').toLowerCase();
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { id: domainId, eventId },
+  });
+  if (!domain) throw new AppError('Domain not found', 404);
+
+  let txtMatch = false;
+  let cnameMatch = false;
+  try {
+    const txtRecords = await dns.resolveTxt(`_eventpeepo.${domain.host}`);
+    txtMatch = txtRecords.flat().map((v) => v.trim()).includes(domain.verificationToken);
+  } catch {
+    txtMatch = false;
+  }
+  try {
+    const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
+    const cnameRecords = await dns.resolveCname(cnameHost);
+    cnameMatch = cnameRecords.some((record) =>
+      record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, '')
+    );
+  } catch {
+    cnameMatch = false;
+  }
+
+  const verified = txtMatch && cnameMatch;
+  const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
+  const updated = await prisma.eventDomain.update({
+    where: { id: domain.id },
+    data: {
+      status,
+      verificationNotes: verified ? null : 'TXT and/or CNAME records do not match yet',
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: 'EVENT_DOMAIN_VERIFIED_BY_OWNER',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ ownerId, host: domain.host, status, txtMatch, cnameMatch }),
+    },
+  });
+
+  res.json({
+    domain: updated,
+    verification: { verified, txtMatch, cnameMatch },
+  });
+}));
+
+/**
+ * PATCH /api/owner-dashboard/events/:eventId/domains/:domainId/primary
+ */
+router.patch('/events/:eventId/domains/:domainId/primary', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId, domainId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { id: domainId, eventId },
+  });
+  if (!domain) throw new AppError('Domain not found', 404);
+  if (!['VERIFIED', 'ACTIVE'].includes(domain.status)) {
+    throw new AppError('Only verified domains can be made primary', 400);
+  }
+
+  await prisma.eventDomain.updateMany({ where: { eventId }, data: { isPrimary: false } });
+  const updated = await prisma.eventDomain.update({
+    where: { id: domain.id },
+    data: { isPrimary: true, status: 'ACTIVE' },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: 'EVENT_DOMAIN_SET_PRIMARY_BY_OWNER',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ ownerId, host: domain.host }),
+    },
+  });
+
+  res.json({ domain: updated });
+}));
+
+/**
+ * DELETE /api/owner-dashboard/events/:eventId/domains/:domainId
+ */
+router.delete('/events/:eventId/domains/:domainId', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId, domainId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { id: domainId, eventId },
+  });
+  if (!domain) throw new AppError('Domain not found', 404);
+
+  await prisma.eventDomain.delete({ where: { id: domain.id } });
+
+  if (domain.isPrimary) {
+    const fallback = await prisma.eventDomain.findFirst({
+      where: { eventId, status: { in: ['VERIFIED', 'ACTIVE'] } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (fallback) {
+      await prisma.eventDomain.update({
+        where: { id: fallback.id },
+        data: { isPrimary: true, status: 'ACTIVE' },
+      });
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: 'EVENT_DOMAIN_DELETED_BY_OWNER',
+      entityType: 'EVENT_DOMAIN',
+      entityId: domain.id,
+      details: JSON.stringify({ ownerId, host: domain.host }),
+    },
+  });
+
+  res.json({ message: 'Domain removed successfully' });
+}));
+
+/**
+ * GET /api/owner-dashboard/events/:eventId/rsvp-invites
+ * List RSVP invite statuses
+ */
+router.get('/events/:eventId/rsvp-invites', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const invites = await prisma.rsvpInvite.findMany({
+    where: { eventId },
+    include: {
+      rsvp: {
+        select: {
+          id: true,
+          attendance: true,
+          status: true,
+          guestCount: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ invites });
+}));
+
+/**
+ * POST /api/owner-dashboard/events/:eventId/rsvp-invites/batch
+ * Create and send invite batch
+ */
+router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+  const invitesInput = Array.isArray(req.body?.invites) ? req.body.invites : [];
+  const expiresInHours = Number(req.body?.expiresInHours || 240);
+
+  if (!invitesInput.length) {
+    throw new AppError('invites must be a non-empty array', 400);
+  }
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const created: any[] = [];
+  const failed: Array<{ phone: string; reason: string }> = [];
+
+  for (const input of invitesInput) {
+    const inviteePhone = String(input?.phone || '').trim();
+    const inviteeName = input?.name ? String(input.name).trim() : null;
+    const inviteeEmail = input?.email ? String(input.email).trim() : null;
+
+    if (!inviteePhone) {
+      failed.push({ phone: '', reason: 'Phone number is required' });
+      continue;
+    }
+
+    const token = randomBytes(20).toString('hex');
+    const expiresAt = new Date(Date.now() + Math.max(expiresInHours, 1) * 60 * 60 * 1000);
+
+    const invite = await prisma.rsvpInvite.create({
+      data: {
+        eventId,
+        token,
+        inviteeName,
+        inviteePhone,
+        inviteeEmail,
+        expiresAt,
+        status: 'SENT',
+        sentByOwnerId: ownerId,
+      },
+    });
+
+    const inviteUrl = getInvitePublicUrl(invite.token);
+    try {
+      const delivery = await sendWhatsAppRsvpInvite(inviteePhone, {
+        eventName: event.name,
+        inviteUrl,
+        token: invite.token,
+      });
+      if (!delivery.success) {
+        failed.push({
+          phone: inviteePhone,
+          reason: ('error' in delivery && delivery.error) ? delivery.error : 'Failed to send WhatsApp invite',
+        });
+        continue;
+      }
+      created.push(invite);
+    } catch (error: any) {
+      failed.push({ phone: inviteePhone, reason: error?.message || 'Failed to send WhatsApp invite' });
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: 'RSVP_INVITE_BATCH_SENT_BY_OWNER',
+      entityType: 'RSVP_INVITE',
+      details: JSON.stringify({
+        ownerId,
+        sentCount: created.length,
+        failedCount: failed.length,
+      }),
+    },
+  });
+
+  res.status(201).json({
+    message: 'Invite batch processed',
+    sentCount: created.length,
+    failedCount: failed.length,
+    invites: created,
+    failed,
+  });
+}));
+
+/**
+ * POST /api/owner-dashboard/events/:eventId/rsvp-invites/:inviteId/resend
+ * Resend a single invite
+ */
+router.post('/events/:eventId/rsvp-invites/:inviteId/resend', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId, inviteId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true, name: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const invite = await prisma.rsvpInvite.findFirst({
+    where: { id: inviteId, eventId },
+  });
+  if (!invite) throw new AppError('Invite not found', 404);
+
+  const inviteUrl = getInvitePublicUrl(invite.token);
+  const delivery = await sendWhatsAppRsvpInvite(invite.inviteePhone, {
+    eventName: event.name,
+    inviteUrl,
+    token: invite.token,
+    reminder: true,
+  });
+  if (!delivery.success) {
+    throw new AppError(
+      ('error' in delivery && delivery.error) ? delivery.error : 'Failed to resend invite',
+      500
+    );
+  }
+  const updated = await prisma.rsvpInvite.update({
+    where: { id: invite.id },
+    data: {
+      status: 'SENT',
+      updatedAt: new Date(),
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId,
+      action: 'RSVP_INVITE_RESENT_BY_OWNER',
+      entityType: 'RSVP_INVITE',
+      entityId: invite.id,
+      details: JSON.stringify({ ownerId, inviteePhone: invite.inviteePhone }),
+    },
+  });
+
+  res.json({ invite: updated, message: 'Invite resent successfully' });
+}));
+
+/**
  * GET /api/owner-dashboard/events/:eventId/checkins
  * Get check-ins for a specific event (owner must own the event)
  */
@@ -325,6 +852,40 @@ router.get('/events/:eventId/tickets', asyncHandler(async (req, res) => {
   });
 
   res.json({ tickets });
+}));
+
+/**
+ * GET /api/owner-dashboard/events/:eventId/gift-orders
+ * Get gift orders for a specific event
+ */
+router.get('/events/:eventId/gift-orders', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId;
+  const { eventId } = req.params;
+
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
+  });
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  const orders = await prisma.giftOrder.findMany({
+    where: { eventId },
+    include: {
+      items: {
+        include: {
+          giftPackage: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ orders });
 }));
 
 /**

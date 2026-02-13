@@ -14,6 +14,11 @@ interface Event {
   slug: string;
   name: string;
   description: string | null;
+  socialTitle: string | null;
+  socialDescription: string | null;
+  coverImagePath: string | null;
+  coverImageAlt: string | null;
+  coverImageUrl?: string | null;
   date: string;
   endDate: string | null;
   venue: string | null;
@@ -21,6 +26,9 @@ interface Event {
   currentPhase: string;
   phaseOverride: boolean;
   invitationOnly: boolean;
+  strictInviteOnly: boolean;
+  itineraryEnabled: boolean;
+  giftingEnabled: boolean;
   ownerAccessToken: string;
   invitationEnabled: boolean;
   rsvpEnabled: boolean;
@@ -47,6 +55,8 @@ interface Event {
   thankYouTemplateId: string | null;
   liveLandingTemplateId: string | null;
   eventEndedTemplateId: string | null;
+  itineraryPageTemplateId: string | null;
+  giftingPageTemplateId: string | null;
   // Event branding
   primaryColor?: string;
   secondaryColor?: string;
@@ -57,7 +67,17 @@ interface Event {
   ownerEmail?: string;
   ownerPhone?: string;
   organizationName?: string;
+  domains?: Domain[];
   _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number };
+}
+
+interface Domain {
+  id: string;
+  host: string;
+  isPrimary: boolean;
+  status: 'PENDING_VERIFICATION' | 'VERIFIED' | 'ACTIVE' | 'FAILED';
+  verificationToken: string;
+  verificationNotes?: string | null;
 }
 
 interface RSVP {
@@ -166,7 +186,9 @@ export default function EventDetailPage() {
 
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
+    socialTitle: '', socialDescription: '', coverImageAlt: '',
     venue: '', timezone: '', invitationOnly: false, reelEnabled: false,
+    strictInviteOnly: false, itineraryEnabled: false, giftingEnabled: false,
     // Feature toggles
     invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
     // RSVP Mode & Ticketing
@@ -183,6 +205,11 @@ export default function EventDetailPage() {
     // Owner
     ownerId: '', ownerName: '', ownerEmail: '', ownerPhone: '', organizationName: '',
   });
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [domainHost, setDomainHost] = useState('');
+  const [savingDomain, setSavingDomain] = useState(false);
 
   const [selectedTemplates, setSelectedTemplates] = useState({
     invitationTemplateId: '', rsvpTemplateId: '', guestbookTemplateId: '',
@@ -191,6 +218,8 @@ export default function EventDetailPage() {
     thankYouTemplateId: '',
     liveLandingTemplateId: '',
     eventEndedTemplateId: '',
+    itineraryPageTemplateId: '',
+    giftingPageTemplateId: '',
   });
 
   useEffect(() => { fetchEvent(); fetchTemplates(); fetchOwners(); }, [eventId]);
@@ -201,6 +230,7 @@ export default function EventDetailPage() {
     if (activeTab === 'checkin') fetchCheckIns();
     if (activeTab === 'sales') fetchSales();
     if (activeTab === 'formFields') fetchFormFields();
+    if (activeTab === 'settings') fetchDomains();
   }, [activeTab, rsvpFilter]);
 
   useEffect(() => {
@@ -219,15 +249,21 @@ export default function EventDetailPage() {
         thankYouTemplateId: event.thankYouTemplateId || '',
         liveLandingTemplateId: event.liveLandingTemplateId || '',
         eventEndedTemplateId: event.eventEndedTemplateId || '',
+        itineraryPageTemplateId: (event as any).itineraryPageTemplateId || '',
+        giftingPageTemplateId: (event as any).giftingPageTemplateId || '',
       });
       const d = new Date(event.date);
       const ed = event.endDate ? new Date(event.endDate) : null;
       setEventSettings({
         name: event.name, description: event.description || '',
+        socialTitle: event.socialTitle || '',
+        socialDescription: event.socialDescription || '',
+        coverImageAlt: event.coverImageAlt || '',
         date: d.toISOString().split('T')[0], time: d.toTimeString().slice(0, 5),
         endDate: ed ? ed.toISOString().split('T')[0] : '', endTime: ed ? ed.toTimeString().slice(0, 5) : '',
         venue: event.venue || '', timezone: event.timezone, invitationOnly: event.invitationOnly,
-        reelEnabled: event.reelEnabled || false,
+        reelEnabled: event.reelEnabled || false, strictInviteOnly: event.strictInviteOnly || false,
+        itineraryEnabled: event.itineraryEnabled || false, giftingEnabled: event.giftingEnabled || false,
         // Feature toggles
         invitationEnabled: event.invitationEnabled ?? true,
         rsvpEnabled: event.rsvpEnabled ?? true,
@@ -251,6 +287,7 @@ export default function EventDetailPage() {
         notifyOnRsvp: event.notifyOnRsvp ?? true, notifyOnCheckIn: event.notifyOnCheckIn ?? false, notifyOnGuestbook: event.notifyOnGuestbook ?? false,
         emailNotifications: event.emailNotifications ?? true, smsNotifications: event.smsNotifications ?? false, whatsappNotifications: event.whatsappNotifications ?? false,
       });
+      setDomains(event.domains || []);
     }
   }, [event]);
 
@@ -258,6 +295,14 @@ export default function EventDetailPage() {
     try { const r = await eventsApi.get(eventId); setEvent(r.data.event); }
     catch { toast.error('Failed to load event'); router.push('/admin/events'); }
     finally { setLoading(false); }
+  };
+  const fetchDomains = async () => {
+    try {
+      const r = await eventsApi.getDomains(eventId);
+      setDomains(r.data.domains || []);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to load domains');
+    }
   };
   const fetchTemplates = async () => { try { const r = await templatesApi.list(); setTemplates(r.data.templates); } catch {} };
   const fetchOwners = async () => { 
@@ -343,6 +388,82 @@ export default function EventDetailPage() {
     }
   };
 
+  const handleUploadCover = async () => {
+    if (!coverFile) return;
+    setUploadingCover(true);
+    try {
+      const formData = new FormData();
+      formData.append('cover', coverFile);
+      if (eventSettings.coverImageAlt) formData.append('alt', eventSettings.coverImageAlt);
+      await eventsApi.uploadCover(eventId, formData);
+      setCoverFile(null);
+      toast.success('Cover image updated');
+      await fetchEvent();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to upload cover');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleDeleteCover = async () => {
+    try {
+      await eventsApi.deleteCover(eventId);
+      toast.success('Cover image removed');
+      await fetchEvent();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to remove cover');
+    }
+  };
+
+  const handleAddDomain = async () => {
+    if (!domainHost.trim()) {
+      toast.error('Domain host is required');
+      return;
+    }
+    setSavingDomain(true);
+    try {
+      await eventsApi.addDomain(eventId, { host: domainHost.trim() });
+      setDomainHost('');
+      toast.success('Domain added. Complete DNS verification next.');
+      await fetchDomains();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to add domain');
+    } finally {
+      setSavingDomain(false);
+    }
+  };
+
+  const handleVerifyDomain = async (domainId: string) => {
+    try {
+      await eventsApi.verifyDomain(eventId, domainId);
+      toast.success('Verification check complete');
+      await fetchDomains();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to verify domain');
+    }
+  };
+
+  const handleSetPrimaryDomain = async (domainId: string) => {
+    try {
+      await eventsApi.setPrimaryDomain(eventId, domainId);
+      toast.success('Primary domain updated');
+      await fetchDomains();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to update primary domain');
+    }
+  };
+
+  const handleDeleteDomain = async (domainId: string) => {
+    try {
+      await eventsApi.deleteDomain(eventId, domainId);
+      toast.success('Domain removed');
+      await fetchDomains();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to remove domain');
+    }
+  };
+
   const handleSaveFormField = async () => {
     try {
       const data = {
@@ -418,6 +539,8 @@ export default function EventDetailPage() {
         thankYouTemplateId: selectedTemplates.thankYouTemplateId || null,
         liveLandingTemplateId: selectedTemplates.liveLandingTemplateId || null,
         eventEndedTemplateId: selectedTemplates.eventEndedTemplateId || null,
+        itineraryPageTemplateId: selectedTemplates.itineraryPageTemplateId || null,
+        giftingPageTemplateId: selectedTemplates.giftingPageTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -435,10 +558,16 @@ export default function EventDetailPage() {
       
       await eventsApi.update(eventId, {
         name: eventSettings.name, description: eventSettings.description || null,
+        socialTitle: eventSettings.socialTitle || null,
+        socialDescription: eventSettings.socialDescription || null,
+        coverImageAlt: eventSettings.coverImageAlt || null,
         date: dt.toISOString(), endDate: edt?.toISOString() || null,
         venue: eventSettings.venue || null, timezone: eventSettings.timezone,
         invitationOnly: eventSettings.invitationOnly,
         reelEnabled: eventSettings.reelEnabled,
+        strictInviteOnly: eventSettings.strictInviteOnly,
+        itineraryEnabled: eventSettings.itineraryEnabled,
+        giftingEnabled: eventSettings.giftingEnabled,
         // Feature toggles
         invitationEnabled: eventSettings.invitationEnabled,
         rsvpEnabled: eventSettings.rsvpEnabled,
@@ -501,44 +630,47 @@ export default function EventDetailPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <Link href="/admin/events" className="inline-flex items-center text-surface-500 hover:text-navy-900 mb-2 text-sm transition-colors">
+      <div className="rounded-2xl border border-surface-200 bg-white shadow-soft px-5 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="min-w-0">
+          <Link href="/admin/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
             {Icons.back}
             <span className="ml-1">Back to Events</span>
           </Link>
-          <h1 className="text-2xl font-display font-bold text-navy-900">{event.name}</h1>
-          <div className="flex items-center gap-3 mt-2">
+          <h1 className="text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className={getStatusColor(event.currentPhase)}>{getPhaseLabel(event.currentPhase)}</span>
             {event.phaseOverride && <span className="text-xs text-surface-500">(Override)</span>}
             {event.invitationOnly && <span className="badge-info">Invite Only</span>}
-            {event.reelEnabled && <span className="px-2 py-0.5 rounded text-xs bg-surface-100 text-surface-600">Reel Enabled</span>}
+            {event.reelEnabled && <span className="px-2 py-0.5 rounded text-xs bg-surface-100 text-surface-600 border border-surface-200">Reel Enabled</span>}
+            <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
           </div>
         </div>
-        <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">
-          {Icons.external}
-          <span className="ml-2">View Public Page</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">
+            {Icons.external}
+            <span className="ml-2">View Public Page</span>
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-surface-200 overflow-x-auto">
-        <nav className="flex gap-1 -mb-px min-w-max">
+      <div className="overflow-x-auto rounded-2xl border border-surface-200 bg-white shadow-soft p-2">
+        <nav className="flex gap-1 min-w-max">
           {tabs.map(tab => (
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id)} 
               className={cn(
-                'px-4 py-3 text-sm font-medium border-b-2 transition-all',
+                'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border',
                 activeTab === tab.id 
-                  ? 'border-navy-900 text-navy-900' 
-                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+                  ? 'bg-brand-50 border-brand-100 text-brand-900 shadow-sm' 
+                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
               )}
             >
               {tab.label}
-              {tab.count !== undefined && <span className="ml-2 px-2 py-0.5 rounded-full bg-surface-100 text-xs">{tab.count}</span>}
+              {tab.count !== undefined && <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>{tab.count}</span>}
             </button>
           ))}
         </nav>
@@ -558,7 +690,7 @@ export default function EventDetailPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-surface-500 mb-1">{s.l}</p>
-                    <p className="text-3xl font-bold text-navy-900">{s.v}</p>
+                    <p className="text-3xl font-bold text-brand-900">{s.v}</p>
                   </div>
                   <div className="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-500">
                     {s.icon}
@@ -569,7 +701,7 @@ export default function EventDetailPage() {
           </div>
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-surface-200 p-5">
-              <h3 className="font-semibold text-navy-900 mb-4">Phase Control</h3>
+              <h3 className="font-semibold text-brand-900 mb-4">Phase Control</h3>
               <div className="space-y-2">
                 {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map(p => (
                   <button 
@@ -579,7 +711,7 @@ export default function EventDetailPage() {
                     className={cn(
                       'w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
                       event.currentPhase === p 
-                        ? 'bg-navy-900 text-white' 
+                        ? 'bg-brand-900 text-white' 
                         : 'bg-surface-50 text-surface-700 hover:bg-surface-100'
                     )}
                   >
@@ -589,7 +721,7 @@ export default function EventDetailPage() {
               </div>
             </div>
             <div className="bg-white rounded-xl border border-surface-200 p-5">
-              <h3 className="font-semibold text-navy-900 mb-4">Quick Links</h3>
+              <h3 className="font-semibold text-brand-900 mb-4">Quick Links</h3>
               <div className="space-y-1 text-sm">
                 {[
                   { l: 'Invitation', p: `/e/${event.slug}` },
@@ -601,7 +733,7 @@ export default function EventDetailPage() {
                   <button 
                     key={x.p} 
                     onClick={() => handleCopyLink(x.p)} 
-                    className="w-full text-left p-2.5 rounded-lg hover:bg-surface-50 flex items-center justify-between text-surface-600 hover:text-navy-900 transition-colors"
+                    className="w-full text-left p-2.5 rounded-lg hover:bg-surface-50 flex items-center justify-between text-surface-600 hover:text-brand-900 transition-colors"
                   >
                     <span>{x.l}</span>
                     <span className="text-surface-400">{Icons.copy}</span>
@@ -624,7 +756,7 @@ export default function EventDetailPage() {
                   onClick={() => setRsvpFilter(s)} 
                   className={cn(
                     'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-                    rsvpFilter === s ? 'bg-white text-navy-900 shadow-sm' : 'text-surface-600 hover:text-surface-900'
+                    rsvpFilter === s ? 'bg-white text-brand-900 shadow-sm' : 'text-surface-600 hover:text-surface-900'
                   )}
                 >
                   {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
@@ -639,7 +771,7 @@ export default function EventDetailPage() {
           <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
             {loadingRsvps ? (
               <div className="py-12 text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900"></div>
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900"></div>
                 <p className="mt-4 text-surface-500">Loading RSVPs...</p>
               </div>
             ) : (
@@ -662,7 +794,7 @@ export default function EventDetailPage() {
                       return (
                         <tr key={r.id} className="hover:bg-surface-50 transition-colors">
                           <td className="py-3 px-4">
-                            <p className="font-medium text-navy-900">{r.primaryName}</p>
+                            <p className="font-medium text-brand-900">{r.primaryName}</p>
                             {r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}
                           </td>
                           <td className="py-3 px-4">
@@ -748,7 +880,7 @@ export default function EventDetailPage() {
               <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b border-surface-200">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-navy-900">RSVP Details</h3>
+                    <h3 className="text-lg font-semibold text-brand-900">RSVP Details</h3>
                     <button onClick={() => setViewingRsvpDetails(null)} className="p-2 rounded-lg hover:bg-surface-100">
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -760,63 +892,63 @@ export default function EventDetailPage() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-surface-500">Primary Name</label>
-                      <p className="text-navy-900 font-medium">{viewingRsvpDetails.primaryName}</p>
+                      <p className="text-brand-900 font-medium">{viewingRsvpDetails.primaryName}</p>
                     </div>
                     {viewingRsvpDetails.secondaryName && (
                       <div>
                         <label className="text-sm font-medium text-surface-500">Secondary Name</label>
-                        <p className="text-navy-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
+                        <p className="text-brand-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
                       </div>
                     )}
                     {viewingRsvpDetails.email && (
                       <div>
                         <label className="text-sm font-medium text-surface-500">Email</label>
-                        <p className="text-navy-900">{viewingRsvpDetails.email}</p>
+                        <p className="text-brand-900">{viewingRsvpDetails.email}</p>
                       </div>
                     )}
                     {viewingRsvpDetails.phone && (
                       <div>
                         <label className="text-sm font-medium text-surface-500">Phone</label>
-                        <p className="text-navy-900">{viewingRsvpDetails.phone}</p>
+                        <p className="text-brand-900">{viewingRsvpDetails.phone}</p>
                       </div>
                     )}
                     <div>
                       <label className="text-sm font-medium text-surface-500">Attendance</label>
-                      <p className="text-navy-900">
+                      <p className="text-brand-900">
                         <span className={getStatusColor(viewingRsvpDetails.attendance)}>{viewingRsvpDetails.attendance}</span>
                       </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-surface-500">Guest Count</label>
-                      <p className="text-navy-900">{viewingRsvpDetails.guestCount}</p>
+                      <p className="text-brand-900">{viewingRsvpDetails.guestCount}</p>
                     </div>
                     {viewingRsvpDetails.mealPreference && (
                       <div>
                         <label className="text-sm font-medium text-surface-500">Meal Preference</label>
-                        <p className="text-navy-900">{viewingRsvpDetails.mealPreference}</p>
+                        <p className="text-brand-900">{viewingRsvpDetails.mealPreference}</p>
                       </div>
                     )}
                     {viewingRsvpDetails.dietaryNotes && (
                       <div>
                         <label className="text-sm font-medium text-surface-500">Dietary Notes</label>
-                        <p className="text-navy-900">{viewingRsvpDetails.dietaryNotes}</p>
+                        <p className="text-brand-900">{viewingRsvpDetails.dietaryNotes}</p>
                       </div>
                     )}
                     {viewingRsvpDetails.note && (
                       <div className="sm:col-span-2">
                         <label className="text-sm font-medium text-surface-500">Note</label>
-                        <p className="text-navy-900">{viewingRsvpDetails.note}</p>
+                        <p className="text-brand-900">{viewingRsvpDetails.note}</p>
                       </div>
                     )}
                     {viewingRsvpDetails.submittedAt && (
                       <div>
                         <label className="text-sm font-medium text-surface-500">Submitted At</label>
-                        <p className="text-navy-900">{formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}</p>
+                        <p className="text-brand-900">{formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}</p>
                       </div>
                     )}
                     <div>
                       <label className="text-sm font-medium text-surface-500">Status</label>
-                      <p className="text-navy-900">
+                      <p className="text-brand-900">
                         <span className={getStatusColor(viewingRsvpDetails.status)}>{viewingRsvpDetails.status}</span>
                       </p>
                     </div>
@@ -828,12 +960,12 @@ export default function EventDetailPage() {
                       if (Object.keys(customFields).length > 0) {
                         return (
                           <div className="border-t border-surface-200 pt-4 mt-4">
-                            <h4 className="text-sm font-semibold text-navy-900 mb-3">Custom Fields</h4>
+                            <h4 className="text-sm font-semibold text-brand-900 mb-3">Custom Fields</h4>
                             <div className="grid sm:grid-cols-2 gap-4">
                               {Object.entries(customFields).map(([key, value]) => (
                                 <div key={key}>
                                   <label className="text-sm font-medium text-surface-500">{key}</label>
-                                  <p className="text-navy-900">{String(value)}</p>
+                                  <p className="text-brand-900">{String(value)}</p>
                                 </div>
                               ))}
                             </div>
@@ -847,15 +979,15 @@ export default function EventDetailPage() {
                   {/* Invitation Details with QR Code */}
                   {viewingRsvpDetails.invitation && (
                     <div className="border-t border-surface-200 pt-4 mt-4">
-                      <h4 className="text-sm font-semibold text-navy-900 mb-3">Invitation Details</h4>
+                      <h4 className="text-sm font-semibold text-brand-900 mb-3">Invitation Details</h4>
                       <div className="grid sm:grid-cols-2 gap-4 text-sm mb-4">
                         <div>
                           <label className="text-sm font-medium text-surface-500">Access Code</label>
-                          <p className="text-navy-900 font-mono">{viewingRsvpDetails.invitation.accessCode}</p>
+                          <p className="text-brand-900 font-mono">{viewingRsvpDetails.invitation.accessCode}</p>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-surface-500">Checked In</label>
-                          <p className="text-navy-900">
+                          <p className="text-brand-900">
                             {viewingRsvpDetails.invitation.isCheckedIn ? (
                               <span className="text-green-600 font-medium">Yes</span>
                             ) : (
@@ -915,7 +1047,7 @@ export default function EventDetailPage() {
                 <tbody className="divide-y divide-surface-100">
                   {checkIns.length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-surface-500">No check-ins yet</td></tr> : checkIns.map(c => (
                     <tr key={c.id} className="hover:bg-surface-50 transition-colors">
-                      <td className="py-3 px-4"><p className="font-medium text-navy-900">{c.invitation.guestName}</p></td>
+                      <td className="py-3 px-4"><p className="font-medium text-brand-900">{c.invitation.guestName}</p></td>
                       <td className="py-3 px-4 text-surface-600">{c.invitation.guestCount}</td>
                       <td className="py-3 px-4 font-mono text-surface-600">{c.invitation.accessCode}</td>
                       <td className="py-3 px-4 text-surface-600">{formatDate(c.checkedInAt, 'MMM d, h:mm a')}</td>
@@ -952,7 +1084,7 @@ export default function EventDetailPage() {
       {activeTab === 'templates' && (
         <div className="space-y-6">
           {/* Header */}
-          <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl p-6 text-white">
+          <div className="bg-gradient-to-r from-brand-900 to-brand-800 rounded-xl p-6 text-white">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-bold mb-2">Template Assignment</h3>
@@ -969,8 +1101,8 @@ export default function EventDetailPage() {
             {/* Main Pages */}
             <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
-                <h4 className="font-semibold text-navy-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <h4 className="font-semibold text-brand-900 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   Main Pages
@@ -985,15 +1117,17 @@ export default function EventDetailPage() {
                   { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true, icon: '🙏', desc: 'Post-submission page' },
                   { t: 'LIVE_LANDING', l: 'Live Landing Page', f: 'liveLandingTemplateId', e: true, icon: '🎉', desc: 'During live phase' },
                   { t: 'EVENT_ENDED', l: 'Event Ended Page', f: 'eventEndedTemplateId', e: true, icon: '🏁', desc: 'After event ends' },
+                  { t: 'ITINERARY', l: 'Itinerary Page', f: 'itineraryPageTemplateId', e: event.itineraryEnabled, icon: '🗓️', desc: 'Public itinerary tracking page' },
+                  { t: 'GIFTING', l: 'Gifting Page', f: 'giftingPageTemplateId', e: event.giftingEnabled, icon: '🎁', desc: 'Guest gifting checkout page' },
                 ].map(x => (
-                  <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-navy-300 hover:shadow-md')}>
+                  <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-brand-300 hover:shadow-md')}>
                     <div className="flex items-start gap-3">
                       <div className="text-2xl flex-shrink-0">{x.icon}</div>
                       <div className="flex-1 min-w-0">
-                        <label className="block text-sm font-semibold text-navy-900 mb-1">{x.l}</label>
+                        <label className="block text-sm font-semibold text-brand-900 mb-1">{x.l}</label>
                         <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
                         <select 
-                          className={cn('w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500 transition-all', !x.e && 'cursor-not-allowed bg-surface-100')} 
+                          className={cn('w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all', !x.e && 'cursor-not-allowed bg-surface-100')} 
                           value={(selectedTemplates as any)[x.f] || ''} 
                           onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })} 
                           disabled={!x.e}
@@ -1017,8 +1151,8 @@ export default function EventDetailPage() {
             {event.guestbookEnabled && (
               <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
                 <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
-                  <h4 className="font-semibold text-navy-900 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <h4 className="font-semibold text-brand-900 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     Guestbook Recording Pages
@@ -1031,14 +1165,14 @@ export default function EventDetailPage() {
                     { t: 'GUESTBOOK_AUDIO', l: 'Audio Recording', f: 'guestbookAudioTemplateId', icon: '🎤', desc: 'Audio messages' },
                     { t: 'GUESTBOOK_PHOTO', l: 'Photo Upload', f: 'guestbookPhotoTemplateId', icon: '📷', desc: 'Photo uploads' },
                   ].map(x => (
-                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-navy-300 hover:shadow-md transition-all">
+                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-brand-300 hover:shadow-md transition-all">
                       <div className="flex items-start gap-3">
                         <div className="text-2xl flex-shrink-0">{x.icon}</div>
                         <div className="flex-1 min-w-0">
-                          <label className="block text-sm font-semibold text-navy-900 mb-1">{x.l}</label>
+                          <label className="block text-sm font-semibold text-brand-900 mb-1">{x.l}</label>
                           <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
                           <select 
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500 transition-all" 
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all" 
                             value={(selectedTemplates as any)[x.f] || ''} 
                             onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })}
                           >
@@ -1057,8 +1191,8 @@ export default function EventDetailPage() {
             {event.guestbookEnabled && (
               <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
                 <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
-                  <h4 className="font-semibold text-navy-900 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <h4 className="font-semibold text-brand-900 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                     </svg>
                     Photo Booth Pages
@@ -1072,13 +1206,13 @@ export default function EventDetailPage() {
                     { t: 'BOOTH', l: 'Booth Audio', f: 'boothAudioTemplateId', icon: '🎙️', desc: 'Audio capture' },
                     { t: 'BOOTH', l: 'Booth Photo', f: 'boothPhotoTemplateId', icon: '📸', desc: 'Photo capture' },
                   ].map(x => (
-                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-navy-300 hover:shadow-md transition-all">
+                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-brand-300 hover:shadow-md transition-all">
                       <div className="flex flex-col items-center text-center">
                         <div className="text-3xl mb-2">{x.icon}</div>
-                        <label className="block text-sm font-semibold text-navy-900 mb-1">{x.l}</label>
+                        <label className="block text-sm font-semibold text-brand-900 mb-1">{x.l}</label>
                         <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
                         <select 
-                          className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500 transition-all" 
+                          className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all" 
                           value={(selectedTemplates as any)[x.f] || ''} 
                           onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })}
                         >
@@ -1102,7 +1236,7 @@ export default function EventDetailPage() {
                 'px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2',
                 savingTemplates 
                   ? 'bg-surface-200 text-surface-500 cursor-not-allowed' 
-                  : 'bg-navy-900 text-white hover:bg-navy-800 shadow-lg hover:shadow-xl'
+                  : 'bg-brand-900 text-white hover:bg-brand-800 shadow-lg hover:shadow-xl'
               )}
             >
               {savingTemplates ? (
@@ -1142,7 +1276,7 @@ export default function EventDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-navy-900">RSVP Form Fields</h3>
+              <h3 className="text-lg font-semibold text-brand-900">RSVP Form Fields</h3>
               <p className="text-sm text-surface-500 mt-1">Customize the fields guests see when RSVPing. Email and Phone are always present but optional by default.</p>
             </div>
             <button
@@ -1163,7 +1297,7 @@ export default function EventDetailPage() {
 
           {loadingFormFields ? (
             <div className="py-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900"></div>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900"></div>
               <p className="mt-4 text-surface-500">Loading form fields...</p>
             </div>
           ) : (
@@ -1189,7 +1323,7 @@ export default function EventDetailPage() {
                       {formFields.map((field) => (
                         <tr key={field.id} className="hover:bg-surface-50 transition-colors">
                           <td className="py-3 px-4">
-                            <p className="font-medium text-navy-900">{field.label}</p>
+                            <p className="font-medium text-brand-900">{field.label}</p>
                             {field.helpText && <p className="text-xs text-surface-500 mt-1">{field.helpText}</p>}
                           </td>
                           <td className="py-3 px-4">
@@ -1257,7 +1391,7 @@ export default function EventDetailPage() {
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b border-surface-200">
-                  <h3 className="text-lg font-semibold text-navy-900">
+                  <h3 className="text-lg font-semibold text-brand-900">
                     {editingFormField ? 'Edit Form Field' : 'Add Form Field'}
                   </h3>
                 </div>
@@ -1432,11 +1566,11 @@ export default function EventDetailPage() {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-white rounded-xl border border-surface-200 p-5">
                     <p className="text-sm text-surface-500 mb-1">Total Sales</p>
-                    <p className="text-3xl font-bold text-navy-900">{salesStats.totalSales || 0}</p>
+                    <p className="text-3xl font-bold text-brand-900">{salesStats.totalSales || 0}</p>
                   </div>
                   <div className="bg-white rounded-xl border border-surface-200 p-5">
                     <p className="text-sm text-surface-500 mb-1">Total Revenue</p>
-                    <p className="text-3xl font-bold text-navy-900">
+                    <p className="text-3xl font-bold text-brand-900">
                       ${(salesStats.totalRevenue || 0).toFixed(2)}
                     </p>
                   </div>
@@ -1454,7 +1588,7 @@ export default function EventDetailPage() {
               {/* Sales Table */}
               <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-surface-200">
-                  <h3 className="text-lg font-semibold text-navy-900">Transaction History</h3>
+                  <h3 className="text-lg font-semibold text-brand-900">Transaction History</h3>
                 </div>
                 {sales.length === 0 ? (
                   <div className="text-center py-12">
@@ -1487,7 +1621,7 @@ export default function EventDetailPage() {
                         {sales.map((sale: any) => (
                           <tr key={sale.id} className="hover:bg-surface-50 transition-colors">
                             <td className="py-3 px-4">
-                              <p className="font-medium text-navy-900">{sale.primaryName}</p>
+                              <p className="font-medium text-brand-900">{sale.primaryName}</p>
                               {sale.email && (
                                 <p className="text-sm text-surface-500">{sale.email}</p>
                               )}
@@ -1496,7 +1630,7 @@ export default function EventDetailPage() {
                               <p className="text-sm text-surface-900">{sale.ticketType || 'N/A'}</p>
                             </td>
                             <td className="py-3 px-4">
-                              <p className="font-semibold text-navy-900">
+                              <p className="font-semibold text-brand-900">
                                 ${(sale.amountPaid || 0).toFixed(2)}
                               </p>
                             </td>
@@ -1535,7 +1669,7 @@ export default function EventDetailPage() {
       {activeTab === 'settings' && (
         <div className="bg-white rounded-xl border border-surface-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-navy-900">Event Settings</h3>
+            <h3 className="text-lg font-semibold text-brand-900">Event Settings</h3>
             {!editingSettings ? (
               <button onClick={() => setEditingSettings(true)} className="btn-outline">
                 {Icons.edit}
@@ -1560,9 +1694,88 @@ export default function EventDetailPage() {
                 <div className="sm:col-span-2"><label className="label">Venue</label><input type="text" className="input" value={eventSettings.venue} onChange={e => setEventSettings({ ...eventSettings, venue: e.target.value })} /></div>
                 <div><label className="label">Timezone</label><select className="input" value={eventSettings.timezone} onChange={e => setEventSettings({ ...eventSettings, timezone: e.target.value })}><option value="UTC">UTC</option><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option><option value="Europe/London">London</option><option value="Africa/Accra">Ghana (GMT)</option></select></div>
               </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-brand-900 mb-4">Social Metadata & Cover</h4>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Social Title</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="Title for social cards"
+                      value={eventSettings.socialTitle}
+                      onChange={(e) => setEventSettings({ ...eventSettings, socialTitle: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Cover Alt Text</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="Describe the cover image"
+                      value={eventSettings.coverImageAlt}
+                      onChange={(e) => setEventSettings({ ...eventSettings, coverImageAlt: e.target.value })}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label">Social Description</label>
+                    <textarea
+                      rows={2}
+                      className="input"
+                      placeholder="Description shown on social shares"
+                      value={eventSettings.socialDescription}
+                      onChange={(e) => setEventSettings({ ...eventSettings, socialDescription: e.target.value })}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label">Cover Image Upload</label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="input flex-1"
+                        onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                      />
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        disabled={!coverFile || uploadingCover}
+                        onClick={handleUploadCover}
+                      >
+                        {uploadingCover ? 'Uploading...' : 'Upload Cover'}
+                      </button>
+                      {event.coverImagePath && (
+                        <button
+                          type="button"
+                          className="btn-ghost text-red-600 hover:text-red-700"
+                          onClick={handleDeleteCover}
+                        >
+                          Remove Cover
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-surface-200 bg-white overflow-hidden">
+                  <div className="h-40 bg-surface-100">
+                    {event.coverImageUrl ? (
+                      <img src={event.coverImageUrl} alt={event.coverImageAlt || event.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-brand-900 to-brand-700" />
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <p className="text-xs uppercase tracking-wider text-surface-500 font-semibold">Live Social Preview</p>
+                    <p className="font-semibold text-brand-900 mt-1">{eventSettings.socialTitle || eventSettings.name || 'Untitled Event'}</p>
+                    <p className="text-sm text-surface-600 mt-1">{eventSettings.socialDescription || eventSettings.description || 'No social description set.'}</p>
+                  </div>
+                </div>
+              </div>
               
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Event Owner</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Event Owner</h4>
                 <p className="text-sm text-surface-500 mb-4">Assign an owner account or enter contact information. Notifications will be sent to this contact.</p>
                 
                 <div className="mb-4">
@@ -1607,7 +1820,7 @@ export default function EventDetailPage() {
 
                 {showNewOwnerForm && (
                   <div className="mb-4 p-4 bg-surface-50 rounded-lg border border-surface-200">
-                    <h5 className="font-medium text-navy-900 mb-3">Create New Owner</h5>
+                    <h5 className="font-medium text-brand-900 mb-3">Create New Owner</h5>
                     <div className="grid sm:grid-cols-2 gap-3">
                       <div><label className="label text-xs">Name *</label><input type="text" className="input text-sm" placeholder="John Smith" value={newOwner.name} onChange={e => setNewOwner({ ...newOwner, name: e.target.value })} /></div>
                       <div><label className="label text-xs">Email *</label><input type="email" className="input text-sm" placeholder="owner@example.com" value={newOwner.email} onChange={e => setNewOwner({ ...newOwner, email: e.target.value })} /></div>
@@ -1617,7 +1830,7 @@ export default function EventDetailPage() {
                     <button
                       type="button"
                       onClick={handleCreateOwner}
-                      className="mt-3 px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-lg text-sm font-medium transition-colors"
+                      className="mt-3 px-4 py-2 bg-brand-900 hover:bg-brand-800 text-white rounded-lg text-sm font-medium transition-colors"
                     >
                       Create Owner
                     </button>
@@ -1633,7 +1846,7 @@ export default function EventDetailPage() {
               </div>
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Event Colors</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Event Colors</h4>
                 <p className="text-sm text-surface-500 mb-4">Used for invitations, reel generation, and branding.</p>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <div>
@@ -1666,15 +1879,15 @@ export default function EventDetailPage() {
               </div>
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Event Features</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Event Features</h4>
                 <p className="text-sm text-surface-500 mb-4">Enable or disable specific event features.</p>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.invitationEnabled} onChange={e => setEventSettings({ ...eventSettings, invitationEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-navy-900">Invitations</span><p className="text-xs text-surface-500">Digital invitation passes</p></div>
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.invitationEnabled} onChange={e => setEventSettings({ ...eventSettings, invitationEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-brand-900">Invitations</span><p className="text-xs text-surface-500">Digital invitation passes</p></div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.rsvpEnabled} onChange={e => {
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.rsvpEnabled} onChange={e => {
                       const enabled = e.target.checked;
                       setEventSettings({ 
                         ...eventSettings, 
@@ -1684,22 +1897,22 @@ export default function EventDetailPage() {
                         ticketingEnabled: enabled && eventSettings.rsvpMode === 'paid'
                       });
                     }} />
-                    <div><span className="font-medium text-navy-900">RSVP</span><p className="text-xs text-surface-500">Guest response collection {eventSettings.invitationOnly ? '(Mandatory when invitation-only)' : '(Optional)'}</p></div>
+                    <div><span className="font-medium text-brand-900">RSVP</span><p className="text-xs text-surface-500">Guest response collection {eventSettings.invitationOnly ? '(Mandatory when invitation-only)' : '(Optional)'}</p></div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.guestbookEnabled} onChange={e => setEventSettings({ ...eventSettings, guestbookEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-navy-900">Guestbook</span><p className="text-xs text-surface-500">Video, audio, photo messages</p></div>
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.guestbookEnabled} onChange={e => setEventSettings({ ...eventSettings, guestbookEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-brand-900">Guestbook</span><p className="text-xs text-surface-500">Video, audio, photo messages</p></div>
                   </label>
                   <label className={`flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors ${eventSettings.invitationOnly ? '' : 'opacity-50 cursor-not-allowed'}`}>
                     <input 
                       type="checkbox" 
-                      className="w-5 h-5 rounded border-surface-300 text-navy-900" 
+                      className="w-5 h-5 rounded border-surface-300 text-brand-900" 
                       checked={eventSettings.checkInEnabled && eventSettings.invitationOnly} 
                       disabled={!eventSettings.invitationOnly}
                       onChange={e => setEventSettings({ ...eventSettings, checkInEnabled: e.target.checked })} 
                     />
                     <div>
-                      <span className="font-medium text-navy-900">Check-in</span>
+                      <span className="font-medium text-brand-900">Check-in</span>
                       <p className="text-xs text-surface-500">
                         {eventSettings.invitationOnly 
                           ? 'Guest arrival tracking' 
@@ -1713,30 +1926,30 @@ export default function EventDetailPage() {
               {/* RSVP Mode */}
               {eventSettings.rsvpEnabled && (
                 <div className="border-t border-surface-100 pt-6">
-                  <h4 className="font-medium text-navy-900 mb-4">RSVP Mode</h4>
+                  <h4 className="font-medium text-brand-900 mb-4">RSVP Mode</h4>
                   <p className="text-sm text-surface-500 mb-4">
                     {eventSettings.invitationOnly 
                       ? 'RSVP is mandatory. Choose whether RSVPs are free or require ticket purchases.' 
                       : 'RSVP is optional. Choose whether RSVPs are free or require ticket purchases. Guests can access other features without RSVP.'}
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3 mb-4">
-                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'free' ? 'border-navy-900 bg-navy-50' : 'border-surface-200 hover:bg-surface-50'}`}>
+                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'free' ? 'border-brand-900 bg-brand-50' : 'border-surface-200 hover:bg-surface-50'}`}>
                       <input type="radio" name="rsvpMode" value="free" checked={eventSettings.rsvpMode === 'free'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'free' })} className="sr-only" />
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'free' ? 'border-navy-900' : 'border-surface-300'}`}>
-                        {eventSettings.rsvpMode === 'free' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'free' ? 'border-brand-900' : 'border-surface-300'}`}>
+                        {eventSettings.rsvpMode === 'free' && <div className="w-2.5 h-2.5 rounded-full bg-brand-900" />}
                       </div>
                       <div>
-                        <span className="font-medium text-navy-900">Free RSVP</span>
+                        <span className="font-medium text-brand-900">Free RSVP</span>
                         <p className="text-xs text-surface-500">Guests can RSVP without payment</p>
                       </div>
                     </label>
-                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'paid' ? 'border-navy-900 bg-navy-50' : 'border-surface-200 hover:bg-surface-50'}`}>
+                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'paid' ? 'border-brand-900 bg-brand-50' : 'border-surface-200 hover:bg-surface-50'}`}>
                       <input type="radio" name="rsvpMode" value="paid" checked={eventSettings.rsvpMode === 'paid'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'paid', ticketingEnabled: true })} className="sr-only" />
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'paid' ? 'border-navy-900' : 'border-surface-300'}`}>
-                        {eventSettings.rsvpMode === 'paid' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'paid' ? 'border-brand-900' : 'border-surface-300'}`}>
+                        {eventSettings.rsvpMode === 'paid' && <div className="w-2.5 h-2.5 rounded-full bg-brand-900" />}
                       </div>
                       <div>
-                        <span className="font-medium text-navy-900">Paid RSVP (Ticketing)</span>
+                        <span className="font-medium text-brand-900">Paid RSVP (Ticketing)</span>
                         <p className="text-xs text-surface-500">Guests purchase tickets to RSVP</p>
                       </div>
                     </label>
@@ -1745,7 +1958,7 @@ export default function EventDetailPage() {
                   {/* Ticketing Settings - shown when paid mode selected */}
                   {eventSettings.rsvpMode === 'paid' && (
                     <div className="bg-surface-50 rounded-lg p-4 space-y-4">
-                      <h5 className="font-medium text-navy-900 text-sm">Ticketing Fees</h5>
+                      <h5 className="font-medium text-brand-900 text-sm">Ticketing Fees</h5>
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div>
                           <label className="block text-xs font-medium text-surface-600 mb-1">Platform Fee (%)</label>
@@ -1753,7 +1966,7 @@ export default function EventDetailPage() {
                             type="number" step="0.1" min="0" max="100"
                             value={eventSettings.platformFeePercent}
                             onChange={e => setEventSettings({ ...eventSettings, platformFeePercent: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500"
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
                           />
                         </div>
                         <div>
@@ -1762,7 +1975,7 @@ export default function EventDetailPage() {
                             type="number" step="0.1" min="0" max="100"
                             value={eventSettings.processingFeePercent}
                             onChange={e => setEventSettings({ ...eventSettings, processingFeePercent: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500"
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
                           />
                         </div>
                         <div>
@@ -1771,7 +1984,7 @@ export default function EventDetailPage() {
                             type="number" step="0.01" min="0"
                             value={eventSettings.processingFeeFixed}
                             onChange={e => setEventSettings({ ...eventSettings, processingFeeFixed: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500"
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
                           />
                         </div>
                       </div>
@@ -1782,12 +1995,12 @@ export default function EventDetailPage() {
               )}
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Access & Options</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Access & Options</h4>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
                     <input 
                       type="checkbox" 
-                      className="w-5 h-5 rounded border-surface-300 text-navy-900" 
+                      className="w-5 h-5 rounded border-surface-300 text-brand-900" 
                       checked={eventSettings.invitationOnly} 
                       onChange={e => {
                         const invitationOnly = e.target.checked;
@@ -1799,31 +2012,123 @@ export default function EventDetailPage() {
                         });
                       }} 
                     />
-                    <div><span className="font-medium text-navy-900">Invitation Only</span><p className="text-sm text-surface-500">Guests must be approved before accessing event features</p></div>
+                    <div><span className="font-medium text-brand-900">Invitation Only</span><p className="text-sm text-surface-500">Guests must be approved before accessing event features</p></div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-navy-900" checked={eventSettings.reelEnabled} onChange={e => setEventSettings({ ...eventSettings, reelEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-navy-900">Enable Reel Generation</span><p className="text-sm text-surface-500">Allow generating video compilations from guest videos</p></div>
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.reelEnabled} onChange={e => setEventSettings({ ...eventSettings, reelEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-brand-900">Enable Reel Generation</span><p className="text-sm text-surface-500">Allow generating video compilations from guest videos</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.strictInviteOnly} onChange={e => setEventSettings({ ...eventSettings, strictInviteOnly: e.target.checked })} />
+                    <div><span className="font-medium text-brand-900">Strict Invite Mode</span><p className="text-sm text-surface-500">Public RSVP requires valid invite token context.</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.itineraryEnabled} onChange={e => setEventSettings({ ...eventSettings, itineraryEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-brand-900">Enable Itinerary</span><p className="text-sm text-surface-500">Guests can follow schedule progress; MC can control completion.</p></div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.giftingEnabled} onChange={e => setEventSettings({ ...eventSettings, giftingEnabled: e.target.checked })} />
+                    <div><span className="font-medium text-brand-900">Enable Gifting</span><p className="text-sm text-surface-500">Allow MoMo cash gifts and gift package checkout for this event.</p></div>
                   </label>
                 </div>
               </div>
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Notifications</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Custom Domains</h4>
+                <p className="text-sm text-surface-500 mb-4">Map client-owned domains to this event. Verification requires TXT + CNAME records.</p>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    className="input flex-1"
+                    placeholder="e.g. wedding.example.com"
+                    value={domainHost}
+                    onChange={(e) => setDomainHost(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={savingDomain}
+                    onClick={handleAddDomain}
+                  >
+                    {savingDomain ? 'Adding...' : 'Add Domain'}
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {domains.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-surface-300 bg-surface-50 px-4 py-5 text-sm text-surface-500">
+                      No domains connected yet.
+                    </div>
+                  ) : (
+                    domains.map((domain) => (
+                      <div key={domain.id} className="rounded-xl border border-surface-200 p-4 bg-white">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-brand-900">{domain.host}</span>
+                              {domain.isPrimary && <span className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-700">Primary</span>}
+                              <span
+                                className={cn(
+                                  'px-2 py-0.5 rounded text-xs font-medium border',
+                                  domain.status === 'ACTIVE' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                  domain.status === 'VERIFIED' && 'bg-blue-50 text-blue-700 border-blue-200',
+                                  domain.status === 'FAILED' && 'bg-rose-50 text-rose-700 border-rose-200',
+                                  domain.status === 'PENDING_VERIFICATION' && 'bg-amber-50 text-amber-700 border-amber-200'
+                                )}
+                              >
+                                {domain.status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-xs text-surface-500 space-y-1">
+                              <p>TXT: <span className="font-mono text-surface-700">_eventpeepo.{domain.host}</span> = <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
+                              <p>CNAME: <span className="font-mono text-surface-700">{domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`}</span> = <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button type="button" className="btn-outline" onClick={() => handleVerifyDomain(domain.id)}>
+                              Verify
+                            </button>
+                            {!domain.isPrimary && (
+                              <button
+                                type="button"
+                                className="btn-outline"
+                                onClick={() => handleSetPrimaryDomain(domain.id)}
+                                disabled={!['VERIFIED', 'ACTIVE'].includes(domain.status)}
+                              >
+                                Make Primary
+                              </button>
+                            )}
+                            <button type="button" className="btn-ghost text-rose-600 hover:text-rose-700" onClick={() => handleDeleteDomain(domain.id)}>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                        {domain.verificationNotes && (
+                          <p className="mt-2 text-xs text-rose-600">{domain.verificationNotes}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h4 className="font-medium text-brand-900 mb-4">Notifications</h4>
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-surface-600 mb-3">Send notifications when:</p>
                     <div className="grid sm:grid-cols-3 gap-3">
                       <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-navy-900" checked={eventSettings.notifyOnRsvp} onChange={e => setEventSettings({ ...eventSettings, notifyOnRsvp: e.target.checked })} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-brand-900" checked={eventSettings.notifyOnRsvp} onChange={e => setEventSettings({ ...eventSettings, notifyOnRsvp: e.target.checked })} />
                         <span className="text-sm font-medium">New RSVP</span>
                       </label>
                       <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-navy-900" checked={eventSettings.notifyOnCheckIn} onChange={e => setEventSettings({ ...eventSettings, notifyOnCheckIn: e.target.checked })} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-brand-900" checked={eventSettings.notifyOnCheckIn} onChange={e => setEventSettings({ ...eventSettings, notifyOnCheckIn: e.target.checked })} />
                         <span className="text-sm font-medium">Guest Check-in</span>
                       </label>
                       <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-navy-900" checked={eventSettings.notifyOnGuestbook} onChange={e => setEventSettings({ ...eventSettings, notifyOnGuestbook: e.target.checked })} />
+                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-brand-900" checked={eventSettings.notifyOnGuestbook} onChange={e => setEventSettings({ ...eventSettings, notifyOnGuestbook: e.target.checked })} />
                         <span className="text-sm font-medium">Guestbook Entry</span>
                       </label>
                     </div>
@@ -1853,7 +2158,7 @@ export default function EventDetailPage() {
               </div>
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Guestbook Limits</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Guestbook Limits</h4>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <div><label className="label">Min Recording (sec)</label><input type="number" min="10" max="60" className="input" value={eventSettings.minRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, minRecordingDuration: parseInt(e.target.value) })} /></div>
                   <div><label className="label">Max Recording (sec)</label><input type="number" min="30" max="300" className="input" value={eventSettings.maxRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, maxRecordingDuration: parseInt(e.target.value) })} /></div>
@@ -1862,7 +2167,7 @@ export default function EventDetailPage() {
               </div>
 
               <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-navy-900 mb-4">Booth/Kiosk Settings</h4>
+                <h4 className="font-medium text-brand-900 mb-4">Booth/Kiosk Settings</h4>
                 <p className="text-sm text-surface-500 mb-4">Configure the photo booth experience for guests.</p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div><label className="label">Max Photos Per Session</label><input type="number" min="1" max="50" className="input" value={eventSettings.maxPhotosPerBoothSession} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerBoothSession: parseInt(e.target.value) || 10 })} /></div>
@@ -1881,20 +2186,24 @@ export default function EventDetailPage() {
                 ].map((r, i) => (
                   <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
                     <span className="text-surface-500">{r.l}</span>
-                    <span className="font-medium text-navy-900">{r.v}</span>
+                    <span className="font-medium text-brand-900">{r.v}</span>
                   </div>
                 ))}
               </div>
               <div className="space-y-3">
                 {[
                   { l: 'Invitation Only', v: event.invitationOnly ? 'Yes' : 'No' },
+                  { l: 'Strict Invite Mode', v: event.strictInviteOnly ? 'Enabled' : 'Disabled' },
+                  { l: 'Itinerary', v: event.itineraryEnabled ? 'Enabled' : 'Disabled' },
+                  { l: 'Gifting', v: event.giftingEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Reel Generation', v: event.reelEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Recording Limits', v: `${event.minRecordingDuration}s – ${event.maxRecordingDuration}s` },
                   { l: 'Max Photos/Guest', v: event.maxPhotosPerGuest },
+                  { l: 'Custom Domains', v: domains.length || 0 },
                 ].map((r, i) => (
                   <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
                     <span className="text-surface-500">{r.l}</span>
-                    <span className="font-medium text-navy-900">{r.v}</span>
+                    <span className="font-medium text-brand-900">{r.v}</span>
                   </div>
                 ))}
               </div>

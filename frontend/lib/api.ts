@@ -48,6 +48,20 @@ export const eventsApi = {
   get: (id: string) => api.get(`/events/${id}`),
   create: (data: any) => api.post('/events', data),
   update: (id: string, data: any) => api.patch(`/events/${id}`, data),
+  uploadCover: (id: string, formData: FormData) =>
+    api.post(`/events/${id}/cover`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteCover: (id: string) => api.delete(`/events/${id}/cover`),
+  getDomains: (id: string) => api.get(`/events/${id}/domains`),
+  addDomain: (id: string, data: { host: string; isPrimary?: boolean }) =>
+    api.post(`/events/${id}/domains`, data),
+  verifyDomain: (id: string, domainId: string) =>
+    api.post(`/events/${id}/domains/${domainId}/verify`),
+  setPrimaryDomain: (id: string, domainId: string) =>
+    api.patch(`/events/${id}/domains/${domainId}/primary`),
+  deleteDomain: (id: string, domainId: string) =>
+    api.delete(`/events/${id}/domains/${domainId}`),
   delete: (id: string) => api.delete(`/events/${id}`),
   setPhase: (id: string, phase: string, override: boolean = false) =>
     api.post(`/events/${id}/phase`, { phase, override }),
@@ -115,6 +129,10 @@ export const rsvpApi = {
   get: (id: string) => api.get(`/rsvp/${id}`),
   submit: (eventSlug: string, data: any) => axios.post(`${API_BASE_URL}/api/rsvp/${eventSlug}`, data),
   review: (id: string, status: 'APPROVED' | 'REJECTED') => api.post(`/rsvp/${id}/review`, { status }),
+  inviteRespond: (token: string, data: { response: 'YES' | 'NO' }) =>
+    axios.post(`${API_BASE_URL}/api/rsvp/invite/${token}/respond`, data),
+  inviteDetails: (token: string, data: { partySize?: number; note?: string; email?: string }) =>
+    axios.patch(`${API_BASE_URL}/api/rsvp/invite/${token}/details`, data),
 };
 
 // Media API
@@ -122,6 +140,7 @@ export const mediaApi = {
   list: (eventId: string, type?: string) => api.get(`/media/event/${eventId}`, { params: type ? { type } : undefined }),
   get: (id: string) => api.get(`/media/${id}`),
   delete: (id: string) => api.delete(`/media/${id}`),
+  bulkDelete: (mediaIds: string[]) => api.post('/media/bulk-delete', { mediaIds }),
   download: (id: string) => api.get(`/media/${id}/download`, { responseType: 'blob' }),
   downloadAll: (eventId: string) => api.get(`/media/event/${eventId}/download-all`, { responseType: 'blob' }),
   stats: (eventId: string) => api.get(`/media/event/${eventId}/stats`),
@@ -143,6 +162,9 @@ export const checkInApi = {
 export const publicApi = {
   getEvent: (slug: string) => axios.get(`${API_BASE_URL}/api/public/event/${slug}`),
   getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/public/event/token/${token}`),
+  getRsvpInvite: (token: string) => axios.get(`${API_BASE_URL}/api/public/rsvp-invite/${token}`),
+  resolveDomain: (host: string) => axios.get(`${API_BASE_URL}/api/public/domain/${encodeURIComponent(host)}`),
+  getItinerary: (slug: string) => axios.get(`${API_BASE_URL}/api/public/event/${slug}/itinerary`),
 };
 
 // Guestbook API
@@ -363,8 +385,44 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps`, {
       params, headers: ownerHeaders(),
     }),
+  reviewRsvp: (eventId: string, rsvpId: string, status: 'APPROVED' | 'REJECTED') =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps/${rsvpId}/review`, { status }, {
+      headers: ownerHeaders(),
+    }),
   getMedia: (eventId: string) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, {
+      headers: ownerHeaders(),
+    }),
+  getDomains: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/domains`, {
+      headers: ownerHeaders(),
+    }),
+  addDomain: (eventId: string, data: { host: string; isPrimary?: boolean }) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/domains`, data, {
+      headers: ownerHeaders(),
+    }),
+  verifyDomain: (eventId: string, domainId: string) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/domains/${domainId}/verify`, {}, {
+      headers: ownerHeaders(),
+    }),
+  setPrimaryDomain: (eventId: string, domainId: string) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/domains/${domainId}/primary`, {}, {
+      headers: ownerHeaders(),
+    }),
+  deleteDomain: (eventId: string, domainId: string) =>
+    axios.delete(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/domains/${domainId}`, {
+      headers: ownerHeaders(),
+    }),
+  getRsvpInvites: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites`, {
+      headers: ownerHeaders(),
+    }),
+  sendRsvpInvites: (eventId: string, data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites/batch`, data, {
+      headers: ownerHeaders(),
+    }),
+  resendRsvpInvite: (eventId: string, inviteId: string) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites/${inviteId}/resend`, {}, {
       headers: ownerHeaders(),
     }),
   getCheckIns: (eventId: string) =>
@@ -375,6 +433,45 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/tickets`, {
       headers: ownerHeaders(),
     }),
+  getGiftOrders: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/gift-orders`, {
+      headers: ownerHeaders(),
+    }),
+};
+
+export const itineraryApi = {
+  listTemplates: () => api.get('/itinerary/templates'),
+  createTemplate: (data: any) => api.post('/itinerary/templates', data),
+  updateTemplate: (id: string, data: any) => api.patch(`/itinerary/templates/${id}`, data),
+  deleteTemplate: (id: string) => api.delete(`/itinerary/templates/${id}`),
+  applyTemplate: (eventId: string, templateId: string) =>
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/apply-template`, { templateId }, {
+      headers: ownerHeaders(),
+    }),
+  getItems: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/itinerary/events/${eventId}/items`, { headers: ownerHeaders() }),
+  createItem: (eventId: string, data: any) =>
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/items`, data, { headers: ownerHeaders() }),
+  updateItem: (eventId: string, itemId: string, data: any) =>
+    axios.patch(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/${itemId}`, data, { headers: ownerHeaders() }),
+  reorderItems: (eventId: string, itemIds: string[]) =>
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/reorder`, { itemIds }, { headers: ownerHeaders() }),
+  createMcSession: (eventId: string, data?: any) =>
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/mc-session`, data || {}, { headers: ownerHeaders() }),
+  getMcSession: (token: string) => axios.get(`${API_BASE_URL}/api/itinerary/mc/${token}`),
+  toggleMcItem: (token: string, itemId: string) =>
+    axios.post(`${API_BASE_URL}/api/itinerary/mc/${token}/items/${itemId}/toggle`),
+};
+
+export const giftingApi = {
+  getPublicOptions: (slug: string) => axios.get(`${API_BASE_URL}/api/gifting/public/${slug}/options`),
+  checkout: (slug: string, data: any) => axios.post(`${API_BASE_URL}/api/gifting/public/${slug}/checkout`, data),
+  listPackages: () => api.get('/gifting/packages'),
+  createPackage: (data: any) => api.post('/gifting/packages', data),
+  updatePackage: (id: string, data: any) => api.patch(`/gifting/packages/${id}`, data),
+  deletePackage: (id: string) => api.delete(`/gifting/packages/${id}`),
+  listOrders: (eventId?: string) => api.get('/gifting/orders', { params: { eventId } }),
+  listOwnerOrders: () => axios.get(`${API_BASE_URL}/api/gifting/owner/orders`, { headers: ownerHeaders() }),
 };
 
 

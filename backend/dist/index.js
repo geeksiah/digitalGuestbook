@@ -220,6 +220,9 @@ const promo_codes_js_1 = __importDefault(require("./routes/promo-codes.js"));
 const owners_js_1 = __importDefault(require("./routes/owners.js"));
 const owner_auth_js_1 = __importDefault(require("./routes/owner-auth.js"));
 const owner_dashboard_js_1 = __importDefault(require("./routes/owner-dashboard.js"));
+const itinerary_js_1 = __importDefault(require("./routes/itinerary.js"));
+const gifting_js_1 = __importDefault(require("./routes/gifting.js"));
+const whatsapp_webhooks_js_1 = __importDefault(require("./routes/whatsapp-webhooks.js"));
 // Middleware
 const errorHandler_js_1 = require("./middleware/errorHandler.js");
 const requestLogger_js_1 = require("./middleware/requestLogger.js");
@@ -277,7 +280,7 @@ app.use((0, cors_1.default)({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token', 'X-Owner-Token', 'X-Invite-Token'],
 }));
 // Rate Limiting
 const limiter = (0, express_rate_limit_1.default)({
@@ -460,6 +463,9 @@ app.use('/api/promo-codes', promo_codes_js_1.default);
 app.use('/api/owners', owners_js_1.default);
 app.use('/api/owner-auth', owner_auth_js_1.default);
 app.use('/api/owner-dashboard', owner_dashboard_js_1.default);
+app.use('/api/itinerary', itinerary_js_1.default);
+app.use('/api/gifting', gifting_js_1.default);
+app.use('/api/whatsapp', whatsapp_webhooks_js_1.default);
 // 404 Handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Endpoint not found' });

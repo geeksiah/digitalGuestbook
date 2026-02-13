@@ -1,11 +1,16 @@
 "use strict";
-// COMPLETE REPLACEMENT FOR backend/src/routes/public.ts
-// Fixes:
-//   1. Adds missing routes: guestbook, guestbook/video, guestbook/audio, guestbook/photo,
-//      rsvp, live, ended, booth, booth/video, booth/audio, booth/photo
-//   2. Proper phase-aware template rendering
-//   3. Proper asset path resolution
-//   4. All sub-page template IDs included in EVENT_PUBLIC_SELECT
+// backend/src/routes/public.ts
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRODUCTION-SAFE UPDATE — Adds X-Template-Asset-Base header for CDN-direct
+// asset delivery, while keeping server-side rewriting as fallback.
+//
+// Changes from previous production version:
+//   1. Emits X-Template-Asset-Base + Access-Control-Expose-Headers
+//   2. Emits Cache-Control on template HTML responses
+//   3. TEMPLATES bucket Supabase public URL used when available
+//   4. All existing routes preserved exactly
+//   5. Server-side rewriting KEPT as fallback for non-updated frontends
+// ═══════════════════════════════════════════════════════════════════════════════
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -15,14 +20,18 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const phase_js_1 = require("../utils/phase.js");
 const template_helper_js_1 = require("../utils/template-helper.js");
+const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const router = (0, express_1.Router)();
 // ─── Event select fields ───────────────────────────────────────────────────────
-// CRITICAL: include ALL template ID fields so renderEventTemplate can look them up
 const EVENT_PUBLIC_SELECT = {
     id: true,
     slug: true,
     name: true,
     description: true,
+    socialTitle: true,
+    socialDescription: true,
+    coverImagePath: true,
+    coverImageAlt: true,
     date: true,
     endDate: true,
     timezone: true,
@@ -37,6 +46,9 @@ const EVENT_PUBLIC_SELECT = {
     guestbookEnabled: true,
     checkInEnabled: true,
     invitationOnly: true,
+    strictInviteOnly: true,
+    itineraryEnabled: true,
+    giftingEnabled: true,
     isArchived: true,
     // Template assignments
     invitationTemplateId: true,
@@ -52,10 +64,11 @@ const EVENT_PUBLIC_SELECT = {
     thankYouTemplateId: true,
     liveLandingTemplateId: true,
     eventEndedTemplateId: true,
+    itineraryPageTemplateId: true,
+    giftingPageTemplateId: true,
 };
 // ─── Helper: standard template data ────────────────────────────────────────────
 function buildTemplateData(event, currentPhase, capabilities) {
-    // Frontend URL for navigation links inside templates
     const frontendUrl = (process.env.FRONTEND_URL ||
         process.env.SITE_URL ||
         process.env.APP_URL ||
@@ -97,6 +110,8 @@ function buildTemplateData(event, currentPhase, capabilities) {
             boothVideo: `${frontendUrl}/e/${event.slug}/booth/video`,
             boothAudio: `${frontendUrl}/e/${event.slug}/booth/audio`,
             boothPhoto: `${frontendUrl}/e/${event.slug}/booth/photo`,
+            itinerary: `${frontendUrl}/e/${event.slug}/itinerary`,
+            gifting: `${frontendUrl}/gift/${event.slug}`,
         },
     };
 }
@@ -106,19 +121,37 @@ async function fetchPublicEvent(slug) {
         where: { slug },
         select: EVENT_PUBLIC_SELECT,
     });
-    if (!event) {
+    if (!event)
         throw new errorHandler_js_1.AppError('Event not found', 404);
-    }
-    if (event.isArchived) {
+    if (event.isArchived)
         throw new errorHandler_js_1.AppError('This event is no longer available', 410);
-    }
     return event;
 }
+// ─── Helper: compute Supabase public base URL for template assets ──────────────
+function getTemplateAssetBase(templateId) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    if (!supabaseUrl)
+        return null;
+    // Supabase public URL pattern for the templates bucket
+    return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/templates/${templateId}/`;
+}
+function resolveEventCoverUrl(coverImagePath) {
+    if (!coverImagePath)
+        return null;
+    if (coverImagePath.startsWith('http://') || coverImagePath.startsWith('https://')) {
+        return coverImagePath;
+    }
+    try {
+        return (0, supabaseStorage_js_1.getPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, coverImagePath);
+    }
+    catch {
+        return coverImagePath;
+    }
+}
 // ─── Helper: render template ───────────────────────────────────────────────────
-// CRITICAL FIXES:
-// 1. Only uses assigned template (no automatic defaults)
-// 2. Properly resolves asset paths to API endpoints
-// 3. Better error handling and logging
+// UPDATED: Emits X-Template-Asset-Base header so the frontend can rewrite
+// asset URLs to hit Supabase CDN directly instead of the backend.
+// Server-side rewriting is KEPT as fallback for direct-fetch/curl compatibility.
 async function renderEventTemplate(event, templateType, templateId, templateData, res) {
     const template = await (0, template_helper_js_1.getEventTemplate)(templateType, templateId);
     console.info(`[Render] event=${event.id} slug=${event.slug} ` +
@@ -153,36 +186,50 @@ async function renderEventTemplate(event, templateType, templateId, templateData
         });
     };
     html = replaceVariables(html, templateData);
-    // CRITICAL FIX: Resolve asset paths using FULL backend URL
-    // The HTML is fetched by the frontend (app.eventpeepo.com) and rendered there.
-    // Relative /api/ paths would resolve against the frontend domain and 404.
-    // We must use absolute URLs pointing to the backend.
+    // ── Asset URL resolution ─────────────────────────────────────────────────
+    // Strategy:
+    //   1. Emit X-Template-Asset-Base header → frontend reads it, rewrites to CDN
+    //   2. ALSO do server-side rewriting (fallback for curl/direct-fetch/old frontends)
+    //
+    // The frontend SHOULD prefer the header value over server-side rewritten URLs.
+    // Try Supabase CDN path first (if TEMPLATES bucket is public)
+    const supabaseAssetBase = template.assetsPath
+        ? getTemplateAssetBase(template.id)
+        : null;
+    // Backend API fallback path
+    const backendUrl = (process.env.API_URL ||
+        process.env.BACKEND_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        '').replace(/\/+$/, '');
+    const apiAssetBase = backendUrl
+        ? `${backendUrl}/api/templates/${template.id}/assets/`
+        : `/api/templates/${template.id}/assets/`;
+    // The header tells the frontend where to get assets from.
+    // Prefer Supabase CDN (public, fast, no backend load).
+    // Fall back to backend API asset route if Supabase URL not configured.
+    const assetBaseForHeader = supabaseAssetBase || apiAssetBase;
+    // Server-side rewriting always uses the backend API path for maximum compatibility
+    // (the backend asset route handles auth, content-type, etc.)
+    const assetBaseForHtml = apiAssetBase;
     if (template.assetsPath) {
-        const backendUrl = (process.env.API_URL ||
-            process.env.BACKEND_URL ||
-            process.env.RENDER_EXTERNAL_URL ||
-            '').replace(/\/+$/, '');
-        const assetBase = backendUrl
-            ? `${backendUrl}/api/templates/${template.id}/assets/`
-            : `/api/templates/${template.id}/assets/`;
         // Pattern 1: src="./assets/..." or src="../assets/..."
-        html = html.replace(/(src|href)=["'](\.\/|\.\.\/)?assets\//g, `$1="${assetBase}`);
+        html = html.replace(/(src|href)=["'](\.\/|\.\.\/)?assets\//g, `$1="${assetBaseForHtml}`);
         // Pattern 2: src="/assets/..."
-        html = html.replace(/(src|href)=["']\/assets\//g, `$1="${assetBase}`);
-        // Pattern 3: bare filenames like src="MCS_9627.jpeg" (no assets/ prefix)
-        // These are relative to the template root — rewrite to asset endpoint
-        html = html.replace(/(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi, `$1="${assetBase}$2"`);
+        html = html.replace(/(src|href)=["']\/assets\//g, `$1="${assetBaseForHtml}`);
+        // Pattern 3: bare filenames like src="MCS_9627.jpeg"
+        html = html.replace(/(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi, `$1="${assetBaseForHtml}$2"`);
         // Pattern 4: CSS url() references in inline styles
-        html = html.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBase}`);
+        html = html.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBaseForHtml}`);
         // Pattern 5: CSS url() in separate cssContent
         if (template.cssContent) {
-            template.cssContent = template.cssContent.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBase}`);
+            template.cssContent = template.cssContent.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBaseForHtml}`);
         }
-        console.info(`[Render] Resolved asset paths for template=${template.id} base=${assetBase}`);
+        console.info(`[Render] Asset paths resolved for template=${template.id} ` +
+            `htmlBase=${assetBaseForHtml} headerBase=${assetBaseForHeader}`);
     }
     // Inject CSS
     if (template.cssContent) {
-        const cssTag = `<style>\n${template.cssContent}\n</style>`;
+        const cssTag = `<style id="tpl-css-${template.id}">\n${template.cssContent}\n</style>`;
         if (html.includes('</head>')) {
             html = html.replace('</head>', `${cssTag}\n</head>`);
         }
@@ -192,7 +239,7 @@ async function renderEventTemplate(event, templateType, templateId, templateData
     }
     // Inject JS
     if (template.jsContent) {
-        const jsTag = `<script>\n${template.jsContent}\n</script>`;
+        const jsTag = `<script id="tpl-js-${template.id}">\n${template.jsContent}\n</script>`;
         if (html.includes('</body>')) {
             html = html.replace('</body>', `${jsTag}\n</body>`);
         }
@@ -200,16 +247,22 @@ async function renderEventTemplate(event, templateType, templateId, templateData
             html = html + '\n' + jsTag;
         }
     }
-    // Set proper content type and send
+    // ── Response headers ─────────────────────────────────────────────────────
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'private, max-age=30');
+    // Emit CDN asset base as header — frontend reads this and rewrites URLs
+    if (assetBaseForHeader) {
+        res.setHeader('X-Template-Asset-Base', assetBaseForHeader);
+    }
+    // Expose the custom header to frontend fetch()
+    res.setHeader('Access-Control-Expose-Headers', 'X-Template-Asset-Base');
     res.send(html);
 }
 // ═══════════════════════════════════════════════════════════════════════════════
-// ROUTES
+// ROUTES — all preserved exactly from production
 // ═══════════════════════════════════════════════════════════════════════════════
 /**
  * GET /api/public/event/:slug
- * Get public event information (JSON)
  */
 router.get('/event/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
@@ -221,6 +274,11 @@ router.get('/event/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
             slug: event.slug,
             name: event.name,
             description: event.description,
+            socialTitle: event.socialTitle,
+            socialDescription: event.socialDescription,
+            coverImagePath: event.coverImagePath,
+            coverImageAlt: event.coverImageAlt,
+            coverImageUrl: resolveEventCoverUrl(event.coverImagePath),
             date: event.date,
             endDate: event.endDate,
             timezone: event.timezone,
@@ -234,58 +292,236 @@ router.get('/event/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
                 checkIn: event.checkInEnabled,
             },
             invitationOnly: event.invitationOnly,
+            strictInviteOnly: event.strictInviteOnly,
+            itineraryEnabled: event.itineraryEnabled,
+            giftingEnabled: event.giftingEnabled,
         },
         urls: {
             rsvp: event.rsvpEnabled ? `/e/${event.slug}/rsvp` : null,
             guestbook: event.guestbookEnabled ? `/e/${event.slug}/guestbook` : null,
             booth: event.guestbookEnabled ? `/e/${event.slug}/booth` : null,
+            itinerary: event.itineraryEnabled ? `/e/${event.slug}/itinerary` : null,
+            gifting: event.giftingEnabled ? `/gift/${event.slug}` : null,
             thankYou: `/e/${event.slug}/thanks`,
         },
     });
 }));
-// ─── Invitation ────────────────────────────────────────────────────────────────
 /**
- * GET /api/public/event/:slug/invitation
- * Rendered invitation page
+ * GET /api/public/domain/:host
+ * Resolve custom domain host to event slug
  */
+router.get('/domain/:host', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const host = String(req.params.host || '').trim().toLowerCase();
+    if (!host) {
+        throw new errorHandler_js_1.AppError('Host is required', 400);
+    }
+    const domain = await prisma_js_1.default.eventDomain.findUnique({
+        where: { host },
+        include: {
+            event: {
+                select: {
+                    id: true,
+                    slug: true,
+                    isArchived: true,
+                },
+            },
+        },
+    });
+    if (!domain || !domain.event || domain.event.isArchived || !['ACTIVE', 'VERIFIED'].includes(domain.status)) {
+        return res.status(404).json({ mapped: false });
+    }
+    return res.json({
+        mapped: true,
+        eventId: domain.event.id,
+        slug: domain.event.slug,
+        host: domain.host,
+    });
+}));
+/**
+ * GET /api/public/rsvp-invite/:token
+ * Public payload for WhatsApp/deep-link invite card
+ */
+router.get('/rsvp-invite/:token', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const token = String(req.params.token || '').trim();
+    if (!token) {
+        throw new errorHandler_js_1.AppError('Invite token is required', 400);
+    }
+    const invite = await prisma_js_1.default.rsvpInvite.findUnique({
+        where: { token },
+        include: {
+            event: {
+                select: {
+                    id: true,
+                    slug: true,
+                    name: true,
+                    description: true,
+                    date: true,
+                    endDate: true,
+                    timezone: true,
+                    venue: true,
+                    socialTitle: true,
+                    socialDescription: true,
+                    coverImagePath: true,
+                    coverImageAlt: true,
+                    strictInviteOnly: true,
+                    invitationOnly: true,
+                },
+            },
+        },
+    });
+    if (!invite) {
+        throw new errorHandler_js_1.AppError('Invite not found', 404);
+    }
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+        throw new errorHandler_js_1.AppError('Invite has expired', 410);
+    }
+    if (invite.status === 'SENT') {
+        await prisma_js_1.default.rsvpInvite.update({
+            where: { id: invite.id },
+            data: {
+                status: 'OPENED',
+                openedAt: invite.openedAt || new Date(),
+            },
+        });
+    }
+    res.json({
+        invite: {
+            id: invite.id,
+            token: invite.token,
+            status: invite.status,
+            inviteeName: invite.inviteeName,
+            inviteePhone: invite.inviteePhone,
+            inviteeEmail: invite.inviteeEmail,
+            initialResponse: invite.initialResponse,
+            partySize: invite.partySize,
+            note: invite.note,
+            expiresAt: invite.expiresAt,
+        },
+        event: {
+            id: invite.event.id,
+            slug: invite.event.slug,
+            name: invite.event.name,
+            title: invite.event.socialTitle || invite.event.name,
+            description: invite.event.socialDescription || invite.event.description,
+            date: invite.event.date,
+            endDate: invite.event.endDate,
+            timezone: invite.event.timezone,
+            venue: invite.event.venue,
+            coverImageUrl: resolveEventCoverUrl(invite.event.coverImagePath),
+            coverImageAlt: invite.event.coverImageAlt,
+            strictInviteOnly: invite.event.strictInviteOnly,
+            invitationOnly: invite.event.invitationOnly,
+        },
+    });
+}));
+/**
+ * GET /api/public/event/:slug/itinerary
+ * Public attendee itinerary (read-only)
+ */
+router.get('/event/:slug/itinerary', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const event = await prisma_js_1.default.event.findUnique({
+        where: { slug: req.params.slug },
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            date: true,
+            venue: true,
+            itineraryEnabled: true,
+            isArchived: true,
+            itineraryItems: {
+                orderBy: { sortOrder: 'asc' },
+                select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    startsAt: true,
+                    endsAt: true,
+                    location: true,
+                    sortOrder: true,
+                    isCompleted: true,
+                    completedAt: true,
+                },
+            },
+        },
+    });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    if (event.isArchived)
+        throw new errorHandler_js_1.AppError('This event is no longer available', 410);
+    if (!event.itineraryEnabled)
+        throw new errorHandler_js_1.AppError('Itinerary is disabled for this event', 404);
+    const total = event.itineraryItems.length;
+    const completed = event.itineraryItems.filter((item) => item.isCompleted).length;
+    res.json({
+        event: {
+            id: event.id,
+            slug: event.slug,
+            name: event.name,
+            date: event.date,
+            venue: event.venue,
+        },
+        itinerary: {
+            total,
+            completed,
+            percent: total ? Math.round((completed / total) * 100) : 0,
+            items: event.itineraryItems,
+        },
+    });
+}));
+/**
+ * GET /api/public/event/:slug/itinerary-page
+ * Render itinerary page template (if assigned)
+ */
+router.get('/event/:slug/itinerary-page', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const event = await fetchPublicEvent(req.params.slug);
+    if (!event.itineraryEnabled)
+        throw new errorHandler_js_1.AppError('Itinerary is disabled for this event', 404);
+    const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
+    const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
+    const templateData = buildTemplateData(event, currentPhase, capabilities);
+    await renderEventTemplate(event, 'ITINERARY', event.itineraryPageTemplateId, templateData, res);
+}));
+/**
+ * GET /api/public/event/:slug/gifting
+ * Render gifting page template (if assigned)
+ */
+router.get('/event/:slug/gifting', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const event = await fetchPublicEvent(req.params.slug);
+    if (!event.giftingEnabled)
+        throw new errorHandler_js_1.AppError('Gifting is disabled for this event', 404);
+    const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
+    const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
+    const templateData = buildTemplateData(event, currentPhase, capabilities);
+    await renderEventTemplate(event, 'GIFTING', event.giftingPageTemplateId, templateData, res);
+}));
+// ─── Invitation ────────────────────────────────────────────────────────────────
 router.get('/event/:slug/invitation', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.invitationEnabled) {
+    if (!event.invitationEnabled)
         throw new errorHandler_js_1.AppError('Invitation page not available', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'INVITATION', event.invitationTemplateId, templateData, res);
 }));
 // ─── RSVP ──────────────────────────────────────────────────────────────────────
-/**
- * GET /api/public/event/:slug/rsvp
- * Rendered RSVP form page
- */
 router.get('/event/:slug/rsvp', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.rsvpEnabled) {
+    if (!event.rsvpEnabled)
         throw new errorHandler_js_1.AppError('RSVP is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canSubmitRsvp) {
+    if (!capabilities.canSubmitRsvp)
         throw new errorHandler_js_1.AppError('RSVP is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'RSVP', event.rsvpTemplateId, templateData, res);
 }));
 // ─── Live Landing ──────────────────────────────────────────────────────────────
-/**
- * GET /api/public/event/:slug/live
- * Live landing page (shown during LIVE phase)
- */
 router.get('/event/:slug/live', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    // Live landing only during LIVE phase — return JSON (not redirect) so fetch() works
     if (currentPhase !== 'LIVE') {
         return res.json({ template: null, phase: currentPhase, message: 'Event is not in LIVE phase' });
     }
@@ -293,15 +529,10 @@ router.get('/event/:slug/live', (0, errorHandler_js_1.asyncHandler)(async (req, 
     await renderEventTemplate(event, 'LIVE_LANDING', event.liveLandingTemplateId, templateData, res);
 }));
 // ─── Event Ended ───────────────────────────────────────────────────────────────
-/**
- * GET /api/public/event/:slug/ended
- * Event ended page (shown during POST_EVENT phase)
- */
 router.get('/event/:slug/ended', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    // Ended page only during POST_EVENT — return JSON (not redirect) so fetch() works
     if (currentPhase !== 'POST_EVENT') {
         return res.json({ template: null, phase: currentPhase, message: 'Event is not in POST_EVENT phase' });
     }
@@ -309,152 +540,99 @@ router.get('/event/:slug/ended', (0, errorHandler_js_1.asyncHandler)(async (req,
     await renderEventTemplate(event, 'EVENT_ENDED', event.eventEndedTemplateId, templateData, res);
 }));
 // ─── Guestbook ─────────────────────────────────────────────────────────────────
-/**
- * GET /api/public/event/:slug/guestbook
- * Guestbook menu / landing page
- */
 router.get('/event/:slug/guestbook', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Guestbook is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Guestbook is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'GUESTBOOK', event.guestbookTemplateId, templateData, res);
 }));
-/**
- * GET /api/public/event/:slug/guestbook/video
- * Guestbook video recording page
- */
 router.get('/event/:slug/guestbook/video', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Guestbook is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Guestbook is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'GUESTBOOK_VIDEO', event.guestbookVideoTemplateId, templateData, res);
 }));
-/**
- * GET /api/public/event/:slug/guestbook/audio
- * Guestbook audio recording page
- */
 router.get('/event/:slug/guestbook/audio', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Guestbook is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Guestbook is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'GUESTBOOK_AUDIO', event.guestbookAudioTemplateId, templateData, res);
 }));
-/**
- * GET /api/public/event/:slug/guestbook/photo
- * Guestbook photo upload page
- */
 router.get('/event/:slug/guestbook/photo', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Guestbook is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Guestbook is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'GUESTBOOK_PHOTO', event.guestbookPhotoTemplateId, templateData, res);
 }));
 // ─── Booth ─────────────────────────────────────────────────────────────────────
-/**
- * GET /api/public/event/:slug/booth
- * Booth menu / landing page (kiosk mode)
- */
 router.get('/event/:slug/booth', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Booth is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Booth is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'BOOTH', event.boothTemplateId, templateData, res);
 }));
-/**
- * GET /api/public/event/:slug/booth/video
- * Booth video recording page
- */
 router.get('/event/:slug/booth/video', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Booth is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Booth is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'BOOTH_VIDEO', event.boothVideoTemplateId, templateData, res);
 }));
-/**
- * GET /api/public/event/:slug/booth/audio
- * Booth audio recording page
- */
 router.get('/event/:slug/booth/audio', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Booth is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Booth is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'BOOTH_AUDIO', event.boothAudioTemplateId, templateData, res);
 }));
-/**
- * GET /api/public/event/:slug/booth/photo
- * Booth photo capture page
- */
 router.get('/event/:slug/booth/photo', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
-    if (!event.guestbookEnabled) {
+    if (!event.guestbookEnabled)
         throw new errorHandler_js_1.AppError('Booth is not available for this event', 404);
-    }
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
-    if (!capabilities.canAccessGuestbook) {
+    if (!capabilities.canAccessGuestbook)
         throw new errorHandler_js_1.AppError('Booth is not available during this event phase', 403);
-    }
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'BOOTH_PHOTO', event.boothPhotoTemplateId, templateData, res);
 }));
 // ─── Thank-You ─────────────────────────────────────────────────────────────────
-/**
- * GET /api/public/event/:slug/thank-you
- * Thank-you page (POST_EVENT phase only)
- */
 router.get('/event/:slug/thank-you', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await fetchPublicEvent(req.params.slug);
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
-    // Thank-you page is only for POST_EVENT phase — return JSON (not redirect)
     if (currentPhase !== 'POST_EVENT') {
         return res.json({ template: null, phase: currentPhase, message: 'Event is not in POST_EVENT phase' });
     }

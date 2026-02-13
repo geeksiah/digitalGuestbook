@@ -28,6 +28,10 @@ export const createEventSchema = z.object({
   name: z.string().min(2, 'Event name must be at least 2 characters'),
   slug: z.string().min(2).regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
   description: z.string().optional().nullable(),
+  socialTitle: z.string().max(120).optional().nullable(),
+  socialDescription: z.string().max(240).optional().nullable(),
+  coverImagePath: z.string().optional().nullable(),
+  coverImageAlt: z.string().max(160).optional().nullable(),
   date: z.string().datetime('Invalid date format'),
   endDate: z.string().datetime().optional().nullable(),
   timezone: z.string().default('UTC'),
@@ -36,11 +40,11 @@ export const createEventSchema = z.object({
   // Owner
   ownerId: z.string().uuid().optional(),
   
-  // Couple Contact
-  coupleName1: z.string().optional().nullable(),
-  coupleName2: z.string().optional().nullable(),
-  coupleEmail: z.string().email().optional().nullable(),
-  couplePhone: z.string().optional().nullable(),
+  // Owner Contact
+  ownerName: z.string().optional().nullable(),
+  ownerEmail: z.string().email().optional().nullable(),
+  ownerPhone: z.string().optional().nullable(),
+  organizationName: z.string().optional().nullable(),
   
   // Event Styling
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFD700'),
@@ -53,6 +57,12 @@ export const createEventSchema = z.object({
   guestbookEnabled: z.boolean().default(true),
   checkInEnabled: z.boolean().default(true),
   invitationOnly: z.boolean().default(false),
+  strictInviteOnly: z.boolean().default(false),
+  itineraryEnabled: z.boolean().default(false),
+  itineraryTemplateId: z.string().uuid().optional().nullable(),
+  giftingEnabled: z.boolean().default(false),
+  itineraryPageTemplateId: z.string().uuid().optional().nullable(),
+  giftingPageTemplateId: z.string().uuid().optional().nullable(),
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
   invitationTemplateId: z.string().uuid().optional(),
@@ -90,6 +100,10 @@ export const updateEventSchema = z.object({
   name: z.string().min(2).optional(),
   slug: z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
   description: z.string().optional().nullable(),
+  socialTitle: z.string().max(120).optional().nullable(),
+  socialDescription: z.string().max(240).optional().nullable(),
+  coverImagePath: z.string().optional().nullable(),
+  coverImageAlt: z.string().max(160).optional().nullable(),
   date: z.string().datetime().optional(),
   endDate: z.string().datetime().optional().nullable(),
   timezone: z.string().optional(),
@@ -98,11 +112,11 @@ export const updateEventSchema = z.object({
   // Owner
   ownerId: z.string().uuid().optional().nullable(),
   
-  // Couple Contact
-  coupleName1: z.string().optional().nullable(),
-  coupleName2: z.string().optional().nullable(),
-  coupleEmail: z.string().email().optional().nullable(),
-  couplePhone: z.string().optional().nullable(),
+  // Owner Contact
+  ownerName: z.string().optional().nullable(),
+  ownerEmail: z.string().email().optional().nullable(),
+  ownerPhone: z.string().optional().nullable(),
+  organizationName: z.string().optional().nullable(),
   
   // Event Styling
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
@@ -115,6 +129,12 @@ export const updateEventSchema = z.object({
   guestbookEnabled: z.boolean().optional(),
   checkInEnabled: z.boolean().optional(),
   invitationOnly: z.boolean().optional(),
+  strictInviteOnly: z.boolean().optional(),
+  itineraryEnabled: z.boolean().optional(),
+  itineraryTemplateId: z.string().uuid().optional().nullable(),
+  giftingEnabled: z.boolean().optional(),
+  itineraryPageTemplateId: z.string().uuid().optional().nullable(),
+  giftingPageTemplateId: z.string().uuid().optional().nullable(),
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
   invitationTemplateId: z.string().uuid().optional().nullable(),
@@ -173,6 +193,8 @@ export const createTemplateSchema = z.object({
     'THANK_YOU',
     'LIVE_LANDING',      // ⭐ NEW
     'EVENT_ENDED',       // ⭐ NEW
+    'ITINERARY',
+    'GIFTING',
   ]),
   htmlContent: z.string().min(1, 'HTML content is required'),
   cssContent: z.string().optional(),

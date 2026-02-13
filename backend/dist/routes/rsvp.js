@@ -51,6 +51,128 @@ async function notifyOwnerAboutRsvp(eventId, rsvpData) {
     }
 }
 /**
+ * POST /api/rsvp/invite/:token/respond
+ * One-tap invite response from WhatsApp/deep-link card
+ */
+router.post('/invite/:token/respond', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const token = String(req.params.token || '').trim();
+    const response = String(req.body?.response || req.body?.attendance || '').toUpperCase();
+    const attendance = response === 'YES' || response === 'NO' ? response : '';
+    if (!attendance) {
+        throw new errorHandler_js_1.AppError('Response must be YES or NO', 400);
+    }
+    const invite = await prisma_js_1.default.rsvpInvite.findUnique({
+        where: { token },
+        include: {
+            event: true,
+            rsvp: true,
+        },
+    });
+    if (!invite)
+        throw new errorHandler_js_1.AppError('Invite not found', 404);
+    if (invite.expiresAt && invite.expiresAt < new Date())
+        throw new errorHandler_js_1.AppError('Invite has expired', 410);
+    if (invite.status === 'RESPONDED' || invite.rsvpId)
+        throw new errorHandler_js_1.AppError('Invite has already been used', 409);
+    const status = invite.event.invitationOnly ? 'PENDING' : 'APPROVED';
+    const guestCount = Math.max(1, Number(req.body?.partySize || 1));
+    const rsvp = await prisma_js_1.default.rSVP.create({
+        data: {
+            eventId: invite.eventId,
+            primaryName: invite.inviteeName || 'Guest',
+            email: invite.inviteeEmail || null,
+            phone: invite.inviteePhone || null,
+            attendance,
+            guestCount,
+            note: req.body?.note ? String(req.body.note) : null,
+            status,
+            submissionChannel: 'WHATSAPP',
+        },
+    });
+    await prisma_js_1.default.rsvpInvite.update({
+        where: { id: invite.id },
+        data: {
+            status: 'RESPONDED',
+            initialResponse: attendance,
+            respondedAt: new Date(),
+            partySize: guestCount,
+            note: req.body?.note ? String(req.body.note) : null,
+            rsvpId: rsvp.id,
+        },
+    });
+    let invitation = null;
+    if (attendance === 'YES' && status === 'APPROVED') {
+        invitation = await (0, invitation_js_1.generateInvitationPass)(rsvp.id);
+        if (invitation) {
+            (0, notifications_js_1.sendInvitationNotifications)(invitation.id).catch(err => console.error('[RSVP Invite Respond] Failed to send invitation notifications:', err));
+        }
+    }
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            eventId: invite.eventId,
+            action: 'RSVP_INVITE_RESPONDED',
+            entityType: 'RSVP_INVITE',
+            entityId: invite.id,
+            details: JSON.stringify({
+                attendance,
+                rsvpId: rsvp.id,
+            }),
+        },
+    });
+    res.json({
+        success: true,
+        rsvp: {
+            id: rsvp.id,
+            status: rsvp.status,
+            attendance: rsvp.attendance,
+            guestCount: rsvp.guestCount,
+        },
+        invitation,
+        nextStep: 'details_optional',
+    });
+}));
+/**
+ * PATCH /api/rsvp/invite/:token/details
+ * Optional details after one-tap invite response
+ */
+router.patch('/invite/:token/details', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const token = String(req.params.token || '').trim();
+    const invite = await prisma_js_1.default.rsvpInvite.findUnique({
+        where: { token },
+        include: {
+            rsvp: true,
+        },
+    });
+    if (!invite)
+        throw new errorHandler_js_1.AppError('Invite not found', 404);
+    if (!invite.rsvpId || !invite.rsvp)
+        throw new errorHandler_js_1.AppError('Invite has not been responded to yet', 400);
+    const guestCount = req.body?.partySize ? Math.max(1, Number(req.body.partySize)) : undefined;
+    const note = req.body?.note !== undefined ? String(req.body.note || '') : undefined;
+    const email = req.body?.email !== undefined ? String(req.body.email || '') : undefined;
+    const updatedRsvp = await prisma_js_1.default.rSVP.update({
+        where: { id: invite.rsvpId },
+        data: {
+            guestCount: guestCount ?? undefined,
+            note: note !== undefined ? note || null : undefined,
+            email: email !== undefined ? email || null : undefined,
+        },
+    });
+    const updatedInvite = await prisma_js_1.default.rsvpInvite.update({
+        where: { id: invite.id },
+        data: {
+            partySize: guestCount ?? invite.partySize,
+            note: note !== undefined ? note || null : invite.note,
+            inviteeEmail: email !== undefined ? email || null : invite.inviteeEmail,
+        },
+    });
+    res.json({
+        success: true,
+        invite: updatedInvite,
+        rsvp: updatedRsvp,
+    });
+}));
+/**
  * POST /api/rsvp/:eventSlug
  * Submit RSVP (Public - no auth required)
  * Per SRS Section 4.2
@@ -80,6 +202,25 @@ router.post('/:eventSlug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
     if (!event.rsvpEnabled) {
         throw new errorHandler_js_1.AppError('RSVP is not enabled for this event', 400);
     }
+    const inviteToken = String(req.body?.inviteToken || req.headers['x-invite-token'] || '').trim();
+    let inviteContext = null;
+    if (event.strictInviteOnly) {
+        if (!inviteToken) {
+            throw new errorHandler_js_1.AppError('A valid invite token is required for this event', 403);
+        }
+        inviteContext = await prisma_js_1.default.rsvpInvite.findUnique({
+            where: { token: inviteToken },
+        });
+        if (!inviteContext || inviteContext.eventId !== event.id) {
+            throw new errorHandler_js_1.AppError('Invite token is invalid for this event', 403);
+        }
+        if (inviteContext.expiresAt && inviteContext.expiresAt < new Date()) {
+            throw new errorHandler_js_1.AppError('Invite token has expired', 410);
+        }
+        if (inviteContext.status === 'RESPONDED' || inviteContext.rsvpId) {
+            throw new errorHandler_js_1.AppError('Invite token has already been used', 409);
+        }
+    }
     // Check phase - RSVP only allowed in PRE_EVENT
     const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
     if (!(0, phase_js_1.canSubmitRsvp)(currentPhase)) {
@@ -104,6 +245,21 @@ router.post('/:eventSlug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
             submissionChannel: data.submissionChannel,
         },
     });
+    if (inviteContext) {
+        await prisma_js_1.default.rsvpInvite.update({
+            where: { id: inviteContext.id },
+            data: {
+                status: 'RESPONDED',
+                initialResponse: data.attendance,
+                respondedAt: new Date(),
+                partySize: data.guestCount,
+                note: data.note || null,
+                inviteeEmail: data.email || inviteContext.inviteeEmail,
+                inviteePhone: data.phone || inviteContext.inviteePhone,
+                rsvpId: rsvp.id,
+            },
+        });
+    }
     // If auto-approved (not invitation-only), generate invitation pass immediately
     let invitation = null;
     if (!event.invitationOnly && data.attendance === 'YES') {

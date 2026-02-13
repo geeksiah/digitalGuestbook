@@ -12,6 +12,7 @@
     --muted-foreground: 107 114 128;
     --border: 229 231 235;
     --accent: 99 102 241;
+    --brand: 6 57 50;
   }
 
   * {
@@ -20,6 +21,9 @@
 
   body {
     @apply bg-surface-50 text-navy-900 antialiased;
+    background-image:
+      radial-gradient(circle at 5% 0%, rgba(6, 57, 50, 0.07), transparent 36%),
+      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.05), transparent 28%);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
@@ -43,7 +47,7 @@
 
   /* Form elements */
   input[type="checkbox"] {
-    @apply rounded border-surface-300 text-navy-900 focus:ring-navy-900/20 focus:ring-offset-0;
+    @apply rounded border-surface-300 text-brand-900 focus:ring-brand-900/20 focus:ring-offset-0;
   }
 
   select {
@@ -58,7 +62,7 @@
   }
 
   .btn-primary {
-    @apply btn bg-navy-900 text-white hover:bg-navy-800 active:bg-navy-950 focus:ring-navy-500;
+    @apply btn bg-brand-900 text-white hover:bg-brand-800 active:bg-brand-950 focus:ring-brand-500;
   }
 
   .btn-secondary {
@@ -79,7 +83,7 @@
 
   /* Inputs */
   .input {
-    @apply w-full rounded-lg border border-surface-300 bg-white px-4 py-2.5 text-navy-900 placeholder-surface-400 transition-all duration-150 focus:border-navy-900 focus:outline-none focus:ring-2 focus:ring-navy-900/10;
+    @apply w-full rounded-lg border border-surface-300 bg-white px-4 py-2.5 text-navy-900 placeholder-surface-400 transition-all duration-150 focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/10;
   }
 
   .input:hover:not(:focus) {
@@ -92,7 +96,7 @@
 
   /* Cards */
   .card {
-    @apply bg-white rounded-xl border border-surface-200 p-6 transition-all duration-150;
+    @apply bg-white rounded-2xl border border-surface-200/80 p-6 shadow-soft transition-all duration-150;
   }
 
   .card-hover {
@@ -147,7 +151,7 @@
   }
 
   .tab-active {
-    @apply tab bg-navy-900 text-white;
+    @apply tab bg-brand-900 text-white;
   }
 
   /* Modal overlay */
@@ -182,7 +186,7 @@
   }
 
   .media-thumbnail:hover {
-    @apply ring-2 ring-navy-900/20;
+    @apply ring-2 ring-brand-900/20;
   }
 }
 
@@ -215,7 +219,7 @@
 
   /* Focus visible for keyboard nav */
   .focus-visible-ring:focus-visible {
-    @apply outline-none ring-2 ring-navy-900/30 ring-offset-2;
+    @apply outline-none ring-2 ring-brand-900/30 ring-offset-2;
   }
 
   /* Transition helpers */

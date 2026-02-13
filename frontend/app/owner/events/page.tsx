@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ownerDashboardApi } from '@/lib/api';
 import { formatDate, cn } from '@/lib/utils';
+import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -79,93 +80,84 @@ export default function OwnerEventsPage() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-navy-900">Events</h1>
-          <p className="text-surface-600 mt-1">Manage and track your events</p>
+    <div className="space-y-7">
+      <DashboardPageHeader title="Events" subtitle="Manage RSVP, guestbook media, itinerary, invites, tickets, and payouts" />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="card py-4">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Showing</p>
+          <p className="text-2xl font-bold text-brand-900 mt-1">{filteredEvents.length}</p>
+        </div>
+        <div className="card py-4">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Upcoming</p>
+          <p className="text-2xl font-bold text-brand-900 mt-1">{events.filter((event) => event.currentPhase === 'PRE_EVENT').length}</p>
+        </div>
+        <div className="card py-4">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Live</p>
+          <p className="text-2xl font-bold text-brand-900 mt-1">{events.filter((event) => event.currentPhase === 'LIVE').length}</p>
+        </div>
+        <div className="card py-4">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Past</p>
+          <p className="text-2xl font-bold text-brand-900 mt-1">{events.filter((event) => event.currentPhase === 'POST_EVENT').length}</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setFilter('all')}
-          className={cn(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            filter === 'all'
-              ? 'bg-navy-900 text-white'
-              : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-          )}
-        >
-          All Events
-        </button>
-        <button
-          onClick={() => setFilter('pre')}
-          className={cn(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            filter === 'pre'
-              ? 'bg-navy-900 text-white'
-              : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-          )}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => setFilter('live')}
-          className={cn(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            filter === 'live'
-              ? 'bg-navy-900 text-white'
-              : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-          )}
-        >
-          Live
-        </button>
-        <button
-          onClick={() => setFilter('post')}
-          className={cn(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            filter === 'post'
-              ? 'bg-navy-900 text-white'
-              : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-          )}
-        >
-          Past
-        </button>
-      </div>
-
-      {/* Events List */}
-      {filteredEvents.length === 0 ? (
-        <div className="bg-white rounded-lg border border-surface-200 p-12 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
-            {Icons.calendar}
+      <DashboardSection
+        title="Event List"
+        subtitle="Select an event to manage operations and guest experience flows"
+        action={(
+          <div className="flex gap-1 bg-surface-100 p-1 rounded-xl">
+            {[
+              { key: 'all', label: 'All Events' },
+              { key: 'pre', label: 'Upcoming' },
+              { key: 'live', label: 'Live' },
+              { key: 'post', label: 'Past' },
+            ].map((option) => (
+              <button
+                key={option.key}
+                onClick={() => setFilter(option.key as 'all' | 'pre' | 'live' | 'post')}
+                className={cn(
+                  'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  filter === option.key
+                    ? 'bg-white text-brand-900 shadow-sm'
+                    : 'text-surface-700 hover:text-brand-900'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-          <p className="text-surface-600">No events found</p>
-          <p className="text-sm text-surface-500 mt-1">
-            {filter === 'all' ? 'You don\'t have any events yet' : `No ${filter === 'pre' ? 'upcoming' : filter === 'live' ? 'live' : 'past'} events`}
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-          <div className="divide-y divide-surface-200">
+        )}
+        contentClassName="p-0"
+      >
+        {filteredEvents.length === 0 ? (
+          <div className="text-center py-16 px-6">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
+              {Icons.calendar}
+            </div>
+            <p className="text-surface-600">No events found</p>
+            <p className="text-sm text-surface-500 mt-1">
+              {filter === 'all' ? 'You do not have any events yet' : `No ${filter === 'pre' ? 'upcoming' : filter === 'live' ? 'live' : 'past'} events`}
+            </p>
+          </div>
+        ) : (
+          <div className="p-4 space-y-3">
             {filteredEvents.map((event) => (
               <Link
                 key={event.id}
                 href={`/owner/events/${event.id}`}
-                className="block px-6 py-4 hover:bg-surface-50 transition-colors"
+                className="group block rounded-2xl border border-surface-200 bg-white px-5 py-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-base font-semibold text-navy-900">{event.name}</h3>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-base font-semibold text-brand-900">{event.name}</h3>
                       <span
                         className={cn(
                           'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
@@ -190,18 +182,18 @@ export default function OwnerEventsPage() {
                   </div>
                   <div className="flex items-center gap-6 ml-4">
                     <div className="text-right">
-                      <p className="text-sm font-medium text-navy-900">{event._count.rsvps}</p>
+                      <p className="text-sm font-semibold text-brand-900">{event._count.rsvps}</p>
                       <p className="text-xs text-surface-500">RSVPs</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-navy-900">{event._count.checkIns}</p>
+                      <p className="text-sm font-semibold text-brand-900">{event._count.checkIns}</p>
                       <p className="text-xs text-surface-500">Check-ins</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-navy-900">{event._count.mediaAssets}</p>
+                      <p className="text-sm font-semibold text-brand-900">{event._count.mediaAssets}</p>
                       <p className="text-xs text-surface-500">Media</p>
                     </div>
-                    <div className="text-surface-400">
+                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors">
                       {Icons.arrow}
                     </div>
                   </div>
@@ -209,8 +201,8 @@ export default function OwnerEventsPage() {
               </Link>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </DashboardSection>
     </div>
   );
 }

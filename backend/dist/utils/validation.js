@@ -25,17 +25,21 @@ exports.createEventSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Event name must be at least 2 characters'),
     slug: zod_1.z.string().min(2).regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
     description: zod_1.z.string().optional().nullable(),
+    socialTitle: zod_1.z.string().max(120).optional().nullable(),
+    socialDescription: zod_1.z.string().max(240).optional().nullable(),
+    coverImagePath: zod_1.z.string().optional().nullable(),
+    coverImageAlt: zod_1.z.string().max(160).optional().nullable(),
     date: zod_1.z.string().datetime('Invalid date format'),
     endDate: zod_1.z.string().datetime().optional().nullable(),
     timezone: zod_1.z.string().default('UTC'),
     venue: zod_1.z.string().optional().nullable(),
     // Owner
     ownerId: zod_1.z.string().uuid().optional(),
-    // Couple Contact
-    coupleName1: zod_1.z.string().optional().nullable(),
-    coupleName2: zod_1.z.string().optional().nullable(),
-    coupleEmail: zod_1.z.string().email().optional().nullable(),
-    couplePhone: zod_1.z.string().optional().nullable(),
+    // Owner Contact
+    ownerName: zod_1.z.string().optional().nullable(),
+    ownerEmail: zod_1.z.string().email().optional().nullable(),
+    ownerPhone: zod_1.z.string().optional().nullable(),
+    organizationName: zod_1.z.string().optional().nullable(),
     // Event Styling
     primaryColor: zod_1.z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFD700'),
     secondaryColor: zod_1.z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#1a1a2e'),
@@ -46,6 +50,12 @@ exports.createEventSchema = zod_1.z.object({
     guestbookEnabled: zod_1.z.boolean().default(true),
     checkInEnabled: zod_1.z.boolean().default(true),
     invitationOnly: zod_1.z.boolean().default(false),
+    strictInviteOnly: zod_1.z.boolean().default(false),
+    itineraryEnabled: zod_1.z.boolean().default(false),
+    itineraryTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    giftingEnabled: zod_1.z.boolean().default(false),
+    itineraryPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    giftingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
     // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
     invitationTemplateId: zod_1.z.string().uuid().optional(),
     rsvpTemplateId: zod_1.z.string().uuid().optional(),
@@ -78,17 +88,21 @@ exports.updateEventSchema = zod_1.z.object({
     name: zod_1.z.string().min(2).optional(),
     slug: zod_1.z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
     description: zod_1.z.string().optional().nullable(),
+    socialTitle: zod_1.z.string().max(120).optional().nullable(),
+    socialDescription: zod_1.z.string().max(240).optional().nullable(),
+    coverImagePath: zod_1.z.string().optional().nullable(),
+    coverImageAlt: zod_1.z.string().max(160).optional().nullable(),
     date: zod_1.z.string().datetime().optional(),
     endDate: zod_1.z.string().datetime().optional().nullable(),
     timezone: zod_1.z.string().optional(),
     venue: zod_1.z.string().optional().nullable(),
     // Owner
     ownerId: zod_1.z.string().uuid().optional().nullable(),
-    // Couple Contact
-    coupleName1: zod_1.z.string().optional().nullable(),
-    coupleName2: zod_1.z.string().optional().nullable(),
-    coupleEmail: zod_1.z.string().email().optional().nullable(),
-    couplePhone: zod_1.z.string().optional().nullable(),
+    // Owner Contact
+    ownerName: zod_1.z.string().optional().nullable(),
+    ownerEmail: zod_1.z.string().email().optional().nullable(),
+    ownerPhone: zod_1.z.string().optional().nullable(),
+    organizationName: zod_1.z.string().optional().nullable(),
     // Event Styling
     primaryColor: zod_1.z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
     secondaryColor: zod_1.z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
@@ -99,6 +113,12 @@ exports.updateEventSchema = zod_1.z.object({
     guestbookEnabled: zod_1.z.boolean().optional(),
     checkInEnabled: zod_1.z.boolean().optional(),
     invitationOnly: zod_1.z.boolean().optional(),
+    strictInviteOnly: zod_1.z.boolean().optional(),
+    itineraryEnabled: zod_1.z.boolean().optional(),
+    itineraryTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    giftingEnabled: zod_1.z.boolean().optional(),
+    itineraryPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    giftingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
     // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
     invitationTemplateId: zod_1.z.string().uuid().optional().nullable(),
     rsvpTemplateId: zod_1.z.string().uuid().optional().nullable(),
@@ -151,6 +171,8 @@ exports.createTemplateSchema = zod_1.z.object({
         'THANK_YOU',
         'LIVE_LANDING', // ⭐ NEW
         'EVENT_ENDED', // ⭐ NEW
+        'ITINERARY',
+        'GIFTING',
     ]),
     htmlContent: zod_1.z.string().min(1, 'HTML content is required'),
     cssContent: zod_1.z.string().optional(),

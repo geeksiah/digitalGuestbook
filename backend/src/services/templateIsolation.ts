@@ -18,6 +18,8 @@ interface TemplateAssignments {
   thankYouTemplateId?: string | null;
   liveLandingTemplateId?: string | null;
   eventEndedTemplateId?: string | null;
+  itineraryPageTemplateId?: string | null;
+  giftingPageTemplateId?: string | null;
 }
 
 /**
@@ -133,6 +135,8 @@ export const copyTemplateAssetsForEvent = async (
   await copyAssets(assignments.thankYouTemplateId, 'thankYouTemplateId');
   await copyAssets(assignments.liveLandingTemplateId, 'liveLandingTemplateId');
   await copyAssets(assignments.eventEndedTemplateId, 'eventEndedTemplateId');
+  await copyAssets(assignments.itineraryPageTemplateId, 'itineraryPageTemplateId');
+  await copyAssets(assignments.giftingPageTemplateId, 'giftingPageTemplateId');
 };
 
 /**
