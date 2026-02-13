@@ -71,7 +71,7 @@ DIRECT_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.
 **Why two URLs?**
 - Supabase pooler (DATABASE_URL) is optimized for queries but doesn't support schema changes
 - Direct connection (DIRECT_URL) is needed for migrations but has connection limits
-- Prisma automatically uses DIRECT_URL for `db push` and `migrate deploy`
+- Prisma automatically uses DIRECT_URL for `db push`
 - Prisma uses DATABASE_URL for regular queries
 
 ### For Local Development:
@@ -119,10 +119,7 @@ The Dockerfile needs to handle PostgreSQL connection pooling. Update the `start:
 CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]
 ```
 
-Or for production with migrations:
-```dockerfile
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
-```
+This startup command is non-destructive because it does not use `--accept-data-loss`.
 
 ## Step 7: Update Render.com Configuration
 
@@ -200,7 +197,7 @@ Or start fresh with the new database (recommended for MVP).
 
 ### Migration Errors
 - Ensure `DIRECT_URL` is set correctly
-- Run migrations manually: `npx prisma migrate deploy`
+- Run schema sync manually: `npx prisma db push --skip-generate`
 - Check Prisma logs for specific errors
 
 ### Authentication Errors
@@ -222,4 +219,6 @@ After successful migration:
 2. Set up automated backups (Supabase Pro)
 3. Configure connection pooling limits if needed
 4. Consider enabling Row Level Security (RLS) for multi-tenancy
+
+
 

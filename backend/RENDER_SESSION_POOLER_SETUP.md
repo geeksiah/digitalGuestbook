@@ -7,7 +7,7 @@ Render.com is **IPv4-only** and cannot use Supabase's Direct Connection which re
 **Solution**: Use **Session Pooler** which:
 - ✅ Works on IPv4 (Render.com, Vercel, GitHub Actions, etc.)
 - ✅ Supports schema operations (unlike Transaction Pooler)
-- ✅ Supports Prisma migrations (`db push`, `migrate deploy`)
+- ✅ Supports Prisma migrations (`db push`)
 - ✅ Supports prepared statements
 
 ## Supabase Connection Pooling Types
@@ -154,4 +154,5 @@ postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres
 ✅ Supports schema operations and migrations  
 ✅ No additional cost (free with Supabase)  
 ✅ Set both environment variables to the same Session Pooler URL  
+
 
