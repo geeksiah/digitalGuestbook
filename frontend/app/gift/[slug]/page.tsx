@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { giftingApi } from '@/lib/api';
+import { API_BASE_URL, giftingApi } from '@/lib/api';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import toast from 'react-hot-toast';
 
@@ -56,6 +56,11 @@ export default function GiftPage() {
   const [paymentMethod, setPaymentMethod] = useState('mtn_momo');
   const [paymentReference, setPaymentReference] = useState('');
   const [note, setNote] = useState('');
+  const resolveGiftThumbnailUrl = (path: string | null | undefined) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+  };
 
   useEffect(() => {
     if (!slug || templateLoading || hasTemplate) return;
@@ -192,11 +197,24 @@ export default function GiftPage() {
               <h2 className="font-semibold text-brand-900">Gift Packages</h2>
               {packages.map((pkg) => (
                 <div key={pkg.id} className="border border-surface-200 rounded-lg p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      {pkg.thumbnailPath ? (
+                        <img
+                          src={resolveGiftThumbnailUrl(pkg.thumbnailPath) || ''}
+                          alt={pkg.name}
+                          className="w-14 h-14 rounded-lg border border-surface-200 object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg border border-surface-200 bg-surface-100 text-[10px] text-surface-400 font-medium flex items-center justify-center shrink-0">
+                          No image
+                        </div>
+                      )}
+                      <div className="min-w-0">
                       <p className="font-medium text-brand-900">{pkg.name}</p>
                       {pkg.description && <p className="text-xs text-surface-600 mt-1">{pkg.description}</p>}
                       <p className="text-sm text-surface-700 mt-1">{pkg.currency} {pkg.price.toFixed(2)}</p>
+                      </div>
                     </div>
                     <input
                       type="number"

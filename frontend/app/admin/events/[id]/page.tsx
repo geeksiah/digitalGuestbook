@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi, API_BASE_URL } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
@@ -178,6 +178,11 @@ export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
   const eventId = params.id as string;
+  const resolveGiftThumbnailUrl = (path: string | null | undefined) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+  };
 
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -209,6 +214,7 @@ export default function EventDetailPage() {
     description: '',
     price: '',
     currency: 'GHS',
+    thumbnailPath: '',
   });
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
   const [loadingItinerary, setLoadingItinerary] = useState(false);
@@ -515,8 +521,15 @@ export default function EventDetailPage() {
         description: newGiftPackage.description.trim() || null,
         price,
         currency: newGiftPackage.currency || 'GHS',
+        thumbnailPath: newGiftPackage.thumbnailPath.trim() || null,
       });
-      setNewGiftPackage({ name: '', description: '', price: '', currency: newGiftPackage.currency || 'GHS' });
+      setNewGiftPackage({
+        name: '',
+        description: '',
+        price: '',
+        currency: newGiftPackage.currency || 'GHS',
+        thumbnailPath: '',
+      });
       toast.success('Gift package created');
       await fetchGifts();
     } catch (e: any) {
@@ -1046,20 +1059,59 @@ export default function EventDetailPage() {
               <h3 className="font-semibold text-brand-900 mb-4">Quick Links</h3>
               <div className="space-y-1 text-sm">
                 {[
-                  { l: 'Invitation', p: `/e/${event.slug}` },
-                  { l: 'RSVP Form', p: `/e/${event.slug}/rsvp` },
-                  { l: 'Guestbook', p: `/e/${event.slug}/guestbook` },
-                  { l: 'Check-In', p: `/e/${event.slug}/checkin` },
-                  { l: 'Owner Dashboard', p: `/owner/login` },
+                  { l: 'Event Home', p: `/e/${event.slug}`, enabled: true },
+                  { l: 'Invitation Page', p: `/e/${event.slug}/invitation`, enabled: event.invitationEnabled },
+                  { l: 'Live Page', p: `/e/${event.slug}/live`, enabled: true },
+                  { l: 'RSVP Form', p: `/e/${event.slug}/rsvp`, enabled: event.rsvpEnabled },
+                  { l: 'Guestbook', p: `/e/${event.slug}/guestbook`, enabled: event.guestbookEnabled },
+                  { l: 'Guest Booth', p: `/e/${event.slug}/booth`, enabled: event.guestbookEnabled },
+                  { l: 'Check-In', p: `/e/${event.slug}/checkin`, enabled: event.checkInEnabled },
+                  { l: 'Itinerary', p: `/e/${event.slug}/itinerary`, enabled: event.itineraryEnabled },
+                  { l: 'Gift Page', p: `/gift/${event.slug}`, enabled: event.giftingEnabled },
+                  { l: 'Thank You Page', p: `/e/${event.slug}/thanks`, enabled: true },
+                  { l: 'Owner Token View', p: `/event-owner/${event.ownerAccessToken}`, enabled: true },
+                  { l: 'Owner Dashboard Login', p: `/owner/login`, enabled: true },
                 ].map(x => (
-                  <button 
-                    key={x.p} 
-                    onClick={() => handleCopyLink(x.p)} 
-                    className="w-full text-left p-2.5 rounded-lg hover:bg-surface-50 flex items-center justify-between text-surface-600 hover:text-brand-900 transition-colors"
+                  <div
+                    key={x.p}
+                    className={cn(
+                      'w-full p-2.5 rounded-lg flex items-center justify-between transition-colors',
+                      x.enabled ? 'hover:bg-surface-50 text-surface-700' : 'bg-surface-50/60 text-surface-400'
+                    )}
                   >
-                    <span>{x.l}</span>
-                    <span className="text-surface-400">{Icons.copy}</span>
-                  </button>
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="truncate">{x.l}</span>
+                      {!x.enabled ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-200 text-surface-500 uppercase tracking-wide">
+                          Disabled
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={x.p}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          'p-1.5 rounded-md transition-colors',
+                          x.enabled ? 'hover:bg-surface-100 text-surface-500 hover:text-brand-900' : 'text-surface-300'
+                        )}
+                        title="Open link"
+                      >
+                        {Icons.external}
+                      </a>
+                      <button
+                        onClick={() => handleCopyLink(x.p)}
+                        className={cn(
+                          'p-1.5 rounded-md transition-colors',
+                          x.enabled ? 'hover:bg-surface-100 text-surface-500 hover:text-brand-900' : 'text-surface-300'
+                        )}
+                        title="Copy link"
+                      >
+                        {Icons.copy}
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -2307,8 +2359,25 @@ export default function EventDetailPage() {
                                   />
                                 </td>
                                 <td className="py-3 px-4">
-                                  <p className="font-medium text-brand-900">{pkg.name}</p>
-                                  {pkg.description ? <p className="text-xs text-surface-500 mt-1">{pkg.description}</p> : null}
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-14 h-14 rounded-lg border border-surface-200 bg-surface-100 overflow-hidden shrink-0">
+                                      {pkg.thumbnailPath ? (
+                                        <img
+                                          src={resolveGiftThumbnailUrl(pkg.thumbnailPath) || ''}
+                                          alt={pkg.name}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-[10px] text-surface-400 font-medium">
+                                          No image
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="font-medium text-brand-900 truncate">{pkg.name}</p>
+                                      {pkg.description ? <p className="text-xs text-surface-500 mt-1 line-clamp-2">{pkg.description}</p> : null}
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="py-3 px-4 text-sm text-surface-700">
                                   {pkg.currency} {Number(pkg.price || 0).toFixed(2)}
@@ -2355,6 +2424,24 @@ export default function EventDetailPage() {
                       value={newGiftPackage.description}
                       onChange={(e) => setNewGiftPackage({ ...newGiftPackage, description: e.target.value })}
                     />
+                    <input
+                      className="input"
+                      placeholder="Image URL or media path (optional)"
+                      value={newGiftPackage.thumbnailPath}
+                      onChange={(e) => setNewGiftPackage({ ...newGiftPackage, thumbnailPath: e.target.value })}
+                    />
+                    {newGiftPackage.thumbnailPath.trim() ? (
+                      <div className="rounded-lg border border-surface-200 bg-white p-2">
+                        <div className="text-xs text-surface-500 mb-2">Preview</div>
+                        <div className="w-full h-36 rounded-md overflow-hidden bg-surface-100 border border-surface-200">
+                          <img
+                            src={resolveGiftThumbnailUrl(newGiftPackage.thumbnailPath.trim()) || ''}
+                            alt="New package preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-3">
                       <input
                         type="number"
