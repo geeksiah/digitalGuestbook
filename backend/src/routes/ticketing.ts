@@ -3,6 +3,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { z } from 'zod';
+import { verifyPaystackTransaction } from '../services/paystack.js';
 
 const router = Router();
 
@@ -391,6 +392,11 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: eventSlug },
     include: {
+      Owner: {
+        include: {
+          wallet: true,
+        },
+      },
       ticketTypes: true,
       eventPaymentGateways: {
         where: { paymentGatewayId: data.paymentGatewayId, isActive: true },
@@ -476,11 +482,56 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
   const processingFeeFixed = event.processingFeeFixed || 0;
   const processingFee = (finalAmount * processingFeePercent) / 100 + processingFeeFixed;
   const amountPaid = finalAmount + platformFee + processingFee;
+  const paymentReference = data.paymentReference?.trim();
+  const paymentMethod = (data.paymentMethod || '').trim().toLowerCase();
+  const isPaystackPayment = paymentMethod === 'paystack';
+  if (!paymentReference) {
+    throw new AppError('Payment reference is required', 400);
+  }
+
+  const duplicate = await prisma.transaction.findFirst({
+    where: {
+      paymentRef: paymentReference,
+      status: 'completed',
+    },
+    select: { id: true },
+  });
+  if (duplicate) {
+    throw new AppError('This payment reference has already been used', 400);
+  }
 
   // Verify payment gateway
   const eventGateway = event.eventPaymentGateways[0];
   if (!eventGateway) {
     throw new AppError('Payment gateway not configured for this event', 400);
+  }
+
+  if (isPaystackPayment) {
+    const verification = await verifyPaystackTransaction(paymentReference);
+    const expectedMinor = Math.round(amountPaid * 100);
+    const paidMinor = Number(verification.amount || 0);
+
+    if (verification.status !== 'success') {
+      throw new AppError('Paystack payment is not successful', 400);
+    }
+    if (paidMinor !== expectedMinor) {
+      throw new AppError('Paystack amount does not match order total', 400);
+    }
+
+    const ticketCurrency = event.ticketTypes[0]?.currency || 'USD';
+    if ((verification.currency || '').toUpperCase() !== ticketCurrency.toUpperCase()) {
+      throw new AppError('Paystack currency does not match event currency', 400);
+    }
+
+    const expectedSubaccount = event.Owner?.wallet?.paystackSubaccount || null;
+    const verifiedSubaccount =
+      typeof verification.subaccount === 'string'
+        ? verification.subaccount
+        : verification.subaccount?.subaccount_code || verification.split?.subaccount || null;
+
+    if (expectedSubaccount && verifiedSubaccount && verifiedSubaccount !== expectedSubaccount) {
+      throw new AppError('Payment split destination does not match this event owner account', 400);
+    }
   }
 
   // Get primary ticket type name
@@ -509,8 +560,8 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       amountPaid: amountPaid,
       currency: event.ticketTypes[0]?.currency || 'USD',
       paymentStatus: 'PAID',
-      paymentMethod: data.paymentMethod,
-      paymentRef: data.paymentReference,
+      paymentMethod: paymentMethod,
+      paymentRef: paymentReference,
       paymentDate: new Date(),
     },
   });
@@ -548,8 +599,8 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       processingFee: processingFee,
       netAmount: finalAmount - platformFee,
       currency: event.ticketTypes[0]?.currency || 'USD',
-      paymentMethod: data.paymentMethod,
-      paymentRef: data.paymentReference,
+      paymentMethod: paymentMethod,
+      paymentRef: paymentReference,
       ticketTypeName: event.ticketTypes[0]?.name,
       ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
       buyerName: data.primaryName,

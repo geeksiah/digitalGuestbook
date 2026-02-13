@@ -35,6 +35,11 @@ interface EventTotal {
   currency?: string;
 }
 
+interface WalletSummary {
+  preferredMethod: string;
+  currency: string;
+}
+
 interface OverallTotals {
   totalNet: number;
   fulfilledAmount: number;
@@ -68,18 +73,32 @@ export default function OwnerPayoutsPage() {
   const [filter, setFilter] = useState<'all' | 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'DELAYED' | 'REJECTED'>('all');
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null);
   const [formData, setFormData] = useState({
     eventId: '',
     requestedAmount: '',
-    currency: 'USD',
-    payoutMethod: 'bank',
     notes: '',
   });
 
   useEffect(() => {
     fetchPayouts();
     fetchEvents();
+    fetchWalletSummary();
   }, []);
+
+  const fetchWalletSummary = async () => {
+    try {
+      const response = await ownerDashboardApi.getWallet();
+      const wallet = response.data?.wallet;
+      if (!wallet) return;
+      setWalletSummary({
+        preferredMethod: wallet.preferredMethod || 'bank',
+        currency: wallet.currency || 'USD',
+      });
+    } catch (error) {
+      console.error('Failed to load wallet summary:', error);
+    }
+  };
 
   const fetchEvents = async () => {
     try {
@@ -111,8 +130,6 @@ export default function OwnerPayoutsPage() {
       await ownerDashboardApi.requestPayout({
         eventId: formData.eventId,
         requestedAmount: parseFloat(formData.requestedAmount),
-        currency: formData.currency,
-        payoutMethod: formData.payoutMethod,
         notes: formData.notes || undefined,
       });
       toast.success('Payout request submitted successfully');
@@ -120,8 +137,6 @@ export default function OwnerPayoutsPage() {
       setFormData({
         eventId: '',
         requestedAmount: '',
-        currency: 'USD',
-        payoutMethod: 'bank',
         notes: '',
       });
       fetchPayouts();
@@ -154,6 +169,7 @@ export default function OwnerPayoutsPage() {
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Payout Management</h1>
           <p className="text-surface-600 mt-1">View and track your payout requests</p>
+          <p className="text-xs text-surface-500 mt-1">Available balance includes ticket sales and net cash gifts only. Gift package sales and Paystack auto-settled split gifts are excluded from manual payout.</p>
         </div>
         <button
           onClick={() => setShowRequestForm(!showRequestForm)}
@@ -184,7 +200,7 @@ export default function OwnerPayoutsPage() {
                     const eventTotal = eventTotals.find((e) => e.eventId === event.id);
                     return (
                       <option key={event.id} value={event.id}>
-                        {event.name} {eventTotal && `(${eventTotal.availableBalance.toFixed(2)} available)`}
+                        {event.name} {eventTotal && `(${eventTotal.availableBalance.toFixed(2)} ${eventTotal.currency || 'USD'} available)`}
                       </option>
                     );
                   })}
@@ -200,52 +216,36 @@ export default function OwnerPayoutsPage() {
                 <label className="block text-sm font-medium text-surface-700 mb-1">
                   Amount <span className="text-red-500">*</span>
                 </label>
-                <div className="flex gap-2">
-                  <select
-                    value={formData.currency}
-                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                    className="px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="GHS">GHS</option>
-                    <option value="NGN">NGN</option>
-                    <option value="KES">KES</option>
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max={maxAmount}
-                    value={formData.requestedAmount}
-                    onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={maxAmount}
+                  value={formData.requestedAmount}
+                  onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  placeholder="0.00"
+                  required
+                />
                 {selectedEventTotal && (
                   <p className="text-xs text-surface-500 mt-1">
-                    Max: {new Intl.NumberFormat('en-US', { style: 'currency', currency: formData.currency }).format(maxAmount)}
+                    Max: {new Intl.NumberFormat('en-US', { style: 'currency', currency: selectedEventTotal.currency || walletSummary?.currency || 'USD' }).format(maxAmount)}
                   </p>
                 )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Payout Method <span className="text-red-500">*</span>
+                  Payout Destination
                 </label>
-                <select
-                  value={formData.payoutMethod}
-                  onChange={(e) => setFormData({ ...formData, payoutMethod: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-                  required
-                >
-                  <option value="bank">Bank Transfer</option>
-                  <option value="mobile">Mobile Money</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="stripe">Stripe</option>
-                  <option value="paystack">Paystack</option>
-                </select>
+                <div className="w-full px-3 py-2 border border-surface-200 rounded-lg bg-surface-50 text-sm text-surface-700">
+                  {walletSummary
+                    ? `${walletSummary.preferredMethod.toUpperCase()} (${walletSummary.currency})`
+                    : 'Configured in Wallet settings'}
+                </div>
+                <p className="text-xs text-surface-500 mt-1">
+                  Payout method and currency are locked to your verified wallet settings.
+                </p>
               </div>
 
               <div>
@@ -334,16 +334,16 @@ export default function OwnerPayoutsPage() {
                   <tr key={event.eventId} className="hover:bg-surface-50">
                     <td className="py-3 px-4 font-medium text-navy-900">{event.eventName}</td>
                     <td className="py-3 px-4 text-right font-semibold">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.totalNet)}
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.totalNet)}
                     </td>
                     <td className="py-3 px-4 text-right text-emerald-600">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.fulfilledAmount)}
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.fulfilledAmount)}
                     </td>
                     <td className="py-3 px-4 text-right text-yellow-600">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.pendingAmount)}
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.pendingAmount)}
                     </td>
                     <td className="py-3 px-4 text-right font-semibold text-navy-900">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(event.availableBalance)}
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.availableBalance)}
                     </td>
                     <td className="py-3 px-4 text-right text-surface-600">{event.payoutCount}</td>
                   </tr>

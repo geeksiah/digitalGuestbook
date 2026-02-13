@@ -28,6 +28,12 @@ interface PaymentGatewayOption {
   } | null;
 }
 
+interface SettlementPolicy {
+  cashGift: 'split_to_owner_subaccount' | 'platform_settlement';
+  packagePurchase: 'platform_only';
+  mixedPaystackCheckoutAllowed: boolean;
+}
+
 export default function GiftPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -39,6 +45,7 @@ export default function GiftPage() {
   const [eventName, setEventName] = useState('');
   const [packages, setPackages] = useState<GiftPackage[]>([]);
   const [paymentGateways, setPaymentGateways] = useState<PaymentGatewayOption[]>([]);
+  const [settlementPolicy, setSettlementPolicy] = useState<SettlementPolicy | null>(null);
   const [cashGiftAmount, setCashGiftAmount] = useState(0);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
@@ -59,6 +66,7 @@ export default function GiftPage() {
         setEventName(response.data.event.name);
         setPackages(response.data.packages || []);
         setPaymentGateways(response.data.paymentGateways || []);
+        setSettlementPolicy(response.data.settlementPolicy || null);
         if (response.data.paymentGateways?.some((g: PaymentGatewayOption) => g.gateway === 'paystack')) {
           setPaymentMethod('paystack');
         }
@@ -102,6 +110,9 @@ export default function GiftPage() {
     () => paymentGateways.find((g) => g.gateway === 'paystack'),
     [paymentGateways]
   );
+  const hasPackageSelection = selectedPackageItems.length > 0;
+  const hasCashSelection = cashGiftAmount > 0;
+  const paystackMixedSelection = paymentMethod === 'paystack' && hasPackageSelection && hasCashSelection;
 
   const submitCheckout = async () => {
     if (!guestName.trim()) {
@@ -110,6 +121,10 @@ export default function GiftPage() {
     }
     if (totalAmount <= 0) {
       toast.error('Please select cash gift or package(s)');
+      return;
+    }
+    if (paystackMixedSelection) {
+      toast.error('Use separate payments for cash gift and package purchase when using Paystack');
       return;
     }
 
@@ -209,7 +224,17 @@ export default function GiftPage() {
               </select>
               {paystackGateway?.splitConfig?.subaccount ? (
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                  This event is configured for automated Paystack split payouts to the owner account.
+                  Cash gifts are auto-split to the owner subaccount. Package purchases are settled to platform only.
+                </div>
+              ) : null}
+              {paystackMixedSelection ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  For secure split accounting, submit cash gift and package purchase separately on Paystack.
+                </div>
+              ) : null}
+              {settlementPolicy?.cashGift === 'platform_settlement' ? (
+                <div className="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-xs text-surface-700">
+                  Owner split account is not connected yet. Cash gifts will be handled via platform settlement.
                 </div>
               ) : null}
               <input className="input" placeholder="Payment reference (optional)" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} />
@@ -217,7 +242,7 @@ export default function GiftPage() {
               <div className="rounded-lg bg-surface-50 border border-surface-200 px-3 py-2 text-sm text-surface-700">
                 Total: <span className="font-semibold text-brand-900">{totalAmount.toFixed(2)}</span>
               </div>
-              <button className="btn-primary w-full justify-center" disabled={submitting} onClick={submitCheckout}>
+              <button className="btn-primary w-full justify-center" disabled={submitting || paystackMixedSelection} onClick={submitCheckout}>
                 {submitting ? 'Submitting...' : 'Complete Gift'}
               </button>
             </div>

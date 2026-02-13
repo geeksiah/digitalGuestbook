@@ -34,6 +34,25 @@ type PaystackSubaccount = {
   active?: boolean;
 };
 
+type PaystackVerifiedTransaction = {
+  id: number;
+  reference: string;
+  status: string;
+  amount: number;
+  currency: string;
+  paid_at?: string;
+  customer?: {
+    email?: string;
+  };
+  metadata?: Record<string, unknown> | null;
+  subaccount?: {
+    subaccount_code?: string;
+  } | string | null;
+  split?: {
+    subaccount?: string;
+  } | null;
+};
+
 const getConfiguredPaystackSecret = async (): Promise<string> => {
   const envSecret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (envSecret) return envSecret;
@@ -154,4 +173,11 @@ export const updatePaystackSubaccount = async (
       description: payload.description,
     }),
   });
+};
+
+export const verifyPaystackTransaction = async (reference: string) => {
+  const data = await paystackRequest<PaystackVerifiedTransaction>(
+    `/transaction/verify/${encodeURIComponent(reference)}`
+  );
+  return data;
 };

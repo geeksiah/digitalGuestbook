@@ -375,7 +375,7 @@ export default function NewEventPage() {
                 <label className="label">Cover Image</label>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="input"
                   onChange={(e) => {
                     const file = e.target.files?.[0] || null;
@@ -383,8 +383,11 @@ export default function NewEventPage() {
                     setCoverPreview(file ? URL.createObjectURL(file) : null);
                   }}
                 />
+                <p className="text-xs text-surface-500 mt-1">
+                  Use JPG/PNG/WEBP, minimum 800x420 (recommended 2000px wide). We auto-crop to 1200x630 for crisp social cards.
+                </p>
                 {coverPreview && (
-                  <div className="mt-3 rounded-lg border border-surface-200 overflow-hidden h-40">
+                  <div className="mt-3 rounded-lg border border-surface-200 overflow-hidden aspect-[1200/630]">
                     <img src={coverPreview} alt="Cover preview" className="w-full h-full object-cover" />
                   </div>
                 )}

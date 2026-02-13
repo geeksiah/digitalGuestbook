@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, randomUUID } from 'crypto';
 import { promises as dns } from 'dns';
 import multer from 'multer';
+import sharp from 'sharp';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
@@ -437,11 +438,37 @@ router.post('/:id/cover', coverUpload.single('cover'), asyncHandler(async (req, 
     throw new AppError('Event not found', 404);
   }
 
-  const safeName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
-  const coverPath = `events/${id}/cover-${Date.now()}-${safeName}`;
-  const upload = await uploadToSupabase(BUCKETS.MEDIA, coverPath, file.buffer, {
-    contentType: file.mimetype,
-    cacheControl: '3600',
+  let coverBuffer: Buffer;
+  try {
+    const image = sharp(file.buffer).rotate();
+    const metadata = await image.metadata();
+    const width = metadata.width || 0;
+    const height = metadata.height || 0;
+
+    if (width < 800 || height < 420) {
+      throw new AppError('Image too small. Please upload at least 800x420 for sharp social previews.', 400);
+    }
+
+    coverBuffer = await image
+      // Normalize to OG/Twitter card ratio for crisp social previews.
+      .resize(1200, 630, {
+        fit: 'cover',
+        position: 'attention',
+        kernel: 'lanczos3',
+        withoutEnlargement: true,
+      })
+      .sharpen({ sigma: 1, m1: 0.8, m2: 0.8 })
+      .jpeg({ quality: 94, mozjpeg: true, chromaSubsampling: '4:4:4' })
+      .toBuffer();
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError('Invalid image file. Please upload a valid JPG, PNG, or WEBP image.', 400);
+  }
+
+  const coverPath = `events/${id}/cover-${Date.now()}.jpg`;
+  const upload = await uploadToSupabase(BUCKETS.MEDIA, coverPath, coverBuffer, {
+    contentType: 'image/jpeg',
+    cacheControl: '31536000',
     upsert: true,
   });
 
@@ -464,7 +491,7 @@ router.post('/:id/cover', coverUpload.single('cover'), asyncHandler(async (req, 
       action: 'EVENT_COVER_UPLOADED',
       entityType: 'EVENT',
       entityId: id,
-      details: JSON.stringify({ coverImagePath: upload.path, mimeType: file.mimetype }),
+      details: JSON.stringify({ coverImagePath: upload.path, mimeType: 'image/jpeg', width: 1200, height: 630 }),
     },
   });
 

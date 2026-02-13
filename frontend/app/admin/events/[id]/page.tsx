@@ -1733,7 +1733,7 @@ export default function EventDetailPage() {
                     <div className="flex flex-col sm:flex-row gap-3">
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp"
                         className="input flex-1"
                         onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
                       />
@@ -1755,11 +1755,14 @@ export default function EventDetailPage() {
                         </button>
                       )}
                     </div>
+                    <p className="text-xs text-surface-500 mt-2">
+                      Use JPG/PNG/WEBP, minimum 800x420 (recommended 2000px wide). Covers are auto-cropped to 1200x630 for social sharing.
+                    </p>
                   </div>
                 </div>
 
                 <div className="mt-5 rounded-xl border border-surface-200 bg-white overflow-hidden">
-                  <div className="h-40 bg-surface-100">
+                  <div className="aspect-[1200/630] bg-surface-100">
                     {event.coverImageUrl ? (
                       <img src={event.coverImageUrl} alt={event.coverImageAlt || event.name} className="w-full h-full object-cover" />
                     ) : (

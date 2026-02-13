@@ -58,6 +58,9 @@ interface GiftOrder {
   guestEmail: string | null;
   currency: string;
   totalAmount: number;
+  ownerNetAmount: number;
+  platformFeeAmount: number;
+  packageAmount: number;
   status: string;
   createdAt: string;
 }
@@ -1311,7 +1314,8 @@ export default function OwnerEventDetailPage() {
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Total Gift</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Your Net</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
                       </tr>
@@ -1319,7 +1323,7 @@ export default function OwnerEventDetailPage() {
                     <tbody className="bg-white divide-y divide-surface-200">
                       {giftOrders.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-6 text-center text-sm text-surface-500">No gift orders yet</td>
+                          <td colSpan={6} className="px-6 py-6 text-center text-sm text-surface-500">No gift orders yet</td>
                         </tr>
                       ) : (
                         giftOrders.map((order) => (
@@ -1327,6 +1331,7 @@ export default function OwnerEventDetailPage() {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{order.guestName}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{order.guestEmail || order.guestPhone || '-'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-700">{order.currency} {order.totalAmount.toFixed(2)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-brand-900">{order.currency} {order.ownerNetAmount.toFixed(2)}</td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
                                 {order.status}

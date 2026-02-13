@@ -155,6 +155,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
           currency: true,
           status: true,
           type: true,
+          paymentMethod: true,
         },
       },
       giftOrders: {
@@ -176,7 +177,9 @@ router.get('/stats', asyncHandler(async (req, res) => {
 
   // Calculate revenue
   const allTransactions = events.flatMap(e => e.transactions);
-  const completedTransactions = allTransactions.filter(t => t.status === 'completed' && t.type === 'ticket_sale');
+  const completedTransactions = allTransactions.filter(
+    (t) => t.status === 'completed' && ['ticket_sale', 'gift_cash'].includes(t.type)
+  );
   
   const revenueByCurrency: Record<string, { gross: number; net: number }> = {};
   completedTransactions.forEach(t => {
@@ -187,15 +190,34 @@ router.get('/stats', asyncHandler(async (req, res) => {
     revenueByCurrency[t.currency].net += t.netAmount;
   });
 
-  const giftingByCurrency: Record<string, { total: number; orders: number }> = {};
-  events.flatMap((e) => e.giftOrders).forEach((order) => {
-    if (order.status !== 'PAID') return;
-    if (!giftingByCurrency[order.currency]) {
-      giftingByCurrency[order.currency] = { total: 0, orders: 0 };
-    }
-    giftingByCurrency[order.currency].total += order.totalAmount;
-    giftingByCurrency[order.currency].orders += 1;
-  });
+  const giftingByCurrency: Record<string, { gross: number; net: number; orders: number }> = {};
+  allTransactions
+    .filter((t) => t.status === 'completed' && t.type === 'gift_cash')
+    .forEach((t) => {
+      if (!giftingByCurrency[t.currency]) {
+        giftingByCurrency[t.currency] = { gross: 0, net: 0, orders: 0 };
+      }
+      giftingByCurrency[t.currency].gross += t.grossAmount;
+      giftingByCurrency[t.currency].net += t.netAmount;
+      giftingByCurrency[t.currency].orders += 1;
+    });
+
+  const autoSettledCashByCurrency: Record<string, { gross: number; net: number; orders: number }> = {};
+  allTransactions
+    .filter(
+      (t) =>
+        t.status === 'completed'
+        && t.type === 'gift_cash'
+        && (t.paymentMethod || '').toLowerCase() === 'paystack'
+    )
+    .forEach((t) => {
+      if (!autoSettledCashByCurrency[t.currency]) {
+        autoSettledCashByCurrency[t.currency] = { gross: 0, net: 0, orders: 0 };
+      }
+      autoSettledCashByCurrency[t.currency].gross += t.grossAmount;
+      autoSettledCashByCurrency[t.currency].net += t.netAmount;
+      autoSettledCashByCurrency[t.currency].orders += 1;
+    });
 
   res.json({
     stats: {
@@ -206,6 +228,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       totalGiftOrders,
       revenueByCurrency,
       giftingByCurrency,
+      autoSettledCashByCurrency,
     },
   });
 }));
@@ -891,7 +914,57 @@ router.get('/events/:eventId/gift-orders', asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  res.json({ orders });
+  const paymentRefs = orders
+    .map((order) => order.paymentReference)
+    .filter((ref): ref is string => Boolean(ref));
+
+  const transactions = paymentRefs.length
+    ? await prisma.transaction.findMany({
+        where: {
+          eventId,
+          paymentRef: { in: paymentRefs },
+          status: 'completed',
+          type: { in: ['gift_cash', 'gift_package_sale'] },
+        },
+        select: {
+          paymentRef: true,
+          type: true,
+          grossAmount: true,
+          platformFee: true,
+          netAmount: true,
+        },
+      })
+    : [];
+
+  const txByRef = new Map<string, Array<typeof transactions[number]>>();
+  transactions.forEach((tx) => {
+    if (!tx.paymentRef) return;
+    const current = txByRef.get(tx.paymentRef) || [];
+    current.push(tx);
+    txByRef.set(tx.paymentRef, current);
+  });
+
+  const ordersWithEarnings = orders.map((order) => {
+    const txs = order.paymentReference ? txByRef.get(order.paymentReference) || [] : [];
+    const ownerNetAmount = txs
+      .filter((tx) => tx.type === 'gift_cash')
+      .reduce((sum, tx) => sum + tx.netAmount, 0);
+    const platformFeeAmount = txs
+      .filter((tx) => tx.type === 'gift_cash')
+      .reduce((sum, tx) => sum + tx.platformFee, 0);
+    const packageAmount = txs
+      .filter((tx) => tx.type === 'gift_package_sale')
+      .reduce((sum, tx) => sum + tx.grossAmount, 0);
+
+    return {
+      ...order,
+      ownerNetAmount,
+      platformFeeAmount,
+      packageAmount,
+    };
+  });
+
+  res.json({ orders: ordersWithEarnings });
 }));
 
 /**
@@ -1140,13 +1213,19 @@ router.get('/payouts', asyncHandler(async (req, res) => {
       const transactions = await prisma.transaction.findMany({
         where: {
           eventId: event.id,
-          type: 'ticket_sale',
+          type: { in: ['ticket_sale', 'gift_cash'] },
           status: 'completed',
         },
       });
+      const payoutEligibleTransactions = transactions.filter((tx) => {
+        // Cash gifts paid with Paystack split are settled directly to owner subaccounts.
+        return !(tx.type === 'gift_cash' && (tx.paymentMethod || '').toLowerCase() === 'paystack');
+      });
+      const totalCurrency =
+        payoutEligibleTransactions[0]?.currency || transactions[0]?.currency || 'USD';
 
       // Calculate total net amount (available for payout)
-      const totalNet = transactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
+      const totalNet = payoutEligibleTransactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
 
       // Get all payout requests for this event
       const eventPayouts = payouts.filter(p => p.eventId === event.id);
@@ -1169,6 +1248,7 @@ router.get('/payouts', asyncHandler(async (req, res) => {
         eventName: event.name,
         eventSlug: event.slug,
         totalNet,
+        currency: totalCurrency,
         fulfilledAmount,
         pendingAmount,
         availableBalance,
@@ -1203,8 +1283,8 @@ router.post('/payouts', asyncHandler(async (req, res) => {
   const payoutSchema = z.object({
     eventId: z.string().uuid(),
     requestedAmount: z.number().positive(),
-    currency: z.string().default('USD'),
-    payoutMethod: z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']),
+    currency: z.string().optional(),
+    payoutMethod: z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']).optional(),
     notes: z.string().optional(),
   });
   
@@ -1231,21 +1311,21 @@ router.post('/payouts', asyncHandler(async (req, res) => {
     throw new AppError('Wallet configuration required. Please set up your wallet first.', 400);
   }
   
-  // Check if preferred method matches request
-  if (wallet.preferredMethod !== data.payoutMethod) {
-    // Allow override but warn (optional check)
-  }
+  // Enforce wallet configuration as source of truth for secure payouts.
   
   // Calculate available balance for this event
   const transactions = await prisma.transaction.findMany({
     where: {
       eventId: data.eventId,
-      type: 'ticket_sale',
+      type: { in: ['ticket_sale', 'gift_cash'] },
       status: 'completed',
     },
   });
-  
-  const totalNet = transactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
+
+  const payoutEligibleTransactions = transactions.filter((tx) => {
+    return !(tx.type === 'gift_cash' && (tx.paymentMethod || '').toLowerCase() === 'paystack');
+  });
+  const totalNet = payoutEligibleTransactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
   
   // Get existing payout requests for this event
   const existingPayouts = await prisma.payoutRequest.findMany({
@@ -1267,7 +1347,7 @@ router.post('/payouts', asyncHandler(async (req, res) => {
   
   if (data.requestedAmount > availableBalance) {
     throw new AppError(
-      `Requested amount (${data.currency} ${data.requestedAmount.toFixed(2)}) exceeds available balance (${data.currency} ${availableBalance.toFixed(2)})`,
+      `Requested amount (${wallet.currency} ${data.requestedAmount.toFixed(2)}) exceeds available balance (${wallet.currency} ${availableBalance.toFixed(2)})`,
       400
     );
   }
@@ -1277,8 +1357,8 @@ router.post('/payouts', asyncHandler(async (req, res) => {
     data: {
       eventId: data.eventId,
       requestedAmount: data.requestedAmount,
-      currency: data.currency,
-      payoutMethod: data.payoutMethod,
+      currency: wallet.currency,
+      payoutMethod: wallet.preferredMethod,
       notes: data.notes,
       status: 'PENDING',
     },

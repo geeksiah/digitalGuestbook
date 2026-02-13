@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
+import { verifyPaystackTransaction } from '../services/paystack.js';
 
 const router = Router();
 
@@ -95,6 +96,11 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
     event: eventPublic,
     packages,
     momoEnabled: true,
+    settlementPolicy: {
+      cashGift: ownerWallet?.paystackSubaccount ? 'split_to_owner_subaccount' : 'platform_settlement',
+      packagePurchase: 'platform_only',
+      mixedPaystackCheckoutAllowed: false,
+    },
     paymentGateways: paystackGateway
       ? [
           {
@@ -132,6 +138,8 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       id: true,
       name: true,
       giftingEnabled: true,
+      ownerId: true,
+      platformFeePercent: true,
     },
   });
   if (!event) throw new AppError('Event not found', 404);
@@ -169,6 +177,85 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
 
   const totalAmount = packagesTotal + cashGiftAmount;
   const currency = giftPackages[0]?.currency || 'USD';
+  const paymentReference = data.paymentReference?.trim() || null;
+  const paymentMethod = (data.paymentMethod || '').trim().toLowerCase() || null;
+  const isPaystackPayment = paymentMethod === 'paystack';
+
+  if (paymentReference) {
+    const duplicate = await prisma.transaction.findFirst({
+      where: {
+        paymentRef: paymentReference,
+        status: 'completed',
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new AppError('This payment reference has already been used', 400);
+    }
+  }
+
+  let ownerWallet: { paystackSubaccount: string | null; isVerified: boolean } | null = null;
+  if (event.ownerId) {
+    ownerWallet = await (prisma as any).ownerWallet.findUnique({
+      where: { ownerId: event.ownerId },
+      select: { paystackSubaccount: true, isVerified: true },
+    });
+  }
+
+  if (isPaystackPayment) {
+    if (!paymentReference) {
+      throw new AppError('Payment reference is required for Paystack gifts', 400);
+    }
+    if (cashGiftAmount > 0 && packagesTotal > 0) {
+      throw new AppError(
+        'For secure split settlement, complete cash gift and package purchase as separate payments',
+        400
+      );
+    }
+
+    const verification = await verifyPaystackTransaction(paymentReference);
+    const expectedMinor = Math.round(totalAmount * 100);
+    const paidMinor = Number(verification.amount || 0);
+
+    if (verification.status !== 'success') {
+      throw new AppError('Paystack payment is not successful', 400);
+    }
+    if (paidMinor !== expectedMinor) {
+      throw new AppError('Paystack amount does not match order total', 400);
+    }
+    if ((verification.currency || '').toUpperCase() !== currency.toUpperCase()) {
+      throw new AppError('Paystack currency does not match order currency', 400);
+    }
+
+    const expectedSubaccount = ownerWallet?.paystackSubaccount || null;
+    const verifiedSubaccount =
+      typeof verification.subaccount === 'string'
+        ? verification.subaccount
+        : verification.subaccount?.subaccount_code || verification.split?.subaccount || null;
+
+    if (cashGiftAmount > 0 && !expectedSubaccount) {
+      throw new AppError(
+        'Owner payout account is not configured for this event. Please complete with MoMo or card, or contact support.',
+        400
+      );
+    }
+    if (cashGiftAmount > 0 && expectedSubaccount && verifiedSubaccount !== expectedSubaccount) {
+      throw new AppError('Payment split destination does not match this event owner account', 400);
+    }
+    if (packagesTotal > 0 && verifiedSubaccount) {
+      throw new AppError(
+        'Package purchases must be processed without owner split destination',
+        400
+      );
+    }
+
+    // If no split details are returned on verification, we still rely on amount/currency/reference checks.
+    // This fallback keeps backward compatibility for providers that omit split fields.
+  }
+
+  const ownerFeePercent = Math.max(0, Number(event.platformFeePercent || 0));
+  const cashOwnerFee = (cashGiftAmount * ownerFeePercent) / 100;
+  const cashOwnerNet = Math.max(0, cashGiftAmount - cashOwnerFee);
 
   const order = await prisma.$transaction(async (tx) => {
     const created = await tx.giftOrder.create({
@@ -179,12 +266,12 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
         guestEmail: data.guestEmail || null,
         deliveryDate: data.deliveryDate ? new Date(data.deliveryDate) : null,
         note: data.note || null,
-        paymentMethod: data.paymentMethod || null,
-        paymentReference: data.paymentReference || null,
+        paymentMethod: paymentMethod || null,
+        paymentReference,
         currency,
         totalAmount,
         cashGiftAmount: cashGiftAmount > 0 ? cashGiftAmount : null,
-        status: data.paymentReference ? 'PAID' : 'PENDING',
+        status: paymentReference ? 'PAID' : 'PENDING',
       },
     });
 
@@ -229,29 +316,52 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
           currency,
           hasCashGift: cashGiftAmount > 0,
           packageCount: lines.length,
-          paymentReference: data.paymentReference || null,
+          ownerFeePercent,
+          cashOwnerNet,
+          paymentReference,
         }),
       },
     });
 
-    // Reuse transaction contract pattern for payment references
-    if (data.paymentReference) {
-      await tx.transaction.create({
-        data: {
-          eventId: event.id,
-          type: 'gift_sale',
-          grossAmount: totalAmount,
-          platformFee: 0,
-          processingFee: 0,
-          netAmount: totalAmount,
-          currency,
-          paymentMethod: data.paymentMethod || 'unknown',
-          paymentRef: data.paymentReference,
-          buyerName: data.guestName,
-          buyerEmail: data.guestEmail || null,
-          status: 'completed',
-        },
-      });
+    // Record transaction ledger entries once paid
+    if (paymentReference) {
+      if (cashGiftAmount > 0) {
+        await tx.transaction.create({
+          data: {
+            eventId: event.id,
+            type: 'gift_cash',
+            grossAmount: cashGiftAmount,
+            platformFee: cashOwnerFee,
+            processingFee: 0,
+            netAmount: cashOwnerNet,
+            currency,
+            paymentMethod: paymentMethod || 'unknown',
+            paymentRef: paymentReference,
+            buyerName: data.guestName,
+            buyerEmail: data.guestEmail || null,
+            status: 'completed',
+          },
+        });
+      }
+
+      if (packagesTotal > 0) {
+        await tx.transaction.create({
+          data: {
+            eventId: event.id,
+            type: 'gift_package_sale',
+            grossAmount: packagesTotal,
+            platformFee: packagesTotal,
+            processingFee: 0,
+            netAmount: 0,
+            currency,
+            paymentMethod: paymentMethod || 'unknown',
+            paymentRef: paymentReference,
+            buyerName: data.guestName,
+            buyerEmail: data.guestEmail || null,
+            status: 'completed',
+          },
+        });
+      }
     }
 
     return created;
@@ -260,6 +370,18 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     order,
+    breakdown: {
+      totalAmount,
+      packageAmount: packagesTotal,
+      cashGiftAmount,
+      ownerFeePercent,
+      ownerNetCash: cashOwnerNet,
+      adminRetainedAmount: packagesTotal + cashOwnerFee,
+      settlementPolicy: {
+        cashGift: cashGiftAmount > 0 ? 'split_to_owner_subaccount' : 'none',
+        packagePurchase: packagesTotal > 0 ? 'platform_only' : 'none',
+      },
+    },
     message: 'Gift checkout submitted successfully',
   });
 }));
