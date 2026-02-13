@@ -16,7 +16,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
 import { getEventTemplate } from '../utils/template-helper.js';
-import { BUCKETS, getPublicUrl } from '../services/supabaseStorage.js';
+import { BUCKETS, buildPublicUrl, getPublicUrl } from '../services/supabaseStorage.js';
 
 const router = Router();
 
@@ -148,7 +148,11 @@ function resolveEventCoverUrl(coverImagePath: string | null | undefined): string
   try {
     return getPublicUrl(BUCKETS.MEDIA, coverImagePath);
   } catch {
-    return coverImagePath;
+    try {
+      return buildPublicUrl(BUCKETS.MEDIA, coverImagePath);
+    } catch {
+      return coverImagePath.startsWith('/') ? coverImagePath : `/${coverImagePath}`;
+    }
   }
 }
 
@@ -492,6 +496,7 @@ router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
       name: true,
       date: true,
       venue: true,
+      updatedAt: true,
       itineraryEnabled: true,
       isArchived: true,
       itineraryItems: {
@@ -506,6 +511,7 @@ router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
           sortOrder: true,
           isCompleted: true,
           completedAt: true,
+          updatedAt: true,
         },
       },
     },
@@ -517,6 +523,18 @@ router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
 
   const total = event.itineraryItems.length;
   const completed = event.itineraryItems.filter((item) => item.isCompleted).length;
+  const lastUpdatedAt = event.itineraryItems.reduce<Date>(
+    (latest, item) => (item.updatedAt > latest ? item.updatedAt : latest),
+    event.updatedAt
+  );
+  const sinceParam = typeof req.query.since === 'string' ? req.query.since : '';
+  const sinceDate = sinceParam ? new Date(sinceParam) : null;
+  const hasValidSince = Boolean(sinceDate && !Number.isNaN(sinceDate.getTime()));
+  const changed = !hasValidSince || (sinceDate as Date) < lastUpdatedAt;
+
+  const items = changed
+    ? event.itineraryItems.map(({ updatedAt, ...item }) => item)
+    : [];
 
   res.json({
     event: {
@@ -530,7 +548,9 @@ router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
       total,
       completed,
       percent: total ? Math.round((completed / total) * 100) : 0,
-      items: event.itineraryItems,
+      changed,
+      lastUpdatedAt,
+      items,
     },
   });
 }));

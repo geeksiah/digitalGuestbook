@@ -477,7 +477,13 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
   const finalAmount = totalAmount - discountAmount;
 
   // Calculate fees
-  const platformFee = (finalAmount * (event.platformFeePercent || 0)) / 100;
+  const platformFeeMode = String((event as any).platformFeeMode || 'PERCENTAGE').toUpperCase();
+  const platformFeePercent = Math.max(0, Number((event as any).platformFeePercent || 0));
+  const platformFeeFixed = Math.max(0, Number((event as any).platformFeeFixed || 0));
+  const platformFee =
+    platformFeeMode === 'FIXED'
+      ? Math.min(finalAmount, platformFeeFixed)
+      : (finalAmount * platformFeePercent) / 100;
   const processingFeePercent = event.processingFeePercent || 0;
   const processingFeeFixed = event.processingFeeFixed || 0;
   const processingFee = (finalAmount * processingFeePercent) / 100 + processingFeeFixed;

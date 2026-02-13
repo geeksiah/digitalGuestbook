@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
-import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
+import { authenticateAdmin, authenticateAdminOrOwnerAccount } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -81,12 +81,26 @@ const requireOwnerEvent = async (ownerId: string, eventId: string) => {
   return event;
 };
 
-router.post('/events/:eventId/apply-template', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId as string;
+const requireManagedEvent = async (req: any, eventId: string) => {
+  if (req.admin?.id) {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!event) throw new AppError('Event not found', 404);
+    return event;
+  }
+
+  const ownerId = req.ownerId as string | undefined;
+  if (!ownerId) throw new AppError('Authentication required', 401);
+  return requireOwnerEvent(ownerId, eventId);
+};
+
+router.post('/events/:eventId/apply-template', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
   const { eventId } = req.params;
   const templateId = String(req.body?.templateId || '');
 
-  await requireOwnerEvent(ownerId, eventId);
+  await requireManagedEvent(req as any, eventId);
 
   const template = await prisma.itineraryTemplate.findUnique({
     where: { id: templateId },
@@ -125,11 +139,10 @@ router.post('/events/:eventId/apply-template', authenticateOwnerAccount, asyncHa
   res.json({ message: 'Template applied successfully' });
 }));
 
-router.get('/events/:eventId/items', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId as string;
+router.get('/events/:eventId/items', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
   const { eventId } = req.params;
 
-  await requireOwnerEvent(ownerId, eventId);
+  await requireManagedEvent(req as any, eventId);
 
   const items = await prisma.eventItineraryItem.findMany({
     where: { eventId },
@@ -139,12 +152,11 @@ router.get('/events/:eventId/items', authenticateOwnerAccount, asyncHandler(asyn
   res.json({ items });
 }));
 
-router.post('/events/:eventId/items', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId as string;
+router.post('/events/:eventId/items', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
   const { eventId } = req.params;
   const data = itemSchema.parse(req.body);
 
-  await requireOwnerEvent(ownerId, eventId);
+  await requireManagedEvent(req as any, eventId);
 
   const maxOrder = await prisma.eventItineraryItem.aggregate({
     where: { eventId },
@@ -171,12 +183,11 @@ router.post('/events/:eventId/items', authenticateOwnerAccount, asyncHandler(asy
   res.status(201).json({ item });
 }));
 
-router.patch('/events/:eventId/items/:itemId', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId as string;
+router.patch('/events/:eventId/items/:itemId', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
   const { eventId, itemId } = req.params;
   const data = itemSchema.partial().parse(req.body);
 
-  await requireOwnerEvent(ownerId, eventId);
+  await requireManagedEvent(req as any, eventId);
 
   const existing = await prisma.eventItineraryItem.findFirst({
     where: { id: itemId, eventId },
@@ -199,13 +210,29 @@ router.patch('/events/:eventId/items/:itemId', authenticateOwnerAccount, asyncHa
   res.json({ item });
 }));
 
-router.post('/events/:eventId/items/reorder', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId as string;
+router.delete('/events/:eventId/items/:itemId', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
+  const { eventId, itemId } = req.params;
+  await requireManagedEvent(req as any, eventId);
+
+  const existing = await prisma.eventItineraryItem.findFirst({
+    where: { id: itemId, eventId },
+    select: { id: true },
+  });
+  if (!existing) throw new AppError('Itinerary item not found', 404);
+
+  await prisma.eventItineraryItem.delete({
+    where: { id: existing.id },
+  });
+
+  res.json({ message: 'Itinerary item deleted' });
+}));
+
+router.post('/events/:eventId/items/reorder', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
   const { eventId } = req.params;
   const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
   if (!itemIds.length) throw new AppError('itemIds must be a non-empty array', 400);
 
-  await requireOwnerEvent(ownerId, eventId);
+  await requireManagedEvent(req as any, eventId);
 
   await prisma.$transaction(
     itemIds.map((id: string, index: number) =>
@@ -219,10 +246,9 @@ router.post('/events/:eventId/items/reorder', authenticateOwnerAccount, asyncHan
   res.json({ message: 'Items reordered successfully' });
 }));
 
-router.post('/events/:eventId/mc-session', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId as string;
+router.post('/events/:eventId/mc-session', authenticateAdminOrOwnerAccount, asyncHandler(async (req, res) => {
   const { eventId } = req.params;
-  await requireOwnerEvent(ownerId, eventId);
+  await requireManagedEvent(req as any, eventId);
 
   const token = randomBytes(24).toString('hex');
   const expiresAt = req.body?.expiresInHours
@@ -313,12 +339,18 @@ router.post('/mc/:token/items/:itemId/toggle', asyncHandler(async (req, res) => 
   });
   if (!item) throw new AppError('Itinerary item not found', 404);
 
+  const requestedState = req.body?.isCompleted;
+  const nextCompleted =
+    typeof requestedState === 'boolean'
+      ? requestedState
+      : !item.isCompleted;
+
   const updated = await prisma.eventItineraryItem.update({
     where: { id: item.id },
     data: {
-      isCompleted: !item.isCompleted,
-      completedAt: !item.isCompleted ? new Date() : null,
-      completedBySessionId: !item.isCompleted ? session.id : null,
+      isCompleted: nextCompleted,
+      completedAt: nextCompleted ? new Date() : null,
+      completedBySessionId: nextCompleted ? session.id : null,
     },
   });
 

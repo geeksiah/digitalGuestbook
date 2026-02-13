@@ -164,7 +164,10 @@ export const publicApi = {
   getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/public/event/token/${token}`),
   getRsvpInvite: (token: string) => axios.get(`${API_BASE_URL}/api/public/rsvp-invite/${token}`),
   resolveDomain: (host: string) => axios.get(`${API_BASE_URL}/api/public/domain/${encodeURIComponent(host)}`),
-  getItinerary: (slug: string) => axios.get(`${API_BASE_URL}/api/public/event/${slug}/itinerary`),
+  getItinerary: (slug: string, since?: string) =>
+    axios.get(`${API_BASE_URL}/api/public/event/${slug}/itinerary`, {
+      params: since ? { since } : undefined,
+    }),
 };
 
 // Guestbook API
@@ -343,9 +346,15 @@ export const ownerAuthApi = {
 
 const getOwnerToken = () =>
   typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+const getAdminToken = () =>
+  typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
 
 const ownerHeaders = () => ({
   Authorization: `Bearer ${getOwnerToken() || ''}`,
+});
+
+const managementHeaders = () => ({
+  Authorization: `Bearer ${getAdminToken() || getOwnerToken() || ''}`,
 });
 
 export const ownerDashboardApi = {
@@ -469,21 +478,25 @@ export const itineraryApi = {
   deleteTemplate: (id: string) => api.delete(`/itinerary/templates/${id}`),
   applyTemplate: (eventId: string, templateId: string) =>
     axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/apply-template`, { templateId }, {
-      headers: ownerHeaders(),
+      headers: managementHeaders(),
     }),
   getItems: (eventId: string) =>
-    axios.get(`${API_BASE_URL}/api/itinerary/events/${eventId}/items`, { headers: ownerHeaders() }),
+    axios.get(`${API_BASE_URL}/api/itinerary/events/${eventId}/items`, { headers: managementHeaders() }),
   createItem: (eventId: string, data: any) =>
-    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/items`, data, { headers: ownerHeaders() }),
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/items`, data, { headers: managementHeaders() }),
   updateItem: (eventId: string, itemId: string, data: any) =>
-    axios.patch(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/${itemId}`, data, { headers: ownerHeaders() }),
+    axios.patch(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/${itemId}`, data, { headers: managementHeaders() }),
+  deleteItem: (eventId: string, itemId: string) =>
+    axios.delete(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/${itemId}`, { headers: managementHeaders() }),
   reorderItems: (eventId: string, itemIds: string[]) =>
-    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/reorder`, { itemIds }, { headers: ownerHeaders() }),
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/items/reorder`, { itemIds }, { headers: managementHeaders() }),
   createMcSession: (eventId: string, data?: any) =>
-    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/mc-session`, data || {}, { headers: ownerHeaders() }),
+    axios.post(`${API_BASE_URL}/api/itinerary/events/${eventId}/mc-session`, data || {}, { headers: managementHeaders() }),
   getMcSession: (token: string) => axios.get(`${API_BASE_URL}/api/itinerary/mc/${token}`),
-  toggleMcItem: (token: string, itemId: string) =>
-    axios.post(`${API_BASE_URL}/api/itinerary/mc/${token}/items/${itemId}/toggle`),
+  toggleMcItem: (token: string, itemId: string, isCompleted?: boolean) =>
+    axios.post(`${API_BASE_URL}/api/itinerary/mc/${token}/items/${itemId}/toggle`, {
+      ...(typeof isCompleted === 'boolean' ? { isCompleted } : {}),
+    }),
 };
 
 export const giftingApi = {
@@ -493,6 +506,9 @@ export const giftingApi = {
   createPackage: (data: any) => api.post('/gifting/packages', data),
   updatePackage: (id: string, data: any) => api.patch(`/gifting/packages/${id}`, data),
   deletePackage: (id: string) => api.delete(`/gifting/packages/${id}`),
+  listEventPackages: (eventId: string) => api.get(`/gifting/events/${eventId}/packages`),
+  setEventPackages: (eventId: string, packageIds: string[]) =>
+    api.put(`/gifting/events/${eventId}/packages`, { packageIds }),
   listOrders: (eventId?: string) => api.get('/gifting/orders', { params: { eventId } }),
   listOwnerOrders: () => axios.get(`${API_BASE_URL}/api/gifting/owner/orders`, { headers: ownerHeaders() }),
 };

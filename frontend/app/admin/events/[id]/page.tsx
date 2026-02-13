@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
@@ -38,6 +38,8 @@ interface Event {
   rsvpMode: 'free' | 'paid';
   ticketingEnabled: boolean;
   platformFeePercent: number;
+  platformFeeMode: 'PERCENTAGE' | 'FIXED';
+  platformFeeFixed: number | null;
   processingFeePercent: number;
   processingFeeFixed: number;
   maxRecordingDuration: number;
@@ -68,7 +70,7 @@ interface Event {
   ownerPhone?: string;
   organizationName?: string;
   domains?: Domain[];
-  _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number };
+  _count: { rsvps: number; invitations: number; checkIns: number; mediaAssets: number; giftOrders?: number };
 }
 
 interface Domain {
@@ -117,8 +119,44 @@ interface CheckIn {
 }
 
 interface Template { id: string; name: string; type: string; isDefault: boolean; }
+interface ItineraryItem {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  location: string | null;
+  sortOrder: number;
+  isCompleted: boolean;
+  completedAt: string | null;
+}
+interface GiftPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  thumbnailPath: string | null;
+  isActive: boolean;
+  assigned?: boolean;
+}
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'formFields' | 'sales' | 'settings';
+interface GiftOrder {
+  id: string;
+  guestName: string;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  currency: string;
+  totalAmount: number;
+  cashGiftAmount: number | null;
+  packageAmount: number;
+  ownerNetAmount: number;
+  adminRetainedAmount: number;
+  status: string;
+  createdAt: string;
+}
+
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'itinerary' | 'formFields' | 'sales' | 'gifts' | 'settings';
 
 // SVG Icons
 const Icons = {
@@ -161,6 +199,41 @@ export default function EventDetailPage() {
   const [sales, setSales] = useState<any[]>([]);
   const [salesStats, setSalesStats] = useState<any>(null);
   const [loadingSales, setLoadingSales] = useState(false);
+  const [giftPackages, setGiftPackages] = useState<GiftPackage[]>([]);
+  const [giftOrders, setGiftOrders] = useState<GiftOrder[]>([]);
+  const [loadingGifts, setLoadingGifts] = useState(false);
+  const [savingGiftAssignments, setSavingGiftAssignments] = useState(false);
+  const [savingGiftPackage, setSavingGiftPackage] = useState(false);
+  const [newGiftPackage, setNewGiftPackage] = useState({
+    name: '',
+    description: '',
+    price: '',
+    currency: 'GHS',
+  });
+  const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
+  const [loadingItinerary, setLoadingItinerary] = useState(false);
+  const [savingItinerary, setSavingItinerary] = useState(false);
+  const [showItineraryDateTimeInputs, setShowItineraryDateTimeInputs] = useState(false);
+  const [creatingMcSession, setCreatingMcSession] = useState(false);
+  const [mcControlUrl, setMcControlUrl] = useState('');
+  const [editingItineraryId, setEditingItineraryId] = useState<string | null>(null);
+  const [editingItineraryDateTimeInputs, setEditingItineraryDateTimeInputs] = useState(false);
+  const [savingEditedItinerary, setSavingEditedItinerary] = useState(false);
+  const [deletingItineraryId, setDeletingItineraryId] = useState<string | null>(null);
+  const [newItineraryItem, setNewItineraryItem] = useState({
+    title: '',
+    description: '',
+    startsAt: '',
+    endsAt: '',
+    location: '',
+  });
+  const [editItineraryItem, setEditItineraryItem] = useState({
+    title: '',
+    description: '',
+    startsAt: '',
+    endsAt: '',
+    location: '',
+  });
   const [loadingRsvps, setLoadingRsvps] = useState(false);
   const [reviewingRsvp, setReviewingRsvp] = useState<string | null>(null);
   const [viewingRsvpDetails, setViewingRsvpDetails] = useState<RSVP | null>(null);
@@ -193,7 +266,11 @@ export default function EventDetailPage() {
     invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
     // RSVP Mode & Ticketing
     rsvpMode: 'free' as 'free' | 'paid', ticketingEnabled: false,
-    platformFeePercent: 5, processingFeePercent: 2.9, processingFeeFixed: 0.30,
+    platformFeeMode: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED',
+    platformFeePercent: 5,
+    platformFeeFixed: 0,
+    processingFeePercent: 2.9,
+    processingFeeFixed: 0.30,
     // Limits
     maxRecordingDuration: 120, minRecordingDuration: 30, maxPhotosPerGuest: 5,
     maxPhotosPerBoothSession: 10, boothShutterCountdown: 3,
@@ -222,6 +299,14 @@ export default function EventDetailPage() {
     giftingPageTemplateId: '',
   });
 
+  const toDateTimeLocalInput = (value: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
   useEffect(() => { fetchEvent(); fetchTemplates(); fetchOwners(); }, [eventId]);
   
   useEffect(() => {
@@ -229,6 +314,8 @@ export default function EventDetailPage() {
     if (activeTab === 'media') fetchMedia();
     if (activeTab === 'checkin') fetchCheckIns();
     if (activeTab === 'sales') fetchSales();
+    if (activeTab === 'gifts') fetchGifts();
+    if (activeTab === 'itinerary') fetchItinerary();
     if (activeTab === 'formFields') fetchFormFields();
     if (activeTab === 'settings') fetchDomains();
   }, [activeTab, rsvpFilter]);
@@ -272,7 +359,9 @@ export default function EventDetailPage() {
         // RSVP Mode & Ticketing
         rsvpMode: (event.rsvpMode as 'free' | 'paid') || 'free',
         ticketingEnabled: event.ticketingEnabled ?? false,
+        platformFeeMode: (event.platformFeeMode as 'PERCENTAGE' | 'FIXED') || 'PERCENTAGE',
         platformFeePercent: event.platformFeePercent ?? 5,
+        platformFeeFixed: event.platformFeeFixed ?? 0,
         processingFeePercent: event.processingFeePercent ?? 2.9,
         processingFeeFixed: event.processingFeeFixed ?? 0.30,
         // Limits
@@ -369,6 +458,221 @@ export default function EventDetailPage() {
       toast.error('Failed to load sales');
     } finally {
       setLoadingSales(false);
+    }
+  };
+
+  const fetchGifts = async () => {
+    try {
+      setLoadingGifts(true);
+      const [packagesResponse, ordersResponse] = await Promise.all([
+        giftingApi.listEventPackages(eventId),
+        giftingApi.listOrders(eventId),
+      ]);
+      setGiftPackages(packagesResponse.data.packages || []);
+      setGiftOrders(ordersResponse.data.orders || []);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to load gifting data');
+    } finally {
+      setLoadingGifts(false);
+    }
+  };
+
+  const handleToggleGiftPackageAssignment = (id: string) => {
+    setGiftPackages((current) =>
+      current.map((pkg) => (pkg.id === id ? { ...pkg, assigned: !pkg.assigned } : pkg))
+    );
+  };
+
+  const handleSaveGiftAssignments = async () => {
+    try {
+      setSavingGiftAssignments(true);
+      const packageIds = giftPackages.filter((pkg) => pkg.assigned).map((pkg) => pkg.id);
+      await giftingApi.setEventPackages(eventId, packageIds);
+      toast.success('Gift package assignment saved');
+      await fetchGifts();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to save gift package assignment');
+    } finally {
+      setSavingGiftAssignments(false);
+    }
+  };
+
+  const handleCreateGiftPackage = async () => {
+    if (!newGiftPackage.name.trim()) {
+      toast.error('Package name is required');
+      return;
+    }
+    const price = Number(newGiftPackage.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      toast.error('Package price must be greater than 0');
+      return;
+    }
+
+    try {
+      setSavingGiftPackage(true);
+      await giftingApi.createPackage({
+        name: newGiftPackage.name.trim(),
+        description: newGiftPackage.description.trim() || null,
+        price,
+        currency: newGiftPackage.currency || 'GHS',
+      });
+      setNewGiftPackage({ name: '', description: '', price: '', currency: newGiftPackage.currency || 'GHS' });
+      toast.success('Gift package created');
+      await fetchGifts();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to create gift package');
+    } finally {
+      setSavingGiftPackage(false);
+    }
+  };
+
+  const handleToggleGiftPackageActive = async (pkg: GiftPackage) => {
+    try {
+      await giftingApi.updatePackage(pkg.id, { isActive: !pkg.isActive });
+      toast.success(!pkg.isActive ? 'Package activated' : 'Package disabled');
+      await fetchGifts();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to update package');
+    }
+  };
+
+  const fetchItinerary = async () => {
+    try {
+      setLoadingItinerary(true);
+      const response = await itineraryApi.getItems(eventId);
+      setItineraryItems(response.data.items || []);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to load itinerary');
+    } finally {
+      setLoadingItinerary(false);
+    }
+  };
+
+  const handleAddItineraryItem = async () => {
+    if (!newItineraryItem.title.trim()) {
+      toast.error('Itinerary item title is required');
+      return;
+    }
+
+    setSavingItinerary(true);
+    try {
+      const startsAtIso = showItineraryDateTimeInputs && newItineraryItem.startsAt
+        ? new Date(newItineraryItem.startsAt).toISOString()
+        : undefined;
+      const endsAtIso = showItineraryDateTimeInputs && newItineraryItem.endsAt
+        ? new Date(newItineraryItem.endsAt).toISOString()
+        : undefined;
+
+      await itineraryApi.createItem(eventId, {
+        title: newItineraryItem.title.trim(),
+        description: newItineraryItem.description.trim() || undefined,
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
+        location: newItineraryItem.location.trim() || undefined,
+      });
+      toast.success('Itinerary item added');
+      setNewItineraryItem({
+        title: '',
+        description: '',
+        startsAt: '',
+        endsAt: '',
+        location: '',
+      });
+      setShowItineraryDateTimeInputs(false);
+      await fetchItinerary();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to add itinerary item');
+    } finally {
+      setSavingItinerary(false);
+    }
+  };
+
+  const handleCreateMcControlLink = async () => {
+    setCreatingMcSession(true);
+    try {
+      const response = await itineraryApi.createMcSession(eventId);
+      if (response.data?.mcUrl) {
+        setMcControlUrl(response.data.mcUrl);
+      }
+      toast.success('MC control link generated');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to generate MC link');
+    } finally {
+      setCreatingMcSession(false);
+    }
+  };
+
+  const handleStartEditItineraryItem = (item: ItineraryItem) => {
+    setEditingItineraryId(item.id);
+    setEditingItineraryDateTimeInputs(Boolean(item.startsAt || item.endsAt));
+    setEditItineraryItem({
+      title: item.title,
+      description: item.description || '',
+      startsAt: toDateTimeLocalInput(item.startsAt),
+      endsAt: toDateTimeLocalInput(item.endsAt),
+      location: item.location || '',
+    });
+  };
+
+  const handleCancelEditItineraryItem = () => {
+    setEditingItineraryId(null);
+    setEditingItineraryDateTimeInputs(false);
+    setEditItineraryItem({
+      title: '',
+      description: '',
+      startsAt: '',
+      endsAt: '',
+      location: '',
+    });
+  };
+
+  const handleUpdateItineraryItem = async (itemId: string) => {
+    if (!editItineraryItem.title.trim()) {
+      toast.error('Itinerary item title is required');
+      return;
+    }
+
+    setSavingEditedItinerary(true);
+    try {
+      await itineraryApi.updateItem(eventId, itemId, {
+        title: editItineraryItem.title.trim(),
+        description: editItineraryItem.description.trim() || null,
+        location: editItineraryItem.location.trim() || null,
+        startsAt: editingItineraryDateTimeInputs
+          ? (editItineraryItem.startsAt ? new Date(editItineraryItem.startsAt).toISOString() : null)
+          : null,
+        endsAt: editingItineraryDateTimeInputs
+          ? (editItineraryItem.endsAt ? new Date(editItineraryItem.endsAt).toISOString() : null)
+          : null,
+      });
+      toast.success('Itinerary item updated');
+      handleCancelEditItineraryItem();
+      await fetchItinerary();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to update itinerary item');
+    } finally {
+      setSavingEditedItinerary(false);
+    }
+  };
+
+  const handleDeleteItineraryItem = async (itemId: string) => {
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm('Delete this itinerary activity?')
+      : true;
+    if (!confirmed) return;
+
+    setDeletingItineraryId(itemId);
+    try {
+      await itineraryApi.deleteItem(eventId, itemId);
+      toast.success('Itinerary item deleted');
+      if (editingItineraryId === itemId) {
+        handleCancelEditItineraryItem();
+      }
+      await fetchItinerary();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to delete itinerary item');
+    } finally {
+      setDeletingItineraryId(null);
     }
   };
 
@@ -576,7 +880,9 @@ export default function EventDetailPage() {
         // RSVP Mode & Ticketing
         rsvpMode: eventSettings.rsvpMode,
         ticketingEnabled: eventSettings.ticketingEnabled,
+        platformFeeMode: eventSettings.platformFeeMode,
         platformFeePercent: eventSettings.platformFeePercent,
+        platformFeeFixed: eventSettings.platformFeeFixed,
         processingFeePercent: eventSettings.processingFeePercent,
         processingFeeFixed: eventSettings.processingFeeFixed,
         // Limits
@@ -625,9 +931,25 @@ export default function EventDetailPage() {
     { id: 'media', label: 'Media', count: event._count.mediaAssets },
     { id: 'templates', label: 'Templates' },
     { id: 'tickets', label: 'Tickets' },
+    { id: 'itinerary', label: 'Itinerary', count: itineraryItems.length || undefined },
     { id: 'formFields', label: 'Form Fields', count: formFields.length },
+    { id: 'gifts', label: 'Gifts', count: event._count.giftOrders || undefined },
     { id: 'settings', label: 'Settings' },
   ];
+
+  const giftSummary = giftOrders.reduce(
+    (acc, order) => {
+      acc.orders += 1;
+      acc.gross += Number(order.totalAmount || 0);
+      acc.ownerNet += Number(order.ownerNetAmount || 0);
+      acc.adminRetained += Number(order.adminRetainedAmount || 0);
+      acc.cash += Number(order.cashGiftAmount || 0);
+      acc.packageAmount += Number(order.packageAmount || 0);
+      return acc;
+    },
+    { orders: 0, gross: 0, ownerNet: 0, adminRetained: 0, cash: 0, packageAmount: 0 }
+  );
+  const giftCurrency = giftOrders[0]?.currency || 'GHS';
 
   return (
     <div className="space-y-7">
@@ -1271,6 +1593,249 @@ export default function EventDetailPage() {
         />
       )}
 
+      {/* Itinerary */}
+      {activeTab === 'itinerary' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-brand-900">Event Itinerary</h3>
+                <p className="text-sm text-surface-600">
+                  Manage activities and generate MC control access.
+                </p>
+              </div>
+              <button
+                className="btn-primary"
+                disabled={creatingMcSession}
+                onClick={handleCreateMcControlLink}
+              >
+                {creatingMcSession ? 'Generating...' : 'Generate MC Link'}
+              </button>
+            </div>
+            {mcControlUrl && (
+              <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
+                <p className="text-xs uppercase tracking-wider text-surface-500 font-medium">MC Control URL</p>
+                <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                  <input className="input text-sm" readOnly value={mcControlUrl} />
+                  <button className="btn-outline" onClick={() => copyToClipboard(mcControlUrl)}>
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
+            <h4 className="font-medium text-brand-900">Add Item</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                className="input"
+                placeholder="Activity title"
+                value={newItineraryItem.title}
+                onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
+              />
+              <input
+                className="input"
+                placeholder="Location (optional)"
+                value={newItineraryItem.location}
+                onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium text-brand-900">Add date/time</p>
+                <p className="text-xs text-surface-500">Optional. Keep off for activities without fixed schedule.</p>
+              </div>
+              <button
+                type="button"
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                  showItineraryDateTimeInputs
+                    ? 'bg-brand-900 text-white border-brand-900'
+                    : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
+                )}
+                onClick={() => {
+                  const next = !showItineraryDateTimeInputs;
+                  setShowItineraryDateTimeInputs(next);
+                  if (!next) {
+                    setNewItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                  }
+                }}
+              >
+                {showItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
+              </button>
+            </div>
+            {showItineraryDateTimeInputs && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={newItineraryItem.startsAt}
+                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
+                />
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={newItineraryItem.endsAt}
+                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
+                />
+              </div>
+            )}
+            <textarea
+              className="input min-h-[88px]"
+              placeholder="Description (optional)"
+              value={newItineraryItem.description}
+              onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
+            />
+            <div className="flex justify-end">
+              <button className="btn-primary" disabled={savingItinerary} onClick={handleAddItineraryItem}>
+                {savingItinerary ? 'Saving...' : 'Add Item'}
+              </button>
+            </div>
+          </div>
+
+          {loadingItinerary ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
+            </div>
+          ) : itineraryItems.length === 0 ? (
+            <div className="bg-white rounded-lg border border-surface-200 p-10 text-center text-surface-500">
+              No itinerary items yet.
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+              <div className="divide-y divide-surface-200">
+                {itineraryItems.map((item) => (
+                  <div key={item.id} className="px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                    {editingItineraryId === item.id ? (
+                      <div className="w-full space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input
+                            className="input"
+                            placeholder="Activity title"
+                            value={editItineraryItem.title}
+                            onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
+                          />
+                          <input
+                            className="input"
+                            placeholder="Location (optional)"
+                            value={editItineraryItem.location}
+                            onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium text-brand-900">Edit date/time</p>
+                            <p className="text-xs text-surface-500">Optional for this itinerary activity.</p>
+                          </div>
+                          <button
+                            type="button"
+                            className={cn(
+                              'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                              editingItineraryDateTimeInputs
+                                ? 'bg-brand-900 text-white border-brand-900'
+                                : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
+                            )}
+                            onClick={() => {
+                              const next = !editingItineraryDateTimeInputs;
+                              setEditingItineraryDateTimeInputs(next);
+                              if (!next) {
+                                setEditItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                              }
+                            }}
+                          >
+                            {editingItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
+                          </button>
+                        </div>
+                        {editingItineraryDateTimeInputs && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input
+                              type="datetime-local"
+                              className="input"
+                              value={editItineraryItem.startsAt}
+                              onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
+                            />
+                            <input
+                              type="datetime-local"
+                              className="input"
+                              value={editItineraryItem.endsAt}
+                              onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
+                            />
+                          </div>
+                        )}
+                        <textarea
+                          className="input min-h-[80px]"
+                          placeholder="Description (optional)"
+                          value={editItineraryItem.description}
+                          onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button className="btn-ghost" onClick={handleCancelEditItineraryItem}>
+                            Cancel
+                          </button>
+                          <button
+                            className="btn-primary"
+                            disabled={savingEditedItinerary}
+                            onClick={() => handleUpdateItineraryItem(item.id)}
+                          >
+                            {savingEditedItinerary ? 'Saving...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'w-2 h-2 rounded-full',
+                                item.isCompleted ? 'bg-emerald-500' : 'bg-surface-300'
+                              )}
+                            />
+                            <p className={cn('font-medium', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
+                              {item.title}
+                            </p>
+                          </div>
+                          {item.description && (
+                            <p className="text-sm text-surface-600 mt-1">{item.description}</p>
+                          )}
+                          {(item.startsAt || item.location) && (
+                            <p className="text-xs text-surface-500 mt-1">
+                              {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : ''}
+                              {item.startsAt && item.location ? ' • ' : ''}
+                              {item.location ? item.location : ''}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="text-xs text-surface-500">
+                            {item.isCompleted
+                              ? `Completed ${item.completedAt ? formatDate(item.completedAt) : 'recently'}`
+                              : 'Pending'}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button className="btn-ghost" onClick={() => handleStartEditItineraryItem(item)}>
+                              Edit
+                            </button>
+                            <button
+                              className="btn-ghost text-rose-600 hover:text-rose-700"
+                              disabled={deletingItineraryId === item.id}
+                              onClick={() => handleDeleteItineraryItem(item.id)}
+                            >
+                              {deletingItineraryId === item.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Form Fields */}
       {activeTab === 'formFields' && (
         <div className="space-y-4">
@@ -1665,6 +2230,230 @@ export default function EventDetailPage() {
         </div>
       )}
 
+      {/* Gifts */}
+      {activeTab === 'gifts' && (
+        <div className="space-y-4">
+          {loadingGifts ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto" />
+            </div>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-surface-200 p-5">
+                  <p className="text-sm text-surface-500 mb-1">Gift Orders</p>
+                  <p className="text-3xl font-bold text-brand-900">{giftSummary.orders}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-surface-200 p-5">
+                  <p className="text-sm text-surface-500 mb-1">Gross Gift Volume</p>
+                  <p className="text-3xl font-bold text-brand-900">{giftCurrency} {giftSummary.gross.toFixed(2)}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-surface-200 p-5">
+                  <p className="text-sm text-surface-500 mb-1">Owner Net (Cash)</p>
+                  <p className="text-3xl font-bold text-emerald-600">{giftCurrency} {giftSummary.ownerNet.toFixed(2)}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-surface-200 p-5">
+                  <p className="text-sm text-surface-500 mb-1">Admin Retained</p>
+                  <p className="text-3xl font-bold text-brand-900">{giftCurrency} {giftSummary.adminRetained.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-surface-200 p-5 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-brand-900">Gift Packages for This Event</h3>
+                    <p className="text-sm text-surface-500">
+                      Admin controls which packages appear on the public gifting page for this event.
+                    </p>
+                  </div>
+                  <button
+                    className="btn-primary"
+                    disabled={savingGiftAssignments}
+                    onClick={handleSaveGiftAssignments}
+                  >
+                    {savingGiftAssignments ? 'Saving...' : 'Save Package Assignment'}
+                  </button>
+                </div>
+
+                <div className="grid lg:grid-cols-3 gap-5">
+                  <div className="lg:col-span-2">
+                    <div className="rounded-xl border border-surface-200 overflow-hidden">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-surface-200 bg-surface-50">
+                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Show</th>
+                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Package</th>
+                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Price</th>
+                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-100">
+                          {giftPackages.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-8 text-center text-sm text-surface-500">
+                                No gift packages yet. Create your first package.
+                              </td>
+                            </tr>
+                          ) : (
+                            giftPackages.map((pkg) => (
+                              <tr key={pkg.id} className="hover:bg-surface-50">
+                                <td className="py-3 px-4">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-surface-300 text-brand-900"
+                                    checked={Boolean(pkg.assigned)}
+                                    onChange={() => handleToggleGiftPackageAssignment(pkg.id)}
+                                  />
+                                </td>
+                                <td className="py-3 px-4">
+                                  <p className="font-medium text-brand-900">{pkg.name}</p>
+                                  {pkg.description ? <p className="text-xs text-surface-500 mt-1">{pkg.description}</p> : null}
+                                </td>
+                                <td className="py-3 px-4 text-sm text-surface-700">
+                                  {pkg.currency} {Number(pkg.price || 0).toFixed(2)}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span
+                                    className={cn(
+                                      'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
+                                      pkg.isActive
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : 'bg-surface-100 text-surface-600 border-surface-200'
+                                    )}
+                                  >
+                                    {pkg.isActive ? 'Active' : 'Disabled'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <button
+                                    className="btn-ghost"
+                                    onClick={() => handleToggleGiftPackageActive(pkg)}
+                                  >
+                                    {pkg.isActive ? 'Disable' : 'Enable'}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-surface-200 p-4 bg-surface-50 space-y-3">
+                    <h4 className="font-semibold text-brand-900">Create Package</h4>
+                    <input
+                      className="input"
+                      placeholder="Package name"
+                      value={newGiftPackage.name}
+                      onChange={(e) => setNewGiftPackage({ ...newGiftPackage, name: e.target.value })}
+                    />
+                    <textarea
+                      className="input min-h-[88px]"
+                      placeholder="Description (optional)"
+                      value={newGiftPackage.description}
+                      onChange={(e) => setNewGiftPackage({ ...newGiftPackage, description: e.target.value })}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="input"
+                        placeholder="Price"
+                        value={newGiftPackage.price}
+                        onChange={(e) => setNewGiftPackage({ ...newGiftPackage, price: e.target.value })}
+                      />
+                      <input
+                        className="input"
+                        placeholder="Currency"
+                        value={newGiftPackage.currency}
+                        onChange={(e) => setNewGiftPackage({ ...newGiftPackage, currency: e.target.value.toUpperCase() })}
+                      />
+                    </div>
+                    <button
+                      className="btn-primary w-full justify-center"
+                      disabled={savingGiftPackage}
+                      onClick={handleCreateGiftPackage}
+                    >
+                      {savingGiftPackage ? 'Creating...' : 'Create Package'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-surface-200">
+                  <h3 className="text-lg font-semibold text-brand-900">Gift Order Ledger</h3>
+                  <p className="text-sm text-surface-500 mt-1">
+                    Cash gifts route owner net after platform fee. Package purchases are retained by admin.
+                  </p>
+                </div>
+                {giftOrders.length === 0 ? (
+                  <div className="text-center py-12 text-surface-500 text-sm">No gift orders yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-surface-200 bg-surface-50">
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Gross</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Cash</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Packages</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Owner Net</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Admin Retained</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-surface-100">
+                        {giftOrders.map((order) => (
+                          <tr key={order.id} className="hover:bg-surface-50">
+                            <td className="py-3 px-4">
+                              <p className="font-medium text-brand-900">{order.guestName}</p>
+                              <p className="text-xs text-surface-500">{order.guestEmail || order.guestPhone || 'No contact'}</p>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-surface-700">
+                              {order.currency} {Number(order.totalAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-surface-700">
+                              {order.currency} {Number(order.cashGiftAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-surface-700">
+                              {order.currency} {Number(order.packageAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="py-3 px-4 text-sm font-semibold text-emerald-700">
+                              {order.currency} {Number(order.ownerNetAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="py-3 px-4 text-sm font-semibold text-brand-900">
+                              {order.currency} {Number(order.adminRetainedAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={cn(
+                                  'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
+                                  order.status === 'PAID'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                )}
+                              >
+                                {order.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-surface-500">{formatDate(order.createdAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Settings */}
       {activeTab === 'settings' && (
         <div className="bg-white rounded-xl border border-surface-200 p-6">
@@ -1962,13 +2751,50 @@ export default function EventDetailPage() {
                   {eventSettings.rsvpMode === 'paid' && (
                     <div className="bg-surface-50 rounded-lg p-4 space-y-4">
                       <h5 className="font-medium text-brand-900 text-sm">Ticketing Fees</h5>
-                      <div className="grid sm:grid-cols-3 gap-4">
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
-                          <label className="block text-xs font-medium text-surface-600 mb-1">Platform Fee (%)</label>
+                          <label className="block text-xs font-medium text-surface-600 mb-1">Platform Fee Mode</label>
+                          <select
+                            value={eventSettings.platformFeeMode}
+                            onChange={(e) =>
+                              setEventSettings({
+                                ...eventSettings,
+                                platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED',
+                              })
+                            }
+                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
+                          >
+                            <option value="PERCENTAGE">Percentage</option>
+                            <option value="FIXED">Fixed Amount</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-surface-600 mb-1">
+                            {eventSettings.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
+                          </label>
                           <input
-                            type="number" step="0.1" min="0" max="100"
-                            value={eventSettings.platformFeePercent}
-                            onChange={e => setEventSettings({ ...eventSettings, platformFeePercent: parseFloat(e.target.value) || 0 })}
+                            type="number"
+                            step={eventSettings.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
+                            min="0"
+                            max={eventSettings.platformFeeMode === 'FIXED' ? undefined : '100'}
+                            value={
+                              eventSettings.platformFeeMode === 'FIXED'
+                                ? eventSettings.platformFeeFixed ?? 0
+                                : eventSettings.platformFeePercent
+                            }
+                            onChange={(e) =>
+                              setEventSettings({
+                                ...eventSettings,
+                                platformFeePercent:
+                                  eventSettings.platformFeeMode === 'PERCENTAGE'
+                                    ? parseFloat(e.target.value) || 0
+                                    : eventSettings.platformFeePercent,
+                                platformFeeFixed:
+                                  eventSettings.platformFeeMode === 'FIXED'
+                                    ? parseFloat(e.target.value) || 0
+                                    : eventSettings.platformFeeFixed,
+                              })
+                            }
                             className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
                           />
                         </div>

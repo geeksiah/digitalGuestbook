@@ -26,6 +26,15 @@ function validateEnvironmentVariables() {
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
+
+  // Prisma schema expects DIRECT_URL for migration/schema operations.
+  // Keep deploys resilient by falling back to DATABASE_URL when DIRECT_URL is not explicitly set.
+  if (!process.env.DIRECT_URL || process.env.DIRECT_URL === '') {
+    process.env.DIRECT_URL = process.env.DATABASE_URL;
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('DIRECT_URL is not set. Falling back to DATABASE_URL for Prisma schema operations.');
+    }
+  }
   
   // Additional production checks
   if (process.env.NODE_ENV === 'production') {
@@ -232,6 +241,7 @@ import ownerDashboardRoutes from './routes/owner-dashboard.js';
 import itineraryRoutes from './routes/itinerary.js';
 import giftingRoutes from './routes/gifting.js';
 import whatsappWebhookRoutes from './routes/whatsapp-webhooks.js';
+import paystackWebhookRoutes from './routes/paystack-webhooks.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -334,6 +344,7 @@ const authLimiter = rateLimit({
 app.use('/api/auth/', authLimiter);
 
 // Body Parsing
+app.use('/api/paystack/webhooks', express.raw({ type: 'application/json', limit: '2mb' }), paystackWebhookRoutes);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

@@ -198,6 +198,70 @@ export const authenticateOwnerAccount = async (
   }
 };
 
+// Admin OR Owner Account Authentication (JWT-based)
+export const authenticateAdminOrOwnerAccount = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError('Authentication required', 401);
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    if (!token || token === 'null' || token === 'undefined') {
+      throw new AppError('Invalid authentication token', 401);
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, getJwtSecret()) as any;
+    } catch (jwtError) {
+      if (jwtError instanceof jwt.TokenExpiredError) {
+        throw new AppError('Session expired. Please sign in again.', 401);
+      }
+      if (jwtError instanceof jwt.JsonWebTokenError) {
+        throw new AppError('Invalid authentication token', 401);
+      }
+      throw new AppError('Authentication failed', 401);
+    }
+
+    if (decoded?.adminId) {
+      const admin = await prisma.admin.findUnique({
+        where: { id: decoded.adminId },
+        select: { id: true, email: true, name: true, role: true },
+      });
+      if (!admin) throw new AppError('Account not found. Please sign in again.', 401);
+      req.admin = admin;
+      return next();
+    }
+
+    if (decoded?.ownerId) {
+      const owner = await prisma.owner.findUnique({
+        where: { id: decoded.ownerId },
+        select: { id: true, email: true, name: true, isActive: true },
+      });
+      if (!owner) throw new AppError('Account not found. Please sign in again.', 401);
+      if (!owner.isActive) throw new AppError('Account is inactive. Please contact support.', 403);
+      req.ownerId = owner.id;
+      req.owner = owner;
+      return next();
+    }
+
+    throw new AppError('Invalid authentication token', 401);
+  } catch (error) {
+    if (error instanceof AppError) {
+      return next(error);
+    }
+    console.error('[Auth] Admin/Owner authentication error:', error);
+    next(new AppError('Authentication failed', 401));
+  }
+};
+
 // Optional Admin Auth (for routes that work with or without auth)
 export const optionalAdminAuth = async (
   req: Request,

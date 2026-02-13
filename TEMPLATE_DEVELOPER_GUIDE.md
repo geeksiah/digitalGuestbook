@@ -28,6 +28,10 @@ The platform supports the following template types:
 9. **BOOTH_AUDIO** - Audio booth page
 10. **BOOTH_PHOTO** - Photo booth page
 11. **THANK_YOU** - Post-event thank you page
+12. **LIVE_LANDING** - Event live page (shown in LIVE phase)
+13. **EVENT_ENDED** - Event ended page (shown in POST_EVENT phase)
+14. **ITINERARY** - Public guest itinerary page (`/e/:slug/itinerary`)
+15. **GIFTING** - Public gifting page (`/gift/:slug`)
 
 ## Template Structure
 
@@ -86,6 +90,9 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{urls.booth}}` - Booth page URL
 - `{{urls.invitation}}` - Invitation page URL
 - `{{urls.checkIn}}` - Check-in page URL
+- `{{urls.live}}` - Live landing page URL
+- `{{urls.itinerary}}` - Guest itinerary page URL
+- `{{urls.gifting}}` - Gifting page URL
 
 #### Owner Variables
 - `{{owner.name}}` - Owner name
@@ -183,7 +190,7 @@ If using assets:
 
 ### Step 4: Assign to Event
 
-1. Go to Event details
+1. Go to **Admin** > Event details (template assignment is admin-managed)
 2. Click "Templates" tab
 3. Select template for desired page type
 4. Save
@@ -256,9 +263,30 @@ Templates are isolated per event:
   guestbook: string (full URL),
   booth: string (full URL),
   invitation: string (full URL),
-  checkIn: string (full URL)
+  checkIn: string (full URL),
+  live: string (full URL),
+  itinerary: string (full URL),
+  gifting: string (full URL)
 }
 ```
+
+## Live Landing CTA Rules
+
+When building **LIVE_LANDING** templates, follow these routing rules:
+
+1. If itinerary is enabled for the event, show a clear CTA that links to `{{urls.itinerary}}`.
+2. Do not hardcode `"/e/.../itinerary"` paths; always use `{{urls.itinerary}}` so domains and rewrites keep working.
+3. Keep the itinerary CTA visible on mobile without scrolling (top hero or sticky action row recommended).
+4. If gifting is enabled, use `{{urls.gifting}}` for the gift CTA.
+
+## Itinerary Time Field Rules
+
+For itinerary experiences (default page or custom ITINERARY templates), treat activity timing as optional:
+
+1. `startsAt` and `endsAt` can be `null`.
+2. Do not render placeholders like "No start time" in guest-facing UI.
+3. Render date/time only when values exist, and allow location/description-only items.
+4. In both Admin and Owner itinerary editors, date/time controls are optional and can be toggled per activity.
 
 ## Testing Templates
 

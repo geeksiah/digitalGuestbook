@@ -68,6 +68,13 @@ export default function NewEventPage() {
     strictInviteOnly: false,
     itineraryEnabled: false,
     giftingEnabled: false,
+    rsvpMode: 'free' as 'free' | 'paid',
+    ticketingEnabled: false,
+    platformFeeMode: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED',
+    platformFeePercent: 5,
+    platformFeeFixed: 0,
+    processingFeePercent: 2.9,
+    processingFeeFixed: 0.3,
     // Template selections
     invitationTemplateId: '',
     rsvpTemplateId: '',
@@ -200,6 +207,13 @@ export default function NewEventPage() {
         strictInviteOnly: formData.strictInviteOnly,
         itineraryEnabled: formData.itineraryEnabled,
         giftingEnabled: formData.giftingEnabled,
+        rsvpMode: formData.rsvpMode,
+        ticketingEnabled: formData.ticketingEnabled,
+        platformFeeMode: formData.platformFeeMode,
+        platformFeePercent: formData.platformFeePercent,
+        platformFeeFixed: formData.platformFeeFixed,
+        processingFeePercent: formData.processingFeePercent,
+        processingFeeFixed: formData.processingFeeFixed,
         invitationTemplateId: formData.invitationTemplateId || undefined,
         rsvpTemplateId: formData.rsvpTemplateId || undefined,
         guestbookTemplateId: formData.guestbookTemplateId || undefined,
@@ -720,6 +734,122 @@ export default function NewEventPage() {
                 onChange={(e) => setFormData({ ...formData, giftingEnabled: e.target.checked })}
               />
             </label>
+          </div>
+        </div>
+
+        {/* RSVP Pricing & Ticketing */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-navy-900 mb-4">RSVP Pricing & Ticketing</h2>
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className={cn(
+                'flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors',
+                formData.rsvpMode === 'free' ? 'border-navy-900 bg-surface-50' : 'border-surface-200 hover:bg-surface-50'
+              )}>
+                <input
+                  type="radio"
+                  name="newEventRsvpMode"
+                  value="free"
+                  checked={formData.rsvpMode === 'free'}
+                  onChange={() => setFormData({ ...formData, rsvpMode: 'free', ticketingEnabled: false })}
+                  className="sr-only"
+                />
+                <div className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center', formData.rsvpMode === 'free' ? 'border-navy-900' : 'border-surface-300')}>
+                  {formData.rsvpMode === 'free' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
+                </div>
+                <div>
+                  <div className="font-medium text-navy-900">Free RSVP</div>
+                  <div className="text-xs text-surface-500">No ticket payment required</div>
+                </div>
+              </label>
+              <label className={cn(
+                'flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors',
+                formData.rsvpMode === 'paid' ? 'border-navy-900 bg-surface-50' : 'border-surface-200 hover:bg-surface-50'
+              )}>
+                <input
+                  type="radio"
+                  name="newEventRsvpMode"
+                  value="paid"
+                  checked={formData.rsvpMode === 'paid'}
+                  onChange={() => setFormData({ ...formData, rsvpMode: 'paid', ticketingEnabled: true })}
+                  className="sr-only"
+                />
+                <div className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center', formData.rsvpMode === 'paid' ? 'border-navy-900' : 'border-surface-300')}>
+                  {formData.rsvpMode === 'paid' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
+                </div>
+                <div>
+                  <div className="font-medium text-navy-900">Paid RSVP</div>
+                  <div className="text-xs text-surface-500">Enable ticketing and checkout</div>
+                </div>
+              </label>
+            </div>
+
+            {formData.rsvpMode === 'paid' && (
+              <div className="rounded-lg border border-surface-200 p-4 bg-surface-50 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="label">Platform Fee Mode</label>
+                  <select
+                    className="input"
+                    value={formData.platformFeeMode}
+                    onChange={(e) =>
+                      setFormData({ ...formData, platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED' })
+                    }
+                  >
+                    <option value="PERCENTAGE">Percentage</option>
+                    <option value="FIXED">Fixed Amount</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">
+                    {formData.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
+                  </label>
+                  <input
+                    type="number"
+                    step={formData.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
+                    min="0"
+                    max={formData.platformFeeMode === 'FIXED' ? undefined : '100'}
+                    className="input"
+                    value={formData.platformFeeMode === 'FIXED' ? formData.platformFeeFixed : formData.platformFeePercent}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        platformFeePercent:
+                          formData.platformFeeMode === 'PERCENTAGE'
+                            ? parseFloat(e.target.value) || 0
+                            : formData.platformFeePercent,
+                        platformFeeFixed:
+                          formData.platformFeeMode === 'FIXED'
+                            ? parseFloat(e.target.value) || 0
+                            : formData.platformFeeFixed,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Processing Fee (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    className="input"
+                    value={formData.processingFeePercent}
+                    onChange={(e) => setFormData({ ...formData, processingFeePercent: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Fixed Processing Fee</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input"
+                    value={formData.processingFeeFixed}
+                    onChange={(e) => setFormData({ ...formData, processingFeeFixed: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

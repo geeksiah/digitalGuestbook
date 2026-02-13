@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { sendEmail } from '../services/notifications.js';
 import { getSiteUrl } from '../utils/siteUrl.js';
 import {
+  createPaystackTransferRecipient,
   createPaystackSubaccount,
   getPaystackBanks,
   resolvePaystackAccount,
@@ -471,6 +472,8 @@ router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
   };
 
   let paystackSubaccount = owner.wallet?.paystackSubaccount || undefined;
+  let paystackRecipientCode = (owner.wallet as any)?.paystackRecipientCode || undefined;
+  const walletCurrency = (input.currency || owner.wallet?.currency || 'NGN').toUpperCase();
 
   if (paystackSubaccount) {
     try {
@@ -485,6 +488,22 @@ router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
     paystackSubaccount = created.subaccount_code;
   }
 
+  try {
+    const recipient = await createPaystackTransferRecipient({
+      name: resolvedAccount.account_name || businessName,
+      accountNumber,
+      bankCode,
+      currency: walletCurrency,
+      type: 'nuban',
+      description: `EventPeepo owner transfer recipient (${owner.id})`,
+    });
+    paystackRecipientCode = recipient.recipient_code;
+  } catch (error) {
+    if (!paystackRecipientCode) {
+      throw error;
+    }
+  }
+
   const wallet = await (prisma as any).ownerWallet.upsert({
     where: { ownerId: owner.id },
     create: {
@@ -492,9 +511,15 @@ router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
       bankName: resolvedAccount.bank_name || owner.wallet?.bankName || null,
       accountName: resolvedAccount.account_name,
       accountNumber,
+      routingNumber: bankCode,
       paystackSubaccount,
+      paystackRecipientCode,
+      paystackRecipientType: 'nuban',
+      paystackRecipientName: resolvedAccount.account_name,
+      paystackRecipientBankCode: bankCode,
+      paystackRecipientUpdatedAt: new Date(),
       preferredMethod: input.setAsPreferred === false ? (owner.wallet?.preferredMethod || 'bank') : 'paystack',
-      currency: input.currency || owner.wallet?.currency || 'NGN',
+      currency: walletCurrency,
       isVerified: true,
       verifiedAt: new Date(),
     },
@@ -502,9 +527,15 @@ router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
       bankName: resolvedAccount.bank_name || owner.wallet?.bankName || undefined,
       accountName: resolvedAccount.account_name,
       accountNumber,
+      routingNumber: bankCode,
       paystackSubaccount,
+      paystackRecipientCode,
+      paystackRecipientType: 'nuban',
+      paystackRecipientName: resolvedAccount.account_name,
+      paystackRecipientBankCode: bankCode,
+      paystackRecipientUpdatedAt: new Date(),
       preferredMethod: input.setAsPreferred === false ? undefined : 'paystack',
-      currency: input.currency || undefined,
+      currency: walletCurrency,
       isVerified: true,
       verifiedAt: new Date(),
     },
@@ -522,6 +553,7 @@ router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
         country: input.country || null,
         currency: wallet.currency,
         paystackSubaccount,
+        paystackRecipientCode,
       }),
     },
   });
@@ -530,6 +562,7 @@ router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
     wallet,
     paystack: {
       subaccountCode: paystackSubaccount,
+      recipientCode: paystackRecipientCode,
       accountName: resolvedAccount.account_name,
       accountNumber: resolvedAccount.account_number,
     },

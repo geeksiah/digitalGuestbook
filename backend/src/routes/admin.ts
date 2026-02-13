@@ -2,6 +2,7 @@ import { Router } from 'express';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
+import { queuePaystackTransferForPayout } from '../services/payoutAutomation.js';
 
 const router = Router();
 
@@ -171,6 +172,11 @@ router.get('/payouts', authenticateAdmin, asyncHandler(async (req, res) => {
       DELAYED: allPayouts.filter((p: any) => p.status === 'DELAYED').length,
       REJECTED: allPayouts.filter((p: any) => p.status === 'REJECTED').length,
     },
+    byLedgerStatus: (allPayouts as any[]).reduce((acc: Record<string, number>, payout: any) => {
+      const key = payout.ledgerStatus || 'UNKNOWN';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {}),
   };
   
   res.json({ 
@@ -241,8 +247,8 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
     throw new AppError('Payout request not found', 404);
   }
   
-  if (payout.status !== 'PENDING') {
-    throw new AppError('Only pending payouts can be processed', 400);
+  if (['FULFILLED', 'REJECTED'].includes(payout.status)) {
+    throw new AppError('This payout request has already been finalized', 400);
   }
   
   // Determine new status based on body (default to PROCESSING)
@@ -251,14 +257,33 @@ router.post('/payouts/:id/process', authenticateAdmin, asyncHandler(async (req, 
   if (!['PROCESSING', 'FULFILLED', 'DELAYED'].includes(newStatus)) {
     throw new AppError('Invalid status. Must be PROCESSING, FULFILLED, or DELAYED', 400);
   }
+
+  const shouldAutoTransfer =
+    payout.payoutMethod === 'paystack'
+    && newStatus === 'PROCESSING'
+    && req.body.autoTransfer !== false
+    && ['PENDING', 'DELAYED'].includes(payout.status);
+
+  if (shouldAutoTransfer) {
+    const automated = await queuePaystackTransferForPayout(id, req.admin!.id);
+    return res.json({
+      payout: automated,
+      automation: {
+        initiated: true,
+        message: 'Paystack transfer initiated. Final status will reconcile via webhook.',
+      },
+    });
+  }
   
-  const updated = await prisma.payoutRequest.update({
+  const updated = await (prisma as any).payoutRequest.update({
     where: { id },
     data: {
       status: newStatus,
+      ledgerStatus: newStatus === 'FULFILLED' ? 'TRANSFER_SUCCESS' : newStatus === 'DELAYED' ? 'MANUAL_REVIEW' : 'TRANSFER_PENDING',
       processedAt: processedAt ? new Date(processedAt) : new Date(),
       processedBy: req.admin!.id,
       transactionRef: transactionRef || null,
+      gateway: payout.payoutMethod === 'paystack' ? 'paystack' : 'manual',
       notes: req.body.notes || notes || null,
     },
     include: {
@@ -402,13 +427,15 @@ router.post('/payouts/:id/reject', authenticateAdmin, asyncHandler(async (req, r
     throw new AppError('Only pending payouts can be rejected', 400);
   }
   
-  const updated = await prisma.payoutRequest.update({
+  const updated = await (prisma as any).payoutRequest.update({
     where: { id },
     data: {
       status: 'REJECTED',
+      ledgerStatus: 'REJECTED',
       processedAt: new Date(),
       processedBy: req.admin!.id,
       notes: reason || null,
+      rejectionReason: reason || null,
     },
     include: {
       event: {
@@ -549,6 +576,11 @@ router.get('/payouts/analytics', authenticateAdmin, asyncHandler(async (req, res
       acc[eventName].total += p.requestedAmount || 0;
       return acc;
     }, {} as Record<string, { count: number; total: number }>),
+    byLedgerStatus: (payouts as any[]).reduce((acc: Record<string, number>, payout: any) => {
+      const key = payout.ledgerStatus || 'UNKNOWN';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {}),
   };
   
   res.json({ analytics });

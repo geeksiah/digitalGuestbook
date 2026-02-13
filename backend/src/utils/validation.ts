@@ -94,6 +94,14 @@ export const createEventSchema = z.object({
   
   // Reel Generation
   reelEnabled: z.boolean().default(false),
+  // Ticketing/Pricing
+  rsvpMode: z.enum(['free', 'paid']).default('free'),
+  ticketingEnabled: z.boolean().default(false),
+  platformFeeMode: z.enum(['PERCENTAGE', 'FIXED']).default('PERCENTAGE'),
+  platformFeePercent: z.number().min(0).max(100).default(5),
+  platformFeeFixed: z.number().min(0).optional().nullable(),
+  processingFeePercent: z.number().min(0).max(100).default(2.9),
+  processingFeeFixed: z.number().min(0).default(0.30),
 });
 
 export const updateEventSchema = z.object({
@@ -169,6 +177,14 @@ export const updateEventSchema = z.object({
   phaseOverride: z.boolean().optional(),
   isArchived: z.boolean().optional(),
   reelEnabled: z.boolean().optional(),
+  // Ticketing/Pricing
+  rsvpMode: z.enum(['free', 'paid']).optional(),
+  ticketingEnabled: z.boolean().optional(),
+  platformFeeMode: z.enum(['PERCENTAGE', 'FIXED']).optional(),
+  platformFeePercent: z.number().min(0).max(100).optional(),
+  platformFeeFixed: z.number().min(0).optional().nullable(),
+  processingFeePercent: z.number().min(0).max(100).optional(),
+  processingFeeFixed: z.number().min(0).optional(),
 });
 
 // ============================================

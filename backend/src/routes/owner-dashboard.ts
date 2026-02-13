@@ -9,11 +9,13 @@ import { z } from 'zod';
 import { sendInvitationNotifications, sendWhatsAppRsvpInvite } from '../services/notifications.js';
 import { generateInvitationPass } from '../services/invitation.js';
 import {
+  createPaystackTransferRecipient,
   createPaystackSubaccount,
   getPaystackBanks,
   resolvePaystackAccount,
   updatePaystackSubaccount,
 } from '../services/paystack.js';
+import { queuePaystackTransferForPayout } from '../services/payoutAutomation.js';
 
 const router = Router();
 
@@ -985,7 +987,9 @@ router.get('/wallet', asyncHandler(async (req, res) => {
   
   res.json({
     wallet: owner.wallet || null,
-    paystackAutomationReady: Boolean(owner.wallet?.paystackSubaccount),
+    paystackAutomationReady: Boolean(
+      owner.wallet?.paystackSubaccount && (owner.wallet as any)?.paystackRecipientCode
+    ),
   });
 }));
 
@@ -1105,6 +1109,8 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
   };
 
   let paystackSubaccount = owner.wallet?.paystackSubaccount || undefined;
+  let paystackRecipientCode = (owner.wallet as any)?.paystackRecipientCode || undefined;
+  const walletCurrency = (input.currency || owner.wallet?.currency || 'NGN').toUpperCase();
 
   if (paystackSubaccount) {
     try {
@@ -1119,6 +1125,22 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
     paystackSubaccount = created.subaccount_code;
   }
 
+  try {
+    const recipient = await createPaystackTransferRecipient({
+      name: resolvedAccount.account_name || businessName,
+      accountNumber,
+      bankCode,
+      currency: walletCurrency,
+      type: 'nuban',
+      description: `EventPeepo owner transfer recipient (${owner.id})`,
+    });
+    paystackRecipientCode = recipient.recipient_code;
+  } catch (error) {
+    if (!paystackRecipientCode) {
+      throw error;
+    }
+  }
+
   const wallet = await (prisma as any).ownerWallet.upsert({
     where: { ownerId },
     create: {
@@ -1126,9 +1148,15 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
       bankName: resolvedAccount.bank_name || owner.wallet?.bankName || null,
       accountName: resolvedAccount.account_name,
       accountNumber,
+      routingNumber: bankCode,
       paystackSubaccount,
+      paystackRecipientCode,
+      paystackRecipientType: 'nuban',
+      paystackRecipientName: resolvedAccount.account_name,
+      paystackRecipientBankCode: bankCode,
+      paystackRecipientUpdatedAt: new Date(),
       preferredMethod: input.setAsPreferred === false ? (owner.wallet?.preferredMethod || 'bank') : 'paystack',
-      currency: input.currency || owner.wallet?.currency || 'NGN',
+      currency: walletCurrency,
       isVerified: true,
       verifiedAt: new Date(),
     },
@@ -1136,9 +1164,15 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
       bankName: resolvedAccount.bank_name || owner.wallet?.bankName || undefined,
       accountName: resolvedAccount.account_name,
       accountNumber,
+      routingNumber: bankCode,
       paystackSubaccount,
+      paystackRecipientCode,
+      paystackRecipientType: 'nuban',
+      paystackRecipientName: resolvedAccount.account_name,
+      paystackRecipientBankCode: bankCode,
+      paystackRecipientUpdatedAt: new Date(),
       preferredMethod: input.setAsPreferred === false ? undefined : 'paystack',
-      currency: input.currency || undefined,
+      currency: walletCurrency,
       isVerified: true,
       verifiedAt: new Date(),
     },
@@ -1155,6 +1189,7 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
         country: input.country || null,
         currency: wallet.currency,
         paystackSubaccount,
+        paystackRecipientCode,
       }),
     },
   });
@@ -1163,6 +1198,7 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
     wallet,
     paystack: {
       subaccountCode: paystackSubaccount,
+      recipientCode: paystackRecipientCode,
       accountName: resolvedAccount.account_name,
       accountNumber: resolvedAccount.account_number,
     },
@@ -1310,6 +1346,13 @@ router.post('/payouts', asyncHandler(async (req, res) => {
   if (!wallet) {
     throw new AppError('Wallet configuration required. Please set up your wallet first.', 400);
   }
+
+  if (wallet.preferredMethod === 'paystack' && !wallet.paystackRecipientCode) {
+    throw new AppError(
+      'Paystack payouts require a connected receiving account. Please reconnect Paystack in Wallet settings.',
+      400
+    );
+  }
   
   // Enforce wallet configuration as source of truth for secure payouts.
   
@@ -1353,7 +1396,7 @@ router.post('/payouts', asyncHandler(async (req, res) => {
   }
   
   // Create payout request
-  const payout = await prisma.payoutRequest.create({
+  const payout = await (prisma as any).payoutRequest.create({
     data: {
       eventId: data.eventId,
       requestedAmount: data.requestedAmount,
@@ -1361,6 +1404,9 @@ router.post('/payouts', asyncHandler(async (req, res) => {
       payoutMethod: wallet.preferredMethod,
       notes: data.notes,
       status: 'PENDING',
+      ledgerStatus: 'REQUESTED',
+      gateway: wallet.preferredMethod === 'paystack' ? 'paystack' : 'manual',
+      requestedByOwnerId: ownerId,
     },
     include: {
       event: {
@@ -1372,8 +1418,50 @@ router.post('/payouts', asyncHandler(async (req, res) => {
       },
     },
   });
+
+  await prisma.auditLog.create({
+    data: {
+      eventId: data.eventId,
+      action: 'OWNER_PAYOUT_REQUEST_CREATED',
+      entityType: 'PAYOUT',
+      entityId: payout.id,
+      details: JSON.stringify({
+        ownerId,
+        requestedAmount: payout.requestedAmount,
+        currency: payout.currency,
+        payoutMethod: payout.payoutMethod,
+      }),
+    },
+  });
+
+  let resultPayout = payout;
+  let automation = {
+    attempted: false,
+    initiated: false,
+    message: null as string | null,
+  };
+
+  if (wallet.preferredMethod === 'paystack') {
+    automation.attempted = true;
+    try {
+      resultPayout = await queuePaystackTransferForPayout(payout.id, null);
+      automation.initiated = true;
+      automation.message = 'Paystack transfer has been initiated and will reconcile automatically via webhook.';
+    } catch (error: any) {
+      resultPayout = await (prisma as any).payoutRequest.update({
+        where: { id: payout.id },
+        data: {
+          status: 'DELAYED',
+          ledgerStatus: 'MANUAL_REVIEW',
+          failureMessage: error?.message || 'Failed to queue transfer',
+        },
+      });
+      automation.initiated = false;
+      automation.message = 'Automatic transfer could not be started. This payout is queued for manual review.';
+    }
+  }
   
-  res.status(201).json({ payout });
+  res.status(201).json({ payout: resultPayout, automation });
 }));
 
 export default router;

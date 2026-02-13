@@ -87,6 +87,11 @@ model OwnerWallet {
   paypalEmail        String?
   stripeAccountId    String? // Stripe Connect account
   paystackSubaccount String?
+  paystackRecipientCode String?
+  paystackRecipientType String?
+  paystackRecipientName String?
+  paystackRecipientBankCode String?
+  paystackRecipientUpdatedAt DateTime?
 
   // Payout Preferences
   preferredMethod     String  @default("bank") // bank | mobile | paypal | stripe | paystack
@@ -220,7 +225,9 @@ liveLandingTemplateId    String?  // Landing page during LIVE phase
 
   // Ticketing Settings (only used when rsvpMode = "paid")
   ticketingEnabled     Boolean @default(false)
+  platformFeeMode      String  @default("PERCENTAGE") // PERCENTAGE | FIXED
   platformFeePercent   Float   @default(5.0) // Platform fee percentage
+  platformFeeFixed     Float? // Optional fixed platform fee amount per transaction
   processingFeePercent Float   @default(2.9) // Payment processing fee %
   processingFeeFixed   Float   @default(0.30) // Fixed processing fee per txn
 
@@ -274,6 +281,7 @@ liveLandingTemplateId    String?  // Landing page during LIVE phase
   itineraryItems       EventItineraryItem[]
   itineraryMcSessions  ItineraryMcSession[]
   giftOrders           GiftOrder[]
+  giftPackages         EventGiftPackage[]
 }
 
 // ============================================
@@ -401,12 +409,26 @@ model PayoutRequest {
 
   // Status
   status String @default("PENDING") // PENDING | PROCESSING | FULFILLED | DELAYED | REJECTED
+  ledgerStatus String @default("REQUESTED") // REQUESTED | TRANSFER_PENDING | TRANSFER_SUCCESS | TRANSFER_FAILED | TRANSFER_REVERSED | REJECTED | MANUAL_REVIEW
 
   // Processing Info
   processedAt     DateTime?
   processedBy     String? // Admin ID
-  transactionRef  String? // External payout reference
+  payoutReference String? @unique // Internal payout reference
+  transactionRef  String? // External payout reference (legacy/manual)
+  gateway         String? // paystack | manual
+  gatewayTransferCode String? @unique
+  gatewayTransferReference String? @unique
+  gatewayRecipientCode String?
+  gatewayStatus   String?
+  reconciliationVersion Int @default(0)
+  webhookLastEvent String?
+  webhookLastPayload String?
+  failureCode     String?
+  failureMessage  String?
+  reconciledAt    DateTime?
   rejectionReason String?
+  requestedByOwnerId String?
 
   // Notes
   notes String?
@@ -416,6 +438,21 @@ model PayoutRequest {
 
   // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model PaystackWebhookEvent {
+  id          String   @id @default(uuid())
+  dedupeKey   String   @unique
+  event       String
+  reference   String?
+  transferCode String?
+  payload     String
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([event])
+  @@index([reference])
+  @@index([transferCode])
 }
 
 // ============================================
@@ -1021,7 +1058,23 @@ model GiftPackage {
   updatedAt     DateTime @updatedAt
 
   // Relations
-  items GiftOrderItem[]
+  items  GiftOrderItem[]
+  events EventGiftPackage[]
+}
+
+model EventGiftPackage {
+  id            String   @id @default(uuid())
+  eventId       String
+  giftPackageId String
+  createdAt     DateTime @default(now())
+
+  // Relations
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  giftPackage GiftPackage @relation(fields: [giftPackageId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, giftPackageId])
+  @@index([eventId])
+  @@index([giftPackageId])
 }
 
 model GiftOrder {

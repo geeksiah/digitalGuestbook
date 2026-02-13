@@ -31,6 +31,41 @@ const checkoutSchema = z.object({
   })).optional(),
 });
 
+const assignmentSchema = z.object({
+  packageIds: z.array(z.string().uuid()).default([]),
+});
+
+type SettlementInput = {
+  cashGiftAmount: number;
+  packageAmount: number;
+  platformFeeMode: string | null | undefined;
+  platformFeePercent: number | null | undefined;
+  platformFeeFixed: number | null | undefined;
+};
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+const computeSettlement = (input: SettlementInput) => {
+  const cashGiftAmount = Math.max(0, Number(input.cashGiftAmount || 0));
+  const packageAmount = Math.max(0, Number(input.packageAmount || 0));
+  const mode = String(input.platformFeeMode || 'PERCENTAGE').toUpperCase();
+  const percent = Math.max(0, Number(input.platformFeePercent || 0));
+  const fixed = Math.max(0, Number(input.platformFeeFixed || 0));
+
+  const ownerFee = mode === 'FIXED'
+    ? Math.min(cashGiftAmount, fixed)
+    : (cashGiftAmount * percent) / 100;
+
+  const ownerNetAmount = roundMoney(Math.max(0, cashGiftAmount - ownerFee));
+  const adminRetainedAmount = roundMoney(packageAmount + ownerFee);
+
+  return {
+    ownerFee: roundMoney(ownerFee),
+    ownerNetAmount,
+    adminRetainedAmount,
+  };
+};
+
 // ============================================
 // Public gifting APIs
 // ============================================
@@ -38,7 +73,7 @@ const checkoutSchema = z.object({
 router.get('/public/:slug/options', asyncHandler(async (req, res) => {
   const { slug } = req.params;
 
-  const event = await prisma.event.findUnique({
+  const event = await (prisma as any).event.findUnique({
     where: { slug },
     select: {
       id: true,
@@ -56,8 +91,17 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
   if (!event) throw new AppError('Event not found', 404);
   if (!event.giftingEnabled) throw new AppError('Gifting is disabled for this event', 404);
 
+  const eventPackageLinks = await (prisma as any).eventGiftPackage.findMany({
+    where: { eventId: event.id },
+    select: { giftPackageId: true },
+  });
+  const assignedPackageIds = eventPackageLinks.map((link: { giftPackageId: string }) => link.giftPackageId);
+
   const packages = await prisma.giftPackage.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(assignedPackageIds.length ? { id: { in: assignedPackageIds } } : {}),
+    },
     orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
   });
   const { ownerId, ...eventPublic } = event;
@@ -132,23 +176,35 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
     throw new AppError('Please select a cash gift amount and/or at least one package', 400);
   }
 
-  const event = await prisma.event.findUnique({
+  const event = await (prisma as any).event.findUnique({
     where: { slug },
     select: {
       id: true,
       name: true,
       giftingEnabled: true,
       ownerId: true,
+      platformFeeMode: true,
       platformFeePercent: true,
+      platformFeeFixed: true,
     },
   });
   if (!event) throw new AppError('Event not found', 404);
   if (!event.giftingEnabled) throw new AppError('Gifting is disabled for this event', 404);
 
+  const eventPackageLinks = await (prisma as any).eventGiftPackage.findMany({
+    where: { eventId: event.id },
+    select: { giftPackageId: true },
+  });
+  const assignedPackageIds = eventPackageLinks.map((link: { giftPackageId: string }) => link.giftPackageId);
+
   const giftPackages = packageItems.length
     ? await prisma.giftPackage.findMany({
         where: {
-          id: { in: packageItems.map((item) => item.giftPackageId) },
+          id: {
+            in: packageItems
+              .map((item) => item.giftPackageId)
+              .filter((id) => !assignedPackageIds.length || assignedPackageIds.includes(id)),
+          },
           isActive: true,
         },
       })
@@ -253,8 +309,13 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
     // This fallback keeps backward compatibility for providers that omit split fields.
   }
 
+  const platformFeeMode = String(event.platformFeeMode || 'PERCENTAGE').toUpperCase();
   const ownerFeePercent = Math.max(0, Number(event.platformFeePercent || 0));
-  const cashOwnerFee = (cashGiftAmount * ownerFeePercent) / 100;
+  const ownerFeeFixed = Math.max(0, Number(event.platformFeeFixed || 0));
+  const cashOwnerFee =
+    platformFeeMode === 'FIXED'
+      ? Math.min(cashGiftAmount, ownerFeeFixed)
+      : (cashGiftAmount * ownerFeePercent) / 100;
   const cashOwnerNet = Math.max(0, cashGiftAmount - cashOwnerFee);
 
   const order = await prisma.$transaction(async (tx) => {
@@ -317,6 +378,8 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
           hasCashGift: cashGiftAmount > 0,
           packageCount: lines.length,
           ownerFeePercent,
+          platformFeeMode,
+          ownerFeeFixed,
           cashOwnerNet,
           paymentReference,
         }),
@@ -375,6 +438,8 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       packageAmount: packagesTotal,
       cashGiftAmount,
       ownerFeePercent,
+      platformFeeMode,
+      ownerFeeFixed,
       ownerNetCash: cashOwnerNet,
       adminRetainedAmount: packagesTotal + cashOwnerFee,
       settlementPolicy: {
@@ -433,6 +498,82 @@ router.delete('/packages/:id', authenticateAdmin, asyncHandler(async (req, res) 
   res.json({ message: 'Package deleted' });
 }));
 
+router.get('/events/:eventId/packages', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, name: true, giftingEnabled: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const [packages, assigned] = await Promise.all([
+    prisma.giftPackage.findMany({
+      orderBy: [{ isActive: 'desc' }, { price: 'asc' }, { createdAt: 'desc' }],
+    }),
+    (prisma as any).eventGiftPackage.findMany({
+      where: { eventId },
+      select: { giftPackageId: true },
+    }),
+  ]);
+
+  const assignedSet = new Set(
+    assigned.map((row: { giftPackageId: string }) => row.giftPackageId)
+  );
+
+  res.json({
+    event,
+    assignedPackageIds: Array.from(assignedSet),
+    packages: packages.map((pkg) => ({
+      ...pkg,
+      assigned: assignedSet.has(pkg.id),
+    })),
+  });
+}));
+
+router.put('/events/:eventId/packages', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+  const { packageIds } = assignmentSchema.parse(req.body);
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const uniquePackageIds = Array.from(new Set(packageIds));
+  if (uniquePackageIds.length) {
+    const valid = await prisma.giftPackage.count({
+      where: { id: { in: uniquePackageIds } },
+    });
+    if (valid !== uniquePackageIds.length) {
+      throw new AppError('One or more packages are invalid', 400);
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await (tx as any).eventGiftPackage.deleteMany({ where: { eventId } });
+    if (uniquePackageIds.length) {
+      await (tx as any).eventGiftPackage.createMany({
+        data: uniquePackageIds.map((giftPackageId) => ({ eventId, giftPackageId })),
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        eventId,
+        action: 'GIFT_PACKAGES_ASSIGNED',
+        entityType: 'EVENT',
+        entityId: eventId,
+        details: JSON.stringify({ packageIds: uniquePackageIds }),
+      },
+    });
+  });
+
+  res.json({
+    message: 'Gift packages updated',
+    packageIds: uniquePackageIds,
+  });
+}));
+
 // ============================================
 // Admin/Owner order listing
 // ============================================
@@ -440,30 +581,88 @@ router.delete('/packages/:id', authenticateAdmin, asyncHandler(async (req, res) 
 router.get('/orders', authenticateAdmin, asyncHandler(async (req, res) => {
   const eventId = req.query.eventId ? String(req.query.eventId) : undefined;
   const where = eventId ? { eventId } : {};
-  const orders = await prisma.giftOrder.findMany({
+  const orders = await (prisma as any).giftOrder.findMany({
     where,
     include: {
-      event: { select: { id: true, name: true, slug: true } },
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          platformFeeMode: true,
+          platformFeePercent: true,
+          platformFeeFixed: true,
+        },
+      },
       items: { include: { giftPackage: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
   });
-  res.json({ orders });
+  const enrichedOrders = orders.map((order: any) => {
+    const packageAmount = order.items
+      .filter((item: any) => item.type === 'PACKAGE')
+      .reduce((sum: number, item: any) => sum + item.lineTotal, 0);
+    const cashGiftAmount = Number(order.cashGiftAmount || 0);
+    const settlement = computeSettlement({
+      cashGiftAmount,
+      packageAmount,
+      platformFeeMode: order.event.platformFeeMode,
+      platformFeePercent: order.event.platformFeePercent,
+      platformFeeFixed: order.event.platformFeeFixed,
+    });
+
+    return {
+      ...order,
+      packageAmount,
+      ownerNetAmount: settlement.ownerNetAmount,
+      adminRetainedAmount: settlement.adminRetainedAmount,
+    };
+  });
+  res.json({ orders: enrichedOrders });
 }));
 
 router.get('/owner/orders', authenticateOwnerAccount, asyncHandler(async (req, res) => {
   const ownerId = (req as any).ownerId as string;
-  const orders = await prisma.giftOrder.findMany({
+  const orders = await (prisma as any).giftOrder.findMany({
     where: {
       event: { ownerId },
     },
     include: {
-      event: { select: { id: true, name: true, slug: true } },
+      event: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          platformFeeMode: true,
+          platformFeePercent: true,
+          platformFeeFixed: true,
+        },
+      },
       items: { include: { giftPackage: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
   });
-  res.json({ orders });
+  const enrichedOrders = orders.map((order: any) => {
+    const packageAmount = order.items
+      .filter((item: any) => item.type === 'PACKAGE')
+      .reduce((sum: number, item: any) => sum + item.lineTotal, 0);
+    const cashGiftAmount = Number(order.cashGiftAmount || 0);
+    const settlement = computeSettlement({
+      cashGiftAmount,
+      packageAmount,
+      platformFeeMode: order.event.platformFeeMode,
+      platformFeePercent: order.event.platformFeePercent,
+      platformFeeFixed: order.event.platformFeeFixed,
+    });
+
+    return {
+      ...order,
+      packageAmount,
+      ownerNetAmount: settlement.ownerNetAmount,
+      adminRetainedAmount: settlement.adminRetainedAmount,
+    };
+  });
+  res.json({ orders: enrichedOrders });
 }));
 
 export default router;

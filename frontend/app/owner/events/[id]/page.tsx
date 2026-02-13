@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -168,6 +168,11 @@ export default function OwnerEventDetailPage() {
   const [savingItinerary, setSavingItinerary] = useState(false);
   const [creatingMcSession, setCreatingMcSession] = useState(false);
   const [mcControlUrl, setMcControlUrl] = useState('');
+  const [showItineraryDateTimeInputs, setShowItineraryDateTimeInputs] = useState(false);
+  const [editingItineraryId, setEditingItineraryId] = useState<string | null>(null);
+  const [editingItineraryDateTimeInputs, setEditingItineraryDateTimeInputs] = useState(false);
+  const [savingEditedItinerary, setSavingEditedItinerary] = useState(false);
+  const [deletingItineraryId, setDeletingItineraryId] = useState<string | null>(null);
   const [newItineraryItem, setNewItineraryItem] = useState({
     title: '',
     description: '',
@@ -175,6 +180,21 @@ export default function OwnerEventDetailPage() {
     endsAt: '',
     location: '',
   });
+  const [editItineraryItem, setEditItineraryItem] = useState({
+    title: '',
+    description: '',
+    startsAt: '',
+    endsAt: '',
+    location: '',
+  });
+
+  const toDateTimeLocalInput = (value: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
 
   const fetchEvent = async () => {
     try {
@@ -457,11 +477,18 @@ export default function OwnerEventDetailPage() {
 
     setSavingItinerary(true);
     try {
+      const startsAtIso = showItineraryDateTimeInputs && newItineraryItem.startsAt
+        ? new Date(newItineraryItem.startsAt).toISOString()
+        : undefined;
+      const endsAtIso = showItineraryDateTimeInputs && newItineraryItem.endsAt
+        ? new Date(newItineraryItem.endsAt).toISOString()
+        : undefined;
+
       await itineraryApi.createItem(eventId, {
         title: newItineraryItem.title.trim(),
         description: newItineraryItem.description.trim() || undefined,
-        startsAt: newItineraryItem.startsAt ? new Date(newItineraryItem.startsAt).toISOString() : undefined,
-        endsAt: newItineraryItem.endsAt ? new Date(newItineraryItem.endsAt).toISOString() : undefined,
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
         location: newItineraryItem.location.trim() || undefined,
       });
       toast.success('Itinerary item added');
@@ -472,11 +499,86 @@ export default function OwnerEventDetailPage() {
         endsAt: '',
         location: '',
       });
+      setShowItineraryDateTimeInputs(false);
       await fetchItinerary();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to add itinerary item');
     } finally {
       setSavingItinerary(false);
+    }
+  };
+
+  const handleStartEditItineraryItem = (item: ItineraryItem) => {
+    setEditingItineraryId(item.id);
+    setEditingItineraryDateTimeInputs(Boolean(item.startsAt || item.endsAt));
+    setEditItineraryItem({
+      title: item.title,
+      description: item.description || '',
+      startsAt: toDateTimeLocalInput(item.startsAt),
+      endsAt: toDateTimeLocalInput(item.endsAt),
+      location: item.location || '',
+    });
+  };
+
+  const handleCancelEditItineraryItem = () => {
+    setEditingItineraryId(null);
+    setEditingItineraryDateTimeInputs(false);
+    setEditItineraryItem({
+      title: '',
+      description: '',
+      startsAt: '',
+      endsAt: '',
+      location: '',
+    });
+  };
+
+  const handleUpdateItineraryItem = async (itemId: string) => {
+    if (!editItineraryItem.title.trim()) {
+      toast.error('Itinerary item title is required');
+      return;
+    }
+
+    setSavingEditedItinerary(true);
+    try {
+      await itineraryApi.updateItem(eventId, itemId, {
+        title: editItineraryItem.title.trim(),
+        description: editItineraryItem.description.trim() || null,
+        location: editItineraryItem.location.trim() || null,
+        startsAt: editingItineraryDateTimeInputs
+          ? (editItineraryItem.startsAt ? new Date(editItineraryItem.startsAt).toISOString() : null)
+          : null,
+        endsAt: editingItineraryDateTimeInputs
+          ? (editItineraryItem.endsAt ? new Date(editItineraryItem.endsAt).toISOString() : null)
+          : null,
+      });
+      toast.success('Itinerary item updated');
+      handleCancelEditItineraryItem();
+      await fetchItinerary();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to update itinerary item');
+    } finally {
+      setSavingEditedItinerary(false);
+    }
+  };
+
+  const handleDeleteItineraryItem = async (itemId: string) => {
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm('Delete this itinerary activity?')
+      : true;
+    if (!confirmed) return;
+
+    setDeletingItineraryId(itemId);
+    try {
+      await itineraryApi.deleteItem(eventId, itemId);
+      toast.success('Itinerary item deleted');
+      if (editingItineraryId === itemId) {
+        handleCancelEditItineraryItem();
+      }
+      await fetchItinerary();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to delete itinerary item');
+    } finally {
+      setDeletingItineraryId(null);
     }
   };
 
@@ -1022,19 +1124,47 @@ export default function OwnerEventDetailPage() {
                   value={newItineraryItem.location}
                   onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
                 />
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={newItineraryItem.startsAt}
-                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
-                />
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={newItineraryItem.endsAt}
-                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
-                />
               </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-brand-900">Add date/time</p>
+                  <p className="text-xs text-surface-500">Optional. Keep off for same-day activities without fixed times.</p>
+                </div>
+                <button
+                  type="button"
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                    showItineraryDateTimeInputs
+                      ? 'bg-brand-900 text-white border-brand-900'
+                      : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
+                  )}
+                  onClick={() => {
+                    const next = !showItineraryDateTimeInputs;
+                    setShowItineraryDateTimeInputs(next);
+                    if (!next) {
+                      setNewItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                    }
+                  }}
+                >
+                  {showItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
+                </button>
+              </div>
+              {showItineraryDateTimeInputs && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    type="datetime-local"
+                    className="input"
+                    value={newItineraryItem.startsAt}
+                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
+                  />
+                  <input
+                    type="datetime-local"
+                    className="input"
+                    value={newItineraryItem.endsAt}
+                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
+                  />
+                </div>
+              )}
               <textarea
                 className="input min-h-[88px]"
                 placeholder="Description (optional)"
@@ -1061,31 +1191,127 @@ export default function OwnerEventDetailPage() {
                 <div className="divide-y divide-surface-200">
                   {itineraryItems.map((item) => (
                     <div key={item.id} className="px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              'w-2 h-2 rounded-full',
-                              item.isCompleted ? 'bg-emerald-500' : 'bg-surface-300'
-                            )}
+                      {editingItineraryId === item.id ? (
+                        <div className="w-full space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input
+                              className="input"
+                              placeholder="Activity title"
+                              value={editItineraryItem.title}
+                              onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
+                            />
+                            <input
+                              className="input"
+                              placeholder="Location (optional)"
+                              value={editItineraryItem.location}
+                              onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
+                            <div>
+                              <p className="text-sm font-medium text-brand-900">Edit date/time</p>
+                              <p className="text-xs text-surface-500">Optional for this itinerary activity.</p>
+                            </div>
+                            <button
+                              type="button"
+                              className={cn(
+                                'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                                editingItineraryDateTimeInputs
+                                  ? 'bg-brand-900 text-white border-brand-900'
+                                  : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
+                              )}
+                              onClick={() => {
+                                const next = !editingItineraryDateTimeInputs;
+                                setEditingItineraryDateTimeInputs(next);
+                                if (!next) {
+                                  setEditItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                                }
+                              }}
+                            >
+                              {editingItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
+                            </button>
+                          </div>
+                          {editingItineraryDateTimeInputs && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <input
+                                type="datetime-local"
+                                className="input"
+                                value={editItineraryItem.startsAt}
+                                onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
+                              />
+                              <input
+                                type="datetime-local"
+                                className="input"
+                                value={editItineraryItem.endsAt}
+                                onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
+                              />
+                            </div>
+                          )}
+                          <textarea
+                            className="input min-h-[80px]"
+                            placeholder="Description (optional)"
+                            value={editItineraryItem.description}
+                            onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
                           />
-                          <p className={cn('font-medium', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
-                            {item.title}
-                          </p>
+                          <div className="flex items-center justify-end gap-2">
+                            <button className="btn-ghost" onClick={handleCancelEditItineraryItem}>
+                              Cancel
+                            </button>
+                            <button
+                              className="btn-primary"
+                              disabled={savingEditedItinerary}
+                              onClick={() => handleUpdateItineraryItem(item.id)}
+                            >
+                              {savingEditedItinerary ? 'Saving...' : 'Save Changes'}
+                            </button>
+                          </div>
                         </div>
-                        {item.description && (
-                          <p className="text-sm text-surface-600 mt-1">{item.description}</p>
-                        )}
-                        <p className="text-xs text-surface-500 mt-1">
-                          {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : 'No start time'}
-                          {item.location ? ` • ${item.location}` : ''}
-                        </p>
-                      </div>
-                      <div className="text-xs text-surface-500">
-                        {item.isCompleted
-                          ? `Completed ${item.completedAt ? formatDate(item.completedAt) : 'recently'}`
-                          : 'Pending'}
-                      </div>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  'w-2 h-2 rounded-full',
+                                  item.isCompleted ? 'bg-emerald-500' : 'bg-surface-300'
+                                )}
+                              />
+                              <p className={cn('font-medium', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
+                                {item.title}
+                              </p>
+                            </div>
+                            {item.description && (
+                              <p className="text-sm text-surface-600 mt-1">{item.description}</p>
+                            )}
+                            {(item.startsAt || item.location) && (
+                              <p className="text-xs text-surface-500 mt-1">
+                                {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : ''}
+                                {item.startsAt && item.location ? ' • ' : ''}
+                                {item.location ? item.location : ''}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="text-xs text-surface-500">
+                              {item.isCompleted
+                                ? `Completed ${item.completedAt ? formatDate(item.completedAt) : 'recently'}`
+                                : 'Pending'}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button className="btn-ghost" onClick={() => handleStartEditItineraryItem(item)}>
+                                Edit
+                              </button>
+                              <button
+                                className="btn-ghost text-rose-600 hover:text-rose-700"
+                                disabled={deletingItineraryId === item.id}
+                                onClick={() => handleDeleteItineraryItem(item.id)}
+                              >
+                                {deletingItineraryId === item.id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1352,5 +1578,6 @@ export default function OwnerEventDetailPage() {
     </div>
   );
 }
+
 
 

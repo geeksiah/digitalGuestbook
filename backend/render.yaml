@@ -24,7 +24,7 @@ services:
       - key: DATABASE_URL
         sync: false  # REQUIRED: Set this in Render dashboard from Supabase (Connection pooling URL)
       - key: DIRECT_URL
-        sync: false  # OPTIONAL: Set this in Render dashboard from Supabase (Direct connection URL)  
+        sync: false  # REQUIRED: Set this in Render dashboard (can match DATABASE_URL if using Session Pooler on 5432)
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN

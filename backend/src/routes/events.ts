@@ -9,7 +9,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { createEventSchema, updateEventSchema } from '../utils/validation.js';
 import { calculateEventPhase } from '../utils/phase.js';
-import { BUCKETS, deleteFromSupabase, getPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
+import { BUCKETS, buildPublicUrl, deleteFromSupabase, getPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
 const coverUpload = multer({
@@ -38,7 +38,11 @@ const resolveCoverUrl = (coverImagePath: string | null | undefined) => {
   try {
     return getPublicUrl(BUCKETS.MEDIA, coverImagePath);
   } catch {
-    return coverImagePath;
+    try {
+      return buildPublicUrl(BUCKETS.MEDIA, coverImagePath);
+    } catch {
+      return coverImagePath.startsWith('/') ? coverImagePath : `/${coverImagePath}`;
+    }
   }
 };
 

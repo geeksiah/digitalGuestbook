@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { createHmac } from 'crypto';
 
 const PAYSTACK_BASE_URL = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
 
@@ -32,6 +33,32 @@ type PaystackSubaccount = {
   account_number?: string;
   settlement_bank?: string;
   active?: boolean;
+};
+
+type PaystackTransferRecipient = {
+  id?: number;
+  type?: string;
+  name?: string;
+  recipient_code: string;
+  currency?: string;
+  active?: boolean;
+  details?: Record<string, unknown>;
+};
+
+type PaystackTransfer = {
+  id?: number;
+  transfer_code: string;
+  reference: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reason?: string;
+  recipient?: {
+    recipient_code?: string;
+  } | string | null;
+  transferred_at?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type PaystackVerifiedTransaction = {
@@ -71,6 +98,12 @@ const getConfiguredPaystackSecret = async (): Promise<string> => {
   if (gatewaySecret) return gatewaySecret;
 
   throw new AppError('Paystack is not configured yet. Ask admin to set Paystack keys first.', 400);
+};
+
+const getConfiguredPaystackWebhookSecret = async (): Promise<string> => {
+  const configured = (process.env.PAYSTACK_WEBHOOK_SECRET || '').trim();
+  if (configured) return configured;
+  return getConfiguredPaystackSecret();
 };
 
 const paystackRequest = async <T>(
@@ -180,4 +213,70 @@ export const verifyPaystackTransaction = async (reference: string) => {
     `/transaction/verify/${encodeURIComponent(reference)}`
   );
   return data;
+};
+
+export const createPaystackTransferRecipient = async (payload: {
+  name: string;
+  accountNumber: string;
+  bankCode: string;
+  currency?: string;
+  type?: 'nuban' | 'mobile_money';
+  description?: string;
+}) => {
+  return paystackRequest<PaystackTransferRecipient>('/transferrecipient', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: payload.type || 'nuban',
+      name: payload.name,
+      account_number: payload.accountNumber,
+      bank_code: payload.bankCode,
+      currency: payload.currency,
+      description: payload.description,
+    }),
+  });
+};
+
+export const initiatePaystackTransfer = async (payload: {
+  amount: number;
+  recipientCode: string;
+  reason?: string;
+  reference: string;
+  source?: 'balance';
+  currency?: string;
+}) => {
+  const amountMinor = Math.round(payload.amount * 100);
+  if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
+    throw new AppError('Transfer amount must be greater than zero', 400);
+  }
+
+  return paystackRequest<PaystackTransfer>('/transfer', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: payload.source || 'balance',
+      amount: amountMinor,
+      recipient: payload.recipientCode,
+      reason: payload.reason,
+      reference: payload.reference,
+      currency: payload.currency,
+    }),
+  });
+};
+
+export const fetchPaystackTransfer = async (codeOrId: string) => {
+  return paystackRequest<PaystackTransfer>(`/transfer/${encodeURIComponent(codeOrId)}`);
+};
+
+export const verifyPaystackWebhookSignature = async (
+  rawBody: Buffer | string,
+  signature: string | undefined | null
+) => {
+  const provided = (signature || '').trim();
+  if (!provided) return false;
+
+  const secret = await getConfiguredPaystackWebhookSecret();
+  const digest = createHmac('sha512', secret)
+    .update(typeof rawBody === 'string' ? rawBody : rawBody)
+    .digest('hex');
+
+  return digest === provided;
 };
