@@ -6,6 +6,12 @@ import { authenticateAdmin } from '../middleware/auth.js';
 import { z } from 'zod';
 import { sendEmail } from '../services/notifications.js';
 import { getSiteUrl } from '../utils/siteUrl.js';
+import {
+  createPaystackSubaccount,
+  getPaystackBanks,
+  resolvePaystackAccount,
+  updatePaystackSubaccount,
+} from '../services/paystack.js';
 
 const router = Router();
 
@@ -401,6 +407,134 @@ router.post('/:id/wallet', asyncHandler(async (req, res) => {
   });
   
   res.json({ wallet, message: 'Wallet configuration saved successfully' });
+}));
+
+/**
+ * GET /api/owners/:id/wallet/paystack/banks
+ * List Paystack banks for admin-assisted owner wallet setup
+ */
+router.get('/:id/wallet/paystack/banks', asyncHandler(async (req, res) => {
+  const owner = await prisma.owner.findUnique({ where: { id: req.params.id } });
+  if (!owner) {
+    throw new AppError('Owner not found', 404);
+  }
+
+  const country = String(req.query.country || 'ghana').trim().toLowerCase();
+  const currency = String(req.query.currency || '').trim().toUpperCase() || undefined;
+  const banks = await getPaystackBanks({ country, currency });
+
+  res.json({ banks });
+}));
+
+/**
+ * POST /api/owners/:id/wallet/paystack/connect
+ * Admin-assisted Paystack subaccount setup for owner automated split payouts
+ */
+router.post('/:id/wallet/paystack/connect', asyncHandler(async (req, res) => {
+  const owner = await prisma.owner.findUnique({
+    where: { id: req.params.id },
+    include: { wallet: true },
+  });
+
+  if (!owner) {
+    throw new AppError('Owner not found', 404);
+  }
+
+  const connectSchema = z.object({
+    bankCode: z.string().min(2),
+    accountNumber: z.string().min(6),
+    businessName: z.string().optional(),
+    currency: z.string().optional(),
+    country: z.string().optional(),
+    setAsPreferred: z.boolean().optional(),
+    percentageCharge: z.number().min(0).max(100).optional(),
+  });
+
+  const input = connectSchema.parse(req.body);
+  const accountNumber = input.accountNumber.replace(/\s+/g, '');
+  const bankCode = input.bankCode.trim();
+  const businessName =
+    input.businessName?.trim() ||
+    owner.company?.trim() ||
+    owner.name?.trim() ||
+    owner.email;
+
+  const resolvedAccount = await resolvePaystackAccount(accountNumber, bankCode);
+  const payload = {
+    businessName,
+    bankCode,
+    accountNumber,
+    percentageCharge: input.percentageCharge ?? 0,
+    primaryContactName: owner.name,
+    primaryContactEmail: owner.email,
+    description: `EventPeepo owner payout destination (${owner.id})`,
+  };
+
+  let paystackSubaccount = owner.wallet?.paystackSubaccount || undefined;
+
+  if (paystackSubaccount) {
+    try {
+      const updated = await updatePaystackSubaccount(paystackSubaccount, payload);
+      paystackSubaccount = updated.subaccount_code || paystackSubaccount;
+    } catch {
+      const created = await createPaystackSubaccount(payload);
+      paystackSubaccount = created.subaccount_code;
+    }
+  } else {
+    const created = await createPaystackSubaccount(payload);
+    paystackSubaccount = created.subaccount_code;
+  }
+
+  const wallet = await (prisma as any).ownerWallet.upsert({
+    where: { ownerId: owner.id },
+    create: {
+      ownerId: owner.id,
+      bankName: resolvedAccount.bank_name || owner.wallet?.bankName || null,
+      accountName: resolvedAccount.account_name,
+      accountNumber,
+      paystackSubaccount,
+      preferredMethod: input.setAsPreferred === false ? (owner.wallet?.preferredMethod || 'bank') : 'paystack',
+      currency: input.currency || owner.wallet?.currency || 'NGN',
+      isVerified: true,
+      verifiedAt: new Date(),
+    },
+    update: {
+      bankName: resolvedAccount.bank_name || owner.wallet?.bankName || undefined,
+      accountName: resolvedAccount.account_name,
+      accountNumber,
+      paystackSubaccount,
+      preferredMethod: input.setAsPreferred === false ? undefined : 'paystack',
+      currency: input.currency || undefined,
+      isVerified: true,
+      verifiedAt: new Date(),
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      adminId: req.admin!.id,
+      action: 'OWNER_PAYSTACK_CONNECTED_BY_ADMIN',
+      entityType: 'OWNER_WALLET',
+      entityId: wallet.id,
+      details: JSON.stringify({
+        ownerId: owner.id,
+        bankCode,
+        country: input.country || null,
+        currency: wallet.currency,
+        paystackSubaccount,
+      }),
+    },
+  });
+
+  res.json({
+    wallet,
+    paystack: {
+      subaccountCode: paystackSubaccount,
+      accountName: resolvedAccount.account_name,
+      accountNumber: resolvedAccount.account_number,
+    },
+    message: 'Owner Paystack account connected successfully',
+  });
 }));
 
 /**

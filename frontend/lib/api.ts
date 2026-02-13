@@ -242,6 +242,12 @@ export const ownersApi = {
   create: (data: any) => api.post('/owners', data),
   update: (id: string, data: any) => api.patch(`/owners/${id}`, data),
   delete: (id: string) => api.delete(`/owners/${id}`),
+  getWallet: (id: string) => api.get(`/owners/${id}/wallet`),
+  updateWallet: (id: string, data: any) => api.post(`/owners/${id}/wallet`, data),
+  getPaystackBanks: (id: string, params?: { country?: string; currency?: string }) =>
+    api.get(`/owners/${id}/wallet/paystack/banks`, { params }),
+  connectPaystackWallet: (id: string, data: any) =>
+    api.post(`/owners/${id}/wallet/paystack/connect`, data),
   // common pattern: assign/unassign owner to event
   assignToEvent: (eventId: string, ownerId: string) =>
     api.post(`/events/${eventId}/owner`, { ownerId }),
@@ -375,6 +381,23 @@ export const ownerDashboardApi = {
     }),
   updateWallet: (data: any) =>
     axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet`, data, {
+      headers: ownerHeaders(),
+    }),
+  getPaystackBanks: (params?: { country?: string; currency?: string }) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/wallet/paystack/banks`, {
+      params,
+      headers: ownerHeaders(),
+    }),
+  connectPaystackWallet: (data: {
+    bankCode: string;
+    accountNumber: string;
+    businessName?: string;
+    currency?: string;
+    country?: string;
+    setAsPreferred?: boolean;
+    percentageCharge?: number;
+  }) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet/paystack/connect`, data, {
       headers: ownerHeaders(),
     }),
   getStats: () =>

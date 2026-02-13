@@ -191,7 +191,7 @@ export default function EventPage() {
           <p className="text-surface-600">
             We are deeply grateful for your presence, your love, and your support.
           </p>
-          <p className="font-serif italic text-primary-600 mt-8">
+          <p className="font-sans italic text-primary-600 mt-8">
             With love,<br />The Happy Couple
           </p>
         </div>

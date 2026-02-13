@@ -47,6 +47,7 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
             coverImageAlt: true,
             socialTitle: true,
             socialDescription: true,
+            ownerId: true,
         },
     });
     if (!event)
@@ -57,10 +58,57 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
         where: { isActive: true },
         orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
     });
+    const { ownerId, ...eventPublic } = event;
+    const paystackGateway = await prisma_js_1.default.eventPaymentGateway.findFirst({
+        where: {
+            eventId: event.id,
+            isActive: true,
+            paymentGateway: {
+                gateway: 'paystack',
+                isActive: true,
+            },
+        },
+        include: {
+            paymentGateway: {
+                select: {
+                    id: true,
+                    name: true,
+                    gateway: true,
+                    currency: true,
+                    paystackPublicKey: true,
+                },
+            },
+        },
+        orderBy: { sortOrder: 'asc' },
+    });
+    const ownerWallet = event.ownerId
+        ? await prisma_js_1.default.ownerWallet.findUnique({
+            where: { ownerId: event.ownerId },
+            select: { paystackSubaccount: true, isVerified: true },
+        })
+        : null;
     res.json({
-        event,
+        event: eventPublic,
         packages,
         momoEnabled: true,
+        paymentGateways: paystackGateway
+            ? [
+                {
+                    id: paystackGateway.paymentGateway.id,
+                    name: paystackGateway.paymentGateway.name,
+                    gateway: paystackGateway.paymentGateway.gateway,
+                    currency: paystackGateway.paymentGateway.currency,
+                    publicKey: paystackGateway.paymentGateway.paystackPublicKey,
+                    splitConfig: ownerWallet?.paystackSubaccount
+                        ? {
+                            subaccount: ownerWallet.paystackSubaccount,
+                            bearer: 'subaccount',
+                            ownerWalletVerified: Boolean(ownerWallet.isVerified),
+                        }
+                        : null,
+                },
+            ]
+            : [],
     });
 }));
 router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {

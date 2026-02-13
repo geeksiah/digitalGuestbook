@@ -48,6 +48,7 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
       coverImageAlt: true,
       socialTitle: true,
       socialDescription: true,
+      ownerId: true,
     },
   });
 
@@ -58,11 +59,60 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
     where: { isActive: true },
     orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
   });
+  const { ownerId, ...eventPublic } = event;
+
+  const paystackGateway = await prisma.eventPaymentGateway.findFirst({
+    where: {
+      eventId: event.id,
+      isActive: true,
+      paymentGateway: {
+        gateway: 'paystack',
+        isActive: true,
+      },
+    },
+    include: {
+      paymentGateway: {
+        select: {
+          id: true,
+          name: true,
+          gateway: true,
+          currency: true,
+          paystackPublicKey: true,
+        },
+      },
+    },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  const ownerWallet = event.ownerId
+    ? await (prisma as any).ownerWallet.findUnique({
+        where: { ownerId: event.ownerId },
+        select: { paystackSubaccount: true, isVerified: true },
+      })
+    : null;
 
   res.json({
-    event,
+    event: eventPublic,
     packages,
     momoEnabled: true,
+    paymentGateways: paystackGateway
+      ? [
+          {
+            id: paystackGateway.paymentGateway.id,
+            name: paystackGateway.paymentGateway.name,
+            gateway: paystackGateway.paymentGateway.gateway,
+            currency: paystackGateway.paymentGateway.currency,
+            publicKey: paystackGateway.paymentGateway.paystackPublicKey,
+            splitConfig: ownerWallet?.paystackSubaccount
+              ? {
+                  subaccount: ownerWallet.paystackSubaccount,
+                  bearer: 'subaccount',
+                  ownerWalletVerified: Boolean(ownerWallet.isVerified),
+                }
+              : null,
+          },
+        ]
+      : [],
   });
 }));
 

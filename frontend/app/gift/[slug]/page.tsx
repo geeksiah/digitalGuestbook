@@ -15,6 +15,19 @@ interface GiftPackage {
   thumbnailPath: string | null;
 }
 
+interface PaymentGatewayOption {
+  id: string;
+  name: string;
+  gateway: string;
+  currency: string;
+  publicKey?: string | null;
+  splitConfig?: {
+    subaccount: string;
+    bearer: string;
+    ownerWalletVerified?: boolean;
+  } | null;
+}
+
 export default function GiftPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -25,6 +38,7 @@ export default function GiftPage() {
   const [accepted, setAccepted] = useState<boolean | null>(null);
   const [eventName, setEventName] = useState('');
   const [packages, setPackages] = useState<GiftPackage[]>([]);
+  const [paymentGateways, setPaymentGateways] = useState<PaymentGatewayOption[]>([]);
   const [cashGiftAmount, setCashGiftAmount] = useState(0);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
@@ -44,6 +58,10 @@ export default function GiftPage() {
         const response = await giftingApi.getPublicOptions(slug);
         setEventName(response.data.event.name);
         setPackages(response.data.packages || []);
+        setPaymentGateways(response.data.paymentGateways || []);
+        if (response.data.paymentGateways?.some((g: PaymentGatewayOption) => g.gateway === 'paystack')) {
+          setPaymentMethod('paystack');
+        }
       } catch (error: any) {
         toast.error(error.response?.data?.error || 'Unable to load gifting options');
       } finally {
@@ -79,6 +97,11 @@ export default function GiftPage() {
     }, 0);
     return packageTotal + cashGiftAmount;
   }, [selectedPackageItems, packages, cashGiftAmount]);
+
+  const paystackGateway = useMemo(
+    () => paymentGateways.find((g) => g.gateway === 'paystack'),
+    [paymentGateways]
+  );
 
   const submitCheckout = async () => {
     if (!guestName.trim()) {
@@ -179,10 +202,16 @@ export default function GiftPage() {
               <input className="input" placeholder="Phone (optional)" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
               <input type="date" className="input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               <select className="input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                {paystackGateway ? <option value="paystack">Paystack (Recommended)</option> : null}
                 <option value="mtn_momo">MTN MoMo</option>
                 <option value="card">Card</option>
                 <option value="bank_transfer">Bank Transfer</option>
               </select>
+              {paystackGateway?.splitConfig?.subaccount ? (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                  This event is configured for automated Paystack split payouts to the owner account.
+                </div>
+              ) : null}
               <input className="input" placeholder="Payment reference (optional)" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} />
               <textarea className="input min-h-[88px]" placeholder="Notes (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="rounded-lg bg-surface-50 border border-surface-200 px-3 py-2 text-sm text-surface-700">

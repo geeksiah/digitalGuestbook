@@ -5,11 +5,20 @@ import { ownerAuthApi, ownerDashboardApi } from '@/lib/api';
 import { useOwnerAuthStore } from '@/lib/store';
 import toast from 'react-hot-toast';
 
+interface PaystackBank {
+  code: string;
+  name: string;
+  currency?: string;
+  country?: string;
+}
+
 export default function OwnerAccountPage() {
   const { owner, setAuth } = useOwnerAuthStore();
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'wallet'>('profile');
   const [loading, setLoading] = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
+  const [paystackLoading, setPaystackLoading] = useState(false);
+  const [paystackBanks, setPaystackBanks] = useState<PaystackBank[]>([]);
 
   // Profile form
   const [profileData, setProfileData] = useState({
@@ -36,10 +45,18 @@ export default function OwnerAccountPage() {
     mobileProvider: '',
     mobileNumber: '',
     paypalEmail: '',
+    paystackSubaccount: '',
     preferredMethod: 'bank' as 'bank' | 'mobile' | 'paypal' | 'stripe' | 'paystack',
     currency: 'USD',
     autoPayoutEnabled: false,
     autoPayoutThreshold: 100,
+  });
+  const [paystackSetup, setPaystackSetup] = useState({
+    country: 'ghana',
+    currency: 'GHS',
+    bankCode: '',
+    accountNumber: '',
+    businessName: '',
   });
 
   useEffect(() => {
@@ -53,6 +70,11 @@ export default function OwnerAccountPage() {
     }
     fetchWallet();
   }, [owner]);
+
+  useEffect(() => {
+    if (activeTab !== 'wallet') return;
+    fetchPaystackBanks(paystackSetup.country, paystackSetup.currency, false);
+  }, [activeTab]);
 
   const fetchWallet = async () => {
     try {
@@ -68,11 +90,20 @@ export default function OwnerAccountPage() {
           mobileProvider: response.data.wallet.mobileProvider || '',
           mobileNumber: response.data.wallet.mobileNumber || '',
           paypalEmail: response.data.wallet.paypalEmail || '',
+          paystackSubaccount: response.data.wallet.paystackSubaccount || '',
           preferredMethod: response.data.wallet.preferredMethod || 'bank',
           currency: response.data.wallet.currency || 'USD',
           autoPayoutEnabled: response.data.wallet.autoPayoutEnabled || false,
           autoPayoutThreshold: response.data.wallet.autoPayoutThreshold || 100,
         });
+        if (response.data.wallet.preferredMethod === 'paystack') {
+          setPaystackSetup((prev) => ({
+            ...prev,
+            accountNumber: response.data.wallet.accountNumber || prev.accountNumber,
+            businessName: response.data.wallet.accountName || owner?.company || owner?.name || '',
+            currency: response.data.wallet.currency || prev.currency,
+          }));
+        }
       }
     } catch (error: any) {
       // Wallet might not exist yet, that's okay
@@ -81,6 +112,53 @@ export default function OwnerAccountPage() {
       }
     } finally {
       setWalletLoading(false);
+    }
+  };
+
+  const fetchPaystackBanks = async (country: string, currency?: string, notify = true) => {
+    try {
+      const response = await ownerDashboardApi.getPaystackBanks({ country, currency });
+      setPaystackBanks(response.data.banks || []);
+    } catch (error: any) {
+      if (notify) {
+        toast.error(error.response?.data?.error || 'Failed to load Paystack banks');
+      }
+    }
+  };
+
+  const handleConnectPaystack = async () => {
+    if (!paystackSetup.bankCode || !paystackSetup.accountNumber) {
+      toast.error('Select a bank and enter account number');
+      return;
+    }
+
+    try {
+      setPaystackLoading(true);
+      const response = await ownerDashboardApi.connectPaystackWallet({
+        bankCode: paystackSetup.bankCode,
+        accountNumber: paystackSetup.accountNumber,
+        businessName: paystackSetup.businessName || owner?.company || owner?.name || undefined,
+        currency: paystackSetup.currency,
+        country: paystackSetup.country,
+        setAsPreferred: true,
+      });
+
+      const nextWallet = response.data.wallet;
+      setWalletData((prev) => ({
+        ...prev,
+        preferredMethod: 'paystack',
+        accountName: nextWallet.accountName || prev.accountName,
+        accountNumber: nextWallet.accountNumber || prev.accountNumber,
+        bankName: nextWallet.bankName || prev.bankName,
+        paystackSubaccount: nextWallet.paystackSubaccount || prev.paystackSubaccount,
+        currency: nextWallet.currency || prev.currency,
+      }));
+      toast.success('Paystack auto-payout connected');
+      await fetchWallet();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to connect Paystack account');
+    } finally {
+      setPaystackLoading(false);
     }
   };
 
@@ -344,6 +422,114 @@ export default function OwnerAccountPage() {
             </div>
           ) : (
             <form onSubmit={handleWalletUpdate} className="space-y-6">
+              {/* Automated Paystack Setup */}
+              <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-brand-900">Automated Paystack Payout</h3>
+                    <p className="text-sm text-brand-800/80 mt-1">
+                      Connect your bank account once. Ticket and gift payments can auto-route to your Paystack subaccount.
+                    </p>
+                  </div>
+                  {walletData.paystackSubaccount ? (
+                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                      Not connected
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Country</label>
+                    <select
+                      className="input"
+                      value={paystackSetup.country}
+                      onChange={(e) => {
+                        const nextCountry = e.target.value;
+                        const nextCurrency = nextCountry === 'nigeria' ? 'NGN' : 'GHS';
+                        setPaystackSetup((prev) => ({ ...prev, country: nextCountry, currency: nextCurrency, bankCode: '' }));
+                        fetchPaystackBanks(nextCountry, nextCurrency);
+                      }}
+                    >
+                      <option value="ghana">Ghana</option>
+                      <option value="nigeria">Nigeria</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Currency</label>
+                    <select
+                      className="input"
+                      value={paystackSetup.currency}
+                      onChange={(e) => setPaystackSetup((prev) => ({ ...prev, currency: e.target.value }))}
+                    >
+                      <option value="GHS">GHS</option>
+                      <option value="NGN">NGN</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Bank</label>
+                    <select
+                      className="input"
+                      value={paystackSetup.bankCode}
+                      onChange={(e) => setPaystackSetup((prev) => ({ ...prev, bankCode: e.target.value }))}
+                    >
+                      <option value="">Select bank</option>
+                      {paystackBanks.map((bank) => (
+                        <option key={`${bank.code}-${bank.name}`} value={bank.code}>
+                          {bank.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Account Number</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={paystackSetup.accountNumber}
+                      onChange={(e) =>
+                        setPaystackSetup((prev) => ({
+                          ...prev,
+                          accountNumber: e.target.value.replace(/[^\d]/g, '').slice(0, 12),
+                        }))
+                      }
+                      placeholder="0123456789"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label">Business Name (Optional)</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={paystackSetup.businessName}
+                      onChange={(e) => setPaystackSetup((prev) => ({ ...prev, businessName: e.target.value }))}
+                      placeholder={owner?.company || owner?.name || 'Your business name'}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={paystackLoading}
+                    onClick={handleConnectPaystack}
+                  >
+                    {paystackLoading ? 'Connecting...' : 'Connect Paystack'}
+                  </button>
+                  {walletData.paystackSubaccount ? (
+                    <span className="text-xs text-brand-900/70">
+                      Subaccount: <span className="font-mono">{walletData.paystackSubaccount}</span>
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
               {/* Preferred Method */}
               <div>
                 <label className="label">Preferred Payout Method *</label>
@@ -356,8 +542,8 @@ export default function OwnerAccountPage() {
                   <option value="bank">Bank Transfer</option>
                   <option value="mobile">Mobile Money</option>
                   <option value="paypal">PayPal</option>
-                  <option value="stripe">Stripe</option>
                   <option value="paystack">Paystack</option>
+                  <option value="stripe">Stripe</option>
                 </select>
               </div>
 

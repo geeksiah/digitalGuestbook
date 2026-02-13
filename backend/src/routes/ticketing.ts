@@ -241,6 +241,16 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { slug: eventSlug },
     include: {
+      Owner: {
+        select: {
+          wallet: {
+            select: {
+              paystackSubaccount: true,
+              isVerified: true,
+            },
+          },
+        },
+      },
       formFields: {
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -306,6 +316,15 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     paymentGateways: event.rsvpMode !== 'rsvp' && event.eventPaymentGateways?.length > 0
       ? event.eventPaymentGateways.map((eg: any) => {
           const g = eg.paymentGateway;
+          const splitConfig =
+            g.gateway === 'paystack' && event.Owner?.wallet?.paystackSubaccount
+              ? {
+                  subaccount: event.Owner.wallet.paystackSubaccount,
+                  bearer: 'subaccount',
+                  ownerWalletVerified: Boolean(event.Owner.wallet.isVerified),
+                }
+              : null;
+
           return {
             id: g.id,
             name: g.name,
@@ -319,6 +338,7 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
                 : g.gateway === 'flutterwave'
                 ? g.flutterwavePublicKey
                 : null,
+            splitConfig,
             sortOrder: eg.sortOrder,
           };
         })

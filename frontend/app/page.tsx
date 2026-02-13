@@ -121,7 +121,7 @@ const MockupPhone = ({ className }: { className?: string }) => (
       {/* Invite Header */}
       <div className="h-[45%] bg-[#F8FAFC] p-4 pt-10 flex flex-col items-center justify-center text-center border-b border-gray-100">
         <div className="text-[8px] text-[#063932]/60 font-bold uppercase tracking-widest mb-3">You are invited</div>
-        <div className="text-2xl text-[#063932] font-extrabold leading-tight mb-2 font-serif">Kwasi <br/>& Afua</div>
+        <div className="text-2xl text-[#063932] font-extrabold leading-tight mb-2 font-sans">Kwasi <br/>& Afua</div>
         <div className="text-[9px] text-gray-400 font-medium tracking-wide">THE UNION</div>
       </div>
       {/* Details */}
