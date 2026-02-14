@@ -45,7 +45,7 @@ export default function McItineraryPage() {
       setLastSyncedAt(new Date());
       hasShownErrorRef.current = false;
     } catch (error: any) {
-      if (!silent || !hasShownErrorRef.current) {
+      if (!silent && !hasShownErrorRef.current) {
         toast.error(error.response?.data?.error || 'Unable to load MC itinerary');
         hasShownErrorRef.current = true;
       }

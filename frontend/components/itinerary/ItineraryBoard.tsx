@@ -126,7 +126,12 @@ export default function ItineraryBoard({
                         <span className="h-1.5 w-1.5 rounded-full bg-[#d6c8cf]" />
                       )}
                     </div>
-                    <div className="pr-4 md:pr-8 py-1 text-sm md:text-base font-semibold tracking-[0.16em] text-[#75696f]">
+                    <div
+                      className={cn(
+                        'pr-4 md:pr-8 py-1 text-sm md:text-base font-semibold tracking-[0.16em] text-[#75696f]',
+                        mode === 'mc' && 'pl-2 md:pl-4'
+                      )}
+                    >
                       {section.label}
                     </div>
                   </div>
@@ -169,7 +174,7 @@ export default function ItineraryBoard({
                           )}
                         </div>
 
-                        <div className="pr-4 md:pr-8 pb-3 pt-2">
+                        <div className={cn('pr-4 md:pr-8 pb-3 pt-2', mode === 'mc' && 'pl-2 md:pl-4')}>
                           <h3
                             className={cn(
                               'text-[15px] md:text-base font-semibold text-[#3f3446] leading-tight',
