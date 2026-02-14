@@ -118,6 +118,127 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
   };
 }
 
+function getPathValue(source: any, rawPath: string): any {
+  if (!source || typeof source !== 'object') return undefined;
+  const path = rawPath.trim();
+  if (!path) return source;
+  const keys = path.split('.').filter(Boolean);
+  let value: any = source;
+  for (const key of keys) {
+    if (value && typeof value === 'object' && key in value) {
+      value = value[key];
+    } else {
+      return undefined;
+    }
+  }
+  return value;
+}
+
+function resolveTemplateValue(pathStr: string, currentData: any, rootData: any): any {
+  const path = pathStr.trim();
+  if (!path) return undefined;
+  if (path === 'this' || path === '.') return currentData;
+  if (path.startsWith('@root.')) {
+    return getPathValue(rootData, path.slice('@root.'.length));
+  }
+  if (path.startsWith('this.')) {
+    return getPathValue(currentData, path.slice('this.'.length));
+  }
+
+  const currentValue = getPathValue(currentData, path);
+  if (currentValue !== undefined) return currentValue;
+  return getPathValue(rootData, path);
+}
+
+function isTruthyTemplateValue(value: any): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(value);
+}
+
+function renderTemplateWithBlocks(
+  tpl: string,
+  currentData: any,
+  rootData: any,
+  depth = 0
+): string {
+  if (depth > 12) return tpl;
+
+  let output = tpl;
+
+  // {{#each path}}...{{/each}}
+  output = output.replace(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_match, pathStr, inner) => {
+    const collection = resolveTemplateValue(pathStr, currentData, rootData);
+    if (Array.isArray(collection)) {
+      return collection
+        .map((item, index) => {
+          const itemCtx =
+            item && typeof item === 'object'
+              ? { ...item, this: item, '@index': index }
+              : { this: item, '@index': index };
+          return renderTemplateWithBlocks(inner, itemCtx, rootData, depth + 1);
+        })
+        .join('');
+    }
+    if (collection && typeof collection === 'object') {
+      return Object.entries(collection)
+        .map(([key, value], index) => {
+          const itemCtx =
+            value && typeof value === 'object'
+              ? { ...value, this: value, '@key': key, '@index': index }
+              : { this: value, '@key': key, '@index': index };
+          return renderTemplateWithBlocks(inner, itemCtx, rootData, depth + 1);
+        })
+        .join('');
+    }
+    return '';
+  });
+
+  // {{#if path}}...{{else}}...{{/if}}
+  output = output.replace(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g, (_match, pathStr, truthyBlock, falsyBlock = '') => {
+    const conditionValue = resolveTemplateValue(pathStr, currentData, rootData);
+    const chosenBlock = isTruthyTemplateValue(conditionValue) ? truthyBlock : falsyBlock;
+    return renderTemplateWithBlocks(chosenBlock, currentData, rootData, depth + 1);
+  });
+
+  // Standard variables: {{event.name}}, {{title}}, {{this}}
+  output = output.replace(/\{\{\s*([^#\/][^}]*)\s*\}\}/g, (match, pathStr) => {
+    const value = resolveTemplateValue(pathStr, currentData, rootData);
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  });
+
+  // Compatibility syntax: {urls.invitation}
+  output = output.replace(/\{\s*((?:urls|event|phase|capabilities|itinerary|itineraryMeta)\.[^{}]+?)\s*\}/g, (match, pathStr) => {
+    const value = resolveTemplateValue(pathStr, currentData, rootData);
+    if (value === undefined || value === null) return match;
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  });
+
+  return output;
+}
+
+function formatItineraryTime(value: Date | string | null | undefined, timezone: string | null | undefined): string {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone || 'UTC',
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  }
+}
+
 // ─── Helper: fetch event or throw ──────────────────────────────────────────────
 async function fetchPublicEvent(slug: string) {
   const event = await prisma.event.findUnique({
@@ -145,13 +266,45 @@ function resolveEventCoverUrl(coverImagePath: string | null | undefined): string
   if (coverImagePath.startsWith('http://') || coverImagePath.startsWith('https://')) {
     return coverImagePath;
   }
+
+  const backendBase = (
+    process.env.API_URL
+    || process.env.BACKEND_URL
+    || process.env.RENDER_EXTERNAL_URL
+    || ''
+  ).replace(/\/+$/, '');
+  const supabaseBase = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+
+  const toBackendAbsolute = (value: string) => {
+    const path = value.startsWith('/') ? value : `/${value}`;
+    return backendBase ? `${backendBase}${path}` : path;
+  };
+
   try {
-    return getPublicUrl(BUCKETS.MEDIA, coverImagePath);
+    const publicUrl = getPublicUrl(BUCKETS.MEDIA, coverImagePath);
+    if (publicUrl.startsWith('http://') || publicUrl.startsWith('https://')) {
+      return publicUrl;
+    }
+    if (supabaseBase && publicUrl.startsWith('/storage/v1/object/public/')) {
+      return `${supabaseBase}${publicUrl}`;
+    }
+    return toBackendAbsolute(publicUrl);
   } catch {
     try {
-      return buildPublicUrl(BUCKETS.MEDIA, coverImagePath);
+      const publicUrl = buildPublicUrl(BUCKETS.MEDIA, coverImagePath);
+      if (publicUrl.startsWith('http://') || publicUrl.startsWith('https://')) {
+        return publicUrl;
+      }
+      if (supabaseBase && publicUrl.startsWith('/storage/v1/object/public/')) {
+        return `${supabaseBase}${publicUrl}`;
+      }
+      return toBackendAbsolute(publicUrl);
     } catch {
-      return coverImagePath.startsWith('/') ? coverImagePath : `/${coverImagePath}`;
+      const normalized = coverImagePath.replace(/^\/+/, '');
+      if (supabaseBase && normalized.includes('/')) {
+        return `${supabaseBase}/storage/v1/object/public/${BUCKETS.MEDIA}/${normalized}`;
+      }
+      return toBackendAbsolute(coverImagePath);
     }
   }
 }
@@ -189,23 +342,7 @@ async function renderEventTemplate(
   // Replace template variables
   let html = template.htmlContent;
 
-  const replaceVariables = (tpl: string, data: any): string => {
-    return tpl.replace(/\{\{([^}]+)\}\}/g, (match, pathStr) => {
-      const keys = pathStr.trim().split('.');
-      let value: any = data;
-      for (const key of keys) {
-        if (value && typeof value === 'object' && key in value) {
-          value = value[key];
-        } else {
-          console.warn(`[Render] Variable not found: ${pathStr}`);
-          return match;
-        }
-      }
-      return String(value ?? '');
-    });
-  };
-
-  html = replaceVariables(html, templateData);
+  html = renderTemplateWithBlocks(html, templateData, templateData);
 
   // ── Asset URL resolution ─────────────────────────────────────────────────
   // Strategy:
@@ -565,7 +702,48 @@ router.get('/event/:slug/itinerary-page', asyncHandler(async (req, res) => {
 
   const currentPhase = calculateEventPhase(event);
   const capabilities = getPhaseCapabilities(currentPhase);
-  const templateData = buildTemplateData(event, currentPhase, capabilities);
+  const itineraryItems = await prisma.eventItineraryItem.findMany({
+    where: { eventId: event.id },
+    orderBy: { sortOrder: 'asc' },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      startsAt: true,
+      endsAt: true,
+      location: true,
+      sortOrder: true,
+      isCompleted: true,
+      completedAt: true,
+    },
+  });
+
+  const itinerary = itineraryItems.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    startsAt: formatItineraryTime(item.startsAt, event.timezone),
+    endsAt: formatItineraryTime(item.endsAt, event.timezone),
+    startsAtIso: item.startsAt ? item.startsAt.toISOString() : null,
+    endsAtIso: item.endsAt ? item.endsAt.toISOString() : null,
+    location: item.location,
+    sortOrder: item.sortOrder,
+    isCompleted: item.isCompleted,
+    completedAt: item.completedAt ? item.completedAt.toISOString() : null,
+  }));
+
+  const completed = itinerary.filter((item) => item.isCompleted).length;
+  const total = itinerary.length;
+
+  const templateData = {
+    ...buildTemplateData(event, currentPhase, capabilities),
+    itinerary,
+    itineraryMeta: {
+      total,
+      completed,
+      percent: total ? Math.round((completed / total) * 100) : 0,
+    },
+  };
 
   await renderEventTemplate(event, 'ITINERARY', (event as any).itineraryPageTemplateId, templateData, res);
 }));
