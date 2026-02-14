@@ -4,6 +4,7 @@ import { z } from 'zod';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateAdminOrOwnerAccount } from '../middleware/auth.js';
+import { publishItineraryUpdate } from '../services/itineraryRealtime.js';
 
 const router = Router();
 
@@ -136,6 +137,8 @@ router.post('/events/:eventId/apply-template', authenticateAdminOrOwnerAccount, 
     }
   });
 
+  publishItineraryUpdate(eventId, { reason: 'apply-template' });
+
   res.json({ message: 'Template applied successfully' });
 }));
 
@@ -180,6 +183,8 @@ router.post('/events/:eventId/items', authenticateAdminOrOwnerAccount, asyncHand
     data: { itineraryEnabled: true },
   });
 
+  publishItineraryUpdate(eventId, { reason: 'item-created', itemId: item.id });
+
   res.status(201).json({ item });
 }));
 
@@ -207,6 +212,8 @@ router.patch('/events/:eventId/items/:itemId', authenticateAdminOrOwnerAccount, 
     },
   });
 
+  publishItineraryUpdate(eventId, { reason: 'item-updated', itemId: item.id });
+
   res.json({ item });
 }));
 
@@ -223,6 +230,8 @@ router.delete('/events/:eventId/items/:itemId', authenticateAdminOrOwnerAccount,
   await prisma.eventItineraryItem.delete({
     where: { id: existing.id },
   });
+
+  publishItineraryUpdate(eventId, { reason: 'item-deleted', itemId: existing.id });
 
   res.json({ message: 'Itinerary item deleted' });
 }));
@@ -242,6 +251,8 @@ router.post('/events/:eventId/items/reorder', authenticateAdminOrOwnerAccount, a
       })
     )
   );
+
+  publishItineraryUpdate(eventId, { reason: 'items-reordered' });
 
   res.json({ message: 'Items reordered successfully' });
 }));
@@ -352,6 +363,12 @@ router.post('/mc/:token/items/:itemId/toggle', asyncHandler(async (req, res) => 
       completedAt: nextCompleted ? new Date() : null,
       completedBySessionId: nextCompleted ? session.id : null,
     },
+  });
+
+  publishItineraryUpdate(session.eventId, {
+    reason: 'item-toggled',
+    itemId: updated.id,
+    isCompleted: updated.isCompleted,
   });
 
   res.json({ item: updated });

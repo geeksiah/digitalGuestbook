@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { publicApi } from '@/lib/api';
+import { API_BASE_URL, publicApi } from '@/lib/api';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -86,6 +86,9 @@ export default function EventItineraryPage() {
 
     fetchItinerary(false);
     const interval = window.setInterval(() => fetchItinerary(true), 3000);
+    const stream = new EventSource(`${API_BASE_URL}/api/public/event/${slug}/itinerary/stream`);
+    const onRealtimeUpdate = () => fetchItinerary(true);
+    stream.addEventListener('itinerary-update', onRealtimeUpdate as EventListener);
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') fetchItinerary(true);
     };
@@ -93,6 +96,8 @@ export default function EventItineraryPage() {
 
     return () => {
       window.clearInterval(interval);
+      stream.removeEventListener('itinerary-update', onRealtimeUpdate as EventListener);
+      stream.close();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       clearHighlightTimeouts();
     };
@@ -107,7 +112,16 @@ export default function EventItineraryPage() {
   }
 
   if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="itinerary-page" />;
+    return (
+      <BackendTemplateFrame
+        slug={slug}
+        endpoint="itinerary-page"
+        refreshIntervalMs={15000}
+        revalidateOnFocus
+        forceFresh
+        eventStreamPath={`/api/public/event/${slug}/itinerary/stream`}
+      />
+    );
   }
 
   if (loading) {
@@ -124,7 +138,7 @@ export default function EventItineraryPage() {
       eventName={eventName}
       items={items}
       subtitle={`${percent}% complete`}
-      syncLabel={`Live sync${lastUpdatedAt ? ` · ${formatDate(lastUpdatedAt, 'p')}` : ''}`}
+      syncLabel={`Live sync${lastUpdatedAt ? ` - ${formatDate(lastUpdatedAt, 'p')}` : ''}`}
       recentlyChangedIds={highlightedItemIds}
     />
   );

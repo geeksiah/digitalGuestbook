@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{event.name}} | Itinerary</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6eaee;
+      --panel: #fcf9fc;
+      --rail: #f1eaee;
+      --line: #ddd0d7;
+      --text-900: #3f3545;
+      --text-700: #655a62;
+      --text-500: #9a8f97;
+      --start: #d5adb2;
+      --done-bg: #dff4e8;
+      --done-text: #2f7a4e;
+      --theme-primary: #6f4580;
+      --theme-secondary: #553163;
+      --theme-accent: #a27639;
+      --shadow: 0 18px 46px rgba(76, 43, 86, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background:
+        radial-gradient(circle at 12% 8%, #fff6f8 0, rgba(255, 246, 248, 0) 36%),
+        radial-gradient(circle at 90% 14%, #f7ecff 0, rgba(247, 236, 255, 0) 38%),
+        var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text-900);
+      overflow-x: hidden;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      position: relative;
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.024;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .petals {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .petal {
+      position: absolute;
+      left: 0;
+      top: -16vh;
+      width: var(--size);
+      height: var(--size);
+      opacity: var(--alpha);
+      transform: translate3d(var(--x0), -16vh, 0);
+      animation: petal-fall var(--fall) linear infinite;
+      animation-delay: var(--delay);
+      will-change: transform;
+      filter: drop-shadow(0 2px 3px rgba(86, 44, 96, 0.14));
+    }
+
+    .petal-inner {
+      width: 100%;
+      height: 100%;
+      color: var(--color);
+      transform-origin: center;
+      animation:
+        petal-sway var(--sway) ease-in-out infinite alternate,
+        petal-spin var(--spin) linear infinite;
+    }
+
+    .petal svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      fill: currentColor;
+    }
+
+    @keyframes petal-fall {
+      0% { transform: translate3d(var(--x0), -16vh, 0) rotate(0deg); }
+      42% { transform: translate3d(calc(var(--x0) + var(--curve)), 44vh, 0) rotate(120deg); }
+      100% { transform: translate3d(var(--x1), 112vh, 0) rotate(320deg); }
+    }
+
+    @keyframes petal-sway {
+      from { transform: translateX(-6px) rotate(-9deg); }
+      to { transform: translateX(8px) rotate(10deg); }
+    }
+
+    @keyframes petal-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .page {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 450px;
+      margin: 0 auto;
+      padding: 12px 10px 138px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid #eadde4;
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      min-height: min(82vh, 760px);
+    }
+
+    .head {
+      text-align: center;
+      padding: 18px 14px 12px;
+    }
+
+    .title {
+      margin: 0;
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.3rem, 5.3vw, 2rem);
+      color: var(--text-900);
+      letter-spacing: 0.01em;
+      line-height: 1.2;
+    }
+
+    .event {
+      margin: 6px 0 0;
+      font-size: 0.74rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-500);
+      font-weight: 600;
+    }
+
+    .board {
+      position: relative;
+      padding: 0 0 18px;
+    }
+
+    .rail-bg {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 74px;
+      background: var(--rail);
+    }
+
+    .rail-line {
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 37px;
+      width: 1px;
+      background: var(--line);
+    }
+
+    .row,
+    .day {
+      position: relative;
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      column-gap: 14px;
+      z-index: 2;
+    }
+
+    .day {
+      min-height: 44px;
+      align-items: center;
+    }
+
+    .day-left {
+      display: flex;
+      justify-content: center;
+    }
+
+    .start-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--theme-primary) 32%, #ffffff);
+      color: #fff;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .day-label {
+      font-size: 0.88rem;
+      letter-spacing: 0.02em;
+      color: var(--text-700);
+      font-weight: 600;
+      line-height: 1.35;
+      padding-right: 12px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .row {
+      min-height: 76px;
+    }
+
+    .left {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 13px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #2f2634;
+    }
+
+    .done {
+      display: none;
+      border-radius: 999px;
+      border: 1px solid #bde4cb;
+      background: var(--done-bg);
+      color: var(--done-text);
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      padding: 4px 8px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .row.done-row .dot { display: none; }
+    .row.done-row .done { display: inline-flex; }
+
+    .content {
+      padding: 10px 12px 10px 2px;
+    }
+
+    .name {
+      margin: 0;
+      font-size: 1.05rem;
+      line-height: 1.32;
+      color: var(--text-900);
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .time,
+    .location,
+    .desc {
+      margin: 5px 0 0;
+      font-size: 0.84rem;
+      color: var(--text-500);
+      font-weight: 500;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .desc {
+      color: var(--text-700);
+    }
+
+    .time:empty,
+    .location:empty,
+    .desc:empty { display: none; }
+
+    .empty {
+      padding: 24px 16px;
+      text-align: center;
+      color: var(--text-700);
+      font-style: italic;
+      font-size: 0.94rem;
+    }
+
+    .footer {
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .back-link {
+      text-decoration: none;
+      color: #715b69;
+      font-size: 0.8rem;
+      letter-spacing: 0.02em;
+      font-weight: 600;
+      border-bottom: 1px solid transparent;
+    }
+
+    .back-link:hover { border-bottom-color: #715b69; }
+
+    .fabs {
+      position: fixed;
+      right: 10px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .fab {
+      text-decoration: none;
+      color: #fff;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 13px;
+      box-shadow: 0 10px 20px rgba(71, 34, 80, 0.3);
+      font-size: 0.7rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      font-weight: 700;
+      white-space: nowrap;
+      max-width: 84vw;
+      transition: transform 0.2s ease;
+    }
+
+    .fab:hover { transform: translateY(-1px); }
+    .fab svg { width: 14px; height: 14px; fill: currentColor; }
+    .fab-guestbook { background: linear-gradient(135deg, var(--theme-primary), var(--theme-secondary)); }
+    .fab-gift { background: linear-gradient(135deg, var(--theme-accent), color-mix(in srgb, var(--theme-accent) 68%, #3d2a12)); }
+
+    @media (min-width: 820px) {
+      .page { max-width: 940px; padding: 22px 18px 128px; }
+      .panel { border-radius: 34px; }
+      .head { padding: 24px 22px 16px; }
+      .title { font-size: 2rem; }
+      .event { font-size: 0.78rem; }
+      .rail-bg { width: 98px; }
+      .rail-line { left: 49px; }
+      .row, .day { grid-template-columns: 98px minmax(0, 1fr); column-gap: 20px; }
+      .day-label { font-size: 0.96rem; }
+      .name { font-size: 1.16rem; }
+      .time, .location, .desc { font-size: 0.9rem; }
+      .content { padding-left: 6px; }
+      .fab { font-size: 0.74rem; padding: 12px 16px; }
+      .fabs { right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .petal, .petal-inner { animation: none !important; }
+      .fab { transition: none; }
+    }
+  </style>
+</head>
+<body data-primary="{{event.primaryColor}}" data-secondary="{{event.secondaryColor}}" data-accent="{{event.accentColor}}">
+  <div class="grain"></div>
+  <div class="petals" id="petals"></div>
+
+  <main class="page">
+    <div class="panel">
+      <header class="head">
+        <h1 class="title">Your Event Itinerary</h1>
+        <p class="event">{{event.name}}</p>
+      </header>
+
+      <section class="board">
+        <div class="rail-bg"></div>
+        <div class="rail-line"></div>
+
+        {{#if itinerary}}
+        <div class="day">
+          <div class="day-left"><span class="start-pill">Start</span></div>
+          <div class="day-label" id="dateLabel">{{event.formattedDate}}</div>
+        </div>
+
+        {{#each itinerary}}
+        <article class="row" data-completed="{{isCompleted}}">
+          <div class="left">
+            <span class="dot"></span>
+            <span class="done">Done</span>
+          </div>
+          <div class="content">
+            <h2 class="name">{{title}}</h2>
+            <p class="time">{{startsAt}} {{endsAt}}</p>
+            <p class="location">{{location}}</p>
+            <p class="desc">{{description}}</p>
+          </div>
+        </article>
+        {{/each}}
+
+        {{else}}
+        <div class="empty">Timings will be updated soon.</div>
+        {{/if}}
+      </section>
+    </div>
+
+    <div class="footer" id="footerWrap">
+      <a class="back-link" id="invitationLink" href="{{urls.invitation}}">Back to Invitation</a>
+    </div>
+  </main>
+
+  <div class="fabs">
+    <a href="{{urls.gifting}}" class="fab fab-gift" id="giftFab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-2.2c.13-.31.2-.65.2-1a3 3 0 00-5.22-2L12 4.9 11.22 4A3 3 0 006 6a2.9 2.9 0 00.2 1H4a1 1 0 00-1 1v3a1 1 0 001 1h1v7a2 2 0 002 2h10a2 2 0 002-2v-7h1a1 1 0 001-1V8a1 1 0 00-1-1zM15 4.5a1.5 1.5 0 11-1.5 1.5c0-.83.67-1.5 1.5-1.5zM9 4.5A1.5 1.5 0 119 7a1.5 1.5 0 010-3zM5 9h14v2H5V9zm2 10v-7h10v7H7z"/></svg>
+      <span>Send Gift</span>
+    </a>
+
+    <a href="{{urls.guestbook}}" class="fab fab-guestbook" id="guestbookFab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      <span>Sign Guestbook</span>
+    </a>
+  </div>
+
+  <script>
+    (function () {
+      var parseColor = function (value) {
+        if (!value) return '';
+        var v = String(value).trim();
+        if (!v) return '';
+        var el = document.createElement('span');
+        el.style.color = '';
+        el.style.color = v;
+        return el.style.color ? v : '';
+      };
+
+      var root = document.documentElement;
+      var body = document.body;
+      if (body) {
+        var p = parseColor(body.getAttribute('data-primary'));
+        var s = parseColor(body.getAttribute('data-secondary'));
+        var a = parseColor(body.getAttribute('data-accent'));
+        if (p) root.style.setProperty('--theme-primary', p);
+        if (s) root.style.setProperty('--theme-secondary', s);
+        if (a) root.style.setProperty('--theme-accent', a);
+      }
+
+      var isEmptyLink = function (node) {
+        if (!node) return true;
+        var href = (node.getAttribute('href') || '').trim();
+        return !href || href === '#' || href === 'null' || href === 'undefined';
+      };
+
+      var invitationLink = document.getElementById('invitationLink');
+      var footerWrap = document.getElementById('footerWrap');
+      if (isEmptyLink(invitationLink) && footerWrap) footerWrap.style.display = 'none';
+
+      var giftFab = document.getElementById('giftFab');
+      if (isEmptyLink(giftFab) && giftFab) giftFab.remove();
+
+      var guestbookFab = document.getElementById('guestbookFab');
+      if (isEmptyLink(guestbookFab) && guestbookFab) guestbookFab.remove();
+
+      document.querySelectorAll('.row').forEach(function (row) {
+        var completed = (row.getAttribute('data-completed') || '').toLowerCase() === 'true';
+        if (completed) row.classList.add('done-row');
+
+        var time = row.querySelector('.time');
+        var location = row.querySelector('.location');
+        var desc = row.querySelector('.desc');
+
+        if (time && !(time.textContent || '').trim()) time.remove();
+        if (location && !(location.textContent || '').trim()) location.remove();
+        if (desc && !(desc.textContent || '').trim()) desc.remove();
+      });
+
+      var dateLabel = document.getElementById('dateLabel');
+      if (dateLabel && !(dateLabel.textContent || '').trim()) {
+        dateLabel.textContent = 'Event schedule';
+      }
+
+      var container = document.getElementById('petals');
+      if (!container) return;
+      var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReduced) return;
+
+      var PETAL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2.3c-1.6 1.5-3.9 3.7-6 6.3-2.4 2.9-3.9 5.4-3.9 5.4s2.4 2.2 5.6 4.2c2.7 1.8 5.5 3 5.5 3s2.4-2.5 4.4-5.5c1.9-2.8 3.7-6 3.7-6s-2-2.4-4.5-4.5c-2.2-1.8-4.8-3.4-4.8-3.4z"/></svg>';
+      var COLORS = ['#f4d9e6', '#ecd5f6', '#f8e5bd', '#e9d8f1', '#f6d8df', '#f0dff8'];
+      var width = Math.max(window.innerWidth, 320);
+      var count = Math.min(40, Math.max(20, Math.floor(width / 15)));
+
+      for (var i = 0; i < count; i++) {
+        var petal = document.createElement('span');
+        petal.className = 'petal';
+
+        var inner = document.createElement('span');
+        inner.className = 'petal-inner';
+        inner.innerHTML = PETAL_SVG;
+        petal.appendChild(inner);
+
+        var x0 = Math.random() * 100;
+        var drift = Math.random() * 28 - 14;
+        var x1 = Math.max(-8, Math.min(108, x0 + drift));
+        var size = 8 + Math.random() * 16;
+
+        petal.style.setProperty('--x0', x0.toFixed(2) + 'vw');
+        petal.style.setProperty('--x1', x1.toFixed(2) + 'vw');
+        petal.style.setProperty('--curve', (Math.random() * 24 - 12).toFixed(1) + 'px');
+        petal.style.setProperty('--size', size.toFixed(1) + 'px');
+        petal.style.setProperty('--fall', (12 + Math.random() * 16).toFixed(2) + 's');
+        petal.style.setProperty('--sway', (2.6 + Math.random() * 2.8).toFixed(2) + 's');
+        petal.style.setProperty('--spin', (5 + Math.random() * 7.5).toFixed(2) + 's');
+        petal.style.setProperty('--delay', (-Math.random() * 20).toFixed(2) + 's');
+        petal.style.setProperty('--alpha', (0.3 + Math.random() * 0.28).toFixed(2));
+        petal.style.setProperty('--color', COLORS[Math.floor(Math.random() * COLORS.length)]);
+
+        container.appendChild(petal);
+      }
+    })();
+  </script>
+</body>
+</html>

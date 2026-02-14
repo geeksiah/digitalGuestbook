@@ -34,12 +34,23 @@ interface Props {
   endpoint: string;
   className?: string;
   fallback?: React.ReactNode;
+  refreshIntervalMs?: number;
+  revalidateOnFocus?: boolean;
+  forceFresh?: boolean;
+  eventStreamPath?: string;
 }
 
 type TemplateUnavailableInfo = {
   status: number;
   message: string;
   phase?: string | null;
+};
+
+type UseBackendTemplateOptions = {
+  refreshIntervalMs?: number;
+  revalidateOnFocus?: boolean;
+  forceFresh?: boolean;
+  eventStreamPath?: string;
 };
 
 /**
@@ -50,11 +61,15 @@ type TemplateUnavailableInfo = {
  * - If response is JSON (not HTML) → no template assigned → show default UI
  * - Reads X-Template-Asset-Base header for CDN-direct asset URLs
  */
-export function useBackendTemplate(slug: string, endpoint: string) {
+export function useBackendTemplate(slug: string, endpoint: string, options: UseBackendTemplateOptions = {}) {
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
   const [unavailableInfo, setUnavailableInfo] = useState<TemplateUnavailableInfo | null>(null);
+  const refreshIntervalMs = Math.max(0, options.refreshIntervalMs ?? 0);
+  const shouldRevalidateOnFocus = options.revalidateOnFocus ?? refreshIntervalMs > 0;
+  const shouldForceFresh = Boolean(options.forceFresh);
+  const eventStreamPath = (options.eventStreamPath || "").trim();
 
   useEffect(() => {
     let cancelled = false;
@@ -77,9 +92,13 @@ export function useBackendTemplate(slug: string, endpoint: string) {
       setLoading(false);
     };
 
-    const fetchTemplate = async (isRevalidation = false) => {
+    const fetchTemplate = async (isRevalidation = false, forceNetwork = false) => {
       try {
-        const url = `${API_BASE_URL}/api/public/event/${slug}/${endpoint}`;
+        let url = `${API_BASE_URL}/api/public/event/${slug}/${endpoint}`;
+        if (forceNetwork || shouldForceFresh) {
+          const separator = url.includes("?") ? "&" : "?";
+          url = `${url}${separator}_rt=${Date.now()}`;
+        }
 
         const res = await fetch(url, { cache: "no-store" });
         if (cancelled) return;
@@ -150,7 +169,7 @@ export function useBackendTemplate(slug: string, endpoint: string) {
     }
 
     // Check SWR cache
-    const cached = templateCache.get(cacheKey);
+    const cached = shouldForceFresh ? null : templateCache.get(cacheKey);
     if (cached) {
       // Return cached data immediately
       applyResult(cached.html, cached.assetBase);
@@ -164,8 +183,61 @@ export function useBackendTemplate(slug: string, endpoint: string) {
       fetchTemplate();
     }
 
-    return () => { cancelled = true; };
-  }, [slug, endpoint]);
+    let intervalId: number | null = null;
+    const revalidate = () => {
+      fetchTemplate(true, true);
+    };
+
+    if (refreshIntervalMs > 0) {
+      intervalId = window.setInterval(revalidate, refreshIntervalMs);
+    }
+
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        revalidate();
+      }
+    };
+
+    if (shouldRevalidateOnFocus) {
+      document.addEventListener("visibilitychange", onVisibilityOrFocus);
+      window.addEventListener("focus", onVisibilityOrFocus);
+    }
+
+    let stream: EventSource | null = null;
+    let onRealtimeUpdate: (() => void) | null = null;
+    if (eventStreamPath) {
+      const streamUrl = eventStreamPath.startsWith("http://") || eventStreamPath.startsWith("https://")
+        ? eventStreamPath
+        : `${API_BASE_URL}${eventStreamPath.startsWith("/") ? "" : "/"}${eventStreamPath}`;
+
+      try {
+        stream = new EventSource(streamUrl);
+        onRealtimeUpdate = () => {
+          revalidate();
+        };
+        stream.addEventListener("itinerary-update", onRealtimeUpdate as EventListener);
+      } catch {
+        // Keep polling/focus revalidation as fallback if EventSource fails.
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      if (stream) {
+        if (onRealtimeUpdate) {
+          stream.removeEventListener("itinerary-update", onRealtimeUpdate as EventListener);
+        }
+        stream.close();
+      }
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+      if (shouldRevalidateOnFocus) {
+        document.removeEventListener("visibilitychange", onVisibilityOrFocus);
+        window.removeEventListener("focus", onVisibilityOrFocus);
+      }
+    };
+  }, [slug, endpoint, refreshIntervalMs, shouldRevalidateOnFocus, shouldForceFresh, eventStreamPath]);
 
   return { loading, available, html, unavailableInfo };
 }
@@ -530,8 +602,22 @@ function injectHead(headContent: string, templateKey: string) {
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export default function BackendTemplateFrame({ slug, endpoint, className, fallback }: Props) {
-  const { loading, available, html, unavailableInfo } = useBackendTemplate(slug, endpoint);
+export default function BackendTemplateFrame({
+  slug,
+  endpoint,
+  className,
+  fallback,
+  refreshIntervalMs,
+  revalidateOnFocus,
+  forceFresh,
+  eventStreamPath,
+}: Props) {
+  const { loading, available, html, unavailableInfo } = useBackendTemplate(slug, endpoint, {
+    refreshIntervalMs,
+    revalidateOnFocus,
+    forceFresh,
+    eventStreamPath,
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const templateKey = `${slug}/${endpoint}`;
 

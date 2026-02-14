@@ -17,6 +17,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
 import { getEventTemplate } from '../utils/template-helper.js';
 import { BUCKETS, buildPublicUrl, getPublicUrl } from '../services/supabaseStorage.js';
+import { subscribeToItineraryUpdates } from '../services/itineraryRealtime.js';
 
 const router = Router();
 
@@ -689,6 +690,62 @@ router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
       lastUpdatedAt,
       items,
     },
+  });
+}));
+
+/**
+ * GET /api/public/event/:slug/itinerary/stream
+ * Server-sent events stream for itinerary realtime updates
+ */
+router.get('/event/:slug/itinerary/stream', asyncHandler(async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { slug: req.params.slug },
+    select: {
+      id: true,
+      isArchived: true,
+      itineraryEnabled: true,
+    },
+  });
+
+  if (!event) throw new AppError('Event not found', 404);
+  if (event.isArchived) throw new AppError('This event is no longer available', 410);
+  if (!event.itineraryEnabled) throw new AppError('Itinerary is disabled for this event', 404);
+
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as any).flushHeaders?.();
+
+  const sendEvent = (eventName: string, payload: Record<string, any>) => {
+    res.write(`event: ${eventName}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    (res as any).flush?.();
+  };
+
+  sendEvent('ready', {
+    eventId: event.id,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const unsubscribe = subscribeToItineraryUpdates(event.id, (payload) => {
+    sendEvent('itinerary-update', payload);
+  });
+
+  const heartbeat = setInterval(() => {
+    res.write(`: keepalive ${Date.now()}\n\n`);
+    (res as any).flush?.();
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    try {
+      res.end();
+    } catch {
+      // Ignore close race conditions.
+    }
   });
 }));
 

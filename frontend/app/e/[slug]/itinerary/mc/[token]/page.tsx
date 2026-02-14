@@ -106,7 +106,7 @@ export default function McItineraryPage() {
       mode="mc"
       eventName={eventName}
       items={items}
-      syncLabel={syncing ? 'Syncing...' : `Synced${lastSyncedAt ? ` · ${formatDate(lastSyncedAt.toISOString(), 'p')}` : ''}`}
+      syncLabel={syncing ? 'Syncing...' : `Synced${lastSyncedAt ? ` - ${formatDate(lastSyncedAt.toISOString(), 'p')}` : ''}`}
       submittingId={submitting}
       recentlyChangedIds={recentlyToggledIds}
       onToggleItem={toggleItem}
