@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { itineraryApi } from '@/lib/api';
-import { cn, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import ItineraryBoard from '@/components/itinerary/ItineraryBoard';
 
 interface McItem {
   id: string;
   title: string;
   description: string | null;
   startsAt: string | null;
+  endsAt: string | null;
   location: string | null;
   isCompleted: boolean;
 }
@@ -72,9 +74,7 @@ export default function McItineraryPage() {
     setSubmitting(itemId);
     const currentItem = items.find((item) => item.id === itemId);
     const nextCompleted = currentItem ? !currentItem.isCompleted : true;
-    setItems((current) =>
-      current.map((item) => (item.id === itemId ? { ...item, isCompleted: nextCompleted } : item))
-    );
+    setItems((current) => current.map((item) => (item.id === itemId ? { ...item, isCompleted: nextCompleted } : item)));
     try {
       const response = await itineraryApi.toggleMcItem(token, itemId, nextCompleted);
       const updatedItem = response.data.item as McItem;
@@ -102,53 +102,14 @@ export default function McItineraryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div className="bg-white rounded-xl border border-surface-200 p-5">
-          <p className="text-xs uppercase tracking-wider text-surface-500 font-semibold">MC Control</p>
-          <h1 className="text-2xl font-bold text-brand-900 mt-1">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-2">Mark each activity complete as it happens.</p>
-          <p className="mt-2 text-xs text-surface-500">
-            {syncing ? 'Syncing...' : 'Synced'}
-            {lastSyncedAt ? ` Â· ${formatDate(lastSyncedAt.toISOString(), 'p')}` : ''}
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className={cn(
-                'bg-white rounded-xl border border-surface-200 p-4 transition-all duration-300',
-                item.isCompleted && 'bg-emerald-50/30',
-                recentlyToggledIds.includes(item.id) && 'ring-2 ring-emerald-300 scale-[1.01]',
-                submitting === item.id && 'opacity-80'
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className={cn('font-semibold transition-colors duration-300', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
-                    {item.title}
-                  </h3>
-                  {item.description && <p className="text-sm text-surface-600 mt-1">{item.description}</p>}
-                  <div className="text-xs text-surface-500 mt-2 space-y-0.5">
-                    {item.startsAt && <p>{formatDate(item.startsAt, 'p')}</p>}
-                    {item.location && <p>{item.location}</p>}
-                  </div>
-                </div>
-                <button
-                  className={cn(item.isCompleted ? 'btn-secondary' : 'btn-primary', 'min-w-[108px] justify-center')}
-                  disabled={submitting === item.id}
-                  onClick={() => toggleItem(item.id)}
-                >
-                  {submitting === item.id ? 'Saving...' : item.isCompleted ? 'Uncheck' : 'Check Off'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <ItineraryBoard
+      mode="mc"
+      eventName={eventName}
+      items={items}
+      syncLabel={syncing ? 'Syncing...' : `Synced${lastSyncedAt ? ` · ${formatDate(lastSyncedAt.toISOString(), 'p')}` : ''}`}
+      submittingId={submitting}
+      recentlyChangedIds={recentlyToggledIds}
+      onToggleItem={toggleItem}
+    />
   );
 }
-

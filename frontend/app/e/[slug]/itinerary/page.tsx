@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { publicApi } from '@/lib/api';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
-import { cn, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import ItineraryBoard from '@/components/itinerary/ItineraryBoard';
 
 interface ItineraryItem {
   id: string;
@@ -118,58 +119,13 @@ export default function EventItineraryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto space-y-5">
-        <div className="bg-white rounded-xl border border-surface-200 p-5">
-          <h1 className="text-2xl font-bold text-brand-900">{eventName} Itinerary</h1>
-          <p className="text-sm text-surface-600 mt-2">{completed}/{items.length} completed</p>
-          <div className="mt-3 h-2 rounded-full bg-surface-100 overflow-hidden">
-            <div className="h-full bg-brand-900 transition-all duration-700 ease-out" style={{ width: `${percent}%` }} />
-          </div>
-          <p className="mt-2 text-xs text-surface-500">
-            Live sync active · updates every 3 seconds
-            {lastUpdatedAt ? ` · Last update ${formatDate(lastUpdatedAt, 'p')}` : ''}
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className={cn(
-                'bg-white rounded-xl border border-surface-200 p-4 transition-all duration-500',
-                item.isCompleted && 'bg-emerald-50/30',
-                highlightedItemIds.includes(item.id) && 'ring-2 ring-emerald-300 scale-[1.01]'
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    'w-5 h-5 mt-0.5 rounded-full border-2 transition-all duration-300',
-                    item.isCompleted ? 'bg-emerald-500 border-emerald-500 scale-110' : 'border-surface-300'
-                  )}
-                />
-                <div className="min-w-0">
-                  <h3 className={cn('font-semibold transition-colors duration-300', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
-                    {item.title}
-                  </h3>
-                  {item.description && <p className="text-sm text-surface-600 mt-1">{item.description}</p>}
-                  <div className="text-xs text-surface-500 mt-2 space-y-0.5">
-                    {item.startsAt && <p>{formatDate(item.startsAt, 'p')}</p>}
-                    {item.location && <p>{item.location}</p>}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-          {items.length === 0 && (
-            <div className="bg-white rounded-xl border border-surface-200 p-8 text-center text-surface-500">
-              No itinerary items yet.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <ItineraryBoard
+      mode="guest"
+      eventName={eventName}
+      items={items}
+      subtitle={`${percent}% complete`}
+      syncLabel={`Live sync${lastUpdatedAt ? ` � ${formatDate(lastUpdatedAt, 'p')}` : ''}`}
+      recentlyChangedIds={highlightedItemIds}
+    />
   );
 }
-
