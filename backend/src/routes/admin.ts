@@ -52,35 +52,75 @@ router.get('/dashboard/stats', authenticateAdmin, asyncHandler(async (req, res) 
  * Get ticket sales across all events
  */
 router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
-  const { eventId, status, startDate, endDate, page = 1, limit = 50 } = req.query;
-  
-  const where: any = {
+  const { eventId, status, type, startDate, endDate, page = 1, limit = 50 } = req.query;
+  const pageNumber = Math.max(1, Number(page) || 1);
+  const pageLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+
+  const parseDate = (value?: string, asEndOfDay = false) => {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    if (asEndOfDay) {
+      d.setHours(23, 59, 59, 999);
+    }
+    return d;
+  };
+
+  const start = parseDate(typeof startDate === 'string' ? startDate : undefined, false);
+  const end = parseDate(typeof endDate === 'string' ? endDate : undefined, true);
+
+  // Legacy RSVP ticket sales filter (kept for compatibility with existing pages)
+  const rsvpWhere: any = {
     ticketType: { not: null },
     amountPaid: { not: null },
   };
-  
-  if (eventId) where.eventId = eventId;
-  if (status) where.paymentStatus = status;
-  if (startDate) where.submittedAt = { gte: new Date(startDate as string) };
-  if (endDate) {
-    where.submittedAt = where.submittedAt || {};
-    where.submittedAt.lte = new Date(endDate as string);
+  if (eventId) rsvpWhere.eventId = eventId;
+  if (status && ['PAID', 'PENDING', 'FAILED', 'REFUNDED'].includes(String(status).toUpperCase())) {
+    rsvpWhere.paymentStatus = String(status).toUpperCase();
   }
-  
-  const [rsvps, total] = await Promise.all([
+  if (start) rsvpWhere.submittedAt = { ...rsvpWhere.submittedAt, gte: start };
+  if (end) rsvpWhere.submittedAt = { ...rsvpWhere.submittedAt, lte: end };
+
+  const statusMap: Record<string, string> = {
+    PAID: 'completed',
+    PENDING: 'pending',
+    FAILED: 'failed',
+    REFUNDED: 'refunded',
+  };
+  const normalizedStatus = status ? String(status).toUpperCase() : '';
+  const txStatus = normalizedStatus ? (statusMap[normalizedStatus] || String(status).toLowerCase()) : undefined;
+
+  const txWhere: any = {};
+  if (eventId) txWhere.eventId = eventId;
+  if (txStatus) txWhere.status = txStatus;
+  if (type) txWhere.type = String(type);
+  if (start) txWhere.createdAt = { ...txWhere.createdAt, gte: start };
+  if (end) txWhere.createdAt = { ...txWhere.createdAt, lte: end };
+
+  const [rsvps, totalRsvps, transactions, totalTransactions] = await Promise.all([
     prisma.rSVP.findMany({
-      where,
+      where: rsvpWhere,
       include: {
         event: { select: { id: true, name: true, slug: true } },
         invitation: { select: { accessCode: true } },
       },
       orderBy: { submittedAt: 'desc' },
-      skip: (Number(page) - 1) * Number(limit),
-      take: Number(limit),
+      skip: (pageNumber - 1) * pageLimit,
+      take: pageLimit,
     }),
-    prisma.rSVP.count({ where }),
+    prisma.rSVP.count({ where: rsvpWhere }),
+    prisma.transaction.findMany({
+      where: txWhere,
+      include: {
+        event: { select: { id: true, name: true, slug: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (pageNumber - 1) * pageLimit,
+      take: pageLimit,
+    }),
+    prisma.transaction.count({ where: txWhere }),
   ]);
-  
+
   const sales = rsvps.filter((r: any) => r.ticketType && r.amountPaid);
   const stats = {
     totalSales: sales.length,
@@ -92,8 +132,70 @@ router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
       REFUNDED: sales.filter((s: any) => s.paymentStatus === 'REFUNDED').length,
     },
   };
-  
-  res.json({ sales, stats, pagination: { page: Number(page), limit: Number(limit), total } });
+
+  const initBucket = () => ({ count: 0, gross: 0, adminRevenue: 0, ownerNet: 0, processingFees: 0 });
+  const byType: Record<string, ReturnType<typeof initBucket>> = {};
+  const byStatus: Record<string, number> = {};
+  const byCurrency: Record<string, ReturnType<typeof initBucket>> = {};
+  const adminRevenueTransactions: string[] = [];
+  const completedTransactions = transactions.filter((t: any) => t.status === 'completed');
+
+  for (const tx of transactions as any[]) {
+    if (!byType[tx.type]) byType[tx.type] = initBucket();
+    if (!byCurrency[tx.currency]) byCurrency[tx.currency] = initBucket();
+
+    byType[tx.type].count += 1;
+    byType[tx.type].gross += tx.grossAmount || 0;
+    byType[tx.type].adminRevenue += tx.platformFee || 0;
+    byType[tx.type].ownerNet += tx.netAmount || 0;
+    byType[tx.type].processingFees += tx.processingFee || 0;
+
+    byCurrency[tx.currency].count += 1;
+    byCurrency[tx.currency].gross += tx.grossAmount || 0;
+    byCurrency[tx.currency].adminRevenue += tx.platformFee || 0;
+    byCurrency[tx.currency].ownerNet += tx.netAmount || 0;
+    byCurrency[tx.currency].processingFees += tx.processingFee || 0;
+
+    byStatus[tx.status] = (byStatus[tx.status] || 0) + 1;
+
+    if ((tx.platformFee || 0) > 0 && tx.status === 'completed') {
+      adminRevenueTransactions.push(tx.id);
+    }
+  }
+
+  const ticketTransactions = transactions.filter((t: any) => t.type === 'ticket_sale');
+  const giftTransactions = transactions.filter((t: any) => ['gift_cash', 'gift_package_sale'].includes(t.type));
+
+  const sum = (list: any[], selector: (item: any) => number) =>
+    list.reduce((acc, item) => acc + selector(item), 0);
+
+  const analytics = {
+    totals: {
+      transactionCount: transactions.length,
+      completedTransactionCount: completedTransactions.length,
+      ticketTransactionCount: ticketTransactions.length,
+      giftTransactionCount: giftTransactions.length,
+      grossRevenue: sum(transactions, (t) => t.grossAmount || 0),
+      ticketRevenue: sum(ticketTransactions, (t) => t.grossAmount || 0),
+      giftRevenue: sum(giftTransactions, (t) => t.grossAmount || 0),
+      adminRevenue: sum(completedTransactions, (t) => t.platformFee || 0),
+      ownerNet: sum(completedTransactions, (t) => t.netAmount || 0),
+      processingFees: sum(completedTransactions, (t) => t.processingFee || 0),
+      adminRevenueTransactionCount: adminRevenueTransactions.length,
+    },
+    byType,
+    byStatus,
+    byCurrency: Object.entries(byCurrency).map(([currency, values]) => ({ currency, ...values })),
+  };
+
+  res.json({
+    sales,
+    stats,
+    transactions,
+    analytics,
+    pagination: { page: pageNumber, limit: pageLimit, total: totalRsvps },
+    transactionPagination: { page: pageNumber, limit: pageLimit, total: totalTransactions },
+  });
 }));
 
 // ============================================

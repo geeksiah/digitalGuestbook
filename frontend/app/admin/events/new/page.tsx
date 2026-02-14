@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, templatesApi, ownersApi } from '@/lib/api';
+import { eventsApi, templatesApi, ownersApi, API_BASE_URL } from '@/lib/api';
 import { slugify, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -42,6 +42,13 @@ export default function NewEventPage() {
   const [creatingOwner, setCreatingOwner] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [defaultFeeSettings, setDefaultFeeSettings] = useState({
+    platformFeeMode: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED',
+    platformFeePercent: 5,
+    platformFeeFixed: 0,
+    processingFeePercent: 2.9,
+    processingFeeFixed: 0.3,
+  });
   
   const [formData, setFormData] = useState({
     name: '',
@@ -70,6 +77,7 @@ export default function NewEventPage() {
     giftingEnabled: false,
     rsvpMode: 'free' as 'free' | 'paid',
     ticketingEnabled: false,
+    feeOverridesEnabled: false,
     platformFeeMode: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED',
     platformFeePercent: 5,
     platformFeeFixed: 0,
@@ -92,7 +100,44 @@ export default function NewEventPage() {
   useEffect(() => {
     fetchTemplates();
     fetchOwners();
+    fetchDefaultFeeSettings();
   }, []);
+
+  const fetchDefaultFeeSettings = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const settings = payload?.settings || {};
+      const defaults: {
+        platformFeeMode: 'PERCENTAGE' | 'FIXED';
+        platformFeePercent: number;
+        platformFeeFixed: number;
+        processingFeePercent: number;
+        processingFeeFixed: number;
+      } = {
+        platformFeeMode: settings.platformFeeMode === 'FIXED' ? 'FIXED' : 'PERCENTAGE',
+        platformFeePercent: Number(settings.platformFeePercent ?? 5),
+        platformFeeFixed: Number(settings.platformFeeFixed ?? 0),
+        processingFeePercent: Number(settings.processingFeePercent ?? 2.9),
+        processingFeeFixed: Number(settings.processingFeeFixed ?? 0.3),
+      };
+      setDefaultFeeSettings(defaults);
+      setFormData((prev) => ({
+        ...prev,
+        platformFeeMode: defaults.platformFeeMode,
+        platformFeePercent: defaults.platformFeePercent,
+        platformFeeFixed: defaults.platformFeeFixed,
+        processingFeePercent: defaults.processingFeePercent,
+        processingFeeFixed: defaults.processingFeeFixed,
+      }));
+    } catch (error) {
+      console.error('Failed to load default fee settings:', error);
+    }
+  };
 
   const fetchOwners = async () => {
     try {
@@ -209,6 +254,7 @@ export default function NewEventPage() {
         giftingEnabled: formData.giftingEnabled,
         rsvpMode: formData.rsvpMode,
         ticketingEnabled: formData.ticketingEnabled,
+        feeOverridesEnabled: formData.feeOverridesEnabled,
         platformFeeMode: formData.platformFeeMode,
         platformFeePercent: formData.platformFeePercent,
         platformFeeFixed: formData.platformFeeFixed,
@@ -784,70 +830,117 @@ export default function NewEventPage() {
               </label>
             </div>
 
-            {formData.rsvpMode === 'paid' && (
-              <div className="rounded-lg border border-surface-200 p-4 bg-surface-50 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="label">Platform Fee Mode</label>
-                  <select
-                    className="input"
-                    value={formData.platformFeeMode}
-                    onChange={(e) =>
-                      setFormData({ ...formData, platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED' })
-                    }
-                  >
-                    <option value="PERCENTAGE">Percentage</option>
-                    <option value="FIXED">Fixed Amount</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">
-                    {formData.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
-                  </label>
+            {(formData.rsvpMode === 'paid' || formData.giftingEnabled) && (
+              <div className="rounded-lg border border-surface-200 p-4 bg-surface-50 space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 bg-white">
                   <input
-                    type="number"
-                    step={formData.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
-                    min="0"
-                    max={formData.platformFeeMode === 'FIXED' ? undefined : '100'}
-                    className="input"
-                    value={formData.platformFeeMode === 'FIXED' ? formData.platformFeeFixed : formData.platformFeePercent}
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-surface-300 text-navy-900"
+                    checked={!formData.feeOverridesEnabled}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        platformFeePercent:
-                          formData.platformFeeMode === 'PERCENTAGE'
-                            ? parseFloat(e.target.value) || 0
-                            : formData.platformFeePercent,
-                        platformFeeFixed:
-                          formData.platformFeeMode === 'FIXED'
-                            ? parseFloat(e.target.value) || 0
-                            : formData.platformFeeFixed,
+                        feeOverridesEnabled: !e.target.checked,
                       })
                     }
                   />
-                </div>
-                <div>
-                  <label className="label">Processing Fee (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    className="input"
-                    value={formData.processingFeePercent}
-                    onChange={(e) => setFormData({ ...formData, processingFeePercent: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Fixed Processing Fee</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input"
-                    value={formData.processingFeeFixed}
-                    onChange={(e) => setFormData({ ...formData, processingFeeFixed: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
+                  <div>
+                    <p className="font-medium text-navy-900">Use system default fees</p>
+                    <p className="text-xs text-surface-500">Disable this to configure custom fees for this event only.</p>
+                  </div>
+                </label>
+
+                {!formData.feeOverridesEnabled ? (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500 mb-1">Default Platform Mode</p>
+                      <p className="font-medium text-navy-900">{defaultFeeSettings.platformFeeMode}</p>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500 mb-1">
+                        {defaultFeeSettings.platformFeeMode === 'FIXED' ? 'Default Platform Fee (Fixed)' : 'Default Platform Fee (%)'}
+                      </p>
+                      <p className="font-medium text-navy-900">
+                        {defaultFeeSettings.platformFeeMode === 'FIXED'
+                          ? defaultFeeSettings.platformFeeFixed
+                          : defaultFeeSettings.platformFeePercent}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500 mb-1">Default Processing Fee (%)</p>
+                      <p className="font-medium text-navy-900">{defaultFeeSettings.processingFeePercent}</p>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500 mb-1">Default Fixed Processing Fee</p>
+                      <p className="font-medium text-navy-900">{defaultFeeSettings.processingFeeFixed}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="label">Platform Fee Mode</label>
+                      <select
+                        className="input"
+                        value={formData.platformFeeMode}
+                        onChange={(e) =>
+                          setFormData({ ...formData, platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED' })
+                        }
+                      >
+                        <option value="PERCENTAGE">Percentage</option>
+                        <option value="FIXED">Fixed Amount</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">
+                        {formData.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
+                      </label>
+                      <input
+                        type="number"
+                        step={formData.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
+                        min="0"
+                        max={formData.platformFeeMode === 'FIXED' ? undefined : '100'}
+                        className="input"
+                        value={formData.platformFeeMode === 'FIXED' ? formData.platformFeeFixed : formData.platformFeePercent}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            platformFeePercent:
+                              formData.platformFeeMode === 'PERCENTAGE'
+                                ? parseFloat(e.target.value) || 0
+                                : formData.platformFeePercent,
+                            platformFeeFixed:
+                              formData.platformFeeMode === 'FIXED'
+                                ? parseFloat(e.target.value) || 0
+                                : formData.platformFeeFixed,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Processing Fee (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        className="input"
+                        value={formData.processingFeePercent}
+                        onChange={(e) => setFormData({ ...formData, processingFeePercent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Fixed Processing Fee</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="input"
+                        value={formData.processingFeeFixed}
+                        onChange={(e) => setFormData({ ...formData, processingFeeFixed: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -214,6 +214,18 @@ export const settingsApi = {
   testWhatsApp: (phone: string) => api.post('/settings/test-whatsapp', { phone }),
 };
 
+// Payment Gateway API (admin)
+export const paymentGatewaysApi = {
+  list: () => api.get('/payment-gateways'),
+  get: (id: string) => api.get(`/payment-gateways/${id}`),
+  create: (data: any) => api.post('/payment-gateways', data),
+  update: (id: string, data: any) => api.put(`/payment-gateways/${id}`, data),
+  delete: (id: string) => api.delete(`/payment-gateways/${id}`),
+  getEventGateways: (eventId: string) => api.get(`/payment-gateways/events/${eventId}`),
+  updateEventGateways: (eventId: string, gatewayIds: any[]) =>
+    api.put(`/payment-gateways/events/${eventId}`, { gatewayIds }),
+};
+
 // Ticketing API (admin/owner)
 export const ticketingApi = {
   // Existing

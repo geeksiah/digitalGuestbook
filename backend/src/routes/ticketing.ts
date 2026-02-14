@@ -4,6 +4,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { z } from 'zod';
 import { verifyPaystackTransaction } from '../services/paystack.js';
+import { getSystemFeeDefaults, resolveEventFeeConfig } from '../utils/fees.js';
 
 const router = Router();
 
@@ -476,16 +477,15 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
 
   const finalAmount = totalAmount - discountAmount;
 
-  // Calculate fees
-  const platformFeeMode = String((event as any).platformFeeMode || 'PERCENTAGE').toUpperCase();
-  const platformFeePercent = Math.max(0, Number((event as any).platformFeePercent || 0));
-  const platformFeeFixed = Math.max(0, Number((event as any).platformFeeFixed || 0));
+  // Calculate fees (global defaults with optional event override)
+  const feeDefaults = await getSystemFeeDefaults();
+  const feeConfig = resolveEventFeeConfig(event as any, feeDefaults);
   const platformFee =
-    platformFeeMode === 'FIXED'
-      ? Math.min(finalAmount, platformFeeFixed)
-      : (finalAmount * platformFeePercent) / 100;
-  const processingFeePercent = event.processingFeePercent || 0;
-  const processingFeeFixed = event.processingFeeFixed || 0;
+    feeConfig.platformFeeMode === 'FIXED'
+      ? Math.min(finalAmount, feeConfig.platformFeeFixed)
+      : (finalAmount * feeConfig.platformFeePercent) / 100;
+  const processingFeePercent = feeConfig.processingFeePercent;
+  const processingFeeFixed = feeConfig.processingFeeFixed;
   const processingFee = (finalAmount * processingFeePercent) / 100 + processingFeeFixed;
   const amountPaid = finalAmount + platformFee + processingFee;
   const paymentReference = data.paymentReference?.trim();

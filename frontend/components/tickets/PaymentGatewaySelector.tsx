@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import { paymentGatewaysApi } from '@/lib/api';
 
 interface PaymentGateway {
   id: string;
@@ -22,11 +24,15 @@ interface EventPaymentGateway {
 interface PaymentGatewaySelectorProps {
   eventId: string;
   onUpdate?: () => void;
+  title?: string;
+  description?: string;
 }
 
 export default function PaymentGatewaySelector({
   eventId,
   onUpdate,
+  title = 'Event Payment Gateways',
+  description = 'Choose gateways for this event. These gateways are used by ticket checkout, gift checkout, and cash gift collections.',
 }: PaymentGatewaySelectorProps) {
   const [allGateways, setAllGateways] = useState<PaymentGateway[]>([]);
   const [eventGateways, setEventGateways] = useState<EventPaymentGateway[]>([]);
@@ -34,229 +40,151 @@ export default function PaymentGatewaySelector({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [eventId]);
 
   const fetchData = async () => {
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const token = localStorage.getItem('admin_token');
-
       const [gatewaysRes, eventGatewaysRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/payment-gateways`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_BASE_URL}/api/payment-gateways/events/${eventId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        paymentGatewaysApi.list(),
+        paymentGatewaysApi.getEventGateways(eventId),
       ]);
-
-      if (gatewaysRes.ok) {
-        const gatewaysData = await gatewaysRes.json();
-        setAllGateways(gatewaysData.gateways || []);
-      }
-
-      if (eventGatewaysRes.ok) {
-        const eventData = await eventGatewaysRes.json();
-        setEventGateways(eventData.eventGateways || []);
-      }
+      setAllGateways(gatewaysRes.data.gateways || []);
+      setEventGateways(eventGatewaysRes.data.eventGateways || []);
     } catch (error) {
-      console.error('Failed to fetch gateways:', error);
+      console.error('Failed to fetch event gateway data:', error);
+      toast.error('Failed to load payment gateways');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleGateway = async (gatewayId: string, enabled: boolean) => {
+  const selectedGatewayIds = useMemo(
+    () => new Set(eventGateways.map((item) => item.paymentGatewayId)),
+    [eventGateways]
+  );
+
+  const saveEventGateways = async (next: Array<{ paymentGatewayId: string; isActive: boolean; sortOrder: number }>) => {
     setSaving(true);
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const token = localStorage.getItem('admin_token');
-
-      // Get current event gateways
-      const currentSelected = eventGateways.map((eg) => eg.paymentGatewayId);
-      
-      let updatedSelected: string[];
-      if (enabled) {
-        // Add gateway if not already selected
-        if (!currentSelected.includes(gatewayId)) {
-          updatedSelected = [...currentSelected, gatewayId];
-        } else {
-          updatedSelected = currentSelected;
-        }
-      } else {
-        // Remove gateway
-        updatedSelected = currentSelected.filter((id) => id !== gatewayId);
-      }
-
-      // Update event gateways
-      const gatewayIds = updatedSelected.map((id, index) => ({
-        paymentGatewayId: id,
-        isActive: true,
-        sortOrder: index,
-      }));
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/payment-gateways/events/${eventId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ gatewayIds }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        onUpdate?.();
-      } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to update gateways');
-      }
-    } catch (error) {
-      console.error('Failed to update gateways:', error);
-      alert('Failed to update gateways');
+      await paymentGatewaysApi.updateEventGateways(eventId, next);
+      await fetchData();
+      onUpdate?.();
+    } catch (error: any) {
+      console.error('Failed to update event gateways:', error);
+      toast.error(error?.response?.data?.error || 'Failed to update event gateways');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleToggleGateway = async (gatewayId: string, enabled: boolean) => {
+    const current = eventGateways.map((item) => item.paymentGatewayId);
+    const nextIds = enabled
+      ? current.includes(gatewayId)
+        ? current
+        : [...current, gatewayId]
+      : current.filter((id) => id !== gatewayId);
+
+    const payload = nextIds.map((id, index) => ({
+      paymentGatewayId: id,
+      isActive: true,
+      sortOrder: index,
+    }));
+    await saveEventGateways(payload);
   };
 
   const handleReorder = async (gatewayId: string, direction: 'up' | 'down') => {
-    setSaving(true);
-    try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const token = localStorage.getItem('admin_token');
+    const current = [...eventGateways];
+    const index = current.findIndex((item) => item.paymentGatewayId === gatewayId);
+    if (index < 0) return;
 
-      const current = [...eventGateways];
-      const index = current.findIndex((eg) => eg.paymentGatewayId === gatewayId);
-      
-      if (index === -1) return;
-
-      if (direction === 'up' && index > 0) {
-        [current[index], current[index - 1]] = [current[index - 1], current[index]];
-      } else if (direction === 'down' && index < current.length - 1) {
-        [current[index], current[index + 1]] = [current[index + 1], current[index]];
-      } else {
-        setSaving(false);
-        return;
-      }
-
-      const gatewayIds = current.map((eg, idx) => ({
-        paymentGatewayId: eg.paymentGatewayId,
-        isActive: eg.isActive,
-        sortOrder: idx,
-      }));
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/payment-gateways/events/${eventId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ gatewayIds }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        onUpdate?.();
-      }
-    } catch (error) {
-      console.error('Failed to reorder gateways:', error);
-      alert('Failed to reorder gateways');
-    } finally {
-      setSaving(false);
+    if (direction === 'up' && index > 0) {
+      [current[index], current[index - 1]] = [current[index - 1], current[index]];
+    } else if (direction === 'down' && index < current.length - 1) {
+      [current[index], current[index + 1]] = [current[index + 1], current[index]];
+    } else {
+      return;
     }
+
+    const payload = current.map((item, idx) => ({
+      paymentGatewayId: item.paymentGatewayId,
+      isActive: item.isActive,
+      sortOrder: idx,
+    }));
+    await saveEventGateways(payload);
   };
 
   if (loading) {
-    return <div className="text-center py-4">Loading payment gateways...</div>;
+    return <div className="text-center py-4 text-sm text-surface-500">Loading payment gateways...</div>;
   }
-
-  const selectedGatewayIds = new Set(eventGateways.map((eg) => eg.paymentGatewayId));
 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium mb-2">Payment Gateways</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Select which payment gateways are available for this event. Users will see these options
-          when purchasing tickets.
-        </p>
+        <h3 className="text-lg font-semibold text-brand-900">{title}</h3>
+        <p className="text-sm text-surface-600 mt-1">{description}</p>
       </div>
 
       {allGateways.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <p className="text-sm text-yellow-800">
-            No payment gateways configured. Please configure payment gateways in{' '}
-            <a
-              href="/admin/payment-gateways"
-              className="underline font-medium"
-              target="_blank"
-            >
-              Payment Gateways
-            </a>{' '}
-            first.
-          </p>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No system gateways are configured yet. Add them in{' '}
+          <a href="/admin/payment-gateways" className="underline font-medium">
+            Admin Payment Gateways
+          </a>
+          .
         </div>
       ) : (
         <div className="space-y-2">
           {allGateways.map((gateway) => {
             const isSelected = selectedGatewayIds.has(gateway.id);
-            const eventGateway = eventGateways.find((eg) => eg.paymentGatewayId === gateway.id);
+            const eventGateway = eventGateways.find((item) => item.paymentGatewayId === gateway.id);
 
             return (
               <div
                 key={gateway.id}
-                className={`border rounded-lg p-4 ${
-                  isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                }`}
+                className={[
+                  'rounded-xl border p-4 transition-colors',
+                  isSelected ? 'border-brand-300 bg-brand-50/40' : 'border-surface-200 bg-white',
+                ].join(' ')}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div className="flex items-start justify-between gap-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={(e) => handleToggleGateway(gateway.id, e.target.checked)}
                       disabled={saving}
-                      className="h-4 w-4 text-blue-600 rounded"
+                      className="mt-1 h-4 w-4 rounded border-surface-300 text-brand-700"
                     />
-                    <div>
-                      <div className="font-medium">{gateway.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {gateway.gateway} • {gateway.currency} •{' '}
-                        {gateway.isLive ? 'Live' : 'Test'} Mode
-                      </div>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleReorder(gateway.id, 'up')}
-                        disabled={saving || eventGateway?.sortOrder === 0}
-                        className="text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                        title="Move up"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => handleReorder(gateway.id, 'down')}
-                        disabled={
-                          saving ||
-                          eventGateway?.sortOrder === eventGateways.length - 1
-                        }
-                        className="text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                        title="Move down"
-                      >
-                        ↓
-                      </button>
-                      <span className="text-xs text-gray-500">
-                        Order: {eventGateway?.sortOrder !== undefined ? eventGateway.sortOrder + 1 : '-'}
+                    <span>
+                      <span className="block text-sm font-semibold text-brand-900">{gateway.name}</span>
+                      <span className="block text-xs text-surface-600 mt-0.5">
+                        {gateway.gateway} | {gateway.currency} | {gateway.isLive ? 'Live' : 'Test'}
                       </span>
+                    </span>
+                  </label>
+
+                  {isSelected && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        title="Move up"
+                        disabled={saving || eventGateway?.sortOrder === 0}
+                        onClick={() => handleReorder(gateway.id, 'up')}
+                        className="rounded border border-surface-300 px-2 py-1 text-xs text-surface-700 disabled:opacity-40"
+                      >
+                        Up
+                      </button>
+                      <button
+                        type="button"
+                        title="Move down"
+                        disabled={saving || eventGateway?.sortOrder === eventGateways.length - 1}
+                        onClick={() => handleReorder(gateway.id, 'down')}
+                        className="rounded border border-surface-300 px-2 py-1 text-xs text-surface-700 disabled:opacity-40"
+                      >
+                        Down
+                      </button>
                     </div>
                   )}
                 </div>
@@ -267,11 +195,8 @@ export default function PaymentGatewaySelector({
       )}
 
       {eventGateways.length > 0 && (
-        <div className="mt-4 p-3 bg-gray-50 rounded-md">
-          <p className="text-sm text-gray-600">
-            <strong>Selected gateways:</strong> {eventGateways.length} gateway(s) will be
-            available for ticket purchases. The order determines the display sequence.
-          </p>
+        <div className="rounded-lg bg-surface-50 px-3 py-2 text-xs text-surface-600 border border-surface-200">
+          {eventGateways.length} gateway(s) enabled for this event.
         </div>
       )}
     </div>

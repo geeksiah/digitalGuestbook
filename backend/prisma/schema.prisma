@@ -225,6 +225,7 @@ liveLandingTemplateId    String?  // Landing page during LIVE phase
 
   // Ticketing Settings (only used when rsvpMode = "paid")
   ticketingEnabled     Boolean @default(false)
+  feeOverridesEnabled  Boolean @default(false) // If true, event-level fees override system defaults
   platformFeeMode      String  @default("PERCENTAGE") // PERCENTAGE | FIXED
   platformFeePercent   Float   @default(5.0) // Platform fee percentage
   platformFeeFixed     Float? // Optional fixed platform fee amount per transaction
@@ -1134,6 +1135,13 @@ model SystemSettings {
   emailEnabled    Boolean @default(false)
   smsEnabled      Boolean @default(false)
   whatsappEnabled Boolean @default(false)
+
+  // Global commerce fee defaults
+  platformFeeMode      String  @default("PERCENTAGE") // PERCENTAGE | FIXED
+  platformFeePercent   Float   @default(5.0) // Platform fee percentage
+  platformFeeFixed     Float? // Optional fixed fee amount
+  processingFeePercent Float   @default(2.9) // Processor fee percentage
+  processingFeeFixed   Float   @default(0.30) // Processor fixed fee
 
   // Default providers (reference by id)
   defaultEmailProviderId    String?

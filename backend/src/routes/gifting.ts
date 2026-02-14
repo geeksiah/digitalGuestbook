@@ -7,6 +7,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
 import { verifyPaystackTransaction } from '../services/paystack.js';
 import { BUCKETS, uploadToSupabase } from '../services/supabaseStorage.js';
+import { getSystemFeeDefaults, resolveEventFeeConfig } from '../utils/fees.js';
 
 const router = Router();
 
@@ -35,6 +36,7 @@ const checkoutSchema = z.object({
   guestName: z.string().min(2),
   guestPhone: z.string().optional().nullable(),
   guestEmail: z.string().email().optional().nullable(),
+  paymentGatewayId: z.string().uuid().optional().nullable(),
   paymentMethod: z.string().optional().nullable(),
   paymentReference: z.string().optional().nullable(),
   note: z.string().optional().nullable(),
@@ -106,6 +108,25 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
   if (!event) throw new AppError('Event not found', 404);
   if (!event.giftingEnabled) throw new AppError('Gifting is disabled for this event', 404);
 
+  const configuredGateways = await prisma.eventPaymentGateway.findMany({
+    where: {
+      eventId: event.id,
+      isActive: true,
+      paymentGateway: { isActive: true },
+    },
+    select: {
+      paymentGatewayId: true,
+      paymentGateway: {
+        select: {
+          id: true,
+          gateway: true,
+          currency: true,
+        },
+      },
+    },
+    orderBy: { sortOrder: 'asc' },
+  });
+
   const eventPackageLinks = await (prisma as any).eventGiftPackage.findMany({
     where: { eventId: event.id },
     select: { giftPackageId: true },
@@ -121,12 +142,11 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
   });
   const { ownerId, ...eventPublic } = event;
 
-  const paystackGateway = await prisma.eventPaymentGateway.findFirst({
+  const eventGateways = await prisma.eventPaymentGateway.findMany({
     where: {
       eventId: event.id,
       isActive: true,
       paymentGateway: {
-        gateway: 'paystack',
         isActive: true,
       },
     },
@@ -138,6 +158,8 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
           gateway: true,
           currency: true,
           paystackPublicKey: true,
+          stripePublicKey: true,
+          flutterwavePublicKey: true,
         },
       },
     },
@@ -160,24 +182,32 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
       packagePurchase: 'platform_only',
       mixedPaystackCheckoutAllowed: false,
     },
-    paymentGateways: paystackGateway
-      ? [
-          {
-            id: paystackGateway.paymentGateway.id,
-            name: paystackGateway.paymentGateway.name,
-            gateway: paystackGateway.paymentGateway.gateway,
-            currency: paystackGateway.paymentGateway.currency,
-            publicKey: paystackGateway.paymentGateway.paystackPublicKey,
-            splitConfig: ownerWallet?.paystackSubaccount
-              ? {
-                  subaccount: ownerWallet.paystackSubaccount,
-                  bearer: 'subaccount',
-                  ownerWalletVerified: Boolean(ownerWallet.isVerified),
-                }
-              : null,
-          },
-        ]
-      : [],
+    paymentGateways: eventGateways.map((eventGateway) => {
+      const gateway = eventGateway.paymentGateway;
+      const publicKey =
+        gateway.gateway === 'paystack'
+          ? gateway.paystackPublicKey
+          : gateway.gateway === 'stripe'
+          ? gateway.stripePublicKey
+          : gateway.gateway === 'flutterwave'
+          ? gateway.flutterwavePublicKey
+          : null;
+      return {
+        id: gateway.id,
+        name: gateway.name,
+        gateway: gateway.gateway,
+        currency: gateway.currency,
+        publicKey,
+        splitConfig:
+          gateway.gateway === 'paystack' && ownerWallet?.paystackSubaccount
+            ? {
+                subaccount: ownerWallet.paystackSubaccount,
+                bearer: 'subaccount',
+                ownerWalletVerified: Boolean(ownerWallet.isVerified),
+              }
+            : null,
+      };
+    }),
   });
 }));
 
@@ -198,13 +228,35 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       name: true,
       giftingEnabled: true,
       ownerId: true,
+      feeOverridesEnabled: true,
       platformFeeMode: true,
       platformFeePercent: true,
       platformFeeFixed: true,
+      processingFeePercent: true,
+      processingFeeFixed: true,
     },
   });
   if (!event) throw new AppError('Event not found', 404);
   if (!event.giftingEnabled) throw new AppError('Gifting is disabled for this event', 404);
+
+  const configuredGateways = await prisma.eventPaymentGateway.findMany({
+    where: {
+      eventId: event.id,
+      isActive: true,
+      paymentGateway: { isActive: true },
+    },
+    select: {
+      paymentGatewayId: true,
+      paymentGateway: {
+        select: {
+          id: true,
+          gateway: true,
+          currency: true,
+        },
+      },
+    },
+    orderBy: { sortOrder: 'asc' },
+  });
 
   const eventPackageLinks = await (prisma as any).eventGiftPackage.findMany({
     where: { eventId: event.id },
@@ -246,11 +298,51 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
     };
   });
 
+  const requestedGatewayId = data.paymentGatewayId || null;
+  const requestedPaymentMethod = (data.paymentMethod || '').trim().toLowerCase() || null;
+
+  const selectedGateway = requestedGatewayId
+    ? configuredGateways.find((gateway) => gateway.paymentGatewayId === requestedGatewayId)
+    : requestedPaymentMethod
+    ? configuredGateways.find((gateway) => gateway.paymentGateway.gateway === requestedPaymentMethod)
+    : null;
+
+  if (requestedGatewayId && !selectedGateway) {
+    throw new AppError('Selected payment gateway is not enabled for this event', 400);
+  }
+  if (
+    selectedGateway &&
+    requestedPaymentMethod &&
+    selectedGateway.paymentGateway.gateway !== requestedPaymentMethod
+  ) {
+    throw new AppError('Payment method does not match selected gateway', 400);
+  }
+  if (
+    configuredGateways.length > 0 &&
+    !selectedGateway &&
+    (requestedGatewayId || requestedPaymentMethod || data.paymentReference)
+  ) {
+    throw new AppError('Please select one of the enabled gateways for this event', 400);
+  }
+
+  const paymentMethod =
+    selectedGateway?.paymentGateway.gateway || requestedPaymentMethod || null;
+
   const totalAmount = packagesTotal + cashGiftAmount;
-  const currency = giftPackages[0]?.currency || 'USD';
+  const currency = giftPackages[0]?.currency || selectedGateway?.paymentGateway.currency || 'USD';
   const paymentReference = data.paymentReference?.trim() || null;
-  const paymentMethod = (data.paymentMethod || '').trim().toLowerCase() || null;
   const isPaystackPayment = paymentMethod === 'paystack';
+
+  if (
+    selectedGateway &&
+    selectedGateway.paymentGateway.currency &&
+    selectedGateway.paymentGateway.currency.toUpperCase() !== currency.toUpperCase()
+  ) {
+    throw new AppError(
+      `Selected gateway currency (${selectedGateway.paymentGateway.currency.toUpperCase()}) does not match order currency (${currency.toUpperCase()})`,
+      400
+    );
+  }
 
   if (paymentReference) {
     const duplicate = await prisma.transaction.findFirst({
@@ -324,9 +416,11 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
     // This fallback keeps backward compatibility for providers that omit split fields.
   }
 
-  const platformFeeMode = String(event.platformFeeMode || 'PERCENTAGE').toUpperCase();
-  const ownerFeePercent = Math.max(0, Number(event.platformFeePercent || 0));
-  const ownerFeeFixed = Math.max(0, Number(event.platformFeeFixed || 0));
+  const feeDefaults = await getSystemFeeDefaults();
+  const feeConfig = resolveEventFeeConfig(event as any, feeDefaults);
+  const platformFeeMode = feeConfig.platformFeeMode;
+  const ownerFeePercent = feeConfig.platformFeePercent;
+  const ownerFeeFixed = feeConfig.platformFeeFixed;
   const cashOwnerFee =
     platformFeeMode === 'FIXED'
       ? Math.min(cashGiftAmount, ownerFeeFixed)
@@ -627,6 +721,7 @@ router.put('/events/:eventId/packages', authenticateAdmin, asyncHandler(async (r
 router.get('/orders', authenticateAdmin, asyncHandler(async (req, res) => {
   const eventId = req.query.eventId ? String(req.query.eventId) : undefined;
   const where = eventId ? { eventId } : {};
+  const feeDefaults = await getSystemFeeDefaults();
   const orders = await (prisma as any).giftOrder.findMany({
     where,
     include: {
@@ -635,6 +730,7 @@ router.get('/orders', authenticateAdmin, asyncHandler(async (req, res) => {
           id: true,
           name: true,
           slug: true,
+          feeOverridesEnabled: true,
           platformFeeMode: true,
           platformFeePercent: true,
           platformFeeFixed: true,
@@ -645,6 +741,7 @@ router.get('/orders', authenticateAdmin, asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'desc' },
   });
   const enrichedOrders = orders.map((order: any) => {
+    const feeConfig = resolveEventFeeConfig(order.event, feeDefaults);
     const packageAmount = order.items
       .filter((item: any) => item.type === 'PACKAGE')
       .reduce((sum: number, item: any) => sum + item.lineTotal, 0);
@@ -652,13 +749,16 @@ router.get('/orders', authenticateAdmin, asyncHandler(async (req, res) => {
     const settlement = computeSettlement({
       cashGiftAmount,
       packageAmount,
-      platformFeeMode: order.event.platformFeeMode,
-      platformFeePercent: order.event.platformFeePercent,
-      platformFeeFixed: order.event.platformFeeFixed,
+      platformFeeMode: feeConfig.platformFeeMode,
+      platformFeePercent: feeConfig.platformFeePercent,
+      platformFeeFixed: feeConfig.platformFeeFixed,
     });
 
     return {
       ...order,
+      platformFeeMode: feeConfig.platformFeeMode,
+      platformFeePercent: feeConfig.platformFeePercent,
+      platformFeeFixed: feeConfig.platformFeeFixed,
       packageAmount,
       ownerNetAmount: settlement.ownerNetAmount,
       adminRetainedAmount: settlement.adminRetainedAmount,
@@ -669,6 +769,7 @@ router.get('/orders', authenticateAdmin, asyncHandler(async (req, res) => {
 
 router.get('/owner/orders', authenticateOwnerAccount, asyncHandler(async (req, res) => {
   const ownerId = (req as any).ownerId as string;
+  const feeDefaults = await getSystemFeeDefaults();
   const orders = await (prisma as any).giftOrder.findMany({
     where: {
       event: { ownerId },
@@ -679,6 +780,7 @@ router.get('/owner/orders', authenticateOwnerAccount, asyncHandler(async (req, r
           id: true,
           name: true,
           slug: true,
+          feeOverridesEnabled: true,
           platformFeeMode: true,
           platformFeePercent: true,
           platformFeeFixed: true,
@@ -689,6 +791,7 @@ router.get('/owner/orders', authenticateOwnerAccount, asyncHandler(async (req, r
     orderBy: { createdAt: 'desc' },
   });
   const enrichedOrders = orders.map((order: any) => {
+    const feeConfig = resolveEventFeeConfig(order.event, feeDefaults);
     const packageAmount = order.items
       .filter((item: any) => item.type === 'PACKAGE')
       .reduce((sum: number, item: any) => sum + item.lineTotal, 0);
@@ -696,13 +799,16 @@ router.get('/owner/orders', authenticateOwnerAccount, asyncHandler(async (req, r
     const settlement = computeSettlement({
       cashGiftAmount,
       packageAmount,
-      platformFeeMode: order.event.platformFeeMode,
-      platformFeePercent: order.event.platformFeePercent,
-      platformFeeFixed: order.event.platformFeeFixed,
+      platformFeeMode: feeConfig.platformFeeMode,
+      platformFeePercent: feeConfig.platformFeePercent,
+      platformFeeFixed: feeConfig.platformFeeFixed,
     });
 
     return {
       ...order,
+      platformFeeMode: feeConfig.platformFeeMode,
+      platformFeePercent: feeConfig.platformFeePercent,
+      platformFeeFixed: feeConfig.platformFeeFixed,
       packageAmount,
       ownerNetAmount: settlement.ownerNetAmount,
       adminRetainedAmount: settlement.adminRetainedAmount,

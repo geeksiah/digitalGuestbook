@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ticketingApi, promoCodeApi } from '@/lib/api';
+import { paymentGatewaysApi, ticketingApi, promoCodeApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import PaymentGatewaySelector from './PaymentGatewaySelector';
+import { CURRENCY_OPTIONS, getCurrencyOption, uniqueCurrencyCodes } from '@/lib/paymentGatewayConfig';
 
 interface TicketType {
   id: string;
@@ -29,24 +30,18 @@ interface TicketsTabProps {
   onRefresh: () => void;
 }
 
-const CURRENCIES = [
-  { code: 'USD', symbol: '$', name: 'US Dollar' },
-  { code: 'EUR', symbol: '€', name: 'Euro' },
-  { code: 'GBP', symbol: '£', name: 'British Pound' },
-  { code: 'NGN', symbol: '₦', name: 'Nigerian Naira' },
-  { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi' },
-  { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling' },
-  { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
-];
+const CURRENCIES = CURRENCY_OPTIONS;
 
 export default function TicketsTab({ eventId, event, tickets, loading, onRefresh }: TicketsTabProps) {
+  const defaultCurrency = CURRENCY_OPTIONS[0]?.code || 'USD';
   const [showForm, setShowForm] = useState(false);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
+  const [gatewayCurrencies, setGatewayCurrencies] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: 0,
-    currency: event.rsvpMode === 'paid' ? (event.ticketTypes?.[0]?.currency || 'USD') : 'USD',
+    currency: event.rsvpMode === 'paid' ? (event.ticketTypes?.[0]?.currency || defaultCurrency) : defaultCurrency,
     quantityTotal: 0,
     maxPerOrder: 10,
     saleStartDate: '',
@@ -54,6 +49,37 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
     isActive: true,
   });
   const [saving, setSaving] = useState(false);
+
+  const availableCurrencies = gatewayCurrencies.length > 0
+    ? gatewayCurrencies
+    : CURRENCY_OPTIONS.map((currency) => currency.code);
+
+  useEffect(() => {
+    void fetchGatewayCurrencies();
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!availableCurrencies.includes(formData.currency)) {
+      setFormData((prev) => ({
+        ...prev,
+        currency: availableCurrencies[0] || defaultCurrency,
+      }));
+    }
+  }, [availableCurrencies, defaultCurrency, formData.currency]);
+
+  const fetchGatewayCurrencies = async () => {
+    try {
+      const response = await paymentGatewaysApi.getEventGateways(eventId);
+      const eventGateways = response.data.eventGateways || [];
+      const currencies = uniqueCurrencyCodes(
+        eventGateways.map((item: any) => item?.paymentGateway?.currency)
+      );
+      setGatewayCurrencies(currencies);
+    } catch (error) {
+      console.error('Failed to load event gateway currencies:', error);
+      setGatewayCurrencies([]);
+    }
+  };
 
   const handleEdit = (ticket: TicketType) => {
     setEditingTicket(ticket);
@@ -111,7 +137,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
         name: '',
         description: '',
         price: 0,
-        currency: 'USD',
+        currency: availableCurrencies[0] || defaultCurrency,
         quantityTotal: 0,
         maxPerOrder: 10,
         saleStartDate: '',
@@ -127,8 +153,12 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
   };
 
   const formatCurrency = (amount: number, currency: string) => {
-    const currencyInfo = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
-    return `${currencyInfo.symbol}${amount.toFixed(2)}`;
+    const code = (currency || defaultCurrency).toUpperCase();
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(amount);
+    } catch {
+      return `${code} ${amount.toFixed(2)}`;
+    }
   };
 
   if (showForm) {
@@ -146,7 +176,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 name: '',
                 description: '',
                 price: 0,
-                currency: 'USD',
+                currency: availableCurrencies[0] || defaultCurrency,
                 quantityTotal: 0,
                 maxPerOrder: 10,
                 saleStartDate: '',
@@ -208,10 +238,20 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
               >
-                {CURRENCIES.map(c => (
-                  <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
-                ))}
+                {availableCurrencies.map((currencyCode) => {
+                  const currency = getCurrencyOption(currencyCode);
+                  return (
+                    <option key={currency.code} value={currency.code}>
+                      {currency.code} - {currency.name}
+                    </option>
+                  );
+                })}
               </select>
+              <p className="text-xs text-surface-500 mt-1">
+                {gatewayCurrencies.length > 0
+                  ? 'Currencies are driven by enabled event gateways.'
+                  : 'No gateway currencies found. Using fallback currency list.'}
+              </p>
             </div>
           </div>
 
@@ -417,7 +457,15 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
       {/* Payment Gateway Selection */}
       {event.rsvpMode === 'paid' && (
         <div className="bg-white rounded-xl border border-surface-200 p-6">
-          <PaymentGatewaySelector eventId={eventId} onUpdate={onRefresh} />
+          <PaymentGatewaySelector
+            eventId={eventId}
+            onUpdate={() => {
+              void fetchGatewayCurrencies();
+              onRefresh();
+            }}
+            title="Ticketing Gateways"
+            description="Select which event gateways guests can use to pay for tickets."
+          />
         </div>
       )}
     </div>
@@ -969,7 +1017,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
             <div>
               <p className="font-medium text-navy-900 capitalize">{gateway.gateway.replace('_', ' ')}</p>
               <p className="text-sm text-surface-500">
-                {gateway.currency} • {gateway.isLive ? 'Live Mode' : 'Test Mode'}
+                {gateway.currency} | {gateway.isLive ? 'Live Mode' : 'Test Mode'}
               </p>
             </div>
             <span className={cn(
@@ -991,4 +1039,3 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
     </div>
   );
 }
-

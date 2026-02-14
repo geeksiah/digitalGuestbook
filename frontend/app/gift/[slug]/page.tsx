@@ -53,7 +53,7 @@ export default function GiftPage() {
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('mtn_momo');
+  const [selectedGatewayId, setSelectedGatewayId] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   const [note, setNote] = useState('');
   const resolveGiftThumbnailUrl = (path: string | null | undefined) => {
@@ -68,12 +68,13 @@ export default function GiftPage() {
     const run = async () => {
       try {
         const response = await giftingApi.getPublicOptions(slug);
+        const gateways = response.data.paymentGateways || [];
         setEventName(response.data.event.name);
         setPackages(response.data.packages || []);
-        setPaymentGateways(response.data.paymentGateways || []);
+        setPaymentGateways(gateways);
         setSettlementPolicy(response.data.settlementPolicy || null);
-        if (response.data.paymentGateways?.some((g: PaymentGatewayOption) => g.gateway === 'paystack')) {
-          setPaymentMethod('paystack');
+        if (gateways.length > 0) {
+          setSelectedGatewayId((current) => current || gateways[0].id);
         }
       } catch (error: any) {
         toast.error(error.response?.data?.error || 'Unable to load gifting options');
@@ -111,13 +112,32 @@ export default function GiftPage() {
     return packageTotal + cashGiftAmount;
   }, [selectedPackageItems, packages, cashGiftAmount]);
 
-  const paystackGateway = useMemo(
-    () => paymentGateways.find((g) => g.gateway === 'paystack'),
-    [paymentGateways]
-  );
+  const selectedGateway = useMemo(() => {
+    if (!paymentGateways.length) return null;
+    return (
+      paymentGateways.find((gateway) => gateway.id === selectedGatewayId) ||
+      paymentGateways[0]
+    );
+  }, [paymentGateways, selectedGatewayId]);
+  const paymentMethod = selectedGateway?.gateway || null;
   const hasPackageSelection = selectedPackageItems.length > 0;
   const hasCashSelection = cashGiftAmount > 0;
-  const paystackMixedSelection = paymentMethod === 'paystack' && hasPackageSelection && hasCashSelection;
+  const paystackMixedSelection =
+    selectedGateway?.gateway === 'paystack' && hasPackageSelection && hasCashSelection;
+  const selectedPackageCurrencies = useMemo(() => {
+    const currencies = new Set<string>();
+    selectedPackageItems.forEach((item) => {
+      const pkg = packages.find((candidate) => candidate.id === item.giftPackageId);
+      if (pkg?.currency) currencies.add(pkg.currency.toUpperCase());
+    });
+    return Array.from(currencies);
+  }, [packages, selectedPackageItems]);
+  const hasGatewayCurrencyMismatch =
+    Boolean(selectedGateway?.currency) &&
+    selectedPackageCurrencies.length > 0 &&
+    selectedPackageCurrencies.some(
+      (currency) => currency !== String(selectedGateway?.currency || '').toUpperCase()
+    );
 
   const submitCheckout = async () => {
     if (!guestName.trim()) {
@@ -132,6 +152,10 @@ export default function GiftPage() {
       toast.error('Use separate payments for cash gift and package purchase when using Paystack');
       return;
     }
+    if (hasGatewayCurrencyMismatch) {
+      toast.error('Selected gateway currency does not match selected package currency');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -139,7 +163,8 @@ export default function GiftPage() {
         guestName: guestName.trim(),
         guestEmail: guestEmail.trim() || undefined,
         guestPhone: guestPhone.trim() || undefined,
-        paymentMethod,
+        paymentGatewayId: selectedGateway?.id || undefined,
+        paymentMethod: paymentMethod || undefined,
         paymentReference: paymentReference.trim() || undefined,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
         note: note.trim() || undefined,
@@ -234,13 +259,28 @@ export default function GiftPage() {
               <input className="input" placeholder="Email (optional)" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} />
               <input className="input" placeholder="Phone (optional)" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
               <input type="date" className="input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              <select className="input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                {paystackGateway ? <option value="paystack">Paystack (Recommended)</option> : null}
-                <option value="mtn_momo">MTN MoMo</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
+              <select
+                className="input"
+                value={selectedGateway?.id || ''}
+                onChange={(e) => setSelectedGatewayId(e.target.value)}
+                disabled={paymentGateways.length === 0}
+              >
+                {paymentGateways.length > 0 ? (
+                  paymentGateways.map((gateway) => (
+                    <option key={gateway.id} value={gateway.id}>
+                      {gateway.name} ({gateway.gateway.toUpperCase()} - {gateway.currency})
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No configured gateway</option>
+                )}
               </select>
-              {paystackGateway?.splitConfig?.subaccount ? (
+              {paymentGateways.length === 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  No payment gateway has been enabled for this event yet.
+                </div>
+              ) : null}
+              {selectedGateway?.splitConfig?.subaccount ? (
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                   Cash gifts are auto-split to the owner subaccount. Package purchases are settled to platform only.
                 </div>
@@ -255,12 +295,21 @@ export default function GiftPage() {
                   Owner split account is not connected yet. Cash gifts will be handled via platform settlement.
                 </div>
               ) : null}
+              {hasGatewayCurrencyMismatch ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                  Selected gateway currency does not match selected package currency.
+                </div>
+              ) : null}
               <input className="input" placeholder="Payment reference (optional)" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} />
               <textarea className="input min-h-[88px]" placeholder="Notes (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="rounded-lg bg-surface-50 border border-surface-200 px-3 py-2 text-sm text-surface-700">
-                Total: <span className="font-semibold text-brand-900">{totalAmount.toFixed(2)}</span>
+                Total: <span className="font-semibold text-brand-900">{(selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')} {totalAmount.toFixed(2)}</span>
               </div>
-              <button className="btn-primary w-full justify-center" disabled={submitting || paystackMixedSelection} onClick={submitCheckout}>
+              <button
+                className="btn-primary w-full justify-center"
+                disabled={submitting || paystackMixedSelection || hasGatewayCurrencyMismatch}
+                onClick={submitCheckout}
+              >
                 {submitting ? 'Submitting...' : 'Complete Gift'}
               </button>
             </div>

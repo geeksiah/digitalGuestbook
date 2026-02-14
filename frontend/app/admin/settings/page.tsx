@@ -13,6 +13,11 @@ interface SystemSettings {
   emailEnabled: boolean;
   smsEnabled: boolean;
   whatsappEnabled: boolean;
+  platformFeeMode: 'PERCENTAGE' | 'FIXED';
+  platformFeePercent: number;
+  platformFeeFixed: number | null;
+  processingFeePercent: number;
+  processingFeeFixed: number;
 }
 
 interface Provider {
@@ -633,6 +638,88 @@ export default function AdminSettingsPage() {
                       </div>
                     </div>
                   </label>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-100 pt-6">
+                <h3 className="text-lg font-semibold text-navy-900 mb-4">Default Commerce Fees</h3>
+                <p className="text-sm text-surface-500 mb-4">
+                  These defaults apply to all events until an event enables its own fee override.
+                </p>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="label">Platform Fee Mode</label>
+                    <select
+                      className="input"
+                      value={settings.platformFeeMode || 'PERCENTAGE'}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED',
+                        })
+                      }
+                    >
+                      <option value="PERCENTAGE">Percentage</option>
+                      <option value="FIXED">Fixed Amount</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">
+                      {settings.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
+                    </label>
+                    <input
+                      type="number"
+                      step={settings.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
+                      min="0"
+                      max={settings.platformFeeMode === 'FIXED' ? undefined : '100'}
+                      className="input"
+                      value={
+                        settings.platformFeeMode === 'FIXED'
+                          ? settings.platformFeeFixed ?? 0
+                          : settings.platformFeePercent ?? 0
+                      }
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          platformFeePercent:
+                            settings.platformFeeMode === 'PERCENTAGE'
+                              ? parseFloat(e.target.value) || 0
+                              : settings.platformFeePercent,
+                          platformFeeFixed:
+                            settings.platformFeeMode === 'FIXED'
+                              ? parseFloat(e.target.value) || 0
+                              : settings.platformFeeFixed,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Processing Fee (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      className="input"
+                      value={settings.processingFeePercent ?? 0}
+                      onChange={(e) =>
+                        setSettings({ ...settings, processingFeePercent: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Fixed Processing Fee</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="input"
+                      value={settings.processingFeeFixed ?? 0}
+                      onChange={(e) =>
+                        setSettings({ ...settings, processingFeeFixed: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
 

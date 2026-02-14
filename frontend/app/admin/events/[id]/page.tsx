@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi, API_BASE_URL } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi, paymentGatewaysApi, API_BASE_URL } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
+import PaymentGatewaySelector from '@/components/tickets/PaymentGatewaySelector';
 import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
+import { CURRENCY_OPTIONS, getCurrencyOption, uniqueCurrencyCodes } from '@/lib/paymentGatewayConfig';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -37,6 +39,7 @@ interface Event {
   reelEnabled: boolean;
   rsvpMode: 'free' | 'paid';
   ticketingEnabled: boolean;
+  feeOverridesEnabled?: boolean;
   platformFeePercent: number;
   platformFeeMode: 'PERCENTAGE' | 'FIXED';
   platformFeeFixed: number | null;
@@ -81,6 +84,14 @@ interface Domain {
   verificationToken: string;
   verificationNotes?: string | null;
 }
+
+type FeeDefaults = {
+  platformFeeMode: 'PERCENTAGE' | 'FIXED';
+  platformFeePercent: number;
+  platformFeeFixed: number;
+  processingFeePercent: number;
+  processingFeeFixed: number;
+};
 
 interface RSVP {
   id: string;
@@ -215,6 +226,7 @@ export default function EventDetailPage() {
     price: '',
     currency: 'GHS',
   });
+  const [eventGatewayCurrencies, setEventGatewayCurrencies] = useState<string[]>([]);
   const [newGiftPackagePhoto, setNewGiftPackagePhoto] = useState<File | null>(null);
   const [newGiftPackagePhotoPreview, setNewGiftPackagePhotoPreview] = useState<string | null>(null);
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
@@ -276,6 +288,7 @@ export default function EventDetailPage() {
     invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
     // RSVP Mode & Ticketing
     rsvpMode: 'free' as 'free' | 'paid', ticketingEnabled: false,
+    feeOverridesEnabled: true,
     platformFeeMode: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED',
     platformFeePercent: 5,
     platformFeeFixed: 0,
@@ -291,6 +304,13 @@ export default function EventDetailPage() {
     primaryColor: '#FFD700', secondaryColor: '#1a1a2e', accentColor: '#ffffff',
     // Owner
     ownerId: '', ownerName: '', ownerEmail: '', ownerPhone: '', organizationName: '',
+  });
+  const [defaultFeeSettings, setDefaultFeeSettings] = useState<FeeDefaults>({
+    platformFeeMode: 'PERCENTAGE',
+    platformFeePercent: 5,
+    platformFeeFixed: 0,
+    processingFeePercent: 2.9,
+    processingFeeFixed: 0.3,
   });
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -308,6 +328,11 @@ export default function EventDetailPage() {
     itineraryPageTemplateId: '',
     giftingPageTemplateId: '',
   });
+
+  const availableEventCurrencies = eventGatewayCurrencies.length > 0
+    ? eventGatewayCurrencies
+    : CURRENCY_OPTIONS.map((currency) => currency.code);
+  const primaryEventCurrency = availableEventCurrencies[0] || 'USD';
 
   const toDateTimeLocalInput = (value: string | null) => {
     if (!value) return '';
@@ -327,7 +352,13 @@ export default function EventDetailPage() {
     return () => URL.revokeObjectURL(objectUrl);
   }, [newGiftPackagePhoto]);
 
-  useEffect(() => { fetchEvent(); fetchTemplates(); fetchOwners(); }, [eventId]);
+  useEffect(() => {
+    fetchEvent();
+    fetchTemplates();
+    fetchOwners();
+    fetchEventGatewayCurrencies();
+    fetchDefaultFeeSettings();
+  }, [eventId]);
   
   useEffect(() => {
     if (activeTab === 'rsvps') fetchRsvps();
@@ -379,6 +410,7 @@ export default function EventDetailPage() {
         // RSVP Mode & Ticketing
         rsvpMode: (event.rsvpMode as 'free' | 'paid') || 'free',
         ticketingEnabled: event.ticketingEnabled ?? false,
+        feeOverridesEnabled: event.feeOverridesEnabled ?? true,
         platformFeeMode: (event.platformFeeMode as 'PERCENTAGE' | 'FIXED') || 'PERCENTAGE',
         platformFeePercent: event.platformFeePercent ?? 5,
         platformFeeFixed: event.platformFeeFixed ?? 0,
@@ -404,6 +436,26 @@ export default function EventDetailPage() {
     try { const r = await eventsApi.get(eventId); setEvent(r.data.event); }
     catch { toast.error('Failed to load event'); router.push('/admin/events'); }
     finally { setLoading(false); }
+  };
+  const fetchDefaultFeeSettings = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const settings = payload?.settings || {};
+      setDefaultFeeSettings({
+        platformFeeMode: settings.platformFeeMode === 'FIXED' ? 'FIXED' : 'PERCENTAGE',
+        platformFeePercent: Number(settings.platformFeePercent ?? 5),
+        platformFeeFixed: Number(settings.platformFeeFixed ?? 0),
+        processingFeePercent: Number(settings.processingFeePercent ?? 2.9),
+        processingFeeFixed: Number(settings.processingFeeFixed ?? 0.3),
+      });
+    } catch (error) {
+      console.error('Failed to load default fee settings:', error);
+    }
   };
   const fetchDomains = async () => {
     try {
@@ -465,6 +517,27 @@ export default function EventDetailPage() {
       toast.error('Failed to load tickets');
     } finally {
       setLoadingTickets(false);
+    }
+  };
+
+  const fetchEventGatewayCurrencies = async () => {
+    try {
+      const response = await paymentGatewaysApi.getEventGateways(eventId);
+      const eventGateways = response.data.eventGateways || [];
+      const currencies = uniqueCurrencyCodes(
+        eventGateways.map((item: any) => item?.paymentGateway?.currency)
+      );
+      setEventGatewayCurrencies(currencies);
+
+      if (currencies.length > 0) {
+        setNewGiftPackage((prev) => {
+          if (prev.currency && currencies.includes(prev.currency.toUpperCase())) return prev;
+          return { ...prev, currency: currencies[0] };
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load event gateways for currencies:', error);
+      setEventGatewayCurrencies([]);
     }
   };
 
@@ -541,14 +614,14 @@ export default function EventDetailPage() {
         name: newGiftPackage.name.trim(),
         description: newGiftPackage.description.trim() || null,
         price,
-        currency: newGiftPackage.currency || 'GHS',
+        currency: (newGiftPackage.currency || primaryEventCurrency).toUpperCase(),
         thumbnailPath: uploadedThumbnailPath,
       });
       setNewGiftPackage({
         name: '',
         description: '',
         price: '',
-        currency: newGiftPackage.currency || 'GHS',
+        currency: (newGiftPackage.currency || primaryEventCurrency).toUpperCase(),
       });
       setNewGiftPackagePhoto(null);
       setNewGiftPackagePhotoPreview(null);
@@ -955,6 +1028,7 @@ export default function EventDetailPage() {
         // RSVP Mode & Ticketing
         rsvpMode: eventSettings.rsvpMode,
         ticketingEnabled: eventSettings.ticketingEnabled,
+        feeOverridesEnabled: eventSettings.feeOverridesEnabled,
         platformFeeMode: eventSettings.platformFeeMode,
         platformFeePercent: eventSettings.platformFeePercent,
         platformFeeFixed: eventSettings.platformFeeFixed,
@@ -1024,7 +1098,7 @@ export default function EventDetailPage() {
     },
     { orders: 0, gross: 0, ownerNet: 0, adminRetained: 0, cash: 0, packageAmount: 0 }
   );
-  const giftCurrency = giftOrders[0]?.currency || 'GHS';
+  const giftCurrency = giftOrders[0]?.currency || primaryEventCurrency;
 
   return (
     <div className="space-y-7">
@@ -2402,6 +2476,18 @@ export default function EventDetailPage() {
                 </div>
               </div>
 
+              <div className="bg-white rounded-xl border border-surface-200 p-5">
+                <PaymentGatewaySelector
+                  eventId={eventId}
+                  onUpdate={() => {
+                    fetchEventGatewayCurrencies();
+                    fetchGifts();
+                  }}
+                  title="Gift and Cash Collection Gateways"
+                  description="Enable event gateways for public gift checkout and cash gifting. Currency options in gift package setup follow these gateway currencies."
+                />
+              </div>
+
               <div className="bg-white rounded-xl border border-surface-200 p-5 space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
@@ -2558,13 +2644,24 @@ export default function EventDetailPage() {
                         value={newGiftPackage.price}
                         onChange={(e) => setNewGiftPackage({ ...newGiftPackage, price: e.target.value })}
                       />
-                      <input
+                      <select
                         className="input"
-                        placeholder="Currency"
                         value={newGiftPackage.currency}
                         onChange={(e) => setNewGiftPackage({ ...newGiftPackage, currency: e.target.value.toUpperCase() })}
-                      />
+                      >
+                        {availableEventCurrencies.map((currencyCode) => {
+                          const currency = getCurrencyOption(currencyCode);
+                          return (
+                            <option key={currency.code} value={currency.code}>
+                              {currency.code} - {currency.name}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </div>
+                    <p className="text-xs text-surface-500">
+                      Package currency follows enabled event gateway currencies.
+                    </p>
                     <button
                       className="btn-primary w-full justify-center"
                       disabled={savingGiftPackage}
@@ -2940,10 +3037,63 @@ export default function EventDetailPage() {
                     </label>
                   </div>
 
-                  {/* Ticketing Settings - shown when paid mode selected */}
-                  {eventSettings.rsvpMode === 'paid' && (
-                    <div className="bg-surface-50 rounded-lg p-4 space-y-4">
-                      <h5 className="font-medium text-brand-900 text-sm">Ticketing Fees</h5>
+                </div>
+              )}
+
+              {(eventSettings.giftingEnabled || (eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid')) && (
+                <div className="border-t border-surface-100 pt-6">
+                  <h4 className="font-medium text-brand-900 mb-4">Commerce Fees</h4>
+                  <div className="bg-surface-50 rounded-lg p-4 space-y-4">
+                    <p className="text-xs text-surface-500">
+                      These fees apply to enabled paid flows:
+                      {(eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid') ? ' ticketing' : ''}
+                      {(eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid' && eventSettings.giftingEnabled) ? ' and ' : ''}
+                      {eventSettings.giftingEnabled ? 'gifting' : ''}.
+                    </p>
+                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 bg-white">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-surface-300 text-brand-900"
+                        checked={!eventSettings.feeOverridesEnabled}
+                        onChange={(e) =>
+                          setEventSettings({
+                            ...eventSettings,
+                            feeOverridesEnabled: !e.target.checked,
+                          })
+                        }
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-brand-900">Use system default fees for this event</p>
+                        <p className="text-xs text-surface-500">Turn off to set custom fee values only for this event.</p>
+                      </div>
+                    </label>
+
+                    {!eventSettings.feeOverridesEnabled ? (
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white border border-surface-200 rounded-lg p-3">
+                          <p className="text-xs text-surface-500 mb-1">Default Platform Mode</p>
+                          <p className="text-sm font-semibold text-brand-900">{defaultFeeSettings.platformFeeMode}</p>
+                        </div>
+                        <div className="bg-white border border-surface-200 rounded-lg p-3">
+                          <p className="text-xs text-surface-500 mb-1">
+                            {defaultFeeSettings.platformFeeMode === 'FIXED' ? `Default Platform Fee (${primaryEventCurrency})` : 'Default Platform Fee (%)'}
+                          </p>
+                          <p className="text-sm font-semibold text-brand-900">
+                            {defaultFeeSettings.platformFeeMode === 'FIXED'
+                              ? defaultFeeSettings.platformFeeFixed
+                              : defaultFeeSettings.platformFeePercent}
+                          </p>
+                        </div>
+                        <div className="bg-white border border-surface-200 rounded-lg p-3">
+                          <p className="text-xs text-surface-500 mb-1">Default Processing Fee (%)</p>
+                          <p className="text-sm font-semibold text-brand-900">{defaultFeeSettings.processingFeePercent}</p>
+                        </div>
+                        <div className="bg-white border border-surface-200 rounded-lg p-3">
+                          <p className="text-xs text-surface-500 mb-1">Default Fixed Fee ({primaryEventCurrency})</p>
+                          <p className="text-sm font-semibold text-brand-900">{defaultFeeSettings.processingFeeFixed}</p>
+                        </div>
+                      </div>
+                    ) : (
                       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
                           <label className="block text-xs font-medium text-surface-600 mb-1">Platform Fee Mode</label>
@@ -2963,7 +3113,7 @@ export default function EventDetailPage() {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-surface-600 mb-1">
-                            {eventSettings.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
+                            {eventSettings.platformFeeMode === 'FIXED' ? `Platform Fee (${primaryEventCurrency})` : 'Platform Fee (%)'}
                           </label>
                           <input
                             type="number"
@@ -2994,25 +3144,34 @@ export default function EventDetailPage() {
                         <div>
                           <label className="block text-xs font-medium text-surface-600 mb-1">Processing Fee (%)</label>
                           <input
-                            type="number" step="0.1" min="0" max="100"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
                             value={eventSettings.processingFeePercent}
-                            onChange={e => setEventSettings({ ...eventSettings, processingFeePercent: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) => setEventSettings({ ...eventSettings, processingFeePercent: parseFloat(e.target.value) || 0 })}
                             className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-surface-600 mb-1">Fixed Fee ($)</label>
+                          <label className="block text-xs font-medium text-surface-600 mb-1">
+                            Fixed Fee ({primaryEventCurrency})
+                          </label>
                           <input
-                            type="number" step="0.01" min="0"
+                            type="number"
+                            step="0.01"
+                            min="0"
                             value={eventSettings.processingFeeFixed}
-                            onChange={e => setEventSettings({ ...eventSettings, processingFeeFixed: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) => setEventSettings({ ...eventSettings, processingFeeFixed: parseFloat(e.target.value) || 0 })}
                             className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
                           />
                         </div>
                       </div>
+                    )}
+                    {eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid' ? (
                       <p className="text-xs text-surface-500">Manage ticket types in the Ticketing section after saving.</p>
-                    </div>
-                  )}
+                    ) : null}
+                  </div>
                 </div>
               )}
 

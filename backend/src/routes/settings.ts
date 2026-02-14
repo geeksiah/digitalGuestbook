@@ -5,6 +5,14 @@ import { authenticateAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+const normalizeFeeMode = (value: unknown) =>
+  String(value || 'PERCENTAGE').toUpperCase() === 'FIXED' ? 'FIXED' : 'PERCENTAGE';
+
+const toNonNegativeNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
 // Mask sensitive fields
 const maskSecret = (value: string | null | undefined): string | null => {
   return value ? '••••••••' : null;
@@ -29,7 +37,25 @@ router.get('/', authenticateAdmin, asyncHandler(async (req: Request, res: Respon
 }));
 
 router.patch('/', authenticateAdmin, asyncHandler(async (req: Request, res: Response) => {
-  const data = req.body;
+  const body = req.body || {};
+  const data: Record<string, unknown> = {
+    siteName: body.siteName,
+    siteUrl: body.siteUrl,
+    logoUrl: body.logoUrl,
+    emailEnabled: body.emailEnabled,
+    smsEnabled: body.smsEnabled,
+    whatsappEnabled: body.whatsappEnabled,
+    defaultEmailProviderId: body.defaultEmailProviderId,
+    defaultSmsProviderId: body.defaultSmsProviderId,
+    defaultWhatsappProviderId: body.defaultWhatsappProviderId,
+    platformFeeMode: normalizeFeeMode(body.platformFeeMode),
+    platformFeePercent: toNonNegativeNumber(body.platformFeePercent, 5),
+    platformFeeFixed: body.platformFeeFixed === null || body.platformFeeFixed === undefined
+      ? null
+      : toNonNegativeNumber(body.platformFeeFixed, 0),
+    processingFeePercent: toNonNegativeNumber(body.processingFeePercent, 2.9),
+    processingFeeFixed: toNonNegativeNumber(body.processingFeeFixed, 0.3),
+  };
   
   // Remove system fields
   delete data.id;
@@ -38,8 +64,8 @@ router.patch('/', authenticateAdmin, asyncHandler(async (req: Request, res: Resp
   
   const settings = await prisma.systemSettings.upsert({
     where: { id: 'default' },
-    create: { id: 'default', ...data },
-    update: data,
+    create: { id: 'default', ...data } as any,
+    update: data as any,
   });
   
   // Log the change

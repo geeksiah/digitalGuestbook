@@ -55,7 +55,12 @@ const paymentGatewaySchema = z.object({
   customGatewayApiSecret: z.string().optional(),
   customGatewayConfig: z.string().optional(),
   // Common
-  currency: z.string().default('USD'),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, 'Currency must be a 3-letter ISO code')
+    .transform((value) => value.toUpperCase())
+    .default('USD'),
   successUrl: z.string().optional(),
   cancelUrl: z.string().optional(),
 });

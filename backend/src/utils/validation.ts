@@ -97,6 +97,7 @@ export const createEventSchema = z.object({
   // Ticketing/Pricing
   rsvpMode: z.enum(['free', 'paid']).default('free'),
   ticketingEnabled: z.boolean().default(false),
+  feeOverridesEnabled: z.boolean().default(false),
   platformFeeMode: z.enum(['PERCENTAGE', 'FIXED']).default('PERCENTAGE'),
   platformFeePercent: z.number().min(0).max(100).default(5),
   platformFeeFixed: z.number().min(0).optional().nullable(),
@@ -180,6 +181,7 @@ export const updateEventSchema = z.object({
   // Ticketing/Pricing
   rsvpMode: z.enum(['free', 'paid']).optional(),
   ticketingEnabled: z.boolean().optional(),
+  feeOverridesEnabled: z.boolean().optional(),
   platformFeeMode: z.enum(['PERCENTAGE', 'FIXED']).optional(),
   platformFeePercent: z.number().min(0).max(100).optional(),
   platformFeeFixed: z.number().min(0).optional().nullable(),
