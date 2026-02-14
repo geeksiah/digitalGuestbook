@@ -36,6 +36,12 @@ interface Props {
   fallback?: React.ReactNode;
 }
 
+type TemplateUnavailableInfo = {
+  status: number;
+  message: string;
+  phase?: string | null;
+};
+
 /**
  * Hook: fetch backend template HTML with SWR caching.
  *
@@ -48,6 +54,7 @@ export function useBackendTemplate(slug: string, endpoint: string) {
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
+  const [unavailableInfo, setUnavailableInfo] = useState<TemplateUnavailableInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +73,7 @@ export function useBackendTemplate(slug: string, endpoint: string) {
 
       setHtml(rewritten);
       setAvailable(true);
+      setUnavailableInfo(null);
       setLoading(false);
     };
 
@@ -79,9 +87,30 @@ export function useBackendTemplate(slug: string, endpoint: string) {
         const ct = res.headers.get("content-type") || "";
 
         if (!res.ok || !ct.includes("text/html")) {
-          // No template assigned — backend returns JSON
+          let message = "This page is not available right now.";
+          let phase: string | null = null;
+
+          try {
+            const payload = await res.json();
+            if (typeof payload?.message === "string" && payload.message.trim()) {
+              message = payload.message.trim();
+            } else if (typeof payload?.error === "string" && payload.error.trim()) {
+              message = payload.error.trim();
+            }
+            if (typeof payload?.phase === "string") {
+              phase = payload.phase;
+            }
+          } catch {
+            // Keep default message when payload is not JSON.
+          }
+
           if (!isRevalidation) {
             setAvailable(false);
+            setUnavailableInfo({
+              status: res.status || 404,
+              message,
+              phase,
+            });
             setLoading(false);
           }
           templateCache.delete(cacheKey);
@@ -105,6 +134,11 @@ export function useBackendTemplate(slug: string, endpoint: string) {
       } catch {
         if (!cancelled && !isRevalidation) {
           setAvailable(false);
+          setUnavailableInfo({
+            status: 500,
+            message: "We could not load this page right now. Please try again shortly.",
+            phase: null,
+          });
           setLoading(false);
         }
       }
@@ -133,7 +167,7 @@ export function useBackendTemplate(slug: string, endpoint: string) {
     return () => { cancelled = true; };
   }, [slug, endpoint]);
 
-  return { loading, available, html };
+  return { loading, available, html, unavailableInfo };
 }
 
 /** @deprecated Use useBackendTemplate instead */
@@ -497,7 +531,7 @@ function injectHead(headContent: string, templateKey: string) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function BackendTemplateFrame({ slug, endpoint, className, fallback }: Props) {
-  const { loading, available, html } = useBackendTemplate(slug, endpoint);
+  const { loading, available, html, unavailableInfo } = useBackendTemplate(slug, endpoint);
   const containerRef = useRef<HTMLDivElement>(null);
   const templateKey = `${slug}/${endpoint}`;
 
@@ -535,7 +569,52 @@ export default function BackendTemplateFrame({ slug, endpoint, className, fallba
     );
   }
 
-  if (!available || !html || !parsed) return null;
+  if (!available || !html || !parsed) {
+    const status = unavailableInfo?.status ?? 404;
+    const phase = unavailableInfo?.phase;
+    const phaseLabel = phase ? phase.replace(/_/g, " ").toLowerCase() : null;
+    const title = status >= 500
+      ? "Temporary Error"
+      : status === 410
+        ? "Event Unavailable"
+        : status === 403
+          ? "Page Not Available In This Phase"
+          : "Page Unavailable";
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-surface-50 via-white to-surface-100 flex items-center justify-center px-4">
+        <div className="w-full max-w-xl rounded-2xl border border-surface-200 bg-white shadow-xl p-8 text-center">
+          <div className="inline-flex items-center rounded-full border border-surface-200 px-3 py-1 text-xs font-semibold text-surface-600">
+            HTTP {status}
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold text-brand-900">{title}</h1>
+          <p className="mt-3 text-surface-600">
+            {unavailableInfo?.message || "This page is not available right now."}
+          </p>
+          {phaseLabel ? (
+            <p className="mt-2 text-xs uppercase tracking-wide text-surface-500">
+              Current phase: {phaseLabel}
+            </p>
+          ) : null}
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <a
+              href={`/e/${slug}`}
+              className="inline-flex items-center justify-center rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 transition-colors"
+            >
+              Back to Event
+            </a>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center rounded-lg border border-surface-300 px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -1,11 +1,26 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
+import { randomUUID } from 'crypto';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
 import { verifyPaystackTransaction } from '../services/paystack.js';
+import { BUCKETS, uploadToSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
+
+const giftPackageImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      cb(new AppError('Only image files are allowed for gift package photos', 400));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 const packageSchema = z.object({
   name: z.string().min(2),
@@ -460,6 +475,37 @@ router.get('/packages', authenticateAdmin, asyncHandler(async (_req, res) => {
     orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
   });
   res.json({ packages });
+}));
+
+router.post('/packages/upload-image', authenticateAdmin, giftPackageImageUpload.single('image'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError('Package photo is required', 400);
+  }
+
+  const extByMime: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/svg+xml': 'svg',
+    'image/avif': 'avif',
+  };
+  const extension = extByMime[req.file.mimetype] || 'jpg';
+  const now = new Date();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const storagePath = `gift-packages/${now.getUTCFullYear()}/${month}/${randomUUID()}.${extension}`;
+
+  const upload = await uploadToSupabase(BUCKETS.MEDIA, storagePath, req.file.buffer, {
+    contentType: req.file.mimetype,
+    metadata: {
+      purpose: 'gift-package-thumbnail',
+    },
+  });
+
+  res.status(201).json({
+    thumbnailPath: upload.path,
+    thumbnailUrl: upload.publicUrl,
+  });
 }));
 
 router.post('/packages', authenticateAdmin, asyncHandler(async (req, res) => {

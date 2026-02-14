@@ -503,6 +503,13 @@ export const giftingApi = {
   getPublicOptions: (slug: string) => axios.get(`${API_BASE_URL}/api/gifting/public/${slug}/options`),
   checkout: (slug: string, data: any) => axios.post(`${API_BASE_URL}/api/gifting/public/${slug}/checkout`, data),
   listPackages: () => api.get('/gifting/packages'),
+  uploadPackageImage: (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return api.post('/gifting/packages/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   createPackage: (data: any) => api.post('/gifting/packages', data),
   updatePackage: (id: string, data: any) => api.patch(`/gifting/packages/${id}`, data),
   deletePackage: (id: string) => api.delete(`/gifting/packages/${id}`),

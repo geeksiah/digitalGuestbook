@@ -166,6 +166,9 @@ export default function OwnerEventDetailPage() {
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
   const [loadingItinerary, setLoadingItinerary] = useState(false);
   const [savingItinerary, setSavingItinerary] = useState(false);
+  const [savingItineraryOrder, setSavingItineraryOrder] = useState(false);
+  const [draggingItineraryId, setDraggingItineraryId] = useState<string | null>(null);
+  const [itineraryDropTargetId, setItineraryDropTargetId] = useState<string | null>(null);
   const [creatingMcSession, setCreatingMcSession] = useState(false);
   const [mcControlUrl, setMcControlUrl] = useState('');
   const [showItineraryDateTimeInputs, setShowItineraryDateTimeInputs] = useState(false);
@@ -288,6 +291,46 @@ export default function OwnerEventDetailPage() {
       toast.error(error.response?.data?.error || 'Failed to load itinerary');
     } finally {
       setLoadingItinerary(false);
+    }
+  };
+
+  const reorderItineraryItems = (items: ItineraryItem[], sourceId: string, targetId: string) => {
+    const sourceIndex = items.findIndex((item) => item.id === sourceId);
+    const targetIndex = items.findIndex((item) => item.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items;
+    const reordered = [...items];
+    const [movedItem] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, movedItem);
+    return reordered;
+  };
+
+  const handleItineraryDrop = async (targetId: string) => {
+    if (!draggingItineraryId || draggingItineraryId === targetId || savingItineraryOrder) {
+      setItineraryDropTargetId(null);
+      return;
+    }
+
+    const previous = itineraryItems;
+    const next = reorderItineraryItems(previous, draggingItineraryId, targetId);
+    if (next === previous) {
+      setItineraryDropTargetId(null);
+      setDraggingItineraryId(null);
+      return;
+    }
+
+    setItineraryItems(next);
+    setItineraryDropTargetId(null);
+    setDraggingItineraryId(null);
+
+    try {
+      setSavingItineraryOrder(true);
+      await itineraryApi.reorderItems(eventId, next.map((item) => item.id));
+      toast.success('Itinerary order updated');
+    } catch (error: any) {
+      setItineraryItems(previous);
+      toast.error(error.response?.data?.error || 'Failed to reorder itinerary');
+    } finally {
+      setSavingItineraryOrder(false);
     }
   };
 
@@ -1188,9 +1231,36 @@ export default function OwnerEventDetailPage() {
               </div>
             ) : (
               <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+                <div className="px-4 py-2 border-b border-surface-200 bg-surface-50 text-xs text-surface-600 flex items-center justify-between gap-3">
+                  <span>Drag and drop itinerary items to reorder.</span>
+                  {savingItineraryOrder ? <span className="font-medium text-brand-900">Saving order...</span> : null}
+                </div>
                 <div className="divide-y divide-surface-200">
                   {itineraryItems.map((item) => (
-                    <div key={item.id} className="px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                    <div
+                      key={item.id}
+                      draggable={editingItineraryId !== item.id && !savingItineraryOrder}
+                      onDragStart={() => setDraggingItineraryId(item.id)}
+                      onDragEnd={() => {
+                        setDraggingItineraryId(null);
+                        setItineraryDropTargetId(null);
+                      }}
+                      onDragOver={(e) => {
+                        if (editingItineraryId === item.id || savingItineraryOrder) return;
+                        e.preventDefault();
+                        if (itineraryDropTargetId !== item.id) {
+                          setItineraryDropTargetId(item.id);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleItineraryDrop(item.id);
+                      }}
+                      className={cn(
+                        'px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3',
+                        itineraryDropTargetId === item.id ? 'bg-brand-50' : ''
+                      )}
+                    >
                       {editingItineraryId === item.id ? (
                         <div className="w-full space-y-3">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1269,6 +1339,9 @@ export default function OwnerEventDetailPage() {
                       ) : (
                         <>
                           <div>
+                            <div className="text-[11px] uppercase tracking-wide text-surface-400 mb-1">
+                              Drag to move
+                            </div>
                             <div className="flex items-center gap-2">
                               <span
                                 className={cn(

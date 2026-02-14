@@ -214,11 +214,15 @@ export default function EventDetailPage() {
     description: '',
     price: '',
     currency: 'GHS',
-    thumbnailPath: '',
   });
+  const [newGiftPackagePhoto, setNewGiftPackagePhoto] = useState<File | null>(null);
+  const [newGiftPackagePhotoPreview, setNewGiftPackagePhotoPreview] = useState<string | null>(null);
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
   const [loadingItinerary, setLoadingItinerary] = useState(false);
   const [savingItinerary, setSavingItinerary] = useState(false);
+  const [savingItineraryOrder, setSavingItineraryOrder] = useState(false);
+  const [draggingItineraryId, setDraggingItineraryId] = useState<string | null>(null);
+  const [itineraryDropTargetId, setItineraryDropTargetId] = useState<string | null>(null);
   const [showItineraryDateTimeInputs, setShowItineraryDateTimeInputs] = useState(false);
   const [creatingMcSession, setCreatingMcSession] = useState(false);
   const [mcControlUrl, setMcControlUrl] = useState('');
@@ -312,6 +316,16 @@ export default function EventDetailPage() {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
+
+  useEffect(() => {
+    if (!newGiftPackagePhoto) {
+      setNewGiftPackagePhotoPreview(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(newGiftPackagePhoto);
+    setNewGiftPackagePhotoPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [newGiftPackagePhoto]);
 
   useEffect(() => { fetchEvent(); fetchTemplates(); fetchOwners(); }, [eventId]);
   
@@ -516,20 +530,28 @@ export default function EventDetailPage() {
 
     try {
       setSavingGiftPackage(true);
+      let uploadedThumbnailPath: string | null = null;
+
+      if (newGiftPackagePhoto) {
+        const uploadResponse = await giftingApi.uploadPackageImage(newGiftPackagePhoto);
+        uploadedThumbnailPath = uploadResponse.data?.thumbnailPath || null;
+      }
+
       await giftingApi.createPackage({
         name: newGiftPackage.name.trim(),
         description: newGiftPackage.description.trim() || null,
         price,
         currency: newGiftPackage.currency || 'GHS',
-        thumbnailPath: newGiftPackage.thumbnailPath.trim() || null,
+        thumbnailPath: uploadedThumbnailPath,
       });
       setNewGiftPackage({
         name: '',
         description: '',
         price: '',
         currency: newGiftPackage.currency || 'GHS',
-        thumbnailPath: '',
       });
+      setNewGiftPackagePhoto(null);
+      setNewGiftPackagePhotoPreview(null);
       toast.success('Gift package created');
       await fetchGifts();
     } catch (e: any) {
@@ -558,6 +580,46 @@ export default function EventDetailPage() {
       toast.error(e.response?.data?.error || 'Failed to load itinerary');
     } finally {
       setLoadingItinerary(false);
+    }
+  };
+
+  const reorderItineraryItems = (items: ItineraryItem[], sourceId: string, targetId: string) => {
+    const sourceIndex = items.findIndex((item) => item.id === sourceId);
+    const targetIndex = items.findIndex((item) => item.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items;
+    const reordered = [...items];
+    const [movedItem] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, movedItem);
+    return reordered;
+  };
+
+  const handleItineraryDrop = async (targetId: string) => {
+    if (!draggingItineraryId || draggingItineraryId === targetId || savingItineraryOrder) {
+      setItineraryDropTargetId(null);
+      return;
+    }
+
+    const previous = itineraryItems;
+    const next = reorderItineraryItems(previous, draggingItineraryId, targetId);
+    if (next === previous) {
+      setItineraryDropTargetId(null);
+      setDraggingItineraryId(null);
+      return;
+    }
+
+    setItineraryItems(next);
+    setItineraryDropTargetId(null);
+    setDraggingItineraryId(null);
+
+    try {
+      setSavingItineraryOrder(true);
+      await itineraryApi.reorderItems(eventId, next.map((item) => item.id));
+      toast.success('Itinerary order updated');
+    } catch (e: any) {
+      setItineraryItems(previous);
+      toast.error(e.response?.data?.error || 'Failed to reorder itinerary');
+    } finally {
+      setSavingItineraryOrder(false);
     }
   };
 
@@ -1756,9 +1818,36 @@ export default function EventDetailPage() {
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+              <div className="px-4 py-2 border-b border-surface-200 bg-surface-50 text-xs text-surface-600 flex items-center justify-between gap-3">
+                <span>Drag and drop itinerary items to reorder.</span>
+                {savingItineraryOrder ? <span className="font-medium text-brand-900">Saving order...</span> : null}
+              </div>
               <div className="divide-y divide-surface-200">
                 {itineraryItems.map((item) => (
-                  <div key={item.id} className="px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div
+                    key={item.id}
+                    draggable={editingItineraryId !== item.id && !savingItineraryOrder}
+                    onDragStart={() => setDraggingItineraryId(item.id)}
+                    onDragEnd={() => {
+                      setDraggingItineraryId(null);
+                      setItineraryDropTargetId(null);
+                    }}
+                    onDragOver={(e) => {
+                      if (editingItineraryId === item.id || savingItineraryOrder) return;
+                      e.preventDefault();
+                      if (itineraryDropTargetId !== item.id) {
+                        setItineraryDropTargetId(item.id);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleItineraryDrop(item.id);
+                    }}
+                    className={cn(
+                      'px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3',
+                      itineraryDropTargetId === item.id ? 'bg-brand-50' : ''
+                    )}
+                  >
                     {editingItineraryId === item.id ? (
                       <div className="w-full space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1837,6 +1926,9 @@ export default function EventDetailPage() {
                     ) : (
                       <>
                         <div>
+                          <div className="text-[11px] uppercase tracking-wide text-surface-400 mb-1">
+                            Drag to move
+                          </div>
                           <div className="flex items-center gap-2">
                             <span
                               className={cn(
@@ -2424,18 +2516,32 @@ export default function EventDetailPage() {
                       value={newGiftPackage.description}
                       onChange={(e) => setNewGiftPackage({ ...newGiftPackage, description: e.target.value })}
                     />
-                    <input
-                      className="input"
-                      placeholder="Image URL or media path (optional)"
-                      value={newGiftPackage.thumbnailPath}
-                      onChange={(e) => setNewGiftPackage({ ...newGiftPackage, thumbnailPath: e.target.value })}
-                    />
-                    {newGiftPackage.thumbnailPath.trim() ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium uppercase tracking-wide text-surface-500">
+                        Package photo (optional)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="input"
+                        onChange={(e) => setNewGiftPackagePhoto(e.target.files?.[0] || null)}
+                      />
+                      {newGiftPackagePhoto ? (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-rose-600 hover:text-rose-700"
+                          onClick={() => setNewGiftPackagePhoto(null)}
+                        >
+                          Remove selected photo
+                        </button>
+                      ) : null}
+                    </div>
+                    {newGiftPackagePhotoPreview ? (
                       <div className="rounded-lg border border-surface-200 bg-white p-2">
                         <div className="text-xs text-surface-500 mb-2">Preview</div>
                         <div className="w-full h-36 rounded-md overflow-hidden bg-surface-100 border border-surface-200">
                           <img
-                            src={resolveGiftThumbnailUrl(newGiftPackage.thumbnailPath.trim()) || ''}
+                            src={newGiftPackagePhotoPreview}
                             alt="New package preview"
                             className="w-full h-full object-cover"
                           />
