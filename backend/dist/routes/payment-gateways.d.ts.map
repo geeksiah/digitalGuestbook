@@ -1,1 +1,1 @@
-{"version":3,"file":"payment-gateways.d.ts","sourceRoot":"","sources":["../../src/routes/payment-gateways.ts"],"names":[],"mappings":"AAMA,QAAA,MAAM,MAAM,4CAAW,CAAC;AAqUxB,eAAe,MAAM,CAAC"}
+{"version":3,"file":"payment-gateways.d.ts","sourceRoot":"","sources":["../../src/routes/payment-gateways.ts"],"names":[],"mappings":"AAMA,QAAA,MAAM,MAAM,4CAAW,CAAC;AA0UxB,eAAe,MAAM,CAAC"}

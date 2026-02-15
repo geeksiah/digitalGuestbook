@@ -279,9 +279,13 @@ const allowedOrigins: string[] = [
   process.env.APP_URL,
 ].filter(Boolean) as string[];
 
-// Add localhost only in development
-if (process.env.NODE_ENV === 'development') {
+// Add local app origins outside production (web + emulator + Capacitor app shell).
+if (process.env.NODE_ENV !== 'production') {
   allowedOrigins.push('http://localhost:3000');
+  allowedOrigins.push('http://localhost:5173');
+  allowedOrigins.push('http://localhost:5174');
+  allowedOrigins.push('http://10.0.2.2:5174');
+  allowedOrigins.push('capacitor://localhost');
 }
 
 // Deduplicate
@@ -291,6 +295,18 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
+
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const parsed = new URL(origin);
+        const localHosts = new Set(['localhost', '127.0.0.1', '10.0.2.2']);
+        if (localHosts.has(parsed.hostname)) {
+          return callback(null, true);
+        }
+      } catch {
+        // Invalid URL -> fall through to standard checks.
+      }
+    }
 
     if (uniqueOrigins.includes(origin)) {
       return callback(null, true);

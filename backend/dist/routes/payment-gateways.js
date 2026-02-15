@@ -57,7 +57,12 @@ const paymentGatewaySchema = zod_1.z.object({
     customGatewayApiSecret: zod_1.z.string().optional(),
     customGatewayConfig: zod_1.z.string().optional(),
     // Common
-    currency: zod_1.z.string().default('USD'),
+    currency: zod_1.z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z]{3}$/, 'Currency must be a 3-letter ISO code')
+        .transform((value) => value.toUpperCase())
+        .default('USD'),
     successUrl: zod_1.z.string().optional(),
     cancelUrl: zod_1.z.string().optional(),
 });

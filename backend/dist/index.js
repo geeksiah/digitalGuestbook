@@ -27,6 +27,14 @@ function validateEnvironmentVariables() {
     if (missing.length > 0) {
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
     }
+    // Prisma schema expects DIRECT_URL for migration/schema operations.
+    // Keep deploys resilient by falling back to DATABASE_URL when DIRECT_URL is not explicitly set.
+    if (!process.env.DIRECT_URL || process.env.DIRECT_URL === '') {
+        process.env.DIRECT_URL = process.env.DATABASE_URL;
+        if (process.env.NODE_ENV === 'production') {
+            console.warn('DIRECT_URL is not set. Falling back to DATABASE_URL for Prisma schema operations.');
+        }
+    }
     // Additional production checks
     if (process.env.NODE_ENV === 'production') {
         const productionWarnings = [];
@@ -223,6 +231,7 @@ const owner_dashboard_js_1 = __importDefault(require("./routes/owner-dashboard.j
 const itinerary_js_1 = __importDefault(require("./routes/itinerary.js"));
 const gifting_js_1 = __importDefault(require("./routes/gifting.js"));
 const whatsapp_webhooks_js_1 = __importDefault(require("./routes/whatsapp-webhooks.js"));
+const paystack_webhooks_js_1 = __importDefault(require("./routes/paystack-webhooks.js"));
 // Middleware
 const errorHandler_js_1 = require("./middleware/errorHandler.js");
 const requestLogger_js_1 = require("./middleware/requestLogger.js");
@@ -252,9 +261,13 @@ const allowedOrigins = [
     process.env.SITE_URL,
     process.env.APP_URL,
 ].filter(Boolean);
-// Add localhost only in development
-if (process.env.NODE_ENV === 'development') {
+// Add local app origins outside production (web + emulator + Capacitor app shell).
+if (process.env.NODE_ENV !== 'production') {
     allowedOrigins.push('http://localhost:3000');
+    allowedOrigins.push('http://localhost:5173');
+    allowedOrigins.push('http://localhost:5174');
+    allowedOrigins.push('http://10.0.2.2:5174');
+    allowedOrigins.push('capacitor://localhost');
 }
 // Deduplicate
 const uniqueOrigins = [...new Set(allowedOrigins)];
@@ -263,6 +276,18 @@ app.use((0, cors_1.default)({
         // Allow requests with no origin (mobile apps, curl, server-to-server)
         if (!origin)
             return callback(null, true);
+        if (process.env.NODE_ENV !== 'production') {
+            try {
+                const parsed = new URL(origin);
+                const localHosts = new Set(['localhost', '127.0.0.1', '10.0.2.2']);
+                if (localHosts.has(parsed.hostname)) {
+                    return callback(null, true);
+                }
+            }
+            catch {
+                // Invalid URL -> fall through to standard checks.
+            }
+        }
         if (uniqueOrigins.includes(origin)) {
             return callback(null, true);
         }
@@ -311,6 +336,7 @@ const authLimiter = (0, express_rate_limit_1.default)({
 });
 app.use('/api/auth/', authLimiter);
 // Body Parsing
+app.use('/api/paystack/webhooks', express_1.default.raw({ type: 'application/json', limit: '2mb' }), paystack_webhooks_js_1.default);
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 // Request Logging

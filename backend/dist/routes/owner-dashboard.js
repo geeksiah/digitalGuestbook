@@ -14,6 +14,7 @@ const zod_1 = require("zod");
 const notifications_js_1 = require("../services/notifications.js");
 const invitation_js_1 = require("../services/invitation.js");
 const paystack_js_1 = require("../services/paystack.js");
+const payoutAutomation_js_1 = require("../services/payoutAutomation.js");
 const router = (0, express_1.Router)();
 // All routes require owner authentication
 router.use(auth_js_1.authenticateOwnerAccount);
@@ -139,6 +140,7 @@ router.get('/stats', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
                     currency: true,
                     status: true,
                     type: true,
+                    paymentMethod: true,
                 },
             },
             giftOrders: {
@@ -158,7 +160,7 @@ router.get('/stats', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const totalGiftOrders = events.reduce((sum, e) => sum + e._count.giftOrders, 0);
     // Calculate revenue
     const allTransactions = events.flatMap(e => e.transactions);
-    const completedTransactions = allTransactions.filter(t => t.status === 'completed' && t.type === 'ticket_sale');
+    const completedTransactions = allTransactions.filter((t) => t.status === 'completed' && ['ticket_sale', 'gift_cash'].includes(t.type));
     const revenueByCurrency = {};
     completedTransactions.forEach(t => {
         if (!revenueByCurrency[t.currency]) {
@@ -168,14 +170,28 @@ router.get('/stats', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         revenueByCurrency[t.currency].net += t.netAmount;
     });
     const giftingByCurrency = {};
-    events.flatMap((e) => e.giftOrders).forEach((order) => {
-        if (order.status !== 'PAID')
-            return;
-        if (!giftingByCurrency[order.currency]) {
-            giftingByCurrency[order.currency] = { total: 0, orders: 0 };
+    allTransactions
+        .filter((t) => t.status === 'completed' && t.type === 'gift_cash')
+        .forEach((t) => {
+        if (!giftingByCurrency[t.currency]) {
+            giftingByCurrency[t.currency] = { gross: 0, net: 0, orders: 0 };
         }
-        giftingByCurrency[order.currency].total += order.totalAmount;
-        giftingByCurrency[order.currency].orders += 1;
+        giftingByCurrency[t.currency].gross += t.grossAmount;
+        giftingByCurrency[t.currency].net += t.netAmount;
+        giftingByCurrency[t.currency].orders += 1;
+    });
+    const autoSettledCashByCurrency = {};
+    allTransactions
+        .filter((t) => t.status === 'completed'
+        && t.type === 'gift_cash'
+        && (t.paymentMethod || '').toLowerCase() === 'paystack')
+        .forEach((t) => {
+        if (!autoSettledCashByCurrency[t.currency]) {
+            autoSettledCashByCurrency[t.currency] = { gross: 0, net: 0, orders: 0 };
+        }
+        autoSettledCashByCurrency[t.currency].gross += t.grossAmount;
+        autoSettledCashByCurrency[t.currency].net += t.netAmount;
+        autoSettledCashByCurrency[t.currency].orders += 1;
     });
     res.json({
         stats: {
@@ -186,6 +202,7 @@ router.get('/stats', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             totalGiftOrders,
             revenueByCurrency,
             giftingByCurrency,
+            autoSettledCashByCurrency,
         },
     });
 }));
@@ -787,7 +804,53 @@ router.get('/events/:eventId/gift-orders', (0, errorHandler_js_1.asyncHandler)(a
         },
         orderBy: { createdAt: 'desc' },
     });
-    res.json({ orders });
+    const paymentRefs = orders
+        .map((order) => order.paymentReference)
+        .filter((ref) => Boolean(ref));
+    const transactions = paymentRefs.length
+        ? await prisma_js_1.default.transaction.findMany({
+            where: {
+                eventId,
+                paymentRef: { in: paymentRefs },
+                status: 'completed',
+                type: { in: ['gift_cash', 'gift_package_sale'] },
+            },
+            select: {
+                paymentRef: true,
+                type: true,
+                grossAmount: true,
+                platformFee: true,
+                netAmount: true,
+            },
+        })
+        : [];
+    const txByRef = new Map();
+    transactions.forEach((tx) => {
+        if (!tx.paymentRef)
+            return;
+        const current = txByRef.get(tx.paymentRef) || [];
+        current.push(tx);
+        txByRef.set(tx.paymentRef, current);
+    });
+    const ordersWithEarnings = orders.map((order) => {
+        const txs = order.paymentReference ? txByRef.get(order.paymentReference) || [] : [];
+        const ownerNetAmount = txs
+            .filter((tx) => tx.type === 'gift_cash')
+            .reduce((sum, tx) => sum + tx.netAmount, 0);
+        const platformFeeAmount = txs
+            .filter((tx) => tx.type === 'gift_cash')
+            .reduce((sum, tx) => sum + tx.platformFee, 0);
+        const packageAmount = txs
+            .filter((tx) => tx.type === 'gift_package_sale')
+            .reduce((sum, tx) => sum + tx.grossAmount, 0);
+        return {
+            ...order,
+            ownerNetAmount,
+            platformFeeAmount,
+            packageAmount,
+        };
+    });
+    res.json({ orders: ordersWithEarnings });
 }));
 /**
  * GET /api/owner-dashboard/wallet
@@ -804,7 +867,7 @@ router.get('/wallet', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     }
     res.json({
         wallet: owner.wallet || null,
-        paystackAutomationReady: Boolean(owner.wallet?.paystackSubaccount),
+        paystackAutomationReady: Boolean(owner.wallet?.paystackSubaccount && owner.wallet?.paystackRecipientCode),
     });
 }));
 /**
@@ -902,6 +965,8 @@ router.post('/wallet/paystack/connect', (0, errorHandler_js_1.asyncHandler)(asyn
         description: `EventPeepo owner payout destination (${owner.id})`,
     };
     let paystackSubaccount = owner.wallet?.paystackSubaccount || undefined;
+    let paystackRecipientCode = owner.wallet?.paystackRecipientCode || undefined;
+    const walletCurrency = (input.currency || owner.wallet?.currency || 'NGN').toUpperCase();
     if (paystackSubaccount) {
         try {
             const updated = await (0, paystack_js_1.updatePaystackSubaccount)(paystackSubaccount, payload);
@@ -916,6 +981,22 @@ router.post('/wallet/paystack/connect', (0, errorHandler_js_1.asyncHandler)(asyn
         const created = await (0, paystack_js_1.createPaystackSubaccount)(payload);
         paystackSubaccount = created.subaccount_code;
     }
+    try {
+        const recipient = await (0, paystack_js_1.createPaystackTransferRecipient)({
+            name: resolvedAccount.account_name || businessName,
+            accountNumber,
+            bankCode,
+            currency: walletCurrency,
+            type: 'nuban',
+            description: `EventPeepo owner transfer recipient (${owner.id})`,
+        });
+        paystackRecipientCode = recipient.recipient_code;
+    }
+    catch (error) {
+        if (!paystackRecipientCode) {
+            throw error;
+        }
+    }
     const wallet = await prisma_js_1.default.ownerWallet.upsert({
         where: { ownerId },
         create: {
@@ -923,9 +1004,15 @@ router.post('/wallet/paystack/connect', (0, errorHandler_js_1.asyncHandler)(asyn
             bankName: resolvedAccount.bank_name || owner.wallet?.bankName || null,
             accountName: resolvedAccount.account_name,
             accountNumber,
+            routingNumber: bankCode,
             paystackSubaccount,
+            paystackRecipientCode,
+            paystackRecipientType: 'nuban',
+            paystackRecipientName: resolvedAccount.account_name,
+            paystackRecipientBankCode: bankCode,
+            paystackRecipientUpdatedAt: new Date(),
             preferredMethod: input.setAsPreferred === false ? (owner.wallet?.preferredMethod || 'bank') : 'paystack',
-            currency: input.currency || owner.wallet?.currency || 'NGN',
+            currency: walletCurrency,
             isVerified: true,
             verifiedAt: new Date(),
         },
@@ -933,9 +1020,15 @@ router.post('/wallet/paystack/connect', (0, errorHandler_js_1.asyncHandler)(asyn
             bankName: resolvedAccount.bank_name || owner.wallet?.bankName || undefined,
             accountName: resolvedAccount.account_name,
             accountNumber,
+            routingNumber: bankCode,
             paystackSubaccount,
+            paystackRecipientCode,
+            paystackRecipientType: 'nuban',
+            paystackRecipientName: resolvedAccount.account_name,
+            paystackRecipientBankCode: bankCode,
+            paystackRecipientUpdatedAt: new Date(),
             preferredMethod: input.setAsPreferred === false ? undefined : 'paystack',
-            currency: input.currency || undefined,
+            currency: walletCurrency,
             isVerified: true,
             verifiedAt: new Date(),
         },
@@ -951,6 +1044,7 @@ router.post('/wallet/paystack/connect', (0, errorHandler_js_1.asyncHandler)(asyn
                 country: input.country || null,
                 currency: wallet.currency,
                 paystackSubaccount,
+                paystackRecipientCode,
             }),
         },
     });
@@ -958,6 +1052,7 @@ router.post('/wallet/paystack/connect', (0, errorHandler_js_1.asyncHandler)(asyn
         wallet,
         paystack: {
             subaccountCode: paystackSubaccount,
+            recipientCode: paystackRecipientCode,
             accountName: resolvedAccount.account_name,
             accountNumber: resolvedAccount.account_number,
         },
@@ -1002,12 +1097,17 @@ router.get('/payouts', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         const transactions = await prisma_js_1.default.transaction.findMany({
             where: {
                 eventId: event.id,
-                type: 'ticket_sale',
+                type: { in: ['ticket_sale', 'gift_cash'] },
                 status: 'completed',
             },
         });
+        const payoutEligibleTransactions = transactions.filter((tx) => {
+            // Cash gifts paid with Paystack split are settled directly to owner subaccounts.
+            return !(tx.type === 'gift_cash' && (tx.paymentMethod || '').toLowerCase() === 'paystack');
+        });
+        const totalCurrency = payoutEligibleTransactions[0]?.currency || transactions[0]?.currency || 'USD';
         // Calculate total net amount (available for payout)
-        const totalNet = transactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
+        const totalNet = payoutEligibleTransactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
         // Get all payout requests for this event
         const eventPayouts = payouts.filter(p => p.eventId === event.id);
         // Calculate fulfilled payout amount (status: FULFILLED)
@@ -1025,6 +1125,7 @@ router.get('/payouts', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             eventName: event.name,
             eventSlug: event.slug,
             totalNet,
+            currency: totalCurrency,
             fulfilledAmount,
             pendingAmount,
             availableBalance,
@@ -1054,8 +1155,8 @@ router.post('/payouts', (0, errorHandler_js_1.asyncHandler)(async (req, res) => 
     const payoutSchema = zod_1.z.object({
         eventId: zod_1.z.string().uuid(),
         requestedAmount: zod_1.z.number().positive(),
-        currency: zod_1.z.string().default('USD'),
-        payoutMethod: zod_1.z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']),
+        currency: zod_1.z.string().optional(),
+        payoutMethod: zod_1.z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']).optional(),
         notes: zod_1.z.string().optional(),
     });
     const data = payoutSchema.parse(req.body);
@@ -1076,19 +1177,22 @@ router.post('/payouts', (0, errorHandler_js_1.asyncHandler)(async (req, res) => 
     if (!wallet) {
         throw new errorHandler_js_1.AppError('Wallet configuration required. Please set up your wallet first.', 400);
     }
-    // Check if preferred method matches request
-    if (wallet.preferredMethod !== data.payoutMethod) {
-        // Allow override but warn (optional check)
+    if (wallet.preferredMethod === 'paystack' && !wallet.paystackRecipientCode) {
+        throw new errorHandler_js_1.AppError('Paystack payouts require a connected receiving account. Please reconnect Paystack in Wallet settings.', 400);
     }
+    // Enforce wallet configuration as source of truth for secure payouts.
     // Calculate available balance for this event
     const transactions = await prisma_js_1.default.transaction.findMany({
         where: {
             eventId: data.eventId,
-            type: 'ticket_sale',
+            type: { in: ['ticket_sale', 'gift_cash'] },
             status: 'completed',
         },
     });
-    const totalNet = transactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
+    const payoutEligibleTransactions = transactions.filter((tx) => {
+        return !(tx.type === 'gift_cash' && (tx.paymentMethod || '').toLowerCase() === 'paystack');
+    });
+    const totalNet = payoutEligibleTransactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
     // Get existing payout requests for this event
     const existingPayouts = await prisma_js_1.default.payoutRequest.findMany({
         where: {
@@ -1104,17 +1208,20 @@ router.post('/payouts', (0, errorHandler_js_1.asyncHandler)(async (req, res) => 
         .reduce((sum, p) => sum + (p.requestedAmount || 0), 0);
     const availableBalance = totalNet - fulfilledAmount - pendingAmount;
     if (data.requestedAmount > availableBalance) {
-        throw new errorHandler_js_1.AppError(`Requested amount (${data.currency} ${data.requestedAmount.toFixed(2)}) exceeds available balance (${data.currency} ${availableBalance.toFixed(2)})`, 400);
+        throw new errorHandler_js_1.AppError(`Requested amount (${wallet.currency} ${data.requestedAmount.toFixed(2)}) exceeds available balance (${wallet.currency} ${availableBalance.toFixed(2)})`, 400);
     }
     // Create payout request
     const payout = await prisma_js_1.default.payoutRequest.create({
         data: {
             eventId: data.eventId,
             requestedAmount: data.requestedAmount,
-            currency: data.currency,
-            payoutMethod: data.payoutMethod,
+            currency: wallet.currency,
+            payoutMethod: wallet.preferredMethod,
             notes: data.notes,
             status: 'PENDING',
+            ledgerStatus: 'REQUESTED',
+            gateway: wallet.preferredMethod === 'paystack' ? 'paystack' : 'manual',
+            requestedByOwnerId: ownerId,
         },
         include: {
             event: {
@@ -1126,7 +1233,47 @@ router.post('/payouts', (0, errorHandler_js_1.asyncHandler)(async (req, res) => 
             },
         },
     });
-    res.status(201).json({ payout });
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            eventId: data.eventId,
+            action: 'OWNER_PAYOUT_REQUEST_CREATED',
+            entityType: 'PAYOUT',
+            entityId: payout.id,
+            details: JSON.stringify({
+                ownerId,
+                requestedAmount: payout.requestedAmount,
+                currency: payout.currency,
+                payoutMethod: payout.payoutMethod,
+            }),
+        },
+    });
+    let resultPayout = payout;
+    let automation = {
+        attempted: false,
+        initiated: false,
+        message: null,
+    };
+    if (wallet.preferredMethod === 'paystack') {
+        automation.attempted = true;
+        try {
+            resultPayout = await (0, payoutAutomation_js_1.queuePaystackTransferForPayout)(payout.id, null);
+            automation.initiated = true;
+            automation.message = 'Paystack transfer has been initiated and will reconcile automatically via webhook.';
+        }
+        catch (error) {
+            resultPayout = await prisma_js_1.default.payoutRequest.update({
+                where: { id: payout.id },
+                data: {
+                    status: 'DELAYED',
+                    ledgerStatus: 'MANUAL_REVIEW',
+                    failureMessage: error?.message || 'Failed to queue transfer',
+                },
+            });
+            automation.initiated = false;
+            automation.message = 'Automatic transfer could not be started. This payout is queued for manual review.';
+        }
+    }
+    res.status(201).json({ payout: resultPayout, automation });
 }));
 exports.default = router;
 //# sourceMappingURL=owner-dashboard.js.map

@@ -8,6 +8,11 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const router = (0, express_1.Router)();
+const normalizeFeeMode = (value) => String(value || 'PERCENTAGE').toUpperCase() === 'FIXED' ? 'FIXED' : 'PERCENTAGE';
+const toNonNegativeNumber = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
 // Mask sensitive fields
 const maskSecret = (value) => {
     return value ? '••••••••' : null;
@@ -27,7 +32,25 @@ router.get('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)
     res.json({ settings });
 }));
 router.patch('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const data = req.body;
+    const body = req.body || {};
+    const data = {
+        siteName: body.siteName,
+        siteUrl: body.siteUrl,
+        logoUrl: body.logoUrl,
+        emailEnabled: body.emailEnabled,
+        smsEnabled: body.smsEnabled,
+        whatsappEnabled: body.whatsappEnabled,
+        defaultEmailProviderId: body.defaultEmailProviderId,
+        defaultSmsProviderId: body.defaultSmsProviderId,
+        defaultWhatsappProviderId: body.defaultWhatsappProviderId,
+        platformFeeMode: normalizeFeeMode(body.platformFeeMode),
+        platformFeePercent: toNonNegativeNumber(body.platformFeePercent, 5),
+        platformFeeFixed: body.platformFeeFixed === null || body.platformFeeFixed === undefined
+            ? null
+            : toNonNegativeNumber(body.platformFeeFixed, 0),
+        processingFeePercent: toNonNegativeNumber(body.processingFeePercent, 2.9),
+        processingFeeFixed: toNonNegativeNumber(body.processingFeeFixed, 0.3),
+    };
     // Remove system fields
     delete data.id;
     delete data.createdAt;

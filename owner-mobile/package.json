@@ -1,0 +1,43 @@
+{
+  "name": "eventpeepo-owner-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:host": "vite --host 0.0.0.0 --port 5174",
+    "lint": "tsc --noEmit",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "android:live": "concurrently -n DEV,CAP \"npm run dev:host\" \"wait-on tcp:5174 && npx cap run android -l --host 10.0.2.2 --port 5174\"",
+    "ios:live": "concurrently -n DEV,CAP \"npm run dev:host\" \"wait-on tcp:5174 && npx cap run ios -l --host localhost --port 5174\""
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@ionic/react": "^8.0.0",
+    "@ionic/react-router": "^8.0.0",
+    "axios": "^1.8.4",
+    "ionicons": "^7.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^5.3.4",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/react-router-dom": "^5.3.3",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.8.2",
+    "vite": "^5.4.10",
+    "wait-on": "^8.0.4"
+  }
+}

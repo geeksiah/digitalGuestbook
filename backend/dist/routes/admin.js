@@ -7,6 +7,7 @@ const express_1 = require("express");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
+const payoutAutomation_js_1 = require("../services/payoutAutomation.js");
 const router = (0, express_1.Router)();
 // ============================================
 // DASHBOARD STATS
@@ -44,33 +45,77 @@ router.get('/dashboard/stats', auth_js_1.authenticateAdmin, (0, errorHandler_js_
  * Get ticket sales across all events
  */
 router.get('/sales', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const { eventId, status, startDate, endDate, page = 1, limit = 50 } = req.query;
-    const where = {
+    const { eventId, status, type, startDate, endDate, page = 1, limit = 50 } = req.query;
+    const pageNumber = Math.max(1, Number(page) || 1);
+    const pageLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+    const parseDate = (value, asEndOfDay = false) => {
+        if (!value)
+            return null;
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime()))
+            return null;
+        if (asEndOfDay) {
+            d.setHours(23, 59, 59, 999);
+        }
+        return d;
+    };
+    const start = parseDate(typeof startDate === 'string' ? startDate : undefined, false);
+    const end = parseDate(typeof endDate === 'string' ? endDate : undefined, true);
+    // Legacy RSVP ticket sales filter (kept for compatibility with existing pages)
+    const rsvpWhere = {
         ticketType: { not: null },
         amountPaid: { not: null },
     };
     if (eventId)
-        where.eventId = eventId;
-    if (status)
-        where.paymentStatus = status;
-    if (startDate)
-        where.submittedAt = { gte: new Date(startDate) };
-    if (endDate) {
-        where.submittedAt = where.submittedAt || {};
-        where.submittedAt.lte = new Date(endDate);
+        rsvpWhere.eventId = eventId;
+    if (status && ['PAID', 'PENDING', 'FAILED', 'REFUNDED'].includes(String(status).toUpperCase())) {
+        rsvpWhere.paymentStatus = String(status).toUpperCase();
     }
-    const [rsvps, total] = await Promise.all([
+    if (start)
+        rsvpWhere.submittedAt = { ...rsvpWhere.submittedAt, gte: start };
+    if (end)
+        rsvpWhere.submittedAt = { ...rsvpWhere.submittedAt, lte: end };
+    const statusMap = {
+        PAID: 'completed',
+        PENDING: 'pending',
+        FAILED: 'failed',
+        REFUNDED: 'refunded',
+    };
+    const normalizedStatus = status ? String(status).toUpperCase() : '';
+    const txStatus = normalizedStatus ? (statusMap[normalizedStatus] || String(status).toLowerCase()) : undefined;
+    const txWhere = {};
+    if (eventId)
+        txWhere.eventId = eventId;
+    if (txStatus)
+        txWhere.status = txStatus;
+    if (type)
+        txWhere.type = String(type);
+    if (start)
+        txWhere.createdAt = { ...txWhere.createdAt, gte: start };
+    if (end)
+        txWhere.createdAt = { ...txWhere.createdAt, lte: end };
+    const [rsvps, totalRsvps, transactions, totalTransactions] = await Promise.all([
         prisma_js_1.default.rSVP.findMany({
-            where,
+            where: rsvpWhere,
             include: {
                 event: { select: { id: true, name: true, slug: true } },
                 invitation: { select: { accessCode: true } },
             },
             orderBy: { submittedAt: 'desc' },
-            skip: (Number(page) - 1) * Number(limit),
-            take: Number(limit),
+            skip: (pageNumber - 1) * pageLimit,
+            take: pageLimit,
         }),
-        prisma_js_1.default.rSVP.count({ where }),
+        prisma_js_1.default.rSVP.count({ where: rsvpWhere }),
+        prisma_js_1.default.transaction.findMany({
+            where: txWhere,
+            include: {
+                event: { select: { id: true, name: true, slug: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            skip: (pageNumber - 1) * pageLimit,
+            take: pageLimit,
+        }),
+        prisma_js_1.default.transaction.count({ where: txWhere }),
     ]);
     const sales = rsvps.filter((r) => r.ticketType && r.amountPaid);
     const stats = {
@@ -83,7 +128,61 @@ router.get('/sales', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHan
             REFUNDED: sales.filter((s) => s.paymentStatus === 'REFUNDED').length,
         },
     };
-    res.json({ sales, stats, pagination: { page: Number(page), limit: Number(limit), total } });
+    const initBucket = () => ({ count: 0, gross: 0, adminRevenue: 0, ownerNet: 0, processingFees: 0 });
+    const byType = {};
+    const byStatus = {};
+    const byCurrency = {};
+    const adminRevenueTransactions = [];
+    const completedTransactions = transactions.filter((t) => t.status === 'completed');
+    for (const tx of transactions) {
+        if (!byType[tx.type])
+            byType[tx.type] = initBucket();
+        if (!byCurrency[tx.currency])
+            byCurrency[tx.currency] = initBucket();
+        byType[tx.type].count += 1;
+        byType[tx.type].gross += tx.grossAmount || 0;
+        byType[tx.type].adminRevenue += tx.platformFee || 0;
+        byType[tx.type].ownerNet += tx.netAmount || 0;
+        byType[tx.type].processingFees += tx.processingFee || 0;
+        byCurrency[tx.currency].count += 1;
+        byCurrency[tx.currency].gross += tx.grossAmount || 0;
+        byCurrency[tx.currency].adminRevenue += tx.platformFee || 0;
+        byCurrency[tx.currency].ownerNet += tx.netAmount || 0;
+        byCurrency[tx.currency].processingFees += tx.processingFee || 0;
+        byStatus[tx.status] = (byStatus[tx.status] || 0) + 1;
+        if ((tx.platformFee || 0) > 0 && tx.status === 'completed') {
+            adminRevenueTransactions.push(tx.id);
+        }
+    }
+    const ticketTransactions = transactions.filter((t) => t.type === 'ticket_sale');
+    const giftTransactions = transactions.filter((t) => ['gift_cash', 'gift_package_sale'].includes(t.type));
+    const sum = (list, selector) => list.reduce((acc, item) => acc + selector(item), 0);
+    const analytics = {
+        totals: {
+            transactionCount: transactions.length,
+            completedTransactionCount: completedTransactions.length,
+            ticketTransactionCount: ticketTransactions.length,
+            giftTransactionCount: giftTransactions.length,
+            grossRevenue: sum(transactions, (t) => t.grossAmount || 0),
+            ticketRevenue: sum(ticketTransactions, (t) => t.grossAmount || 0),
+            giftRevenue: sum(giftTransactions, (t) => t.grossAmount || 0),
+            adminRevenue: sum(completedTransactions, (t) => t.platformFee || 0),
+            ownerNet: sum(completedTransactions, (t) => t.netAmount || 0),
+            processingFees: sum(completedTransactions, (t) => t.processingFee || 0),
+            adminRevenueTransactionCount: adminRevenueTransactions.length,
+        },
+        byType,
+        byStatus,
+        byCurrency: Object.entries(byCurrency).map(([currency, values]) => ({ currency, ...values })),
+    };
+    res.json({
+        sales,
+        stats,
+        transactions,
+        analytics,
+        pagination: { page: pageNumber, limit: pageLimit, total: totalRsvps },
+        transactionPagination: { page: pageNumber, limit: pageLimit, total: totalTransactions },
+    });
 }));
 // ============================================
 // PAYOUT MANAGEMENT
@@ -160,6 +259,11 @@ router.get('/payouts', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncH
             DELAYED: allPayouts.filter((p) => p.status === 'DELAYED').length,
             REJECTED: allPayouts.filter((p) => p.status === 'REJECTED').length,
         },
+        byLedgerStatus: allPayouts.reduce((acc, payout) => {
+            const key = payout.ledgerStatus || 'UNKNOWN';
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+        }, {}),
     };
     res.json({
         payouts,
@@ -221,21 +325,37 @@ router.post('/payouts/:id/process', auth_js_1.authenticateAdmin, (0, errorHandle
     if (!payout) {
         throw new errorHandler_js_1.AppError('Payout request not found', 404);
     }
-    if (payout.status !== 'PENDING') {
-        throw new errorHandler_js_1.AppError('Only pending payouts can be processed', 400);
+    if (['FULFILLED', 'REJECTED'].includes(payout.status)) {
+        throw new errorHandler_js_1.AppError('This payout request has already been finalized', 400);
     }
     // Determine new status based on body (default to PROCESSING)
     const newStatus = req.body.status || 'PROCESSING'; // PROCESSING | FULFILLED | DELAYED
     if (!['PROCESSING', 'FULFILLED', 'DELAYED'].includes(newStatus)) {
         throw new errorHandler_js_1.AppError('Invalid status. Must be PROCESSING, FULFILLED, or DELAYED', 400);
     }
+    const shouldAutoTransfer = payout.payoutMethod === 'paystack'
+        && newStatus === 'PROCESSING'
+        && req.body.autoTransfer !== false
+        && ['PENDING', 'DELAYED'].includes(payout.status);
+    if (shouldAutoTransfer) {
+        const automated = await (0, payoutAutomation_js_1.queuePaystackTransferForPayout)(id, req.admin.id);
+        return res.json({
+            payout: automated,
+            automation: {
+                initiated: true,
+                message: 'Paystack transfer initiated. Final status will reconcile via webhook.',
+            },
+        });
+    }
     const updated = await prisma_js_1.default.payoutRequest.update({
         where: { id },
         data: {
             status: newStatus,
+            ledgerStatus: newStatus === 'FULFILLED' ? 'TRANSFER_SUCCESS' : newStatus === 'DELAYED' ? 'MANUAL_REVIEW' : 'TRANSFER_PENDING',
             processedAt: processedAt ? new Date(processedAt) : new Date(),
             processedBy: req.admin.id,
             transactionRef: transactionRef || null,
+            gateway: payout.payoutMethod === 'paystack' ? 'paystack' : 'manual',
             notes: req.body.notes || notes || null,
         },
         include: {
@@ -364,9 +484,11 @@ router.post('/payouts/:id/reject', auth_js_1.authenticateAdmin, (0, errorHandler
         where: { id },
         data: {
             status: 'REJECTED',
+            ledgerStatus: 'REJECTED',
             processedAt: new Date(),
             processedBy: req.admin.id,
             notes: reason || null,
+            rejectionReason: reason || null,
         },
         include: {
             event: {
@@ -490,6 +612,11 @@ router.get('/payouts/analytics', auth_js_1.authenticateAdmin, (0, errorHandler_j
             }
             acc[eventName].count++;
             acc[eventName].total += p.requestedAmount || 0;
+            return acc;
+        }, {}),
+        byLedgerStatus: payouts.reduce((acc, payout) => {
+            const key = payout.ledgerStatus || 'UNKNOWN';
+            acc[key] = (acc[key] || 0) + 1;
             return acc;
         }, {}),
     };

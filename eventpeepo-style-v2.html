@@ -1,0 +1,245 @@
+﻿<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Event Peepo | Premium Event Management Agency</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#ffffff;--text:#0b0f0d;--accent:#06392f;--accent-soft:#0e4f43;--dark:#0b0f0d;
+      --font-main:'Inter',sans-serif;
+    }
+    ::-webkit-scrollbar{width:14px}::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background-color:var(--accent);border:4px solid var(--bg);border-radius:20px}
+    html,body{max-width:100%;overflow-x:hidden;font-family:var(--font-main)}
+    body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    .titular-impact{font-weight:900;text-transform:uppercase;letter-spacing:-.04em;line-height:.9;display:block;width:100%}
+    #hero-title{font-size:13vw;line-height:105%;color:#fff;margin-left:-.05em;margin-bottom:3rem}
+    @media(min-width:1024px){#hero-title{font-size:7vw;margin-bottom:4rem;line-height:110%}}
+    .section-title-huge{font-size:9.5vw;line-height:.95;margin-bottom:2.5rem;color:var(--text)}
+    @media(min-width:768px){.section-title-huge{font-size:8vw}}
+    @media(min-width:1024px){.section-title-huge{font-size:5.5vw;margin-bottom:3rem;line-height:110%}}
+    .eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.2em;font-weight:700;color:var(--accent);display:inline-block;margin-bottom:1.5rem}
+    .reveal{opacity:0;transform:translateY(30px);transition:all 1s cubic-bezier(.16,1,.3,1)}
+    .reveal.active{opacity:1;transform:translateY(0)}
+    .hero-section{min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden;padding-top:100px;padding-bottom:60px;background:#0b0f0d}
+    .hero-card{background:var(--accent);border:1px solid rgba(255,255,255,.12);border-radius:2rem;padding:2.5rem 1.5rem;position:relative;overflow:hidden;z-index:2}
+    @media(min-width:768px){.hero-card{border-radius:4rem;padding:5rem}}
+    .hero-media{border-radius:2rem;overflow:hidden;position:relative;min-height:400px;border:1px solid rgba(255,255,255,.1)}
+    .hero-media img{width:100%;height:100%;object-fit:cover;transition:transform 2.5s cubic-bezier(.16,1,.3,1)}
+    .hero-trust{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.6rem;margin-bottom:2rem}
+    .hero-trust span{font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.08);padding:.45rem .75rem;border-radius:999px;font-weight:700}
+    .glass-nav{background:rgba(255,255,255,.98);backdrop-filter:blur(30px);border-bottom:1px solid rgba(0,0,0,.08)}
+    #scroll-progress{position:fixed;top:0;left:0;width:0%;height:4px;background:var(--accent);z-index:1000}
+    .service-card{background:#fff;border:1px solid rgba(0,0,0,.08);padding:2.5rem 2rem;transition:all .3s cubic-bezier(.25,.46,.45,.94);height:100%;display:flex;flex-direction:column;position:relative;border-radius:1.5rem;overflow:hidden}
+    .service-card::before{content:'';position:absolute;inset:0;background:var(--accent);opacity:0;transition:opacity .4s ease;z-index:0}
+    @media(min-width:1024px){.service-card:hover{transform:translateY(-8px);border-color:var(--accent);box-shadow:0 20px 40px rgba(6,57,47,.1)}.service-card:hover::before{opacity:.03}}
+    .service-index{font-size:3rem;font-weight:900;color:#d1d5db;line-height:1;margin-bottom:1.5rem;position:relative;z-index:1}
+    .service-title{font-size:1.75rem;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-bottom:1rem;color:var(--text);position:relative;z-index:1}
+    .service-desc{font-size:1rem;color:rgba(11,15,13,.7);line-height:1.6;font-weight:500;position:relative;z-index:1;margin-bottom:1rem}
+    .service-points{margin:0;padding-left:1.1rem;color:rgba(11,15,13,.72);font-size:.95rem;line-height:1.5;position:relative;z-index:1;display:grid;gap:.45rem}
+    .conversion-band{background:#0f1b17;border:1px solid rgba(255,255,255,.09);border-radius:2rem;padding:1.5rem}
+    .portfolio-card{position:relative;aspect-ratio:4/5;border-radius:1.75rem;overflow:hidden;background:#000;cursor:pointer;isolation:isolate}
+    .portfolio-card img{width:100%;height:100%;object-fit:cover;transform:scale(1);filter:grayscale(100%);transition:transform 1.8s cubic-bezier(.16,1,.3,1),filter .8s ease}
+    .portfolio-card:hover img{transform:scale(1.08);filter:grayscale(0%)}
+    .form-group{position:relative;margin-bottom:2.2rem}.form-label{font-size:.7rem;font-weight:800;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:.5rem;display:block;letter-spacing:.1em}
+    .form-input{width:100%;background:transparent;border-bottom:2px solid rgba(255,255,255,.2);padding:.75rem 0;color:#fff;font-size:1.08rem;font-weight:700;transition:all .4s ease;border-radius:0}
+    .form-input:focus{outline:none;border-bottom-color:#fff}
+    .contact-card-inner{padding:2.5rem 2rem}@media(min-width:768px){.contact-card-inner{padding:4rem 5rem}}
+    .stat-container{text-align:center}.stat-number{font-size:clamp(3.5rem,9vw,8rem);line-height:1;font-weight:900;letter-spacing:-.04em;color:var(--accent);display:inline-block}
+    .btn-primary{background:#fff;color:var(--accent);transition:all .3s cubic-bezier(.16,1,.3,1);font-weight:800}
+    .btn-primary:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 20px 40px rgba(0,0,0,.3)}
+    .btn-secondary{border:2px solid rgba(255,255,255,.2);color:#fff;transition:all .3s cubic-bezier(.16,1,.3,1);font-weight:800}
+    .btn-secondary:hover{background:rgba(255,255,255,.1);border-color:#fff;transform:translateY(-4px)}
+    #mobileMenu{transform:translateX(100%);transition:transform .6s cubic-bezier(.16,1,.3,1)}#mobileMenu.active{transform:translateX(0)}
+    .faq-item{border:1px solid rgba(255,255,255,.18);border-radius:1.25rem;background:rgba(255,255,255,.04);padding:1rem}
+    .footer-heading{font-size:.75rem;font-weight:700;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:1.5rem;letter-spacing:.2em}
+  </style>
+</head>
+<body class="antialiased">
+<div id="scroll-progress"></div>
+<nav class="fixed top-0 w-full z-[100] py-6 md:py-8 transition-all duration-500" id="mainNav">
+  <div class="max-w-[1700px] mx-auto px-6 md:px-12 lg:px-20 flex items-center justify-between">
+    <div class="flex items-center cursor-pointer" onclick="window.scrollTo(0,0)">
+      <div class="text-white font-black tracking-tight text-xl md:text-2xl" id="navText">THE EVENT PEEPO</div>
+    </div>
+    <div class="hidden lg:flex items-center space-x-12 xl:space-x-16">
+      <div class="flex space-x-12 xl:space-x-16 text-xs font-bold uppercase text-white/70 transition-colors tracking-widest" id="navLinks">
+        <a href="#services" class="hover:text-white">Services</a>
+        <a href="#portfolio" class="hover:text-white">Archive</a>
+        <a href="#contact" class="hover:text-white">Inquiry</a>
+      </div>
+      <a href="#contact" class="px-10 py-4 xl:px-12 xl:py-5 rounded-full btn-primary text-xs uppercase shadow-2xl tracking-widest">Book Free Call</a>
+    </div>
+    <button class="lg:hidden text-white transition-colors" id="mobileMenuBtn"><svg class="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" stroke-linecap="round" d="M4 8h16M4 16h16"/></svg></button>
+  </div>
+</nav>
+<div id="mobileMenu" class="fixed inset-0 bg-[var(--dark)] z-[110] text-white p-10 md:p-20 lg:hidden flex flex-col justify-center">
+  <button class="absolute top-10 right-10" id="closeMenu"><svg class="w-10 h-10 md:w-12 md:h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+  <div class="space-y-10 md:space-y-14 text-5xl md:text-8xl font-bold tracking-tight">
+    <a href="#services" class="mobile-link block hover:text-white/70 transition-colors">Services</a>
+    <a href="#portfolio" class="mobile-link block hover:text-white/70 transition-colors">Archive</a>
+    <a href="#contact" class="mobile-link block hover:text-white/70 transition-colors">Inquiry</a>
+  </div>
+</div>
+<section class="hero-section">
+  <div class="max-w-[1700px] mx-auto px-5 md:px-12 lg:px-20 w-full grid lg:grid-cols-12 gap-8 md:gap-12 items-stretch relative z-10">
+    <div class="lg:col-span-8 hero-card reveal active shadow-2xl">
+      <div class="flex items-center space-x-4 mb-8 md:mb-14">
+        <div class="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+        <span class="text-[10px] md:text-xs font-bold uppercase text-white/50 tracking-widest">Event Management + Digital Experiences</span>
+      </div>
+      <h1 id="hero-title" class="titular-impact">DESIGN.<br>DELIVER.<br>REMEMBER.</h1>
+      <p class="text-lg md:text-3xl text-white/80 max-w-3xl mb-8 md:mb-10 font-semibold leading-relaxed">
+        We deliver premium event management, digital solutions for events, ushering, photography/videography, and logistics with the control and confidence serious hosts expect.
+      </p>
+      <div class="hero-trust">
+        <span>Tailored Strategy in 24h</span>
+        <span>Dedicated Event Lead</span>
+        <span>Premium Guest Experience</span>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-6 md:gap-8">
+        <a href="#contact" class="w-full sm:w-auto px-10 py-6 md:px-16 md:py-8 rounded-full btn-primary text-xs uppercase text-center tracking-widest block">Get Free Strategy Call</a>
+        <a href="https://app.eventpeepo.com" target="_blank" rel="noopener" class="w-full sm:w-auto px-10 py-6 md:px-16 md:py-8 rounded-full btn-secondary text-xs uppercase text-center tracking-widest block">Visit app.eventpeepo.com</a>
+      </div>
+    </div>
+    <div class="lg:col-span-4 hero-media reveal active shadow-2xl" style="transition-delay:0.3s">
+      <img src="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&q=80&w=1200" alt="Event experience">
+      <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent"></div>
+      <div class="absolute bottom-8 left-8 md:bottom-16 md:left-16">
+        <div class="text-[10px] md:text-xs font-bold uppercase text-white/40 mb-2 md:mb-4 tracking-widest">The Event Peepo</div>
+        <p class="text-lg md:text-2xl font-black text-white uppercase tracking-tight leading-tight">Precision Execution. <br>Lasting Impressions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="py-24 md:py-48 border-y border-black/5 bg-slate-50">
+  <div class="max-w-[1700px] mx-auto px-6 md:px-12 lg:px-20">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-12 md:gap-16">
+      <div class="reveal stat-container"><div class="stat-number" data-target="300">0</div><div class="text-xs md:text-sm font-bold uppercase text-black/40 mt-6 md:mt-8 tracking-widest">Events Delivered</div></div>
+      <div class="reveal stat-container" style="transition-delay:0.1s;"><div class="stat-number" data-target="5">0</div><div class="text-xs md:text-sm font-bold uppercase text-black/40 mt-6 md:mt-8 tracking-widest">Service Verticals</div></div>
+      <div class="reveal stat-container" style="transition-delay:0.2s;"><div class="stat-number" data-target="96">0</div><div class="text-xs md:text-sm font-bold uppercase text-black/40 mt-6 md:mt-8 tracking-widest">Referral Confidence</div></div>
+      <div class="reveal stat-container" style="transition-delay:0.3s;"><div class="stat-number" data-target="24">0</div><div class="text-xs md:text-sm font-bold uppercase text-black/40 mt-6 md:mt-8 tracking-widest">Hours Proposal Turnaround</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="services" class="py-24 md:py-56">
+  <div class="max-w-[1700px] mx-auto px-5 md:px-12 lg:px-20">
+    <div class="max-w-6xl mb-16 md:mb-32 reveal">
+      <span class="eyebrow block">Our Framework</span>
+      <h2 class="titular-impact section-title-huge text-black">Engineered for<br>Excellence.</h2>
+      <p class="text-xl md:text-4xl text-black/70 font-semibold leading-relaxed max-w-4xl mt-8 md:mt-12">Every service is structured to improve guest comfort, visual quality, and execution control while increasing conversion outcomes for your event goals.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-12">
+      <div class="service-card reveal"><div class="service-index">01</div><h3 class="service-title">Event Management</h3><p class="service-desc">Full planning and operational leadership from concept to close.</p><ul class="service-points"><li>Run-of-show and vendor coordination</li><li>Guest flow and on-site command control</li><li>Timeline precision and quality assurance</li></ul></div>
+      <div class="service-card reveal" style="transition-delay:.1s;"><div class="service-index">02</div><h3 class="service-title">Digital Solutions for Events</h3><p class="service-desc">Custom event pages and digital systems via app.eventpeepo.com.</p><ul class="service-points"><li>Invitations, RSVP and guest access flows</li><li>Itinerary, guestbook and gifting integration</li><li>Event-specific branding and smart experience layers</li></ul></div>
+      <div class="service-card reveal" style="transition-delay:.2s;"><div class="service-index">03</div><h3 class="service-title">Ushering Service</h3><p class="service-desc">Professional ushers who maintain poise, order, and guest comfort.</p><ul class="service-points"><li>Reception and protocol handling</li><li>Section and seating flow guidance</li><li>VIP pathway support</li></ul></div>
+      <div class="service-card reveal"><div class="service-index">04</div><h3 class="service-title">Photography & Videography</h3><p class="service-desc">Cinematic storytelling and high-impact media assets.</p><ul class="service-points"><li>Premium photo and film capture</li><li>Social edits and recap deliverables</li><li>Narrative-driven visual direction</li></ul></div>
+      <div class="service-card reveal" style="transition-delay:.1s;"><div class="service-index">05</div><h3 class="service-title">Logistics</h3><p class="service-desc">Reliable logistics that keep people, equipment, and timelines aligned.</p><ul class="service-points"><li>Load-in and venue setup coordination</li><li>Transport and schedule alignment</li><li>Rapid contingency response</li></ul></div>
+    </div>
+
+    <div class="conversion-band mt-10 md:mt-14 reveal text-white">
+      <div class="grid lg:grid-cols-12 gap-6 items-center">
+        <div class="lg:col-span-8"><p class="text-xs uppercase tracking-[0.22em] text-white/50 mb-2 font-bold">Conversion Focus</p><h3 class="text-2xl md:text-4xl font-black tracking-tight mb-2">Secure your date with a free strategy call.</h3><p class="text-white/75 text-base md:text-lg font-medium">Tell us what you are planning and get a tailored service direction quickly.</p></div>
+        <div class="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-3">
+          <a href="#contact" class="px-8 py-4 rounded-full btn-primary text-xs uppercase text-center tracking-widest">Book Free Call</a>
+          <a href="https://app.eventpeepo.com" target="_blank" rel="noopener" class="px-8 py-4 rounded-full btn-secondary text-xs uppercase text-center tracking-widest">View Platform</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="portfolio" class="py-24 md:py-56 bg-black">
+  <div class="max-w-[1700px] mx-auto px-5 md:px-12 lg:px-20">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-16 md:mb-20 reveal">
+      <div class="max-w-3xl mb-12 lg:mb-0"><span class="eyebrow mb-8 text-white/40 block">WHERE WE OPERATE</span><h2 class="titular-impact section-title-huge text-white">Occasions of<br>Distinction.</h2></div>
+      <div class="text-xs font-bold uppercase text-white/20 pb-6 border-b border-white/10 hidden lg:block tracking-widest">Selected Works Index</div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
+      <div class="portfolio-card reveal group"><img src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=800" alt="Weddings"><div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-95"></div><div class="absolute bottom-8 left-8 md:bottom-12 md:left-12"><div class="text-[10px] font-bold uppercase text-[var(--accent)] mb-3 md:mb-4 tracking-widest">Elegant systems and storytelling for milestone celebrations.</div><h4 class="text-3xl md:text-4xl font-black uppercase text-white tracking-tight">Weddings</h4></div></div>
+      <div class="portfolio-card reveal group" style="transition-delay:.1s;"><img src="https://images.unsplash.com/photo-1515168833906-d2a3b82b302a?auto=format&fit=crop&q=80&w=800" alt="Corporate"><div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-95"></div><div class="absolute bottom-8 left-8 md:bottom-12 md:left-12"><div class="text-[10px] font-bold uppercase text-[var(--accent)] mb-3 md:mb-4 tracking-widest">Conferences, launches, and executive experiences.</div><h4 class="text-3xl md:text-4xl font-black uppercase text-white tracking-tight">Corporate</h4></div></div>
+      <div class="portfolio-card reveal group" style="transition-delay:.2s;"><img src="https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&q=80&w=800" alt="Private Celebrations"><div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-95"></div><div class="absolute bottom-8 left-8 md:bottom-12 md:left-12"><div class="text-[10px] font-bold uppercase text-[var(--accent)] mb-3 md:mb-4 tracking-widest">Premium planning and media for personal milestones.</div><h4 class="text-3xl md:text-4xl font-black uppercase text-white tracking-tight">Private Celebrations</h4></div></div>
+      <div class="portfolio-card reveal group" style="transition-delay:.3s;"><img src="https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&q=80&w=800" alt="Memorials"><div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-95"></div><div class="absolute bottom-8 left-8 md:bottom-12 md:left-12"><div class="text-[10px] font-bold uppercase text-[var(--accent)] mb-3 md:mb-4 tracking-widest">Dignified operations handled with care and sensitivity.</div><h4 class="text-3xl md:text-4xl font-black uppercase text-white tracking-tight">Memorials</h4></div></div>
+    </div>
+  </div>
+</section>
+<section id="contact" class="py-24 md:py-64">
+  <div class="max-w-[1700px] mx-auto px-5 md:px-12 lg:px-20">
+    <div class="bg-[var(--accent)] rounded-[2.5rem] md:rounded-[6rem] p-6 md:p-20 text-white reveal overflow-hidden relative shadow-2xl">
+      <div class="absolute top-0 right-0 w-full h-full bg-white/5 blur-[150px] pointer-events-none"></div>
+      <div class="grid lg:grid-cols-12 gap-12 md:gap-24 relative z-10 p-2 md:p-0">
+        <div class="lg:col-span-5">
+          <span class="eyebrow text-white/50 mb-8 md:mb-16 block">PROJECT CONSULTATION</span>
+          <h2 class="titular-impact section-title-huge text-white">BEGIN<br>WITH<br>CONFIDENCE.</h2>
+          <p class="text-xl md:text-3xl text-white/70 font-semibold leading-relaxed max-w-xl mb-12 md:mb-24 mt-8 md:mt-12">Share your event goals. We will return a structured strategy and service path that fits your standards.</p>
+          <div class="grid gap-3">
+            <span class="text-xs md:text-sm font-bold uppercase text-white/30 tracking-widest">Client Advisory</span>
+            <span class="text-2xl md:text-4xl font-black tracking-tight text-white hover:text-white/80 cursor-pointer transition-colors">+233 (055) 424-7000</span>
+            <span class="text-sm font-semibold text-white/70">No spam. We only contact you about your inquiry.</span>
+          </div>
+        </div>
+        <div class="lg:col-span-7 bg-black/20 contact-card-inner rounded-[2rem] md:rounded-[5rem] border border-white/10">
+          <form class="space-y-8 md:space-y-12" id="leadForm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14">
+              <div class="form-group"><label class="form-label">Forename</label><input type="text" id="forename" class="form-input" placeholder="John" required></div>
+              <div class="form-group"><label class="form-label">Surname</label><input type="text" id="surname" class="form-input" placeholder="Doe" required></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14">
+              <div class="form-group"><label class="form-label">Email Address</label><input type="email" id="email" class="form-input" placeholder="name@domain.com" required></div>
+              <div class="form-group"><label class="form-label">Phone Number</label><input type="tel" id="phone" class="form-input" placeholder="+233 24 000 0000"></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14">
+              <div class="form-group"><label class="form-label">Event Type</label><input type="text" id="eventType" class="form-input" placeholder="Wedding, Corporate, etc." required></div>
+              <div class="form-group"><label class="form-label">Estimated Budget</label><input type="text" id="budget" class="form-input" placeholder="e.g. GHS 25,000"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Project Scope</label><textarea id="scope" class="form-input h-24 md:h-40 resize-none" placeholder="Briefly outline your goals, location, date, expected guests, and services needed..."></textarea></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button type="submit" class="w-full py-6 md:py-8 btn-primary rounded-full uppercase text-sm md:text-base shadow-2xl tracking-widest">Submit Project Brief</button>
+              <a href="https://app.eventpeepo.com" target="_blank" rel="noopener" class="w-full py-6 md:py-8 btn-secondary rounded-full uppercase text-sm md:text-base shadow-2xl tracking-widest text-center">Explore Digital Platform</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="pt-24 md:pt-32 pb-12 bg-[var(--dark)] text-white">
+  <div class="max-w-[1700px] mx-auto px-6 md:px-12 lg:px-20">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-32 mb-20 md:mb-24">
+      <div class="lg:col-span-5">
+        <div class="flex items-center mb-10 md:mb-12"><div class="text-white font-black tracking-tight text-xl md:text-2xl">THE EVENT PEEPO</div></div>
+        <p class="text-lg md:text-2xl font-semibold text-white/90 leading-relaxed mb-8">Thoughtful Design. Trusted Execution. Memorable Experiences.</p>
+        <p class="text-xs font-medium text-white/40 uppercase tracking-widest">Precision is our protocol.</p>
+      </div>
+      <div class="lg:col-span-7 grid grid-cols-2 md:grid-cols-3 gap-10 md:gap-16">
+        <div><h5 class="footer-heading">Expertise</h5><ul class="text-base font-medium space-y-4 md:space-y-5 text-white/60"><li><a href="#services" class="hover:text-white transition-colors">Event Management</a></li><li><a href="#services" class="hover:text-white transition-colors">Digital Solutions</a></li><li><a href="#services" class="hover:text-white transition-colors">Ushering</a></li><li><a href="#services" class="hover:text-white transition-colors">Logistics</a></li></ul></div>
+        <div><h5 class="footer-heading">Agency</h5><ul class="text-base font-medium space-y-4 md:space-y-5 text-white/60"><li><a href="#contact" class="hover:text-white transition-colors">Inquiry</a></li><li><a href="#portfolio" class="hover:text-white transition-colors">Archive</a></li><li><a href="https://app.eventpeepo.com" class="hover:text-white transition-colors">Platform</a></li></ul></div>
+        <div><h5 class="footer-heading">Connect</h5><ul class="text-base font-medium space-y-4 md:space-y-5 text-white/60"><li><a href="#" class="hover:text-white transition-colors">Instagram</a></li><li><a href="#" class="hover:text-white transition-colors">LinkedIn</a></li><li><a href="#" class="hover:text-white transition-colors">Twitter</a></li><li><a href="#" class="hover:text-white transition-colors">Facebook</a></li></ul></div>
+      </div>
+    </div>
+    <div class="pt-8 md:pt-12 border-t border-white/10 flex flex-col md:flex-row justify-between items-center text-xs font-medium text-white/40">
+      <p class="tracking-widest mb-4 md:mb-0">&copy; 2026 The Event Peepo. All rights reserved.</p>
+      <div class="flex space-x-8"><a href="#" class="hover:text-white transition-colors tracking-widest">Legal</a><a href="#" class="hover:text-white transition-colors tracking-widest">Privacy</a><a href="#" class="hover:text-white transition-colors tracking-widest">Terms</a></div>
+    </div>
+  </div>
+</footer>
+
+<script>
+window.addEventListener('scroll',function(){var h=document.documentElement;var p=h.scrollTop/(h.scrollHeight-h.clientHeight)*100;var pr=document.getElementById('scroll-progress');if(pr)pr.style.width=p+'%';var nav=document.getElementById('mainNav');var navLinks=document.getElementById('navLinks');var mobileBtn=document.getElementById('mobileMenuBtn');var navText=document.getElementById('navText');if(window.scrollY>80){if(nav)nav.classList.add('glass-nav');if(mobileBtn){mobileBtn.classList.remove('text-white');mobileBtn.classList.add('text-black')}if(navLinks){navLinks.classList.remove('text-white/70');navLinks.classList.add('text-black/60')}if(navText){navText.classList.remove('text-white');navText.classList.add('text-black')}}else{if(nav)nav.classList.remove('glass-nav');if(mobileBtn){mobileBtn.classList.remove('text-black');mobileBtn.classList.add('text-white')}if(navLinks){navLinks.classList.remove('text-black/60');navLinks.classList.add('text-white/70')}if(navText){navText.classList.remove('text-black');navText.classList.add('text-white')}}});
+var observer=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){entry.target.classList.add('active');if(entry.target.classList.contains('stat-number')){animateCounter(entry.target)}}})},{threshold:.15});document.querySelectorAll('.reveal,.stat-number').forEach(function(el){observer.observe(el)});
+function animateCounter(obj){if(obj.dataset.done)return;var t=parseInt(obj.getAttribute('data-target'),10);var d=2500;var s=null;function step(ts){if(!s)s=ts;var p=Math.min((ts-s)/d,1);var e=1-Math.pow(1-p,5);obj.innerText=Math.floor(e*t);if(p<1){window.requestAnimationFrame(step)}else{obj.innerText=t+(t>50?'+':'');obj.dataset.done='1'}}window.requestAnimationFrame(step)}
+var mobileBtn=document.getElementById('mobileMenuBtn');var mobileMenu=document.getElementById('mobileMenu');var closeMenu=document.getElementById('closeMenu');if(mobileBtn&&mobileMenu){mobileBtn.addEventListener('click',function(){mobileMenu.classList.add('active')})}if(closeMenu&&mobileMenu){closeMenu.addEventListener('click',function(){mobileMenu.classList.remove('active')})}document.querySelectorAll('.mobile-link').forEach(function(link){link.addEventListener('click',function(){if(mobileMenu)mobileMenu.classList.remove('active')})});
+document.addEventListener('mousemove',function(e){if(window.innerWidth<=1024)return;var img=document.querySelector('.hero-media img');var x=(e.clientX-window.innerWidth/2)*.006;var y=(e.clientY-window.innerHeight/2)*.006;if(img)img.style.transform='scale(1.15) translate('+x+'px,'+y+'px)'});
+var form=document.getElementById('leadForm');if(form){form.addEventListener('submit',function(e){e.preventDefault();var forename=document.getElementById('forename')?document.getElementById('forename').value:'';var surname=document.getElementById('surname')?document.getElementById('surname').value:'';var email=document.getElementById('email')?document.getElementById('email').value:'';var phone=document.getElementById('phone')?document.getElementById('phone').value:'';var eventType=document.getElementById('eventType')?document.getElementById('eventType').value:'';var budget=document.getElementById('budget')?document.getElementById('budget').value:'';var scope=document.getElementById('scope')?document.getElementById('scope').value:'';var subject=encodeURIComponent('The Event Peepo Inquiry');var body=encodeURIComponent('Forename: '+forename+'\n'+'Surname: '+surname+'\n'+'Email: '+email+'\n'+'Phone: '+phone+'\n'+'Event Type: '+eventType+'\n'+'Estimated Budget: '+budget+'\n\n'+'Project Scope:\n'+scope);window.location.href='mailto:hello@eventpeepo.com?subject='+subject+'&body='+body})}
+</script>
+</body>
+</html>

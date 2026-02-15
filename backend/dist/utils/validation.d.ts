@@ -79,6 +79,14 @@ export declare const createEventSchema: z.ZodObject<{
     smsNotifications: z.ZodDefault<z.ZodBoolean>;
     whatsappNotifications: z.ZodDefault<z.ZodBoolean>;
     reelEnabled: z.ZodDefault<z.ZodBoolean>;
+    rsvpMode: z.ZodDefault<z.ZodEnum<["free", "paid"]>>;
+    ticketingEnabled: z.ZodDefault<z.ZodBoolean>;
+    feeOverridesEnabled: z.ZodDefault<z.ZodBoolean>;
+    platformFeeMode: z.ZodDefault<z.ZodEnum<["PERCENTAGE", "FIXED"]>>;
+    platformFeePercent: z.ZodDefault<z.ZodNumber>;
+    platformFeeFixed: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+    processingFeePercent: z.ZodDefault<z.ZodNumber>;
+    processingFeeFixed: z.ZodDefault<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     name: string;
     slug: string;
@@ -105,6 +113,13 @@ export declare const createEventSchema: z.ZodObject<{
     emailNotifications: boolean;
     smsNotifications: boolean;
     whatsappNotifications: boolean;
+    rsvpMode: "free" | "paid";
+    ticketingEnabled: boolean;
+    feeOverridesEnabled: boolean;
+    platformFeeMode: "PERCENTAGE" | "FIXED";
+    platformFeePercent: number;
+    processingFeePercent: number;
+    processingFeeFixed: number;
     description?: string | null | undefined;
     endDate?: string | null | undefined;
     venue?: string | null | undefined;
@@ -129,6 +144,7 @@ export declare const createEventSchema: z.ZodObject<{
     thankYouTemplateId?: string | undefined;
     liveLandingTemplateId?: string | undefined;
     eventEndedTemplateId?: string | undefined;
+    platformFeeFixed?: number | null | undefined;
     boothVideoTemplateId?: string | undefined;
     boothAudioTemplateId?: string | undefined;
     boothPhotoTemplateId?: string | undefined;
@@ -183,6 +199,14 @@ export declare const createEventSchema: z.ZodObject<{
     emailNotifications?: boolean | undefined;
     smsNotifications?: boolean | undefined;
     whatsappNotifications?: boolean | undefined;
+    rsvpMode?: "free" | "paid" | undefined;
+    ticketingEnabled?: boolean | undefined;
+    feeOverridesEnabled?: boolean | undefined;
+    platformFeeMode?: "PERCENTAGE" | "FIXED" | undefined;
+    platformFeePercent?: number | undefined;
+    platformFeeFixed?: number | null | undefined;
+    processingFeePercent?: number | undefined;
+    processingFeeFixed?: number | undefined;
     boothVideoTemplateId?: string | undefined;
     boothAudioTemplateId?: string | undefined;
     boothPhotoTemplateId?: string | undefined;
@@ -245,6 +269,14 @@ export declare const updateEventSchema: z.ZodObject<{
     phaseOverride: z.ZodOptional<z.ZodBoolean>;
     isArchived: z.ZodOptional<z.ZodBoolean>;
     reelEnabled: z.ZodOptional<z.ZodBoolean>;
+    rsvpMode: z.ZodOptional<z.ZodEnum<["free", "paid"]>>;
+    ticketingEnabled: z.ZodOptional<z.ZodBoolean>;
+    feeOverridesEnabled: z.ZodOptional<z.ZodBoolean>;
+    platformFeeMode: z.ZodOptional<z.ZodEnum<["PERCENTAGE", "FIXED"]>>;
+    platformFeePercent: z.ZodOptional<z.ZodNumber>;
+    platformFeeFixed: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+    processingFeePercent: z.ZodOptional<z.ZodNumber>;
+    processingFeeFixed: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     name?: string | undefined;
     slug?: string | undefined;
@@ -297,6 +329,14 @@ export declare const updateEventSchema: z.ZodObject<{
     emailNotifications?: boolean | undefined;
     smsNotifications?: boolean | undefined;
     whatsappNotifications?: boolean | undefined;
+    rsvpMode?: "free" | "paid" | undefined;
+    ticketingEnabled?: boolean | undefined;
+    feeOverridesEnabled?: boolean | undefined;
+    platformFeeMode?: "PERCENTAGE" | "FIXED" | undefined;
+    platformFeePercent?: number | undefined;
+    platformFeeFixed?: number | null | undefined;
+    processingFeePercent?: number | undefined;
+    processingFeeFixed?: number | undefined;
     boothVideoTemplateId?: string | null | undefined;
     boothAudioTemplateId?: string | null | undefined;
     boothPhotoTemplateId?: string | null | undefined;
@@ -354,6 +394,14 @@ export declare const updateEventSchema: z.ZodObject<{
     emailNotifications?: boolean | undefined;
     smsNotifications?: boolean | undefined;
     whatsappNotifications?: boolean | undefined;
+    rsvpMode?: "free" | "paid" | undefined;
+    ticketingEnabled?: boolean | undefined;
+    feeOverridesEnabled?: boolean | undefined;
+    platformFeeMode?: "PERCENTAGE" | "FIXED" | undefined;
+    platformFeePercent?: number | undefined;
+    platformFeeFixed?: number | null | undefined;
+    processingFeePercent?: number | undefined;
+    processingFeeFixed?: number | undefined;
     boothVideoTemplateId?: string | null | undefined;
     boothAudioTemplateId?: string | null | undefined;
     boothPhotoTemplateId?: string | null | undefined;

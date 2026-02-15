@@ -279,6 +279,50 @@ router.post('/setup-password', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/owner-auth/request-password-reset
+ * Submit a password reset request for admin review
+ */
+router.post('/request-password-reset', asyncHandler(async (req, res) => {
+  const data = requestPasswordResetSchema.parse(req.body);
+
+  const owner = await prisma.owner.findUnique({
+    where: { email: data.email },
+  });
+
+  if (!owner) {
+    throw new AppError('Owner account not found', 404);
+  }
+
+  if (!owner.isActive) {
+    throw new AppError('Account is inactive. Please contact support.', 403);
+  }
+
+  const pendingRequest = await prisma.passwordResetRequest.findFirst({
+    where: {
+      ownerId: owner.id,
+      status: 'PENDING',
+    },
+  });
+
+  if (pendingRequest) {
+    throw new AppError('A password reset request is already pending admin review.', 400);
+  }
+
+  const request = await prisma.passwordResetRequest.create({
+    data: {
+      ownerId: owner.id,
+      reason: data.reason || null,
+    },
+  });
+
+  res.status(201).json({
+    requestId: request.id,
+    status: request.status,
+    message: 'Password reset request submitted. An administrator will review it shortly.',
+  });
+}));
+
+/**
  * POST /api/owner-auth/change-password
  * Change owner password
  */

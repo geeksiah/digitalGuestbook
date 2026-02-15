@@ -83,6 +83,15 @@ exports.createEventSchema = zod_1.z.object({
     whatsappNotifications: zod_1.z.boolean().default(false),
     // Reel Generation
     reelEnabled: zod_1.z.boolean().default(false),
+    // Ticketing/Pricing
+    rsvpMode: zod_1.z.enum(['free', 'paid']).default('free'),
+    ticketingEnabled: zod_1.z.boolean().default(false),
+    feeOverridesEnabled: zod_1.z.boolean().default(false),
+    platformFeeMode: zod_1.z.enum(['PERCENTAGE', 'FIXED']).default('PERCENTAGE'),
+    platformFeePercent: zod_1.z.number().min(0).max(100).default(5),
+    platformFeeFixed: zod_1.z.number().min(0).optional().nullable(),
+    processingFeePercent: zod_1.z.number().min(0).max(100).default(2.9),
+    processingFeeFixed: zod_1.z.number().min(0).default(0.30),
 });
 exports.updateEventSchema = zod_1.z.object({
     name: zod_1.z.string().min(2).optional(),
@@ -149,6 +158,15 @@ exports.updateEventSchema = zod_1.z.object({
     phaseOverride: zod_1.z.boolean().optional(),
     isArchived: zod_1.z.boolean().optional(),
     reelEnabled: zod_1.z.boolean().optional(),
+    // Ticketing/Pricing
+    rsvpMode: zod_1.z.enum(['free', 'paid']).optional(),
+    ticketingEnabled: zod_1.z.boolean().optional(),
+    feeOverridesEnabled: zod_1.z.boolean().optional(),
+    platformFeeMode: zod_1.z.enum(['PERCENTAGE', 'FIXED']).optional(),
+    platformFeePercent: zod_1.z.number().min(0).max(100).optional(),
+    platformFeeFixed: zod_1.z.number().min(0).optional().nullable(),
+    processingFeePercent: zod_1.z.number().min(0).max(100).optional(),
+    processingFeeFixed: zod_1.z.number().min(0).optional(),
 });
 // ============================================
 // TEMPLATE SCHEMAS - ⭐ INCLUDES NEW TYPES

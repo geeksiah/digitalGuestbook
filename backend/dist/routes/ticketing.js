@@ -8,6 +8,8 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const zod_1 = require("zod");
+const paystack_js_1 = require("../services/paystack.js");
+const fees_js_1 = require("../utils/fees.js");
 const router = (0, express_1.Router)();
 // ============================================
 // CUSTOM FORM FIELDS
@@ -340,6 +342,11 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: eventSlug },
         include: {
+            Owner: {
+                include: {
+                    wallet: true,
+                },
+            },
             ticketTypes: true,
             eventPaymentGateways: {
                 where: { paymentGatewayId: data.paymentGatewayId, isActive: true },
@@ -410,16 +417,58 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
         }
     }
     const finalAmount = totalAmount - discountAmount;
-    // Calculate fees
-    const platformFee = (finalAmount * (event.platformFeePercent || 0)) / 100;
-    const processingFeePercent = event.processingFeePercent || 0;
-    const processingFeeFixed = event.processingFeeFixed || 0;
+    // Calculate fees (global defaults with optional event override)
+    const feeDefaults = await (0, fees_js_1.getSystemFeeDefaults)();
+    const feeConfig = (0, fees_js_1.resolveEventFeeConfig)(event, feeDefaults);
+    const platformFee = feeConfig.platformFeeMode === 'FIXED'
+        ? Math.min(finalAmount, feeConfig.platformFeeFixed)
+        : (finalAmount * feeConfig.platformFeePercent) / 100;
+    const processingFeePercent = feeConfig.processingFeePercent;
+    const processingFeeFixed = feeConfig.processingFeeFixed;
     const processingFee = (finalAmount * processingFeePercent) / 100 + processingFeeFixed;
     const amountPaid = finalAmount + platformFee + processingFee;
+    const paymentReference = data.paymentReference?.trim();
+    const paymentMethod = (data.paymentMethod || '').trim().toLowerCase();
+    const isPaystackPayment = paymentMethod === 'paystack';
+    if (!paymentReference) {
+        throw new errorHandler_js_1.AppError('Payment reference is required', 400);
+    }
+    const duplicate = await prisma_js_1.default.transaction.findFirst({
+        where: {
+            paymentRef: paymentReference,
+            status: 'completed',
+        },
+        select: { id: true },
+    });
+    if (duplicate) {
+        throw new errorHandler_js_1.AppError('This payment reference has already been used', 400);
+    }
     // Verify payment gateway
     const eventGateway = event.eventPaymentGateways[0];
     if (!eventGateway) {
         throw new errorHandler_js_1.AppError('Payment gateway not configured for this event', 400);
+    }
+    if (isPaystackPayment) {
+        const verification = await (0, paystack_js_1.verifyPaystackTransaction)(paymentReference);
+        const expectedMinor = Math.round(amountPaid * 100);
+        const paidMinor = Number(verification.amount || 0);
+        if (verification.status !== 'success') {
+            throw new errorHandler_js_1.AppError('Paystack payment is not successful', 400);
+        }
+        if (paidMinor !== expectedMinor) {
+            throw new errorHandler_js_1.AppError('Paystack amount does not match order total', 400);
+        }
+        const ticketCurrency = event.ticketTypes[0]?.currency || 'USD';
+        if ((verification.currency || '').toUpperCase() !== ticketCurrency.toUpperCase()) {
+            throw new errorHandler_js_1.AppError('Paystack currency does not match event currency', 400);
+        }
+        const expectedSubaccount = event.Owner?.wallet?.paystackSubaccount || null;
+        const verifiedSubaccount = typeof verification.subaccount === 'string'
+            ? verification.subaccount
+            : verification.subaccount?.subaccount_code || verification.split?.subaccount || null;
+        if (expectedSubaccount && verifiedSubaccount && verifiedSubaccount !== expectedSubaccount) {
+            throw new errorHandler_js_1.AppError('Payment split destination does not match this event owner account', 400);
+        }
     }
     // Get primary ticket type name
     const primaryTicketType = event.ticketTypes.find((t) => t.id === data.tickets[0].ticketTypeId);
@@ -445,8 +494,8 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
             amountPaid: amountPaid,
             currency: event.ticketTypes[0]?.currency || 'USD',
             paymentStatus: 'PAID',
-            paymentMethod: data.paymentMethod,
-            paymentRef: data.paymentReference,
+            paymentMethod: paymentMethod,
+            paymentRef: paymentReference,
             paymentDate: new Date(),
         },
     });
@@ -477,8 +526,8 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
             processingFee: processingFee,
             netAmount: finalAmount - platformFee,
             currency: event.ticketTypes[0]?.currency || 'USD',
-            paymentMethod: data.paymentMethod,
-            paymentRef: data.paymentReference,
+            paymentMethod: paymentMethod,
+            paymentRef: paymentReference,
             ticketTypeName: event.ticketTypes[0]?.name,
             ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
             buyerName: data.primaryName,

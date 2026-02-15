@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireRole = exports.optionalAdminAuth = exports.authenticateOwnerAccount = exports.authenticateCouple = exports.authenticateOwner = exports.authenticateAdmin = void 0;
+exports.requireRole = exports.optionalAdminAuth = exports.authenticateAdminOrOwnerAccount = exports.authenticateOwnerAccount = exports.authenticateCouple = exports.authenticateOwner = exports.authenticateAdmin = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("./errorHandler.js");
@@ -149,6 +149,64 @@ const authenticateOwnerAccount = async (req, res, next) => {
     }
 };
 exports.authenticateOwnerAccount = authenticateOwnerAccount;
+// Admin OR Owner Account Authentication (JWT-based)
+const authenticateAdminOrOwnerAccount = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            throw new errorHandler_js_1.AppError('Authentication required', 401);
+        }
+        const token = authHeader.split(' ')[1];
+        if (!token || token === 'null' || token === 'undefined') {
+            throw new errorHandler_js_1.AppError('Invalid authentication token', 401);
+        }
+        let decoded;
+        try {
+            decoded = jsonwebtoken_1.default.verify(token, getJwtSecret());
+        }
+        catch (jwtError) {
+            if (jwtError instanceof jsonwebtoken_1.default.TokenExpiredError) {
+                throw new errorHandler_js_1.AppError('Session expired. Please sign in again.', 401);
+            }
+            if (jwtError instanceof jsonwebtoken_1.default.JsonWebTokenError) {
+                throw new errorHandler_js_1.AppError('Invalid authentication token', 401);
+            }
+            throw new errorHandler_js_1.AppError('Authentication failed', 401);
+        }
+        if (decoded?.adminId) {
+            const admin = await prisma_js_1.default.admin.findUnique({
+                where: { id: decoded.adminId },
+                select: { id: true, email: true, name: true, role: true },
+            });
+            if (!admin)
+                throw new errorHandler_js_1.AppError('Account not found. Please sign in again.', 401);
+            req.admin = admin;
+            return next();
+        }
+        if (decoded?.ownerId) {
+            const owner = await prisma_js_1.default.owner.findUnique({
+                where: { id: decoded.ownerId },
+                select: { id: true, email: true, name: true, isActive: true },
+            });
+            if (!owner)
+                throw new errorHandler_js_1.AppError('Account not found. Please sign in again.', 401);
+            if (!owner.isActive)
+                throw new errorHandler_js_1.AppError('Account is inactive. Please contact support.', 403);
+            req.ownerId = owner.id;
+            req.owner = owner;
+            return next();
+        }
+        throw new errorHandler_js_1.AppError('Invalid authentication token', 401);
+    }
+    catch (error) {
+        if (error instanceof errorHandler_js_1.AppError) {
+            return next(error);
+        }
+        console.error('[Auth] Admin/Owner authentication error:', error);
+        next(new errorHandler_js_1.AppError('Authentication failed', 401));
+    }
+};
+exports.authenticateAdminOrOwnerAccount = authenticateAdminOrOwnerAccount;
 // Optional Admin Auth (for routes that work with or without auth)
 const optionalAdminAuth = async (req, res, next) => {
     try {

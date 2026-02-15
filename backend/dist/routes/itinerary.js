@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
+const itineraryRealtime_js_1 = require("../services/itineraryRealtime.js");
 const router = (0, express_1.Router)();
 const templateSchema = zod_1.z.object({
     name: zod_1.z.string().min(2),
@@ -76,11 +77,25 @@ const requireOwnerEvent = async (ownerId, eventId) => {
         throw new errorHandler_js_1.AppError('Event not found', 404);
     return event;
 };
-router.post('/events/:eventId/apply-template', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+const requireManagedEvent = async (req, eventId) => {
+    if (req.admin?.id) {
+        const event = await prisma_js_1.default.event.findUnique({
+            where: { id: eventId },
+            select: { id: true },
+        });
+        if (!event)
+            throw new errorHandler_js_1.AppError('Event not found', 404);
+        return event;
+    }
     const ownerId = req.ownerId;
+    if (!ownerId)
+        throw new errorHandler_js_1.AppError('Authentication required', 401);
+    return requireOwnerEvent(ownerId, eventId);
+};
+router.post('/events/:eventId/apply-template', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
     const templateId = String(req.body?.templateId || '');
-    await requireOwnerEvent(ownerId, eventId);
+    await requireManagedEvent(req, eventId);
     const template = await prisma_js_1.default.itineraryTemplate.findUnique({
         where: { id: templateId },
     });
@@ -113,23 +128,22 @@ router.post('/events/:eventId/apply-template', auth_js_1.authenticateOwnerAccoun
             });
         }
     });
+    (0, itineraryRealtime_js_1.publishItineraryUpdate)(eventId, { reason: 'apply-template' });
     res.json({ message: 'Template applied successfully' });
 }));
-router.get('/events/:eventId/items', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = req.ownerId;
+router.get('/events/:eventId/items', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
-    await requireOwnerEvent(ownerId, eventId);
+    await requireManagedEvent(req, eventId);
     const items = await prisma_js_1.default.eventItineraryItem.findMany({
         where: { eventId },
         orderBy: { sortOrder: 'asc' },
     });
     res.json({ items });
 }));
-router.post('/events/:eventId/items', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = req.ownerId;
+router.post('/events/:eventId/items', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
     const data = itemSchema.parse(req.body);
-    await requireOwnerEvent(ownerId, eventId);
+    await requireManagedEvent(req, eventId);
     const maxOrder = await prisma_js_1.default.eventItineraryItem.aggregate({
         where: { eventId },
         _max: { sortOrder: true },
@@ -149,13 +163,13 @@ router.post('/events/:eventId/items', auth_js_1.authenticateOwnerAccount, (0, er
         where: { id: eventId },
         data: { itineraryEnabled: true },
     });
+    (0, itineraryRealtime_js_1.publishItineraryUpdate)(eventId, { reason: 'item-created', itemId: item.id });
     res.status(201).json({ item });
 }));
-router.patch('/events/:eventId/items/:itemId', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = req.ownerId;
+router.patch('/events/:eventId/items/:itemId', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId, itemId } = req.params;
     const data = itemSchema.partial().parse(req.body);
-    await requireOwnerEvent(ownerId, eventId);
+    await requireManagedEvent(req, eventId);
     const existing = await prisma_js_1.default.eventItineraryItem.findFirst({
         where: { id: itemId, eventId },
         select: { id: true },
@@ -173,25 +187,40 @@ router.patch('/events/:eventId/items/:itemId', auth_js_1.authenticateOwnerAccoun
             sortOrder: data.sortOrder,
         },
     });
+    (0, itineraryRealtime_js_1.publishItineraryUpdate)(eventId, { reason: 'item-updated', itemId: item.id });
     res.json({ item });
 }));
-router.post('/events/:eventId/items/reorder', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = req.ownerId;
+router.delete('/events/:eventId/items/:itemId', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { eventId, itemId } = req.params;
+    await requireManagedEvent(req, eventId);
+    const existing = await prisma_js_1.default.eventItineraryItem.findFirst({
+        where: { id: itemId, eventId },
+        select: { id: true },
+    });
+    if (!existing)
+        throw new errorHandler_js_1.AppError('Itinerary item not found', 404);
+    await prisma_js_1.default.eventItineraryItem.delete({
+        where: { id: existing.id },
+    });
+    (0, itineraryRealtime_js_1.publishItineraryUpdate)(eventId, { reason: 'item-deleted', itemId: existing.id });
+    res.json({ message: 'Itinerary item deleted' });
+}));
+router.post('/events/:eventId/items/reorder', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
     if (!itemIds.length)
         throw new errorHandler_js_1.AppError('itemIds must be a non-empty array', 400);
-    await requireOwnerEvent(ownerId, eventId);
+    await requireManagedEvent(req, eventId);
     await prisma_js_1.default.$transaction(itemIds.map((id, index) => prisma_js_1.default.eventItineraryItem.updateMany({
         where: { id, eventId },
         data: { sortOrder: index },
     })));
+    (0, itineraryRealtime_js_1.publishItineraryUpdate)(eventId, { reason: 'items-reordered' });
     res.json({ message: 'Items reordered successfully' });
 }));
-router.post('/events/:eventId/mc-session', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = req.ownerId;
+router.post('/events/:eventId/mc-session', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
-    await requireOwnerEvent(ownerId, eventId);
+    await requireManagedEvent(req, eventId);
     const token = (0, crypto_1.randomBytes)(24).toString('hex');
     const expiresAt = req.body?.expiresInHours
         ? new Date(Date.now() + Number(req.body.expiresInHours) * 60 * 60 * 1000)
@@ -275,13 +304,22 @@ router.post('/mc/:token/items/:itemId/toggle', (0, errorHandler_js_1.asyncHandle
     });
     if (!item)
         throw new errorHandler_js_1.AppError('Itinerary item not found', 404);
+    const requestedState = req.body?.isCompleted;
+    const nextCompleted = typeof requestedState === 'boolean'
+        ? requestedState
+        : !item.isCompleted;
     const updated = await prisma_js_1.default.eventItineraryItem.update({
         where: { id: item.id },
         data: {
-            isCompleted: !item.isCompleted,
-            completedAt: !item.isCompleted ? new Date() : null,
-            completedBySessionId: !item.isCompleted ? session.id : null,
+            isCompleted: nextCompleted,
+            completedAt: nextCompleted ? new Date() : null,
+            completedBySessionId: nextCompleted ? session.id : null,
         },
+    });
+    (0, itineraryRealtime_js_1.publishItineraryUpdate)(session.eventId, {
+        reason: 'item-toggled',
+        itemId: updated.id,
+        isCompleted: updated.isCompleted,
     });
     res.json({ item: updated });
 }));

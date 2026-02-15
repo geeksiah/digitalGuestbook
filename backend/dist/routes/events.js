@@ -8,6 +8,7 @@ const uuid_1 = require("uuid");
 const crypto_1 = require("crypto");
 const dns_1 = require("dns");
 const multer_1 = __importDefault(require("multer"));
+const sharp_1 = __importDefault(require("sharp"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
@@ -38,7 +39,12 @@ const resolveCoverUrl = (coverImagePath) => {
         return (0, supabaseStorage_js_1.getPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, coverImagePath);
     }
     catch {
-        return coverImagePath;
+        try {
+            return (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, coverImagePath);
+        }
+        catch {
+            return coverImagePath.startsWith('/') ? coverImagePath : `/${coverImagePath}`;
+        }
     }
 };
 // All routes require admin authentication
@@ -389,11 +395,36 @@ router.post('/:id/cover', coverUpload.single('cover'), (0, errorHandler_js_1.asy
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
     }
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
-    const coverPath = `events/${id}/cover-${Date.now()}-${safeName}`;
-    const upload = await (0, supabaseStorage_js_1.uploadToSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, coverPath, file.buffer, {
-        contentType: file.mimetype,
-        cacheControl: '3600',
+    let coverBuffer;
+    try {
+        const image = (0, sharp_1.default)(file.buffer).rotate();
+        const metadata = await image.metadata();
+        const width = metadata.width || 0;
+        const height = metadata.height || 0;
+        if (width < 800 || height < 420) {
+            throw new errorHandler_js_1.AppError('Image too small. Please upload at least 800x420 for sharp social previews.', 400);
+        }
+        coverBuffer = await image
+            // Normalize to OG/Twitter card ratio for crisp social previews.
+            .resize(1200, 630, {
+            fit: 'cover',
+            position: 'attention',
+            kernel: 'lanczos3',
+            withoutEnlargement: true,
+        })
+            .sharpen({ sigma: 1, m1: 0.8, m2: 0.8 })
+            .jpeg({ quality: 94, mozjpeg: true, chromaSubsampling: '4:4:4' })
+            .toBuffer();
+    }
+    catch (error) {
+        if (error instanceof errorHandler_js_1.AppError)
+            throw error;
+        throw new errorHandler_js_1.AppError('Invalid image file. Please upload a valid JPG, PNG, or WEBP image.', 400);
+    }
+    const coverPath = `events/${id}/cover-${Date.now()}.jpg`;
+    const upload = await (0, supabaseStorage_js_1.uploadToSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, coverPath, coverBuffer, {
+        contentType: 'image/jpeg',
+        cacheControl: '31536000',
         upsert: true,
     });
     if (event.coverImagePath) {
@@ -413,7 +444,7 @@ router.post('/:id/cover', coverUpload.single('cover'), (0, errorHandler_js_1.asy
             action: 'EVENT_COVER_UPLOADED',
             entityType: 'EVENT',
             entityId: id,
-            details: JSON.stringify({ coverImagePath: upload.path, mimeType: file.mimetype }),
+            details: JSON.stringify({ coverImagePath: upload.path, mimeType: 'image/jpeg', width: 1200, height: 630 }),
         },
     });
     res.json({
