@@ -723,7 +723,7 @@ export default function OwnerEventDetailPage() {
     { id: 'media', label: 'Media', count: event._count.mediaAssets },
     { id: 'tickets', label: 'Tickets', count: event.ticketTypes?.reduce((sum, t) => sum + t.quantitySold, 0) || 0 },
     { id: 'itinerary', label: 'Itinerary', count: itineraryItems.length || undefined },
-    { id: 'invites', label: 'WhatsApp Invites', count: invites.length },
+    { id: 'invites', label: 'Invites', count: invites.length },
     { id: 'domains', label: 'Domains', count: domains.length },
     { id: 'gifts', label: 'Gifts', count: event._count.giftOrders || 0 },
   ];
@@ -731,25 +731,27 @@ export default function OwnerEventDetailPage() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <div className="rounded-2xl border border-surface-200 bg-white shadow-soft px-5 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="min-w-0">
-          <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
-            {Icons.back}
-            <span className="ml-1">Back to Events</span>
-          </Link>
-          <h1 className="text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', getPhaseStyle(event.currentPhase))}>
-              {getPhaseLabel(event.currentPhase)}
-            </span>
-            {event.invitationOnly && <span className="badge-info">Invite Only</span>}
-            <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
-          </div>
-        </div>
-        <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">
-          {Icons.external}
-          <span className="ml-2">View Public Page</span>
+      <div className="rounded-xl border border-surface-200/80 bg-white shadow-soft px-4 sm:px-5 py-3.5 sm:py-4">
+        <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-xs sm:text-sm transition-colors">
+          {Icons.back}
+          <span className="ml-1">Events</span>
         </Link>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className={cn('inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none', getPhaseStyle(event.currentPhase))}>
+                {getPhaseLabel(event.currentPhase)}
+              </span>
+              {event.invitationOnly && <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border bg-blue-50 text-blue-700 border-blue-200 leading-none">Invite Only</span>}
+              <span className="text-[10px] text-surface-400 font-mono">/{event.slug}</span>
+            </div>
+          </div>
+          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline text-xs sm:text-sm flex-shrink-0 !px-3 !py-1.5">
+            {Icons.external}
+            <span className="ml-1.5 hidden sm:inline">View Page</span>
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -781,23 +783,23 @@ export default function OwnerEventDetailPage() {
       <div>
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg border border-surface-200 p-6">
-                <p className="text-sm font-medium text-surface-600">RSVPs</p>
-                <p className="text-2xl font-bold text-brand-900 mt-1">{event._count.rsvps}</p>
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">RSVPs</p>
+                <p className="text-xl sm:text-2xl font-bold text-brand-900">{event._count.rsvps}</p>
               </div>
-              <div className="bg-white rounded-lg border border-surface-200 p-6">
-                <p className="text-sm font-medium text-surface-600">Check-Ins</p>
-                <p className="text-2xl font-bold text-brand-900 mt-1">{event._count.checkIns}</p>
+              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Check-Ins</p>
+                <p className="text-xl sm:text-2xl font-bold text-brand-900">{event._count.checkIns}</p>
               </div>
-              <div className="bg-white rounded-lg border border-surface-200 p-6">
-                <p className="text-sm font-medium text-surface-600">Media Assets</p>
-                <p className="text-2xl font-bold text-brand-900 mt-1">{event._count.mediaAssets}</p>
+              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Media</p>
+                <p className="text-xl sm:text-2xl font-bold text-brand-900">{event._count.mediaAssets}</p>
               </div>
-              <div className="bg-white rounded-lg border border-surface-200 p-6">
-                <p className="text-sm font-medium text-surface-600">Event Date</p>
-                <p className="text-sm font-medium text-brand-900 mt-1">{formatDate(event.date)}</p>
+              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Date</p>
+                <p className="text-sm font-semibold text-brand-900 mt-0.5">{formatDate(event.date)}</p>
               </div>
             </div>
 
@@ -1075,39 +1077,54 @@ export default function OwnerEventDetailPage() {
               </button>
             </div>
 
-            <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-surface-200">
-                  <thead className="bg-surface-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guests</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Code</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Checked In At</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Method</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-surface-200">
-                    {checkIns.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-4 text-center text-sm text-surface-500">
-                          No check-ins found
-                        </td>
-                      </tr>
-                    ) : (
-                      checkIns.map(checkIn => (
-                        <tr key={checkIn.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{checkIn.invitation.guestName}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{checkIn.invitation.guestCount}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500 font-mono">{checkIn.invitation.accessCode}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(checkIn.checkedInAt)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{checkIn.method}</td>
+            <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft overflow-hidden">
+              {checkIns.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-surface-500">No check-ins found</div>
+              ) : (
+                <>
+                  {/* Mobile card view */}
+                  <div className="divide-y divide-surface-100 md:hidden">
+                    {checkIns.map(checkIn => (
+                      <div key={checkIn.id} className="px-4 py-3.5 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-brand-900">{checkIn.invitation.guestName}</p>
+                          <span className="text-[10px] font-mono text-surface-500 bg-surface-100 px-1.5 py-0.5 rounded flex-shrink-0">{checkIn.invitation.accessCode}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 text-xs text-surface-500">
+                          <span>{checkIn.invitation.guestCount} guest(s)</span>
+                          <span>{checkIn.method}</span>
+                          <span>{formatDate(checkIn.checkedInAt)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table view */}
+                  <div className="overflow-x-auto hidden md:block">
+                    <table className="min-w-full divide-y divide-surface-200">
+                      <thead className="bg-surface-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Guests</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Code</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Checked In</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Method</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody className="divide-y divide-surface-100">
+                        {checkIns.map(checkIn => (
+                          <tr key={checkIn.id}>
+                            <td className="px-4 py-3 text-sm font-medium text-brand-900">{checkIn.invitation.guestName}</td>
+                            <td className="px-4 py-3 text-sm text-surface-500">{checkIn.invitation.guestCount}</td>
+                            <td className="px-4 py-3 text-sm text-surface-500 font-mono">{checkIn.invitation.accessCode}</td>
+                            <td className="px-4 py-3 text-sm text-surface-500">{formatDate(checkIn.checkedInAt)}</td>
+                            <td className="px-4 py-3 text-sm text-surface-500">{checkIn.method}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1226,47 +1243,61 @@ export default function OwnerEventDetailPage() {
 
         {/* Tickets Tab */}
         {activeTab === 'tickets' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-surface-200">
-                  <thead className="bg-surface-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Price</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Sold</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Total</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-surface-200">
-                    {tickets.length === 0 ? (
+          <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft overflow-hidden">
+            {tickets.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-surface-500">No tickets found</div>
+            ) : (
+              <>
+                {/* Mobile card view */}
+                <div className="divide-y divide-surface-100 md:hidden">
+                  {tickets.map((ticket: any) => (
+                    <div key={ticket.id} className="px-4 py-3.5 space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-brand-900">{ticket.name}</p>
+                        <span className={cn('inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none flex-shrink-0', ticket.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-surface-100 text-surface-600 border-surface-200')}>
+                          {ticket.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 text-xs text-surface-500">
+                        <span className="font-semibold text-brand-900">{ticket.price > 0 ? `${ticket.currency} ${ticket.price.toFixed(2)}` : 'Free'}</span>
+                        <span>{ticket.quantitySold} / {ticket.quantityTotal} sold</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop table view */}
+                <div className="overflow-x-auto hidden md:block">
+                  <table className="min-w-full divide-y divide-surface-200">
+                    <thead className="bg-surface-50">
                       <tr>
-                        <td colSpan={5} className="px-6 py-4 text-center text-sm text-surface-500">
-                          No tickets found
-                        </td>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Price</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Sold</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Total</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Status</th>
                       </tr>
-                    ) : (
-                      tickets.map(ticket => (
+                    </thead>
+                    <tbody className="divide-y divide-surface-100">
+                      {tickets.map((ticket: any) => (
                         <tr key={ticket.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{ticket.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">
+                          <td className="px-4 py-3 text-sm font-medium text-brand-900">{ticket.name}</td>
+                          <td className="px-4 py-3 text-sm text-surface-500">
                             {ticket.price > 0 ? `${ticket.currency} ${ticket.price.toFixed(2)}` : 'Free'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{ticket.quantitySold}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{ticket.quantityTotal}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3 text-sm text-surface-500">{ticket.quantitySold}</td>
+                          <td className="px-4 py-3 text-sm text-surface-500">{ticket.quantityTotal}</td>
+                          <td className="px-4 py-3">
                             <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', ticket.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-surface-100 text-surface-600')}>
                               {ticket.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
 

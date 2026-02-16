@@ -282,29 +282,30 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-[272px]">
+      <div className="lg:pl-[272px] min-h-screen flex flex-col">
         {/* Top bar */}
         <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-surface-200/80">
-          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8 gap-3">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden flex-shrink-0 p-2 -ml-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
+                className="lg:hidden flex-shrink-0 p-2.5 -ml-2 rounded-xl text-surface-600 hover:bg-surface-100 hover:text-brand-900 active:bg-surface-200 transition-colors"
+                aria-label="Open menu"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
 
               <div className="min-w-0 flex items-center gap-2 flex-1">
-                <span className="hidden xl:inline-block flex-shrink-0 text-xs font-semibold uppercase tracking-wider text-surface-500">
-                  Manage Event
+                <span className="hidden xl:inline-block flex-shrink-0 text-[10px] font-semibold uppercase tracking-widest text-surface-400">
+                  Event
                 </span>
                 <select
                   value={selectedEventId || '__all__'}
                   onChange={(e) => handleEventSwitch(e.target.value)}
                   disabled={loadingEvents || ownerEvents.length === 0}
-                  className="h-10 w-full max-w-[360px] rounded-xl border border-surface-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-9 sm:h-10 w-full max-w-[320px] rounded-lg border border-surface-200 bg-white px-3 text-sm font-medium text-brand-900 focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="__all__">All events</option>
                   {ownerEvents.map((event) => (
@@ -317,7 +318,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             </div>
 
             <div className="hidden sm:flex items-center gap-2 text-sm flex-shrink-0">
-              <span className="text-surface-500 font-medium">Owner Workspace</span>
+              <span className="text-surface-400 text-xs font-medium">Workspace</span>
               <span className="text-surface-300">/</span>
               <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
             </div>
@@ -325,12 +326,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </header>
 
         {/* Page content */}
-        <main className="p-4 pb-32 sm:p-6 sm:pb-32 lg:p-7 lg:pb-7">
+        <main className="flex-1 p-4 pb-28 sm:p-6 sm:pb-32 lg:p-7 lg:pb-7">
           {children}
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200/80 bg-white/95 backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-4 gap-1 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        {/* Mobile bottom tab bar */}
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200/60 bg-white/95 backdrop-blur-xl lg:hidden">
+          <div className="grid grid-cols-4 px-1 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))]">
             {navigation.map((item) => {
               const isActive = isNavActive(item.href);
               return (
@@ -339,19 +341,19 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold tracking-tight transition-colors',
-                    isActive ? 'text-brand-900' : 'text-surface-500'
+                    'flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-medium tracking-tight transition-colors active:opacity-70',
+                    isActive ? 'text-brand-900' : 'text-surface-400'
                   )}
                 >
                   <span
                     className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-xl transition-colors',
-                      isActive ? 'bg-brand-50 text-brand-800' : 'text-surface-500'
+                      'flex h-7 w-7 items-center justify-center rounded-lg transition-all',
+                      isActive ? 'bg-brand-900 text-white shadow-sm' : 'text-surface-400'
                     )}
                   >
                     {item.icon}
                   </span>
-                  <span>{item.name}</span>
+                  <span className={cn(isActive ? 'font-semibold' : '')}>{item.name}</span>
                 </Link>
               );
             })}

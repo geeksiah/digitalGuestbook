@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { ownerAuthApi, ownerDashboardApi } from '@/lib/api';
 import { useOwnerAuthStore } from '@/lib/store';
 import toast from 'react-hot-toast';
+import { DashboardPageHeader } from '@/components/dashboard/ui';
+import { cn } from '@/lib/utils';
 
 interface PaystackBank {
   code: string;
@@ -303,45 +305,38 @@ export default function OwnerAccountPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-navy-900">Account Settings</h1>
-        <p className="text-surface-600 mt-1">Manage your account information and security</p>
-      </div>
+    <div className="max-w-4xl mx-auto space-y-5 sm:space-y-6">
+      <DashboardPageHeader title="Account" subtitle="Manage your profile, security, and preferences" />
 
       {/* Tabs */}
-      <div className="border-b border-surface-200 -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto">
-        <nav className="flex space-x-4 sm:space-x-8 min-w-max">
-          {([
-            { id: 'profile' as const, label: 'Profile' },
-            { id: 'password' as const, label: 'Password' },
-            { id: 'wallet' as const, label: 'Wallet' },
-            { id: 'notifications' as const, label: 'Notifications' },
-            { id: 'support' as const, label: 'Support' },
-          ]).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`
-                py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap
-                ${activeTab === tab.id
-                  ? 'border-navy-900 text-navy-900'
-                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
-                }
-              `}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
+        {([
+          { id: 'profile' as const, label: 'Profile' },
+          { id: 'password' as const, label: 'Password' },
+          { id: 'wallet' as const, label: 'Wallet' },
+          { id: 'notifications' as const, label: 'Alerts' },
+          { id: 'support' as const, label: 'Support' },
+        ]).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+              activeTab === tab.id
+                ? 'bg-white text-brand-900 shadow-sm'
+                : 'text-surface-600 hover:text-brand-900'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Profile Tab */}
       {activeTab === 'profile' && (
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-6">Profile Information</h2>
-          <form onSubmit={handleProfileUpdate} className="space-y-5">
+        <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-5 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-brand-900 mb-5">Profile Information</h2>
+          <form onSubmit={handleProfileUpdate} className="space-y-4">
             <div>
               <label htmlFor="name" className="label">
                 Full Name *
@@ -398,8 +393,8 @@ export default function OwnerAccountPage() {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <button type="submit" disabled={loading} className="btn-primary">
+            <div className="flex gap-3 pt-2">
+              <button type="submit" disabled={loading} className="btn-primary w-full sm:w-auto">
                 {loading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
@@ -409,9 +404,9 @@ export default function OwnerAccountPage() {
 
       {/* Password Tab */}
       {activeTab === 'password' && (
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-6">Change Password</h2>
-          <form onSubmit={handlePasswordChange} className="space-y-5">
+        <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-5 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-brand-900 mb-5">Change Password</h2>
+          <form onSubmit={handlePasswordChange} className="space-y-4">
             <div>
               <label htmlFor="currentPassword" className="label">
                 Current Password *
@@ -455,8 +450,8 @@ export default function OwnerAccountPage() {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <button type="submit" disabled={loading} className="btn-primary">
+            <div className="flex gap-3 pt-2">
+              <button type="submit" disabled={loading} className="btn-primary w-full sm:w-auto">
                 {loading ? 'Changing...' : 'Change Password'}
               </button>
             </div>
@@ -466,8 +461,8 @@ export default function OwnerAccountPage() {
 
       {/* Wallet Tab */}
       {activeTab === 'wallet' && (
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-6">Wallet & Payout Settings</h2>
+        <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-5 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-brand-900 mb-5">Wallet & Payout Settings</h2>
           <p className="text-sm text-surface-600 mb-6">
             Configure your payout method to receive payments from your events.
           </p>
@@ -756,6 +751,168 @@ export default function OwnerAccountPage() {
                 </button>
               </div>
             </form>
+          )}
+        </div>
+      )}
+
+      {/* Notifications Tab */}
+      {activeTab === 'notifications' && (
+        <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+          <div className="p-5 sm:p-6 border-b border-surface-200">
+            <h2 className="text-lg font-semibold text-navy-900">Notification Preferences</h2>
+            <p className="text-sm text-surface-500 mt-1">Choose what alerts you want to receive</p>
+          </div>
+
+          {notificationLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-7 w-7 border-2 border-brand-900 border-t-transparent" />
+            </div>
+          ) : (
+            <form onSubmit={handleNotificationSave}>
+              <div className="divide-y divide-surface-100">
+                {([
+                  {
+                    key: 'notificationsEnabled' as const,
+                    label: 'Push Notifications',
+                    description: 'Receive alerts for RSVPs, check-ins, and event updates',
+                  },
+                  {
+                    key: 'marketingEnabled' as const,
+                    label: 'Marketing & Tips',
+                    description: 'Product updates, feature announcements, and event tips',
+                  },
+                  {
+                    key: 'soundEnabled' as const,
+                    label: 'Sound',
+                    description: 'Play a sound when notifications arrive',
+                  },
+                  {
+                    key: 'hapticsEnabled' as const,
+                    label: 'Haptics',
+                    description: 'Vibrate on notification events (mobile only)',
+                  },
+                ]).map((pref) => (
+                  <label key={pref.key} htmlFor={pref.key} className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-navy-900">{pref.label}</p>
+                      <p className="text-xs text-surface-500 mt-0.5">{pref.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      id={pref.key}
+                      role="switch"
+                      aria-checked={notificationPrefs[pref.key]}
+                      onClick={() => setNotificationPrefs((prev) => ({ ...prev, [pref.key]: !prev[pref.key] }))}
+                      className={`
+                        relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200
+                        ${notificationPrefs[pref.key] ? 'bg-brand-900' : 'bg-surface-300'}
+                      `}
+                    >
+                      <span
+                        className={`
+                          inline-block h-4.5 w-4.5 rounded-full bg-white shadow-sm transform transition-transform duration-200
+                          ${notificationPrefs[pref.key] ? 'translate-x-[22px]' : 'translate-x-[3px]'}
+                        `}
+                        style={{ width: 18, height: 18 }}
+                      />
+                    </button>
+                  </label>
+                ))}
+              </div>
+
+              <div className="px-5 sm:px-6 py-4 bg-surface-50 border-t border-surface-200">
+                <button type="submit" disabled={loading} className="btn-primary w-full sm:w-auto">
+                  {loading ? 'Saving...' : 'Save Preferences'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Support Tab */}
+      {activeTab === 'support' && (
+        <div className="space-y-5">
+          {supportLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-7 w-7 border-2 border-brand-900 border-t-transparent" />
+            </div>
+          ) : (
+            <>
+              {/* Contact */}
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="p-5 sm:p-6 border-b border-surface-200">
+                  <h2 className="text-lg font-semibold text-navy-900">Contact Support</h2>
+                  <p className="text-sm text-surface-500 mt-1">Get help from our team</p>
+                </div>
+                <div className="p-5 sm:p-6 space-y-4">
+                  {supportContent.supportEmail && (
+                    <a
+                      href={`mailto:${supportContent.supportEmail}`}
+                      className="flex items-center gap-4 p-4 rounded-xl border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all"
+                    >
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-navy-900">Email Support</p>
+                        <p className="text-xs text-surface-500 truncate">{supportContent.supportEmail}</p>
+                      </div>
+                    </a>
+                  )}
+                  {supportContent.supportWhatsAppNumber && (
+                    <a
+                      href={`https://wa.me/${supportContent.supportWhatsAppNumber.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-4 p-4 rounded-xl border border-surface-200 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all"
+                    >
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-navy-900">WhatsApp Support</p>
+                        <p className="text-xs text-surface-500 truncate">{supportContent.supportWhatsAppNumber}</p>
+                      </div>
+                    </a>
+                  )}
+                  {!supportContent.supportEmail && !supportContent.supportWhatsAppNumber && (
+                    <p className="text-sm text-surface-500 text-center py-4">No support channels configured yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* FAQ */}
+              {supportContent.faq.length > 0 && (
+                <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                  <div className="p-5 sm:p-6 border-b border-surface-200">
+                    <h2 className="text-lg font-semibold text-navy-900">Frequently Asked Questions</h2>
+                  </div>
+                  <div className="divide-y divide-surface-100">
+                    {supportContent.faq.map((item, index) => (
+                      <details key={index} className="group">
+                        <summary className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors list-none">
+                          <span className="text-sm font-medium text-navy-900">{item.question}</span>
+                          <svg className="w-4 h-4 text-surface-400 flex-shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </summary>
+                        <div className="px-5 sm:px-6 pb-4 text-sm text-surface-600 leading-relaxed">
+                          {item.answer}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {supportContent.faq.length === 0 && !supportContent.supportEmail && !supportContent.supportWhatsAppNumber && (
+                <div className="bg-white rounded-xl border border-surface-200 p-10 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-3">
+                    <svg className="w-6 h-6 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <p className="text-sm text-surface-600">Support content will appear here once configured by the admin.</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

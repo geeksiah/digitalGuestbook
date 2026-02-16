@@ -92,27 +92,27 @@ export default function OwnerDashboardPage() {
   }
 
   return (
-    <div className="space-y-7">
-      <DashboardPageHeader title="Dashboard" subtitle="At-a-glance view of your event operations and guest activity" />
+    <div className="space-y-5 sm:space-y-7">
+      <DashboardPageHeader title="Dashboard" subtitle="Your event operations at a glance" />
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <DashboardKpiCard label="Total Events" value={stats.totalEvents} icon={Icons.events} tone="blue" />
-          <DashboardKpiCard label="Total RSVPs" value={stats.totalRsvps} icon={Icons.rsvps} tone="emerald" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <DashboardKpiCard label="Events" value={stats.totalEvents} icon={Icons.events} tone="blue" />
+          <DashboardKpiCard label="RSVPs" value={stats.totalRsvps} icon={Icons.rsvps} tone="emerald" />
           <DashboardKpiCard label="Check-Ins" value={stats.totalCheckIns} icon={Icons.checkins} tone="violet" />
-          <DashboardKpiCard label="Media Assets" value={stats.totalMedia} icon={Icons.media} tone="rose" />
+          <DashboardKpiCard label="Media" value={stats.totalMedia} icon={Icons.media} tone="rose" />
         </div>
       )}
 
       {/* Revenue Summary */}
       {stats && Object.keys(stats.revenueByCurrency).length > 0 && (
-        <DashboardSection title="Revenue Summary" subtitle="Net and gross performance by currency">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <DashboardSection title="Revenue" subtitle="Net and gross by currency">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
-              <div key={currency} className="rounded-xl border border-surface-200 bg-white p-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all">
-                <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-surface-500 mb-2">{currency}</p>
-                <p className="text-2xl font-bold text-brand-900">
+              <div key={currency} className="rounded-xl border border-surface-200 bg-surface-50/50 p-4">
+                <p className="text-[10px] uppercase tracking-widest font-semibold text-surface-400 mb-1.5">{currency}</p>
+                <p className="text-xl sm:text-2xl font-bold text-brand-900">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: currency,
@@ -133,73 +133,53 @@ export default function OwnerDashboardPage() {
       {/* Recent Events */}
       <DashboardSection
         title="Your Events"
-        subtitle="Quickly open an event to manage RSVPs, media, itinerary, invites, and gifts"
+        subtitle="Open an event to manage it"
         action={(
-          <Link href="/owner/events" className="btn-ghost !px-3 !py-2 text-sm !font-semibold">
-            View All
+          <Link href="/owner/events" className="text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors px-1">
+            View all
           </Link>
         )}
         contentClassName="p-0"
       >
         {events.length === 0 ? (
-          <div className="text-center py-10">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
+          <div className="text-center py-10 px-4">
+            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
               {Icons.events}
             </div>
-            <p className="text-surface-600">No events yet</p>
-            <p className="text-sm text-surface-500 mt-1">Events will appear here once created</p>
+            <p className="text-sm font-medium text-surface-600">No events yet</p>
+            <p className="text-xs text-surface-400 mt-1">Events will appear here once created</p>
           </div>
         ) : (
-          <div className="divide-y divide-surface-200">
+          <div className="divide-y divide-surface-100">
             {events.slice(0, 5).map((event) => (
               <Link
                 key={event.id}
                 href={`/owner/events/${event.id}`}
-                className="group block px-6 py-4 hover:bg-brand-50/30 transition-colors"
+                className="group flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-surface-50 active:bg-surface-100 transition-colors"
               >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
-                        <span
-                          className={cn(
-                            'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
-                            getPhaseStyle(event.currentPhase)
-                          )}
-                        >
-                          {getPhaseLabel(event.currentPhase)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-surface-600">
-                        <span className="flex items-center">
-                          {Icons.events}
-                          <span className="ml-1">{formatDate(event.date)}</span>
-                        </span>
-                        {event.venue && (
-                          <span className="flex items-center">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            </svg>
-                            <span className="ml-1">{event.venue}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors flex-shrink-0 mt-1">
-                      {Icons.arrow}
-                    </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h3 className="text-sm font-semibold text-brand-900 truncate">{event.name}</h3>
+                    <span
+                      className={cn(
+                        'inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none',
+                        getPhaseStyle(event.currentPhase)
+                      )}
+                    >
+                      {getPhaseLabel(event.currentPhase)}
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-4 sm:gap-6 border-t border-surface-100 pt-3">
-                    <div>
-                      <p className="text-sm font-semibold text-brand-900">{event._count.rsvps}</p>
-                      <p className="text-xs text-surface-500">RSVPs</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-brand-900">{event._count.checkIns}</p>
-                      <p className="text-xs text-surface-500">Check-ins</p>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-surface-500">
+                    <span>{formatDate(event.date)}</span>
+                    {event.venue && <span>{event.venue}</span>}
                   </div>
+                  <div className="flex gap-3 mt-2 text-xs">
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
+                  </div>
+                </div>
+                <div className="text-surface-300 group-hover:text-brand-600 transition-colors flex-shrink-0">
+                  {Icons.arrow}
                 </div>
               </Link>
             ))}

@@ -125,20 +125,21 @@ export default function OwnerEventsPage() {
   }
 
   return (
-    <div className="space-y-7">
-      <DashboardPageHeader title="Events" subtitle="Manage RSVP, guestbook media, itinerary, invites, tickets, and payouts" />
-
-      <DashboardSection
-        title="Create Event"
-        subtitle="Quick create wizard (events start in pending admin approval)"
+    <div className="space-y-5 sm:space-y-7">
+      <DashboardPageHeader
+        title="Events"
+        subtitle="Manage your events and guest experiences"
         action={(
-          <button className="btn-outline" onClick={() => setShowCreate((prev) => !prev)}>
-            {showCreate ? 'Close' : 'Quick create'}
+          <button className="btn-outline text-sm" onClick={() => setShowCreate((prev) => !prev)}>
+            {showCreate ? 'Cancel' : '+ New Event'}
           </button>
         )}
-      >
-        {showCreate ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      />
+
+      {/* Quick Create */}
+      {showCreate && (
+        <DashboardSection title="Create Event" subtitle="Admin approval is required before activation">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               className="input"
               placeholder="Event name"
@@ -170,138 +171,105 @@ export default function OwnerEventsPage() {
               <option value="NGN">NGN</option>
             </select>
             <input
-              className="input"
+              className="input sm:col-span-2"
               placeholder="Venue (optional)"
               value={createData.venue}
               onChange={(event) => setCreateData((prev) => ({ ...prev, venue: event.target.value }))}
             />
-            <div className="md:col-span-2 flex justify-end">
-              <button className="btn-primary" onClick={createEvent} disabled={creating}>
+            <div className="sm:col-span-2 flex justify-end">
+              <button className="btn-primary w-full sm:w-auto" onClick={createEvent} disabled={creating}>
                 {creating ? 'Creating...' : 'Create Event'}
               </button>
             </div>
           </div>
-        ) : (
-          <p className="text-sm text-surface-600">Use quick create for new events. Admin approval is required before activation.</p>
-        )}
-      </DashboardSection>
+        </DashboardSection>
+      )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Showing</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{filteredEvents.length}</p>
+      {/* Filter + Count */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'pre', label: 'Upcoming' },
+            { key: 'live', label: 'Live' },
+            { key: 'post', label: 'Past' },
+          ].map((option) => (
+            <button
+              key={option.key}
+              onClick={() => setFilter(option.key as 'all' | 'pre' | 'live' | 'post')}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+                filter === option.key
+                  ? 'bg-white text-brand-900 shadow-sm'
+                  : 'text-surface-600 hover:text-brand-900'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Upcoming</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{events.filter((event) => event.currentPhase === 'PRE_EVENT').length}</p>
-        </div>
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Live</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{events.filter((event) => event.currentPhase === 'LIVE').length}</p>
-        </div>
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Past</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{events.filter((event) => event.currentPhase === 'POST_EVENT').length}</p>
-        </div>
+        <p className="text-xs text-surface-500 tabular-nums">
+          {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
+        </p>
       </div>
 
-      <DashboardSection
-        title="Event List"
-        subtitle="Select an event to manage operations and guest experience flows"
-        action={(
-          <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
-            {[
-              { key: 'all', label: 'All' },
-              { key: 'pre', label: 'Upcoming' },
-              { key: 'live', label: 'Live' },
-              { key: 'post', label: 'Past' },
-            ].map((option) => (
-              <button
-                key={option.key}
-                onClick={() => setFilter(option.key as 'all' | 'pre' | 'live' | 'post')}
-                className={cn(
-                  'px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors',
-                  filter === option.key
-                    ? 'bg-white text-brand-900 shadow-sm'
-                    : 'text-surface-700 hover:text-brand-900'
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
-        contentClassName="p-0"
-      >
+      {/* Event List */}
+      <DashboardSection contentClassName="p-0">
         {filteredEvents.length === 0 ? (
-          <div className="text-center py-16 px-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
+          <div className="text-center py-12 px-4">
+            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
               {Icons.calendar}
             </div>
-            <p className="text-surface-600">No events found</p>
-            <p className="text-sm text-surface-500 mt-1">
-              {filter === 'all' ? 'You do not have any events yet' : `No ${filter === 'pre' ? 'upcoming' : filter === 'live' ? 'live' : 'past'} events`}
+            <p className="text-sm font-medium text-surface-600">No events found</p>
+            <p className="text-xs text-surface-400 mt-1">
+              {filter === 'all' ? 'Create your first event to get started' : `No ${filter === 'pre' ? 'upcoming' : filter === 'live' ? 'live' : 'past'} events`}
             </p>
           </div>
         ) : (
-          <div className="p-4 space-y-3">
+          <div className="divide-y divide-surface-100">
             {filteredEvents.map((event) => (
               <Link
                 key={event.id}
                 href={`/owner/events/${event.id}`}
-                className="group block rounded-2xl border border-surface-200 bg-white px-5 py-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all"
+                className="group flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-surface-50 active:bg-surface-100 transition-colors"
               >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-brand-900">{event.name}</h3>
-                        <span
-                          className={cn(
-                            'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
-                            getPhaseStyle(event.currentPhase)
-                          )}
-                        >
-                          {getPhaseLabel(event.currentPhase)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-surface-600">
-                        <span className="flex items-center">
-                          {Icons.calendar}
-                          <span className="ml-1">{formatDate(event.date)}</span>
-                        </span>
-                        {event.venue && (
-                          <span className="flex items-center">
-                            {Icons.location}
-                            <span className="ml-1">{event.venue}</span>
-                          </span>
-                        )}
-                      </div>
-                      {event.approvalStatus ? (
-                        <p className="text-xs text-surface-500 mt-1">Approval: {event.approvalStatus}</p>
-                      ) : null}
-                      {event.defaultCurrency ? (
-                        <p className="text-xs text-surface-500 mt-1">Default currency: {event.defaultCurrency}</p>
-                      ) : null}
-                    </div>
-                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors flex-shrink-0 mt-1">
-                      {Icons.arrow}
-                    </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h3 className="text-sm font-semibold text-brand-900 truncate">{event.name}</h3>
+                    <span
+                      className={cn(
+                        'inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none',
+                        getPhaseStyle(event.currentPhase)
+                      )}
+                    >
+                      {getPhaseLabel(event.currentPhase)}
+                    </span>
+                    {event.approvalStatus && event.approvalStatus !== 'APPROVED' && (
+                      <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border bg-amber-50 text-amber-700 border-amber-200 leading-none">
+                        {event.approvalStatus.replace(/_/g, ' ')}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex flex-wrap gap-4 border-t border-surface-100 pt-3">
-                    <div>
-                      <p className="text-sm font-semibold text-brand-900">{event._count.rsvps}</p>
-                      <p className="text-xs text-surface-500">RSVPs</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-brand-900">{event._count.checkIns}</p>
-                      <p className="text-xs text-surface-500">Check-ins</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-brand-900">{event._count.mediaAssets}</p>
-                      <p className="text-xs text-surface-500">Media</p>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-surface-500">
+                    <span className="flex items-center gap-1">
+                      {Icons.calendar}
+                      {formatDate(event.date)}
+                    </span>
+                    {event.venue && (
+                      <span className="flex items-center gap-1">
+                        {Icons.location}
+                        {event.venue}
+                      </span>
+                    )}
                   </div>
+                  <div className="flex gap-3 mt-2 text-xs">
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.mediaAssets}</span> Media</span>
+                  </div>
+                </div>
+                <div className="text-surface-300 group-hover:text-brand-600 transition-colors flex-shrink-0">
+                  {Icons.arrow}
                 </div>
               </Link>
             ))}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ownerDashboardApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { formatDate, cn } from '@/lib/utils';
+import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 
 interface Payout {
   id: string;
@@ -163,36 +164,31 @@ export default function OwnerPayoutsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-navy-900">Payout Management</h1>
-          <p className="text-surface-600 mt-1 text-sm">View and track your payout requests</p>
-          <p className="text-xs text-surface-500 mt-1">Available balance includes ticket sales and net cash gifts only. Gift package sales and Paystack auto-settled split gifts are excluded from manual payout.</p>
-        </div>
-        <button
-          onClick={() => setShowRequestForm(!showRequestForm)}
-          className="px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors font-medium text-sm whitespace-nowrap self-start flex-shrink-0"
-        >
-          {showRequestForm ? 'Cancel' : '+ Request Payout'}
-        </button>
-      </div>
+    <div className="space-y-5 sm:space-y-6">
+      <DashboardPageHeader
+        title="Payouts"
+        subtitle="View and track your payout requests"
+        action={(
+          <button
+            onClick={() => setShowRequestForm(!showRequestForm)}
+            className="btn-primary text-sm"
+          >
+            {showRequestForm ? 'Cancel' : '+ Request Payout'}
+          </button>
+        )}
+      />
 
       {/* Request Payout Form */}
       {showRequestForm && (
-        <div className="bg-white rounded-lg border border-surface-200 p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">Request Payout</h2>
+        <DashboardSection title="Request Payout">
           <form onSubmit={handleRequestPayout} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Event <span className="text-red-500">*</span>
-                </label>
+                <label className="label">Event *</label>
                 <select
                   value={formData.eventId}
                   onChange={(e) => setFormData({ ...formData, eventId: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  className="input"
                   required
                 >
                   <option value="">Select an event</option>
@@ -200,7 +196,7 @@ export default function OwnerPayoutsPage() {
                     const eventTotal = eventTotals.find((e) => e.eventId === event.id);
                     return (
                       <option key={event.id} value={event.id}>
-                        {event.name} {eventTotal && `(${eventTotal.availableBalance.toFixed(2)} ${eventTotal.currency || 'USD'} available)`}
+                        {event.name} {eventTotal && `(${eventTotal.availableBalance.toFixed(2)} ${eventTotal.currency || 'USD'})`}
                       </option>
                     );
                   })}
@@ -213,9 +209,7 @@ export default function OwnerPayoutsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Amount <span className="text-red-500">*</span>
-                </label>
+                <label className="label">Amount *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -223,7 +217,7 @@ export default function OwnerPayoutsPage() {
                   max={maxAmount}
                   value={formData.requestedAmount}
                   onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  className="input"
                   placeholder="0.00"
                   required
                 />
@@ -235,136 +229,154 @@ export default function OwnerPayoutsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Payout Destination
-                </label>
-                <div className="w-full px-3 py-2 border border-surface-200 rounded-lg bg-surface-50 text-sm text-surface-700">
+                <label className="label">Payout Destination</label>
+                <div className="input bg-surface-50 text-surface-600">
                   {walletSummary
                     ? `${walletSummary.preferredMethod.toUpperCase()} (${walletSummary.currency})`
                     : 'Configured in Wallet settings'}
                 </div>
-                <p className="text-xs text-surface-500 mt-1">
-                  Payout method and currency are locked to your verified wallet settings.
-                </p>
+                <p className="text-xs text-surface-500 mt-1">Locked to your wallet settings.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Notes (Optional)
-                </label>
+                <label className="label">Notes (Optional)</label>
                 <input
                   type="text"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-transparent"
+                  className="input"
                   placeholder="Additional notes..."
                 />
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={requesting || !formData.eventId || !formData.requestedAmount}
-                className="px-6 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {requesting ? 'Submitting...' : 'Submit Request'}
-              </button>
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowRequestForm(false)}
-                className="px-6 py-2 border border-surface-300 text-surface-700 rounded-lg hover:bg-surface-50 transition-colors font-medium"
+                className="btn-outline w-full sm:w-auto"
               >
                 Cancel
               </button>
+              <button
+                type="submit"
+                disabled={requesting || !formData.eventId || !formData.requestedAmount}
+                className="btn-primary w-full sm:w-auto"
+              >
+                {requesting ? 'Submitting...' : 'Submit Request'}
+              </button>
             </div>
           </form>
-        </div>
+        </DashboardSection>
       )}
 
       {/* Overall Totals */}
       {overallTotals && (
-        <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-lg p-4 sm:p-6 text-white">
-          <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Overall Summary</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-gradient-to-br from-brand-900 to-brand-800 rounded-xl p-4 sm:p-5 text-white">
+          <p className="text-[10px] uppercase tracking-widest font-semibold text-white/60 mb-3">Overall Summary</p>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <p className="text-xs sm:text-sm opacity-80">Total Available</p>
-              <p className="text-lg sm:text-2xl font-bold mt-1 break-all">
+              <p className="text-[10px] sm:text-xs text-white/70">Available</p>
+              <p className="text-lg sm:text-xl font-bold mt-0.5 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.availableBalance)}
               </p>
             </div>
             <div>
-              <p className="text-xs sm:text-sm opacity-80">Total Fulfilled</p>
-              <p className="text-lg sm:text-2xl font-bold mt-1 break-all">
+              <p className="text-[10px] sm:text-xs text-white/70">Fulfilled</p>
+              <p className="text-lg sm:text-xl font-bold mt-0.5 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.fulfilledAmount)}
               </p>
             </div>
             <div>
-              <p className="text-xs sm:text-sm opacity-80">Pending/Processing</p>
-              <p className="text-lg sm:text-2xl font-bold mt-1 break-all">
+              <p className="text-[10px] sm:text-xs text-white/70">Pending</p>
+              <p className="text-lg sm:text-xl font-bold mt-0.5 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.pendingAmount)}
               </p>
             </div>
             <div>
-              <p className="text-xs sm:text-sm opacity-80">Total Payouts</p>
-              <p className="text-lg sm:text-2xl font-bold mt-1">{overallTotals.totalPayoutCount}</p>
+              <p className="text-[10px] sm:text-xs text-white/70">Total Payouts</p>
+              <p className="text-lg sm:text-xl font-bold mt-0.5">{overallTotals.totalPayoutCount}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Event Totals */}
+      {/* Event Totals - mobile cards + desktop table */}
       {eventTotals.length > 0 && (
-        <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-          <h2 className="text-lg font-semibold text-navy-900 p-4 border-b border-surface-200">Event Breakdown</h2>
-          <div className="overflow-x-auto">
+        <DashboardSection title="Event Breakdown" contentClassName="p-0">
+          {/* Mobile card view */}
+          <div className="divide-y divide-surface-100 md:hidden">
+            {eventTotals.map((evt) => (
+              <div key={evt.eventId} className="px-4 py-3.5 space-y-2">
+                <p className="text-sm font-semibold text-brand-900">{evt.eventName}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-surface-500">Net</p>
+                    <p className="font-semibold text-brand-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.totalNet)}</p>
+                  </div>
+                  <div>
+                    <p className="text-surface-500">Available</p>
+                    <p className="font-semibold text-brand-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.availableBalance)}</p>
+                  </div>
+                  <div>
+                    <p className="text-surface-500">Fulfilled</p>
+                    <p className="font-semibold text-emerald-600">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.fulfilledAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-surface-500">Pending</p>
+                    <p className="font-semibold text-yellow-600">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.pendingAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Desktop table view */}
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-50 border-b border-surface-200">
                   <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Event</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Total Net</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Net</th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Fulfilled</th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Pending</th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Available</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Payouts</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100">
-                {eventTotals.map((event) => (
-                  <tr key={event.eventId} className="hover:bg-surface-50">
-                    <td className="py-3 px-4 font-medium text-navy-900">{event.eventName}</td>
-                    <td className="py-3 px-4 text-right font-semibold">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.totalNet)}
+                {eventTotals.map((evt) => (
+                  <tr key={evt.eventId}>
+                    <td className="py-3 px-4 font-medium text-brand-900 text-sm">{evt.eventName}</td>
+                    <td className="py-3 px-4 text-right text-sm font-semibold">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.totalNet)}
                     </td>
-                    <td className="py-3 px-4 text-right text-emerald-600">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.fulfilledAmount)}
+                    <td className="py-3 px-4 text-right text-sm text-emerald-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.fulfilledAmount)}
                     </td>
-                    <td className="py-3 px-4 text-right text-yellow-600">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.pendingAmount)}
+                    <td className="py-3 px-4 text-right text-sm text-yellow-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.pendingAmount)}
                     </td>
-                    <td className="py-3 px-4 text-right font-semibold text-navy-900">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.availableBalance)}
+                    <td className="py-3 px-4 text-right text-sm font-semibold text-brand-900">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.availableBalance)}
                     </td>
-                    <td className="py-3 px-4 text-right text-surface-600">{event.payoutCount}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </DashboardSection>
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-1.5 sm:gap-2 bg-surface-100 p-1 rounded-lg">
+      <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
         {(['all', 'PENDING', 'PROCESSING', 'FULFILLED', 'DELAYED', 'REJECTED'] as const).map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
             className={cn(
-              'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all',
+              'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
               filter === status
-                ? 'bg-white text-navy-900 shadow-sm'
-                : 'text-surface-600 hover:text-surface-900'
+                ? 'bg-white text-brand-900 shadow-sm'
+                : 'text-surface-600 hover:text-brand-900'
             )}
           >
             {status === 'all' ? 'All' : statusLabels[status]}
@@ -372,103 +384,96 @@ export default function OwnerPayoutsPage() {
         ))}
       </div>
 
-      {/* Payouts Table */}
-      <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+      {/* Payouts List */}
+      <DashboardSection contentClassName="p-0">
         {filteredPayouts.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
-              <svg className="w-6 h-6 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="text-center py-10 px-4">
+            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
+              <svg className="w-5 h-5 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <p className="text-surface-600">No payouts found</p>
-            <p className="text-sm text-surface-500 mt-1">
-              {filter === 'all' 
-                ? 'You haven\'t requested any payouts yet'
+            <p className="text-sm font-medium text-surface-600">No payouts found</p>
+            <p className="text-xs text-surface-400 mt-1">
+              {filter === 'all'
+                ? 'Request your first payout to get started'
                 : `No ${statusLabels[filter].toLowerCase()} payouts`}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-surface-200 bg-surface-50">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                    Event
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                    Method
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                    Requested
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                    Details
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-100">
-                {filteredPayouts.map((payout) => (
-                  <tr key={payout.id} className="hover:bg-surface-50 transition-colors">
-                    <td className="py-3 px-4">
-                      <p className="font-medium text-navy-900">{payout.event.name}</p>
-                    </td>
-                    <td className="py-3 px-4">
-                      <p className="font-semibold text-navy-900">
-                        {new Intl.NumberFormat('en-US', {
-                          style: 'currency',
-                          currency: payout.currency,
-                        }).format(payout.requestedAmount)}
-                      </p>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-sm text-surface-600 capitalize">
-                        {payout.payoutMethod.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={cn(
-                          'inline-flex px-2 py-1 text-xs font-medium rounded border',
-                          statusColors[payout.status]
-                        )}
-                      >
-                        {statusLabels[payout.status]}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <p className="text-sm text-surface-600">
-                        {formatDate(payout.createdAt)}
-                      </p>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="text-sm text-surface-600">
-                        {payout.processedAt && (
-                          <p>Processed: {formatDate(payout.processedAt)}</p>
-                        )}
-                        {payout.transactionRef && (
-                          <p className="text-xs font-mono text-surface-500 mt-1">
-                            Ref: {payout.transactionRef}
-                          </p>
-                        )}
-                        {payout.notes && (
-                          <p className="text-xs text-surface-500 mt-1">{payout.notes}</p>
-                        )}
-                      </div>
-                    </td>
+          <>
+            {/* Mobile card view */}
+            <div className="divide-y divide-surface-100 md:hidden">
+              {filteredPayouts.map((payout) => (
+                <div key={payout.id} className="px-4 py-3.5 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-brand-900 truncate">{payout.event.name}</p>
+                      <p className="text-xs text-surface-500">{formatDate(payout.createdAt)}</p>
+                    </div>
+                    <span
+                      className={cn(
+                        'inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none flex-shrink-0',
+                        statusColors[payout.status]
+                      )}
+                    >
+                      {statusLabels[payout.status]}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-base font-bold text-brand-900">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: payout.currency }).format(payout.requestedAmount)}
+                    </p>
+                    <span className="text-xs text-surface-500 capitalize">{payout.payoutMethod.replace('_', ' ')}</span>
+                  </div>
+                  {(payout.transactionRef || payout.notes) && (
+                    <div className="text-xs text-surface-500">
+                      {payout.transactionRef && <p className="font-mono truncate">Ref: {payout.transactionRef}</p>}
+                      {payout.notes && <p className="mt-0.5">{payout.notes}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Desktop table view */}
+            <div className="overflow-x-auto hidden md:block">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-surface-200 bg-surface-50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Event</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Amount</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Method</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Status</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Date</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-surface-100">
+                  {filteredPayouts.map((payout) => (
+                    <tr key={payout.id} className="hover:bg-surface-50 transition-colors">
+                      <td className="py-3 px-4 text-sm font-medium text-brand-900">{payout.event.name}</td>
+                      <td className="py-3 px-4 text-sm font-semibold text-brand-900">
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: payout.currency }).format(payout.requestedAmount)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-surface-600 capitalize">{payout.payoutMethod.replace('_', ' ')}</td>
+                      <td className="py-3 px-4">
+                        <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', statusColors[payout.status])}>
+                          {statusLabels[payout.status]}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-surface-600">{formatDate(payout.createdAt)}</td>
+                      <td className="py-3 px-4 text-sm text-surface-500">
+                        {payout.transactionRef && <p className="text-xs font-mono">Ref: {payout.transactionRef}</p>}
+                        {payout.notes && <p className="text-xs mt-0.5">{payout.notes}</p>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
-      </div>
+      </DashboardSection>
     </div>
   );
 }
