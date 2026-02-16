@@ -311,68 +311,29 @@ export default function OwnerAccountPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-surface-200">
-        <nav className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`
-              py-4 px-1 border-b-2 font-medium text-sm transition-colors
-              ${activeTab === 'profile'
-                ? 'border-navy-900 text-navy-900'
-                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
-              }
-            `}
-          >
-            Profile
-          </button>
-          <button
-            onClick={() => setActiveTab('password')}
-            className={`
-              py-4 px-1 border-b-2 font-medium text-sm transition-colors
-              ${activeTab === 'password'
-                ? 'border-navy-900 text-navy-900'
-                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
-              }
-            `}
-          >
-            Change Password
-          </button>
-          <button
-            onClick={() => setActiveTab('wallet')}
-            className={`
-              py-4 px-1 border-b-2 font-medium text-sm transition-colors
-              ${activeTab === 'wallet'
-                ? 'border-navy-900 text-navy-900'
-                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
-              }
-            `}
-          >
-            Wallet & Payouts
-          </button>
-          <button
-            onClick={() => setActiveTab('notifications')}
-            className={`
-              py-4 px-1 border-b-2 font-medium text-sm transition-colors
-              ${activeTab === 'notifications'
-                ? 'border-navy-900 text-navy-900'
-                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
-              }
-            `}
-          >
-            Notifications
-          </button>
-          <button
-            onClick={() => setActiveTab('support')}
-            className={`
-              py-4 px-1 border-b-2 font-medium text-sm transition-colors
-              ${activeTab === 'support'
-                ? 'border-navy-900 text-navy-900'
-                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
-              }
-            `}
-          >
-            FAQ & Support
-          </button>
+      <div className="border-b border-surface-200 -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto">
+        <nav className="flex space-x-4 sm:space-x-8 min-w-max">
+          {([
+            { id: 'profile' as const, label: 'Profile' },
+            { id: 'password' as const, label: 'Password' },
+            { id: 'wallet' as const, label: 'Wallet' },
+            { id: 'notifications' as const, label: 'Notifications' },
+            { id: 'support' as const, label: 'Support' },
+          ]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`
+                py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap
+                ${activeTab === tab.id
+                  ? 'border-navy-900 text-navy-900'
+                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+                }
+              `}
+            >
+              {tab.label}
+            </button>
+          ))}
         </nav>
       </div>
 

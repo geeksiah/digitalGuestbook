@@ -209,9 +209,9 @@ export default function OwnerEventsPage() {
         title="Event List"
         subtitle="Select an event to manage operations and guest experience flows"
         action={(
-          <div className="flex gap-1 bg-surface-100 p-1 rounded-xl">
+          <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
             {[
-              { key: 'all', label: 'All Events' },
+              { key: 'all', label: 'All' },
               { key: 'pre', label: 'Upcoming' },
               { key: 'live', label: 'Live' },
               { key: 'post', label: 'Past' },
@@ -220,7 +220,7 @@ export default function OwnerEventsPage() {
                 key={option.key}
                 onClick={() => setFilter(option.key as 'all' | 'pre' | 'live' | 'post')}
                 className={cn(
-                  'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  'px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors',
                   filter === option.key
                     ? 'bg-white text-brand-900 shadow-sm'
                     : 'text-surface-700 hover:text-brand-900'
@@ -251,53 +251,55 @@ export default function OwnerEventsPage() {
                 href={`/owner/events/${event.id}`}
                 className="group block rounded-2xl border border-surface-200 bg-white px-5 py-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all"
               >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-base font-semibold text-brand-900">{event.name}</h3>
-                      <span
-                        className={cn(
-                          'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
-                          getPhaseStyle(event.currentPhase)
-                        )}
-                      >
-                        {getPhaseLabel(event.currentPhase)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-surface-600">
-                      <span className="flex items-center">
-                        {Icons.calendar}
-                        <span className="ml-1">{formatDate(event.date)}</span>
-                      </span>
-                      {event.venue && (
-                        <span className="flex items-center">
-                          {Icons.location}
-                          <span className="ml-1">{event.venue}</span>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-semibold text-brand-900">{event.name}</h3>
+                        <span
+                          className={cn(
+                            'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
+                            getPhaseStyle(event.currentPhase)
+                          )}
+                        >
+                          {getPhaseLabel(event.currentPhase)}
                         </span>
-                      )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-surface-600">
+                        <span className="flex items-center">
+                          {Icons.calendar}
+                          <span className="ml-1">{formatDate(event.date)}</span>
+                        </span>
+                        {event.venue && (
+                          <span className="flex items-center">
+                            {Icons.location}
+                            <span className="ml-1">{event.venue}</span>
+                          </span>
+                        )}
+                      </div>
+                      {event.approvalStatus ? (
+                        <p className="text-xs text-surface-500 mt-1">Approval: {event.approvalStatus}</p>
+                      ) : null}
+                      {event.defaultCurrency ? (
+                        <p className="text-xs text-surface-500 mt-1">Default currency: {event.defaultCurrency}</p>
+                      ) : null}
                     </div>
-                    {event.approvalStatus ? (
-                      <p className="text-xs text-surface-500 mt-1">Approval: {event.approvalStatus}</p>
-                    ) : null}
-                    {event.defaultCurrency ? (
-                      <p className="text-xs text-surface-500 mt-1">Default currency: {event.defaultCurrency}</p>
-                    ) : null}
+                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors flex-shrink-0 mt-1">
+                      {Icons.arrow}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-6 ml-4">
-                    <div className="text-right">
+                  <div className="flex flex-wrap gap-4 border-t border-surface-100 pt-3">
+                    <div>
                       <p className="text-sm font-semibold text-brand-900">{event._count.rsvps}</p>
                       <p className="text-xs text-surface-500">RSVPs</p>
                     </div>
-                    <div className="text-right">
+                    <div>
                       <p className="text-sm font-semibold text-brand-900">{event._count.checkIns}</p>
                       <p className="text-xs text-surface-500">Check-ins</p>
                     </div>
-                    <div className="text-right">
+                    <div>
                       <p className="text-sm font-semibold text-brand-900">{event._count.mediaAssets}</p>
                       <p className="text-xs text-surface-500">Media</p>
-                    </div>
-                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors">
-                      {Icons.arrow}
                     </div>
                   </div>
                 </div>

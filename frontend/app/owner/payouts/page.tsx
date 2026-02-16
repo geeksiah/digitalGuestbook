@@ -165,15 +165,15 @@ export default function OwnerPayoutsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-navy-900">Payout Management</h1>
-          <p className="text-surface-600 mt-1">View and track your payout requests</p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-navy-900">Payout Management</h1>
+          <p className="text-surface-600 mt-1 text-sm">View and track your payout requests</p>
           <p className="text-xs text-surface-500 mt-1">Available balance includes ticket sales and net cash gifts only. Gift package sales and Paystack auto-settled split gifts are excluded from manual payout.</p>
         </div>
         <button
           onClick={() => setShowRequestForm(!showRequestForm)}
-          className="px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors font-medium"
+          className="px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors font-medium text-sm whitespace-nowrap self-start flex-shrink-0"
         >
           {showRequestForm ? 'Cancel' : '+ Request Payout'}
         </button>
@@ -284,30 +284,30 @@ export default function OwnerPayoutsPage() {
 
       {/* Overall Totals */}
       {overallTotals && (
-        <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-lg p-6 text-white">
-          <h2 className="text-lg font-semibold mb-4">Overall Summary</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-lg p-4 sm:p-6 text-white">
+          <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Overall Summary</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <div>
-              <p className="text-sm opacity-80">Total Available</p>
-              <p className="text-2xl font-bold mt-1">
+              <p className="text-xs sm:text-sm opacity-80">Total Available</p>
+              <p className="text-lg sm:text-2xl font-bold mt-1 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.availableBalance)}
               </p>
             </div>
             <div>
-              <p className="text-sm opacity-80">Total Fulfilled</p>
-              <p className="text-2xl font-bold mt-1">
+              <p className="text-xs sm:text-sm opacity-80">Total Fulfilled</p>
+              <p className="text-lg sm:text-2xl font-bold mt-1 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.fulfilledAmount)}
               </p>
             </div>
             <div>
-              <p className="text-sm opacity-80">Pending/Processing</p>
-              <p className="text-2xl font-bold mt-1">
+              <p className="text-xs sm:text-sm opacity-80">Pending/Processing</p>
+              <p className="text-lg sm:text-2xl font-bold mt-1 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.pendingAmount)}
               </p>
             </div>
             <div>
-              <p className="text-sm opacity-80">Total Payouts</p>
-              <p className="text-2xl font-bold mt-1">{overallTotals.totalPayoutCount}</p>
+              <p className="text-xs sm:text-sm opacity-80">Total Payouts</p>
+              <p className="text-lg sm:text-2xl font-bold mt-1">{overallTotals.totalPayoutCount}</p>
             </div>
           </div>
         </div>
@@ -355,13 +355,13 @@ export default function OwnerPayoutsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-2 bg-surface-100 p-1 rounded-lg">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 bg-surface-100 p-1 rounded-lg">
         {(['all', 'PENDING', 'PROCESSING', 'FULFILLED', 'DELAYED', 'REJECTED'] as const).map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
             className={cn(
-              'px-4 py-2 rounded-md text-sm font-medium transition-all',
+              'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all',
               filter === status
                 ? 'bg-white text-navy-900 shadow-sm'
                 : 'text-surface-600 hover:text-surface-900'

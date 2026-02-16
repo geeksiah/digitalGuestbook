@@ -157,45 +157,47 @@ export default function OwnerDashboardPage() {
                 href={`/owner/events/${event.id}`}
                 className="group block px-6 py-4 hover:bg-brand-50/30 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
-                      <span
-                        className={cn(
-                          'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
-                          getPhaseStyle(event.currentPhase)
-                        )}
-                      >
-                        {getPhaseLabel(event.currentPhase)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-surface-600">
-                      <span className="flex items-center">
-                        {Icons.events}
-                        <span className="ml-1">{formatDate(event.date)}</span>
-                      </span>
-                      {event.venue && (
-                        <span className="flex items-center">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          </svg>
-                          <span className="ml-1">{event.venue}</span>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
+                        <span
+                          className={cn(
+                            'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
+                            getPhaseStyle(event.currentPhase)
+                          )}
+                        >
+                          {getPhaseLabel(event.currentPhase)}
                         </span>
-                      )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-surface-600">
+                        <span className="flex items-center">
+                          {Icons.events}
+                          <span className="ml-1">{formatDate(event.date)}</span>
+                        </span>
+                        {event.venue && (
+                          <span className="flex items-center">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            </svg>
+                            <span className="ml-1">{event.venue}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors flex-shrink-0 mt-1">
+                      {Icons.arrow}
                     </div>
                   </div>
-                  <div className="flex items-center gap-6 ml-4">
-                    <div className="text-right">
+                  <div className="flex flex-wrap gap-4 sm:gap-6 border-t border-surface-100 pt-3">
+                    <div>
                       <p className="text-sm font-semibold text-brand-900">{event._count.rsvps}</p>
                       <p className="text-xs text-surface-500">RSVPs</p>
                     </div>
-                    <div className="text-right">
+                    <div>
                       <p className="text-sm font-semibold text-brand-900">{event._count.checkIns}</p>
                       <p className="text-xs text-surface-500">Check-ins</p>
-                    </div>
-                    <div className="text-surface-400 group-hover:text-brand-600 transition-colors">
-                      {Icons.arrow}
                     </div>
                   </div>
                 </div>

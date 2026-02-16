@@ -753,14 +753,14 @@ export default function OwnerEventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="overflow-x-auto rounded-2xl border border-surface-200 bg-white shadow-soft p-2">
-        <nav className="flex gap-1 min-w-max">
+      <div className="rounded-2xl border border-surface-200 bg-white shadow-soft p-2">
+        <nav className="flex flex-wrap gap-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border',
+                'px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-xl transition-all border whitespace-nowrap',
                 activeTab === tab.id
                   ? 'bg-brand-50 border-brand-100 text-brand-900 shadow-sm'
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
@@ -768,7 +768,7 @@ export default function OwnerEventDetailPage() {
             >
               {tab.label}
               {tab.count !== undefined && (
-                <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>
+                <span className={cn('ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>
                   {tab.count}
                 </span>
               )}
@@ -905,8 +905,8 @@ export default function OwnerEventDetailPage() {
         {/* RSVPs Tab */}
         {activeTab === 'rsvps' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setRsvpFilter('all')}
                   className={cn('px-3 py-1.5 rounded-lg text-sm font-medium', rsvpFilter === 'all' ? 'bg-brand-900 text-white' : 'bg-surface-100 text-surface-700')}
@@ -932,87 +932,135 @@ export default function OwnerEventDetailPage() {
                   Rejected
                 </button>
               </div>
-              <button onClick={exportRsvpsToCSV} className="btn-outline">
+              <button onClick={exportRsvpsToCSV} className="btn-outline self-start">
                 {Icons.download}
                 <span className="ml-2">Export CSV</span>
               </button>
             </div>
 
             <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-surface-200">
-                  <thead className="bg-surface-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Attendance</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guests</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Submitted</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-surface-200">
-                    {rsvps.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-4 text-center text-sm text-surface-500">
-                          No RSVPs found
-                        </td>
-                      </tr>
-                    ) : (
-                      rsvps.map(rsvp => (
-                        <tr key={rsvp.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{rsvp.primaryName}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.email || '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.attendance}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.guestCount}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', getRsvpStatusStyle(rsvp.status))}>
-                              {rsvp.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(rsvp.submittedAt)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                            <div className="inline-flex items-center gap-2">
-                              <button
-                                onClick={() => handleReviewRsvp(rsvp.id, 'PENDING')}
-                                disabled={reviewingRsvp === rsvp.id || rsvp.status === 'PENDING'}
-                                className="px-2.5 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium disabled:opacity-50"
-                                title="Set RSVP to pending"
-                              >
-                                Pending
-                              </button>
-                              <button
-                                onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
-                                disabled={reviewingRsvp === rsvp.id || rsvp.status === 'REJECTED'}
-                                className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
-                                title="Reject RSVP"
-                              >
-                                Reject
-                              </button>
-                              <button
-                                onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
-                                disabled={reviewingRsvp === rsvp.id || rsvp.status === 'APPROVED'}
-                                className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
-                                title="Approve RSVP"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => setViewingRsvpDetails(rsvp)}
-                                className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                                title="View Details"
-                              >
-                                Details
-                              </button>
-                            </div>
-                          </td>
+              {rsvps.length === 0 ? (
+                <div className="px-6 py-8 text-center text-sm text-surface-500">
+                  No RSVPs found
+                </div>
+              ) : (
+                <>
+                  {/* Mobile card view */}
+                  <div className="divide-y divide-surface-200 md:hidden">
+                    {rsvps.map(rsvp => (
+                      <div key={rsvp.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-brand-900 truncate">{rsvp.primaryName}</p>
+                            <p className="text-xs text-surface-500 truncate">{rsvp.email || '-'}</p>
+                          </div>
+                          <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded flex-shrink-0', getRsvpStatusStyle(rsvp.status))}>
+                            {rsvp.status}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-surface-600">
+                          <span>{rsvp.attendance}</span>
+                          <span>{rsvp.guestCount} guest(s)</span>
+                          <span>{formatDate(rsvp.submittedAt)}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleReviewRsvp(rsvp.id, 'PENDING')}
+                            disabled={reviewingRsvp === rsvp.id || rsvp.status === 'PENDING'}
+                            className="px-2.5 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium disabled:opacity-50"
+                          >
+                            Pending
+                          </button>
+                          <button
+                            onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
+                            disabled={reviewingRsvp === rsvp.id || rsvp.status === 'REJECTED'}
+                            className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
+                            disabled={reviewingRsvp === rsvp.id || rsvp.status === 'APPROVED'}
+                            className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => setViewingRsvpDetails(rsvp)}
+                            className="px-2.5 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table view */}
+                  <div className="overflow-x-auto hidden md:block">
+                    <table className="min-w-full divide-y divide-surface-200">
+                      <thead className="bg-surface-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Email</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Attendance</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guests</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Submitted</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-surface-200">
+                        {rsvps.map(rsvp => (
+                          <tr key={rsvp.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{rsvp.primaryName}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.email || '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.attendance}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.guestCount}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', getRsvpStatusStyle(rsvp.status))}>
+                                {rsvp.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(rsvp.submittedAt)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => handleReviewRsvp(rsvp.id, 'PENDING')}
+                                  disabled={reviewingRsvp === rsvp.id || rsvp.status === 'PENDING'}
+                                  className="px-2.5 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium disabled:opacity-50"
+                                >
+                                  Pending
+                                </button>
+                                <button
+                                  onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
+                                  disabled={reviewingRsvp === rsvp.id || rsvp.status === 'REJECTED'}
+                                  className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
+                                  disabled={reviewingRsvp === rsvp.id || rsvp.status === 'APPROVED'}
+                                  className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => setViewingRsvpDetails(rsvp)}
+                                  className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                                >
+                                  Details
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1500,7 +1548,7 @@ export default function OwnerEventDetailPage() {
           <div className="space-y-4">
             <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
               <h3 className="font-semibold text-brand-900">Send WhatsApp RSVP Invites</h3>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-xs">
                 <div className="rounded-md border border-surface-200 bg-surface-50 px-3 py-2">
                   <p className="text-surface-500">Total</p>
                   <p className="font-semibold text-brand-900">{inviteStats.total}</p>
@@ -1558,68 +1606,105 @@ export default function OwnerEventDetailPage() {
               </div>
             ) : (
               <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-surface-200">
-                    <thead className="bg-surface-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Invitee</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Phone</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Sent</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Expires</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-surface-200">
-                      {invites.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-6 text-center text-sm text-surface-500">
-                            No WhatsApp invites sent yet
-                          </td>
-                        </tr>
-                      ) : (
-                        invites.map((invite) => (
-                          <tr key={invite.id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{invite.inviteeName || '-'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{invite.inviteePhone}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span
-                                className={cn(
-                                  'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
-                                  invite.status === 'RESPONDED' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                  invite.status === 'OPENED' && 'bg-blue-50 text-blue-700 border-blue-200',
-                                  invite.status === 'SENT' && 'bg-amber-50 text-amber-700 border-amber-200',
-                                  invite.status === 'EXPIRED' && 'bg-rose-50 text-rose-700 border-rose-200'
-                                )}
-                              >
-                                {invite.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                              {invite.initialResponse || '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                              {formatDate(invite.sentAt)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                              {invite.expiresAt ? formatDate(invite.expiresAt) : '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right">
-                              <button
-                                className="btn-outline"
-                                onClick={() => handleResendInvite(invite.id)}
-                                disabled={invite.status === 'RESPONDED'}
-                              >
-                                Resend
-                              </button>
-                            </td>
+                {invites.length === 0 ? (
+                  <div className="px-6 py-6 text-center text-sm text-surface-500">
+                    No WhatsApp invites sent yet
+                  </div>
+                ) : (
+                  <>
+                    {/* Mobile card view */}
+                    <div className="divide-y divide-surface-200 md:hidden">
+                      {invites.map((invite) => (
+                        <div key={invite.id} className="p-4 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-brand-900 truncate">{invite.inviteeName || '-'}</p>
+                              <p className="text-xs text-surface-500">{invite.inviteePhone}</p>
+                            </div>
+                            <span
+                              className={cn(
+                                'inline-flex px-2 py-0.5 rounded text-xs font-medium border flex-shrink-0',
+                                invite.status === 'RESPONDED' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                invite.status === 'OPENED' && 'bg-blue-50 text-blue-700 border-blue-200',
+                                invite.status === 'SENT' && 'bg-amber-50 text-amber-700 border-amber-200',
+                                invite.status === 'EXPIRED' && 'bg-rose-50 text-rose-700 border-rose-200'
+                              )}
+                            >
+                              {invite.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-surface-600">
+                            <span>Response: {invite.initialResponse || '-'}</span>
+                            <span>Sent: {formatDate(invite.sentAt)}</span>
+                          </div>
+                          <button
+                            className="btn-outline !text-xs !px-2.5 !py-1.5"
+                            onClick={() => handleResendInvite(invite.id)}
+                            disabled={invite.status === 'RESPONDED'}
+                          >
+                            Resend
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop table view */}
+                    <div className="overflow-x-auto hidden md:block">
+                      <table className="min-w-full divide-y divide-surface-200">
+                        <thead className="bg-surface-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Invitee</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Phone</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Sent</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Expires</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Action</th>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-surface-200">
+                          {invites.map((invite) => (
+                            <tr key={invite.id}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{invite.inviteeName || '-'}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{invite.inviteePhone}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                                  className={cn(
+                                    'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
+                                    invite.status === 'RESPONDED' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                    invite.status === 'OPENED' && 'bg-blue-50 text-blue-700 border-blue-200',
+                                    invite.status === 'SENT' && 'bg-amber-50 text-amber-700 border-amber-200',
+                                    invite.status === 'EXPIRED' && 'bg-rose-50 text-rose-700 border-rose-200'
+                                  )}
+                                >
+                                  {invite.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
+                                {invite.initialResponse || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
+                                {formatDate(invite.sentAt)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
+                                {invite.expiresAt ? formatDate(invite.expiresAt) : '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                                <button
+                                  className="btn-outline"
+                                  onClick={() => handleResendInvite(invite.id)}
+                                  disabled={invite.status === 'RESPONDED'}
+                                >
+                                  Resend
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1709,42 +1794,65 @@ export default function OwnerEventDetailPage() {
               </div>
             ) : (
               <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-surface-200">
-                    <thead className="bg-surface-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Total Gift</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Your Net</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-surface-200">
-                      {giftOrders.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-6 text-center text-sm text-surface-500">No gift orders yet</td>
-                        </tr>
-                      ) : (
-                        giftOrders.map((order) => (
-                          <tr key={order.id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{order.guestName}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{order.guestEmail || order.guestPhone || '-'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-700">{order.currency} {order.totalAmount.toFixed(2)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-brand-900">{order.currency} {order.ownerNetAmount.toFixed(2)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-                                {order.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(order.createdAt)}</td>
+                {giftOrders.length === 0 ? (
+                  <div className="px-6 py-6 text-center text-sm text-surface-500">No gift orders yet</div>
+                ) : (
+                  <>
+                    {/* Mobile card view */}
+                    <div className="divide-y divide-surface-200 md:hidden">
+                      {giftOrders.map((order) => (
+                        <div key={order.id} className="p-4 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-brand-900 truncate">{order.guestName}</p>
+                              <p className="text-xs text-surface-500 truncate">{order.guestEmail || order.guestPhone || '-'}</p>
+                            </div>
+                            <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium flex-shrink-0', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                              {order.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            <span className="text-surface-700">Total: {order.currency} {order.totalAmount.toFixed(2)}</span>
+                            <span className="font-semibold text-brand-900">Net: {order.currency} {order.ownerNetAmount.toFixed(2)}</span>
+                            <span className="text-surface-500">{formatDate(order.createdAt)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop table view */}
+                    <div className="overflow-x-auto hidden md:block">
+                      <table className="min-w-full divide-y divide-surface-200">
+                        <thead className="bg-surface-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Total Gift</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Your Net</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-surface-200">
+                          {giftOrders.map((order) => (
+                            <tr key={order.id}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{order.guestName}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{order.guestEmail || order.guestPhone || '-'}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-700">{order.currency} {order.totalAmount.toFixed(2)}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-brand-900">{order.currency} {order.ownerNetAmount.toFixed(2)}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                                  {order.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(order.createdAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

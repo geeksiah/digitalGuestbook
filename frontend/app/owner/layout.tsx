@@ -289,22 +289,22 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 -ml-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
+                className="lg:hidden flex-shrink-0 p-2 -ml-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
 
-              <div className="min-w-0 flex items-center gap-2">
-                <span className="hidden xl:inline-block text-xs font-semibold uppercase tracking-wider text-surface-500">
+              <div className="min-w-0 flex items-center gap-2 flex-1">
+                <span className="hidden xl:inline-block flex-shrink-0 text-xs font-semibold uppercase tracking-wider text-surface-500">
                   Manage Event
                 </span>
                 <select
                   value={selectedEventId || '__all__'}
                   onChange={(e) => handleEventSwitch(e.target.value)}
                   disabled={loadingEvents || ownerEvents.length === 0}
-                  className="h-10 min-w-[190px] max-w-[360px] rounded-xl border border-surface-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-10 w-full max-w-[360px] rounded-xl border border-surface-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="__all__">All events</option>
                   {ownerEvents.map((event) => (
@@ -316,7 +316,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-sm min-w-0">
+            <div className="hidden sm:flex items-center gap-2 text-sm flex-shrink-0">
               <span className="text-surface-500 font-medium">Owner Workspace</span>
               <span className="text-surface-300">/</span>
               <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
@@ -325,7 +325,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </header>
 
         {/* Page content */}
-        <main className="p-4 pb-24 sm:p-6 sm:pb-28 lg:p-7 lg:pb-7">
+        <main className="p-4 pb-32 sm:p-6 sm:pb-32 lg:p-7 lg:pb-7">
           {children}
         </main>
 
