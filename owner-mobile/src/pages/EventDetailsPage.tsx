@@ -681,7 +681,7 @@ const EventDetailsPage = () => {
                     <h3>RSVP Reviews</h3>
                     <IonButton size="small" fill="outline" onClick={exportRsvps}>Export CSV</IonButton>
                   </div>
-                  <IonSegment value={rsvpFilter} onIonChange={(segmentEvent) => setRsvpFilter((segmentEvent.detail.value as string) || 'all')}>
+                  <IonSegment scrollable={true} value={rsvpFilter} onIonChange={(segmentEvent) => setRsvpFilter((segmentEvent.detail.value as string) || 'all')}>
                     <IonSegmentButton value="all">All</IonSegmentButton>
                     <IonSegmentButton value="PENDING">Pending</IonSegmentButton>
                     <IonSegmentButton value="APPROVED">Approved</IonSegmentButton>
@@ -779,6 +779,7 @@ const EventDetailsPage = () => {
                     <span className="status-pill tone-neutral">Audio: {mediaAlbums.audios.length}</span>
                   </div>
                   <IonSegment
+                    scrollable={true}
                     value={mediaFilter}
                     onIonChange={(segmentEvent) =>
                       setMediaFilter((segmentEvent.detail.value as 'ALL' | 'PHOTO' | 'VIDEO' | 'AUDIO') || 'ALL')

@@ -103,6 +103,7 @@ const AnalyticsPage = () => {
 
           <section className="surface-card">
             <IonSegment
+              scrollable={true}
               value={tab}
               onIonChange={(e) => setTab((e.detail.value as Tab) || 'overview')}
             >
