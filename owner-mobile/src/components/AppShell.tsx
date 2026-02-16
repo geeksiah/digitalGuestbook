@@ -7,10 +7,10 @@ import {
   IonTabs
 } from '@ionic/react';
 import {
-  homeOutline,
-  calendarOutline,
-  cashOutline,
-  ellipsisHorizontalOutline
+  home,
+  calendar,
+  wallet,
+  grid
 } from 'ionicons/icons';
 import { Redirect, Route } from 'react-router-dom';
 
@@ -48,22 +48,22 @@ const AppShell = () => {
 
       <IonTabBar slot="bottom" className="owner-tab-bar">
         <IonTabButton tab="home" href="/app/home">
-          <IonIcon aria-hidden="true" icon={homeOutline} />
+          <IonIcon aria-hidden="true" icon={home} />
           <IonLabel>Home</IonLabel>
         </IonTabButton>
 
         <IonTabButton tab="events" href="/app/events">
-          <IonIcon aria-hidden="true" icon={calendarOutline} />
+          <IonIcon aria-hidden="true" icon={calendar} />
           <IonLabel>Events</IonLabel>
         </IonTabButton>
 
         <IonTabButton tab="payouts" href="/app/payouts">
-          <IonIcon aria-hidden="true" icon={cashOutline} />
+          <IonIcon aria-hidden="true" icon={wallet} />
           <IonLabel>Payouts</IonLabel>
         </IonTabButton>
 
         <IonTabButton tab="more" href="/app/more">
-          <IonIcon aria-hidden="true" icon={ellipsisHorizontalOutline} />
+          <IonIcon aria-hidden="true" icon={grid} />
           <IonLabel>More</IonLabel>
         </IonTabButton>
       </IonTabBar>

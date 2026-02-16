@@ -3,6 +3,7 @@ import {
   IonButton,
   IonContent,
   IonHeader,
+  IonIcon,
   IonPage,
   IonRefresher,
   IonRefresherContent,
@@ -13,6 +14,7 @@ import {
   useIonToast,
   useIonViewWillEnter
 } from '@ionic/react';
+import { cardOutline } from 'ionicons/icons';
 import { ownerDashboardApi } from '../api/client';
 import type { OwnerEvent, PayoutRecord, PayoutResponse, PayoutStatus } from '../types/domain';
 import { formatCurrency, formatDate, statusToneClass } from '../utils/format';
@@ -229,7 +231,9 @@ const PayoutsPage = () => {
             <h3>Payout Requests</h3>
             {!filteredPayouts.length && !loading ? (
               <div className="empty-state">
-                <div className="empty-state-icon">{'\u{1F4B3}'}</div>
+                <div className="empty-state-icon">
+                  <IonIcon icon={cardOutline} />
+                </div>
                 <p>No payout requests yet.</p>
               </div>
             ) : null}

@@ -3,6 +3,7 @@ import {
   IonButton,
   IonContent,
   IonHeader,
+  IonIcon,
   IonPage,
   IonRefresher,
   IonRefresherContent,
@@ -15,6 +16,7 @@ import {
   useIonViewWillEnter
 } from '@ionic/react';
 import { useIonRouter } from '@ionic/react';
+import { calendarOutline } from 'ionicons/icons';
 import { ownerDashboardApi } from '../api/client';
 import type { OwnerEvent } from '../types/domain';
 import { phaseLabel } from '../utils/format';
@@ -201,7 +203,9 @@ const EventsPage = () => {
           <section className="surface-card event-list">
             {!filtered.length ? (
               <div className="empty-state">
-                <div className="empty-state-icon">{'\u{1F4C5}'}</div>
+                <div className="empty-state-icon">
+                  <IonIcon icon={calendarOutline} />
+                </div>
                 <p>No matching events found.</p>
               </div>
             ) : null}

@@ -1,33 +1,43 @@
 import { useState } from 'react';
-import { IonButton, IonContent, IonPage, useIonRouter } from '@ionic/react';
+import { IonButton, IonContent, IonIcon, IonPage, useIonRouter } from '@ionic/react';
+import {
+  barChartOutline,
+  checkmarkCircleOutline,
+  compassOutline,
+  flashOutline,
+  phonePortraitOutline,
+  searchOutline,
+  shieldCheckmarkOutline,
+  walletOutline
+} from 'ionicons/icons';
 import { useOnboardingStore } from '../store/onboarding';
 
 const steps = [
   {
-    icon: '\u{1F3AF}',
+    icon: compassOutline,
     title: 'Own Every\nEvent Moment',
     body: 'Track RSVP activity, check-ins, media, and revenue from one clean owner workspace.',
     features: [
-      { icon: '\u{1F4CA}', text: 'Real-time event insights' },
-      { icon: '\u{2705}', text: 'Smooth guest approvals' },
+      { icon: barChartOutline, text: 'Real-time event insights' },
+      { icon: checkmarkCircleOutline, text: 'Smooth guest approvals' },
     ]
   },
   {
-    icon: '\u{26A1}',
+    icon: flashOutline,
     title: 'Move Fast\nDuring Live Events',
     body: 'Get the right numbers quickly so approvals, decisions, and follow-up happen without friction.',
     features: [
-      { icon: '\u{1F4F1}', text: 'Mobile-first operations' },
-      { icon: '\u{1F50D}', text: 'Instant search and filters' },
+      { icon: phonePortraitOutline, text: 'Mobile-first operations' },
+      { icon: searchOutline, text: 'Instant search and filters' },
     ]
   },
   {
-    icon: '\u{1F4B0}',
+    icon: walletOutline,
     title: 'Get Paid\nwith Confidence',
     body: 'Manage payout-ready balances and wallet settings in a focused, low-stress flow.',
     features: [
-      { icon: '\u{1F3E6}', text: 'Wallet-ready payouts' },
-      { icon: '\u{1F512}', text: 'Secure transactions' },
+      { icon: walletOutline, text: 'Wallet-ready payouts' },
+      { icon: shieldCheckmarkOutline, text: 'Secure transactions' },
     ]
   }
 ];
@@ -58,14 +68,18 @@ const OnboardingPage = () => {
         <div className="onboarding-wrap" style={{ position: 'relative' }}>
           <button className="skip-btn" onClick={onSkip}>Skip</button>
 
-          <div className="onboarding-step-icon">{current.icon}</div>
+          <div className="onboarding-step-icon">
+            <IonIcon icon={current.icon} />
+          </div>
           <h1 style={{ whiteSpace: 'pre-line' }}>{current.title}</h1>
           <p className="body">{current.body}</p>
 
-          <div className="surface-card" style={{ marginTop: 16 }}>
+          <div className="surface-card onboarding-feature-card">
             {current.features.map((feature, i) => (
               <div key={i} className="onboarding-feature-row">
-                <div className="feature-icon">{feature.icon}</div>
+                <div className="feature-icon">
+                  <IonIcon icon={feature.icon} />
+                </div>
                 <span className="feature-text">{feature.text}</span>
               </div>
             ))}

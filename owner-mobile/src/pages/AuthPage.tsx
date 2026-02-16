@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import {
   IonButton,
   IonContent,
+  IonIcon,
   IonPage,
   IonSegment,
   IonSegmentButton,
@@ -9,6 +10,7 @@ import {
   useIonRouter,
   useIonToast
 } from '@ionic/react';
+import { barChartOutline, shieldCheckmarkOutline, sparklesOutline } from 'ionicons/icons';
 import { ownerAuthApi } from '../api/client';
 import { useSessionStore } from '../store/session';
 import { getErrorMessage } from '../utils/error';
@@ -98,10 +100,24 @@ const AuthPage = () => {
       <IonContent fullscreen className="auth-screen">
         <div className="auth-wrap">
           <div className="auth-hero">
-            <div className="brand-mark">E</div>
+            <div className="brand-mark">EP</div>
             <span className="brand-tagline">EventPeepo Owner</span>
             <h1>{labels.title}</h1>
             <p>Manage events, track guests, and collect payouts from one workspace.</p>
+            <div className="auth-trust-row">
+              <span className="auth-trust-pill">
+                <IonIcon icon={shieldCheckmarkOutline} />
+                Secure
+              </span>
+              <span className="auth-trust-pill">
+                <IonIcon icon={barChartOutline} />
+                Real-time metrics
+              </span>
+              <span className="auth-trust-pill">
+                <IonIcon icon={sparklesOutline} />
+                Fast workflows
+              </span>
+            </div>
           </div>
 
           {showRegisterSwitch ? (
@@ -114,7 +130,7 @@ const AuthPage = () => {
             </IonSegment>
           ) : null}
 
-          <section className="surface-card">
+          <section className="surface-card auth-card">
             <form className="auth-form" onSubmit={submit}>
               {mode === 'register' ? (
                 <label className="field">

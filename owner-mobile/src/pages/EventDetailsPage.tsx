@@ -635,8 +635,7 @@ const EventDetailsPage = () => {
               </section>
 
               {activeTab === 'overview' ? (
-                <section className="surface-card">
-                  <h3>Operations snapshot</h3>
+                <>
                   <div className="metric-grid">
                     <article className="surface-card metric-card">
                       <p className="metric-label">RSVPs</p>
@@ -655,20 +654,25 @@ const EventDetailsPage = () => {
                       <p className="metric-value">{event._count.invitations}</p>
                     </article>
                   </div>
-                  <div className="event-list-item static stack">
-                    <div className="row-between">
-                      <p className="event-title">Approval status</p>
-                      <span className={'status-pill ' + statusToneClass(event.approvalStatus || 'APPROVED')}>
-                        {event.approvalStatus || 'APPROVED'}
-                      </span>
+
+                  <section className="surface-card">
+                    <h3>Event status</h3>
+                    <div className="event-list">
+                      <article className="event-list-item static stack">
+                        <div className="row-between">
+                          <p className="event-title">Approval</p>
+                          <span className={'status-pill ' + statusToneClass(event.approvalStatus || 'APPROVED')}>
+                            {event.approvalStatus || 'APPROVED'}
+                          </span>
+                        </div>
+                        <p className="event-subline">Currency: {event.defaultCurrency || 'USD'} &middot; Submitted: {formatDate(event.approvalSubmittedAt || event.date)}</p>
+                        {event.approvalRejectionReason ? (
+                          <p className="event-subline">Feedback: {event.approvalRejectionReason}</p>
+                        ) : null}
+                      </article>
                     </div>
-                    <p className="event-subline">Default currency: {event.defaultCurrency || 'USD'}</p>
-                    <p className="event-subline">Submitted: {formatDate(event.approvalSubmittedAt || event.date)}</p>
-                    {event.approvalRejectionReason ? (
-                      <p className="event-subline">Feedback: {event.approvalRejectionReason}</p>
-                    ) : null}
-                  </div>
-                </section>
+                  </section>
+                </>
               ) : null}
 
               {activeTab === 'rsvps' ? (

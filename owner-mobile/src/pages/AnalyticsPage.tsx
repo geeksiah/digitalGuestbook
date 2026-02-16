@@ -4,6 +4,7 @@ import {
   IonButtons,
   IonContent,
   IonHeader,
+  IonIcon,
   IonPage,
   IonRefresher,
   IonRefresherContent,
@@ -14,6 +15,7 @@ import {
   useIonToast,
   useIonViewWillEnter
 } from '@ionic/react';
+import { barChartOutline } from 'ionicons/icons';
 import { ownerDashboardApi } from '../api/client';
 import type { OwnerEvent, OwnerStats, PayoutResponse } from '../types/domain';
 import { formatCurrency } from '../utils/format';
@@ -205,7 +207,9 @@ const AnalyticsPage = () => {
               <h3>Event Performance</h3>
               {!eventPerformance.length && !loading ? (
                 <div className="empty-state">
-                  <div className="empty-state-icon">{'\u{1F4CA}'}</div>
+                  <div className="empty-state-icon">
+                    <IonIcon icon={barChartOutline} />
+                  </div>
                   <p>No events to analyze.</p>
                 </div>
               ) : null}

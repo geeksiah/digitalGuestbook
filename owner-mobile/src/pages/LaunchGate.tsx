@@ -5,9 +5,11 @@ const LaunchGate = () => {
     <IonPage>
       <IonContent fullscreen className="launch-screen">
         <div className="launch-wrap">
-          <div className="brand-mark">E</div>
-          <h1>EventPeepo</h1>
-          <p>Owner workspace</p>
+          <div className="brand-mark">EP</div>
+          <div className="launch-title-wrap">
+            <h1>EventPeepo</h1>
+            <p>Owner workspace</p>
+          </div>
           <div className="pulse-loader">
             <span />
             <span />

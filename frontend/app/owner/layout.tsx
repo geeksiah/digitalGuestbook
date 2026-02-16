@@ -153,8 +153,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   // Show loading while verifying
   if (isVerifying) {
     return (
-      <div className="min-h-screen bg-surface-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
+      <div className="min-h-screen bg-surface-50 px-4 py-8">
+        <div className="mx-auto max-w-md space-y-4 animate-pulse">
+          <div className="h-5 w-40 rounded-lg bg-surface-200" />
+          <div className="h-24 rounded-2xl bg-surface-200" />
+          <div className="h-24 rounded-2xl bg-surface-200" />
+          <div className="h-24 rounded-2xl bg-surface-200" />
+        </div>
       </div>
     );
   }
@@ -175,7 +180,8 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     router.push(`/owner/events/${eventId}`);
   };
 
-  const currentSection = navigation.find((item) => pathname === item.href || (item.href !== '/owner' && pathname.startsWith(item.href)))?.name || 'Dashboard';
+  const isNavActive = (href: string) => pathname === href || (href !== '/owner' && pathname.startsWith(href));
+  const currentSection = navigation.find((item) => isNavActive(item.href))?.name || 'Dashboard';
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -229,7 +235,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           {/* Navigation */}
           <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/owner' && pathname.startsWith(item.href));
+              const isActive = isNavActive(item.href);
               return (
                 <Link
                   key={item.name}
@@ -278,7 +284,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Main content */}
       <div className="lg:pl-[272px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-surface-200/80">
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-surface-200/80">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 gap-3">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <button
@@ -310,7 +316,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
 
-            <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
+            <div className="flex items-center gap-2 text-sm min-w-0">
               <span className="text-surface-500 font-medium">Owner Workspace</span>
               <span className="text-surface-300">/</span>
               <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
@@ -319,9 +325,38 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-7">
+        <main className="p-4 pb-24 sm:p-6 sm:pb-28 lg:p-7 lg:pb-7">
           {children}
         </main>
+
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200/80 bg-white/95 backdrop-blur-xl lg:hidden">
+          <div className="grid grid-cols-4 gap-1 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+            {navigation.map((item) => {
+              const isActive = isNavActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold tracking-tight transition-colors',
+                    isActive ? 'text-brand-900' : 'text-surface-500'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-xl transition-colors',
+                      isActive ? 'bg-brand-50 text-brand-800' : 'text-surface-500'
+                    )}
+                  >
+                    {item.icon}
+                  </span>
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </div>
   );
