@@ -17,6 +17,7 @@ interface Event {
   endDate: string | null;
   venue: string | null;
   timezone: string;
+  defaultCurrency?: string;
   currentPhase: string;
   invitationOnly: boolean;
   strictInviteOnly?: boolean;
@@ -127,6 +128,15 @@ interface CheckIn {
   method: string;
 }
 
+interface EventApproval {
+  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | string;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  reviewedBy?: { id: string; name: string; email: string } | null;
+  updatedAt?: string | null;
+}
+
 type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'tickets' | 'itinerary' | 'invites' | 'domains' | 'gifts';
 
 const Icons = {
@@ -148,6 +158,8 @@ export default function OwnerEventDetailPage() {
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [approval, setApproval] = useState<EventApproval | null>(null);
+  const [loadingApproval, setLoadingApproval] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
@@ -249,6 +261,18 @@ export default function OwnerEventDetailPage() {
     }
   };
 
+  const fetchApproval = async () => {
+    try {
+      setLoadingApproval(true);
+      const r = await ownerDashboardApi.getEventApproval(eventId);
+      setApproval(r.data.approval || null);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to load approval status');
+    } finally {
+      setLoadingApproval(false);
+    }
+  };
+
   const fetchDomains = async () => {
     try {
       const r = await ownerDashboardApi.getDomains(eventId);
@@ -336,6 +360,7 @@ export default function OwnerEventDetailPage() {
 
   useEffect(() => {
     fetchEvent();
+    fetchApproval();
   }, [eventId]);
 
   useEffect(() => {
@@ -399,11 +424,17 @@ export default function OwnerEventDetailPage() {
     a.click();
   };
 
-  const handleReviewRsvp = async (rsvpId: string, status: 'APPROVED' | 'REJECTED') => {
+  const handleReviewRsvp = async (rsvpId: string, status: 'PENDING' | 'APPROVED' | 'REJECTED') => {
     setReviewingRsvp(rsvpId);
     try {
-      await ownerDashboardApi.reviewRsvp(eventId, rsvpId, status);
-      toast.success(status === 'APPROVED' ? 'RSVP approved' : 'RSVP rejected');
+      await ownerDashboardApi.updateRsvpStatus(eventId, rsvpId, status);
+      toast.success(
+        status === 'APPROVED'
+          ? 'RSVP approved'
+          : status === 'REJECTED'
+            ? 'RSVP rejected'
+            : 'RSVP set to pending'
+      );
       await Promise.all([fetchRsvps(), fetchEvent()]);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to review RSVP');
@@ -650,6 +681,18 @@ export default function OwnerEventDetailPage() {
     }
   };
 
+  const getRsvpStatusStyle = (status: string) => {
+    if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'REJECTED') return 'bg-rose-100 text-rose-700';
+    return 'bg-yellow-100 text-yellow-700';
+  };
+
+  const getApprovalStatusStyle = (status: string) => {
+    if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (status === 'REJECTED') return 'bg-rose-100 text-rose-700 border-rose-200';
+    return 'bg-amber-100 text-amber-700 border-amber-200';
+  };
+
   const inviteStats = useMemo(() => {
     const byStatus = invites.reduce((acc, invite) => {
       acc[invite.status] = (acc[invite.status] || 0) + 1;
@@ -759,6 +802,57 @@ export default function OwnerEventDetailPage() {
             </div>
 
             <div className="bg-white rounded-lg border border-surface-200 p-6">
+              <h3 className="text-lg font-semibold text-brand-900 mb-4">Approval Status</h3>
+              {loadingApproval ? (
+                <div className="flex items-center gap-3 text-sm text-surface-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-900" />
+                  <span>Loading approval timeline...</span>
+                </div>
+              ) : approval ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={cn('inline-flex px-2.5 py-1 rounded-full border text-xs font-medium', getApprovalStatusStyle(approval.status))}>
+                      {approval.status.replaceAll('_', ' ')}
+                    </span>
+                    {approval.reviewedBy?.name ? (
+                      <span className="text-xs text-surface-500">
+                        Reviewed by {approval.reviewedBy.name}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-surface-500">Submitted</p>
+                      <p className="mt-1 text-brand-900">
+                        {approval.submittedAt ? formatDate(approval.submittedAt) : 'Not submitted'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-surface-500">Reviewed</p>
+                      <p className="mt-1 text-brand-900">
+                        {approval.reviewedAt ? formatDate(approval.reviewedAt) : 'Awaiting admin review'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-surface-500">Last Updated</p>
+                      <p className="mt-1 text-brand-900">
+                        {approval.updatedAt ? formatDate(approval.updatedAt) : '-'}
+                      </p>
+                    </div>
+                  </div>
+                  {approval.rejectionReason ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                      <p className="font-medium">Rejection reason</p>
+                      <p className="mt-1">{approval.rejectionReason}</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-surface-500">Approval information is unavailable for this event.</p>
+              )}
+            </div>
+
+            <div className="bg-white rounded-lg border border-surface-200 p-6">
               <h3 className="text-lg font-semibold text-brand-900 mb-4">Event Details</h3>
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -774,6 +868,10 @@ export default function OwnerEventDetailPage() {
                 <div>
                   <dt className="text-sm font-medium text-surface-600">Date</dt>
                   <dd className="mt-1 text-sm text-brand-900">{formatDate(event.date)}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-surface-600">Default Currency</dt>
+                  <dd className="mt-1 text-sm text-brand-900">{event.defaultCurrency || 'USD'}</dd>
                 </div>
                 {event.endDate && (
                   <div>
@@ -869,33 +967,37 @@ export default function OwnerEventDetailPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.attendance}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.guestCount}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', rsvp.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : rsvp.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-yellow-100 text-yellow-700')}>
+                            <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', getRsvpStatusStyle(rsvp.status))}>
                               {rsvp.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(rsvp.submittedAt)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                             <div className="inline-flex items-center gap-2">
-                              {rsvp.status === 'PENDING' && (
-                                <>
-                                  <button
-                                    onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
-                                    disabled={reviewingRsvp === rsvp.id}
-                                    className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
-                                    title="Reject RSVP"
-                                  >
-                                    Reject
-                                  </button>
-                                  <button
-                                    onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
-                                    disabled={reviewingRsvp === rsvp.id}
-                                    className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
-                                    title="Approve RSVP"
-                                  >
-                                    Approve
-                                  </button>
-                                </>
-                              )}
+                              <button
+                                onClick={() => handleReviewRsvp(rsvp.id, 'PENDING')}
+                                disabled={reviewingRsvp === rsvp.id || rsvp.status === 'PENDING'}
+                                className="px-2.5 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium disabled:opacity-50"
+                                title="Set RSVP to pending"
+                              >
+                                Pending
+                              </button>
+                              <button
+                                onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
+                                disabled={reviewingRsvp === rsvp.id || rsvp.status === 'REJECTED'}
+                                className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
+                                title="Reject RSVP"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
+                                disabled={reviewingRsvp === rsvp.id || rsvp.status === 'APPROVED'}
+                                className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
+                                title="Approve RSVP"
+                              >
+                                Approve
+                              </button>
                               <button
                                 onClick={() => setViewingRsvpDetails(rsvp)}
                                 className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
@@ -1028,7 +1130,7 @@ export default function OwnerEventDetailPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-surface-500">Status</label>
-                    <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', viewingRsvpDetails.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : viewingRsvpDetails.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-yellow-100 text-yellow-700')}>
+                    <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', getRsvpStatusStyle(viewingRsvpDetails.status))}>
                       {viewingRsvpDetails.status}
                     </span>
                   </div>

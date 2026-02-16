@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  IonButton,
   IonContent,
   IonHeader,
   IonPage,
@@ -24,6 +25,16 @@ const EventsPage = () => {
   const [events, setEvents] = useState<OwnerEvent[]>([]);
   const [search, setSearch] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'PRE_EVENT' | 'LIVE' | 'POST_EVENT'>('all');
+  const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createData, setCreateData] = useState({
+    name: '',
+    slug: '',
+    date: '',
+    timezone: 'UTC',
+    defaultCurrency: 'USD',
+    venue: '',
+  });
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +63,32 @@ const EventsPage = () => {
     });
   }, [events, phaseFilter, search]);
 
+  const createEvent = async () => {
+    if (!createData.name.trim() || !createData.slug.trim() || !createData.date) {
+      present({ message: 'Name, slug, and date are required', duration: 2000, color: 'danger' });
+      return;
+    }
+    setCreating(true);
+    try {
+      await ownerDashboardApi.createEvent({
+        name: createData.name.trim(),
+        slug: createData.slug.trim().toLowerCase().replace(/\s+/g, '-'),
+        date: new Date(createData.date).toISOString(),
+        timezone: createData.timezone || 'UTC',
+        defaultCurrency: createData.defaultCurrency || 'USD',
+        venue: createData.venue || undefined,
+      });
+      present({ message: 'Event created and submitted for admin approval', duration: 2200, color: 'success' });
+      setShowCreate(false);
+      setCreateData({ name: '', slug: '', date: '', timezone: 'UTC', defaultCurrency: 'USD', venue: '' });
+      await load();
+    } catch {
+      present({ message: 'Failed to create event', duration: 2000, color: 'danger' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <IonPage>
       <IonHeader translucent>
@@ -64,6 +101,73 @@ const EventsPage = () => {
           <IonRefresherContent />
         </IonRefresher>
         <main className="screen-content">
+          <section className="surface-card">
+            <div className="row-between">
+              <h3>Create event</h3>
+              <IonButton size="small" fill="outline" onClick={() => setShowCreate((prev) => !prev)}>
+                {showCreate ? 'Close' : 'Quick create'}
+              </IonButton>
+            </div>
+            {showCreate ? (
+              <div className="auth-form">
+                <label className="field">
+                  <span>Event name</span>
+                  <input
+                    className="native-input"
+                    value={createData.name}
+                    onChange={(event) => setCreateData((prev) => ({ ...prev, name: event.target.value }))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Event slug</span>
+                  <input
+                    className="native-input"
+                    value={createData.slug}
+                    onChange={(event) => setCreateData((prev) => ({ ...prev, slug: event.target.value }))}
+                    placeholder="my-event-2026"
+                  />
+                </label>
+                <label className="field">
+                  <span>Date</span>
+                  <input
+                    className="native-input"
+                    type="datetime-local"
+                    value={createData.date}
+                    onChange={(event) => setCreateData((prev) => ({ ...prev, date: event.target.value }))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Default currency</span>
+                  <select
+                    className="native-select"
+                    value={createData.defaultCurrency}
+                    onChange={(event) => setCreateData((prev) => ({ ...prev, defaultCurrency: event.target.value }))}
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="GHS">GHS</option>
+                    <option value="KES">KES</option>
+                    <option value="NGN">NGN</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Venue (optional)</span>
+                  <input
+                    className="native-input"
+                    value={createData.venue}
+                    onChange={(event) => setCreateData((prev) => ({ ...prev, venue: event.target.value }))}
+                  />
+                </label>
+                <IonButton className="solid-cta" expand="block" disabled={creating} onClick={createEvent}>
+                  {creating ? 'Creating...' : 'Create and submit'}
+                </IonButton>
+              </div>
+            ) : (
+              <p className="muted-text">New events start in pending review until admin approval.</p>
+            )}
+          </section>
+
           <section className="surface-card">
             <h3>Phase filter</h3>
             <IonSegment
@@ -102,6 +206,12 @@ const EventsPage = () => {
                   <p className="event-subline">
                     {event._count.rsvps} RSVPs - {event._count.checkIns} check-ins - {event._count.mediaAssets} media
                   </p>
+                  {event.approvalStatus ? (
+                    <p className="event-subline">Approval: {event.approvalStatus}</p>
+                  ) : null}
+                  {event.defaultCurrency ? (
+                    <p className="event-subline">Default currency: {event.defaultCurrency}</p>
+                  ) : null}
                 </div>
                 <span className={'phase-chip phase-' + String(event.currentPhase || '').toLowerCase()}>
                   {phaseLabel(event.currentPhase)}

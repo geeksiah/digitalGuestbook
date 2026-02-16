@@ -34,6 +34,10 @@ const CURRENCIES = CURRENCY_OPTIONS;
 
 export default function TicketsTab({ eventId, event, tickets, loading, onRefresh }: TicketsTabProps) {
   const defaultCurrency = CURRENCY_OPTIONS[0]?.code || 'USD';
+  const eventDefaultCurrency =
+    typeof event?.defaultCurrency === 'string' && event.defaultCurrency.trim().length === 3
+      ? event.defaultCurrency.toUpperCase()
+      : defaultCurrency;
   const [showForm, setShowForm] = useState(false);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
   const [gatewayCurrencies, setGatewayCurrencies] = useState<string[]>([]);
@@ -41,7 +45,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
     name: '',
     description: '',
     price: 0,
-    currency: event.rsvpMode === 'paid' ? (event.ticketTypes?.[0]?.currency || defaultCurrency) : defaultCurrency,
+    currency: event.rsvpMode === 'paid' ? (event.ticketTypes?.[0]?.currency || eventDefaultCurrency) : eventDefaultCurrency,
     quantityTotal: 0,
     maxPerOrder: 10,
     saleStartDate: '',
@@ -53,6 +57,12 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
   const availableCurrencies = gatewayCurrencies.length > 0
     ? gatewayCurrencies
     : CURRENCY_OPTIONS.map((currency) => currency.code);
+
+  const pickNewTicketCurrency = () => {
+    const preferred = event.ticketTypes?.[0]?.currency || eventDefaultCurrency;
+    if (availableCurrencies.includes(preferred)) return preferred;
+    return availableCurrencies[0] || defaultCurrency;
+  };
 
   useEffect(() => {
     void fetchGatewayCurrencies();
@@ -137,7 +147,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
         name: '',
         description: '',
         price: 0,
-        currency: availableCurrencies[0] || defaultCurrency,
+        currency: pickNewTicketCurrency(),
         quantityTotal: 0,
         maxPerOrder: 10,
         saleStartDate: '',
@@ -176,7 +186,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 name: '',
                 description: '',
                 price: 0,
-                currency: availableCurrencies[0] || defaultCurrency,
+                currency: pickNewTicketCurrency(),
                 quantityTotal: 0,
                 maxPerOrder: 10,
                 saleStartDate: '',
@@ -346,7 +356,24 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
             <p className="text-sm text-surface-500">Manage ticket packages and pricing</p>
           </div>
           {event.rsvpMode === 'paid' && (
-            <button onClick={() => setShowForm(true)} className="btn-primary">
+            <button
+              onClick={() => {
+                setEditingTicket(null);
+                setFormData({
+                  name: '',
+                  description: '',
+                  price: 0,
+                  currency: pickNewTicketCurrency(),
+                  quantityTotal: 0,
+                  maxPerOrder: 10,
+                  saleStartDate: '',
+                  saleEndDate: '',
+                  isActive: true,
+                });
+                setShowForm(true);
+              }}
+              className="btn-primary"
+            >
               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>

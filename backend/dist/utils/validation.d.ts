@@ -37,6 +37,7 @@ export declare const createEventSchema: z.ZodObject<{
     endDate: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     timezone: z.ZodDefault<z.ZodString>;
     venue: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    defaultCurrency: z.ZodDefault<z.ZodString>;
     ownerId: z.ZodOptional<z.ZodString>;
     ownerName: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     ownerEmail: z.ZodNullable<z.ZodOptional<z.ZodString>>;
@@ -92,6 +93,7 @@ export declare const createEventSchema: z.ZodObject<{
     slug: string;
     date: string;
     timezone: string;
+    defaultCurrency: string;
     primaryColor: string;
     secondaryColor: string;
     accentColor: string;
@@ -157,6 +159,7 @@ export declare const createEventSchema: z.ZodObject<{
     endDate?: string | null | undefined;
     timezone?: string | undefined;
     venue?: string | null | undefined;
+    defaultCurrency?: string | undefined;
     socialTitle?: string | null | undefined;
     socialDescription?: string | null | undefined;
     coverImagePath?: string | null | undefined;
@@ -224,6 +227,7 @@ export declare const updateEventSchema: z.ZodObject<{
     endDate: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     timezone: z.ZodOptional<z.ZodString>;
     venue: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    defaultCurrency: z.ZodOptional<z.ZodString>;
     ownerId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     ownerName: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     ownerEmail: z.ZodNullable<z.ZodOptional<z.ZodString>>;
@@ -285,6 +289,7 @@ export declare const updateEventSchema: z.ZodObject<{
     endDate?: string | null | undefined;
     timezone?: string | undefined;
     venue?: string | null | undefined;
+    defaultCurrency?: string | undefined;
     socialTitle?: string | null | undefined;
     socialDescription?: string | null | undefined;
     coverImagePath?: string | null | undefined;
@@ -350,6 +355,7 @@ export declare const updateEventSchema: z.ZodObject<{
     endDate?: string | null | undefined;
     timezone?: string | undefined;
     venue?: string | null | undefined;
+    defaultCurrency?: string | undefined;
     socialTitle?: string | null | undefined;
     socialDescription?: string | null | undefined;
     coverImagePath?: string | null | undefined;

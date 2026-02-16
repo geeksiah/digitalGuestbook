@@ -33,6 +33,12 @@ exports.createEventSchema = zod_1.z.object({
     endDate: zod_1.z.string().datetime().optional().nullable(),
     timezone: zod_1.z.string().default('UTC'),
     venue: zod_1.z.string().optional().nullable(),
+    defaultCurrency: zod_1.z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{3}$/, 'Default currency must be a 3-letter code')
+        .default('USD'),
     // Owner
     ownerId: zod_1.z.string().uuid().optional(),
     // Owner Contact
@@ -105,6 +111,12 @@ exports.updateEventSchema = zod_1.z.object({
     endDate: zod_1.z.string().datetime().optional().nullable(),
     timezone: zod_1.z.string().optional(),
     venue: zod_1.z.string().optional().nullable(),
+    defaultCurrency: zod_1.z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{3}$/, 'Default currency must be a 3-letter code')
+        .optional(),
     // Owner
     ownerId: zod_1.z.string().uuid().optional().nullable(),
     // Owner Contact

@@ -25,6 +25,7 @@ interface Event {
   endDate: string | null;
   venue: string | null;
   timezone: string;
+  defaultCurrency?: string;
   currentPhase: string;
   phaseOverride: boolean;
   invitationOnly: boolean;
@@ -282,7 +283,7 @@ export default function EventDetailPage() {
   const [eventSettings, setEventSettings] = useState({
     name: '', description: '', date: '', time: '', endDate: '', endTime: '',
     socialTitle: '', socialDescription: '', coverImageAlt: '',
-    venue: '', timezone: '', invitationOnly: false, reelEnabled: false,
+    venue: '', timezone: '', defaultCurrency: 'USD', invitationOnly: false, reelEnabled: false,
     strictInviteOnly: false, itineraryEnabled: false, giftingEnabled: false,
     // Feature toggles
     invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
@@ -399,7 +400,7 @@ export default function EventDetailPage() {
         coverImageAlt: event.coverImageAlt || '',
         date: d.toISOString().split('T')[0], time: d.toTimeString().slice(0, 5),
         endDate: ed ? ed.toISOString().split('T')[0] : '', endTime: ed ? ed.toTimeString().slice(0, 5) : '',
-        venue: event.venue || '', timezone: event.timezone, invitationOnly: event.invitationOnly,
+        venue: event.venue || '', timezone: event.timezone, defaultCurrency: event.defaultCurrency || 'USD', invitationOnly: event.invitationOnly,
         reelEnabled: event.reelEnabled || false, strictInviteOnly: event.strictInviteOnly || false,
         itineraryEnabled: event.itineraryEnabled || false, giftingEnabled: event.giftingEnabled || false,
         // Feature toggles
@@ -1014,7 +1015,7 @@ export default function EventDetailPage() {
         socialDescription: eventSettings.socialDescription || null,
         coverImageAlt: eventSettings.coverImageAlt || null,
         date: dt.toISOString(), endDate: edt?.toISOString() || null,
-        venue: eventSettings.venue || null, timezone: eventSettings.timezone,
+        venue: eventSettings.venue || null, timezone: eventSettings.timezone, defaultCurrency: eventSettings.defaultCurrency,
         invitationOnly: eventSettings.invitationOnly,
         reelEnabled: eventSettings.reelEnabled,
         strictInviteOnly: eventSettings.strictInviteOnly,
@@ -2772,6 +2773,7 @@ export default function EventDetailPage() {
                 <div><label className="label">End Time</label><input type="time" className="input" value={eventSettings.endTime} onChange={e => setEventSettings({ ...eventSettings, endTime: e.target.value })} /></div>
                 <div className="sm:col-span-2"><label className="label">Venue</label><input type="text" className="input" value={eventSettings.venue} onChange={e => setEventSettings({ ...eventSettings, venue: e.target.value })} /></div>
                 <div><label className="label">Timezone</label><select className="input" value={eventSettings.timezone} onChange={e => setEventSettings({ ...eventSettings, timezone: e.target.value })}><option value="UTC">UTC</option><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option><option value="Europe/London">London</option><option value="Africa/Accra">Ghana (GMT)</option></select></div>
+                <div><label className="label">Default Currency</label><select className="input" value={eventSettings.defaultCurrency} onChange={e => setEventSettings({ ...eventSettings, defaultCurrency: e.target.value })}><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="GHS">GHS</option><option value="KES">KES</option><option value="NGN">NGN</option></select></div>
               </div>
 
               <div className="border-t border-surface-100 pt-6">
@@ -3364,6 +3366,7 @@ export default function EventDetailPage() {
                   { l: 'Date', v: formatDate(event.date, 'PPP') },
                   { l: 'Venue', v: event.venue || '—' },
                   { l: 'Timezone', v: event.timezone },
+                  { l: 'Default Currency', v: event.defaultCurrency || 'USD' },
                 ].map((r, i) => (
                   <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
                     <span className="text-surface-500">{r.l}</span>

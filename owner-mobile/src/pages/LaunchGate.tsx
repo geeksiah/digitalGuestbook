@@ -8,6 +8,7 @@ const LaunchGate = () => {
           <div className="brand-mark">E</div>
           <h1>EventPeepo Owner</h1>
           <p>Preparing your workspace</p>
+          <p className="eyebrow">Live operations mode</p>
           <IonSpinner name="crescent" />
         </div>
       </IonContent>

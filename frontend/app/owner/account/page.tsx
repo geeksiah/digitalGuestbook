@@ -14,10 +14,12 @@ interface PaystackBank {
 
 export default function OwnerAccountPage() {
   const { owner, setAuth } = useOwnerAuthStore();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'wallet'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'wallet' | 'notifications' | 'support'>('profile');
   const [loading, setLoading] = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
   const [paystackLoading, setPaystackLoading] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [supportLoading, setSupportLoading] = useState(false);
   const [paystackBanks, setPaystackBanks] = useState<PaystackBank[]>([]);
 
   // Profile form
@@ -58,6 +60,21 @@ export default function OwnerAccountPage() {
     accountNumber: '',
     businessName: '',
   });
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    notificationsEnabled: true,
+    marketingEnabled: true,
+    soundEnabled: true,
+    hapticsEnabled: true,
+  });
+  const [supportContent, setSupportContent] = useState<{
+    supportEmail: string | null;
+    supportWhatsAppNumber: string | null;
+    faq: Array<{ question: string; answer: string }>;
+  }>({
+    supportEmail: null,
+    supportWhatsAppNumber: null,
+    faq: [],
+  });
 
   useEffect(() => {
     if (owner) {
@@ -69,6 +86,8 @@ export default function OwnerAccountPage() {
       });
     }
     fetchWallet();
+    fetchNotificationPreferences();
+    fetchSupportContent();
   }, [owner]);
 
   useEffect(() => {
@@ -112,6 +131,45 @@ export default function OwnerAccountPage() {
       }
     } finally {
       setWalletLoading(false);
+    }
+  };
+
+  const fetchNotificationPreferences = async () => {
+    try {
+      setNotificationLoading(true);
+      const response = await ownerDashboardApi.getNotificationPreferences();
+      if (response.data?.preferences) {
+        setNotificationPrefs({
+          notificationsEnabled: Boolean(response.data.preferences.notificationsEnabled),
+          marketingEnabled: Boolean(response.data.preferences.marketingEnabled),
+          soundEnabled: Boolean(response.data.preferences.soundEnabled),
+          hapticsEnabled: Boolean(response.data.preferences.hapticsEnabled),
+        });
+      }
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        toast.error(error.response?.data?.error || 'Failed to load notification settings');
+      }
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
+
+  const fetchSupportContent = async () => {
+    try {
+      setSupportLoading(true);
+      const response = await ownerDashboardApi.getSupportContent();
+      setSupportContent({
+        supportEmail: response.data?.supportEmail || null,
+        supportWhatsAppNumber: response.data?.supportWhatsAppNumber || null,
+        faq: response.data?.faq || [],
+      });
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        toast.error(error.response?.data?.error || 'Failed to load support content');
+      }
+    } finally {
+      setSupportLoading(false);
     }
   };
 
@@ -231,6 +289,19 @@ export default function OwnerAccountPage() {
     }
   };
 
+  const handleNotificationSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await ownerDashboardApi.updateNotificationPreferences(notificationPrefs);
+      toast.success('Notification settings saved');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to save notification settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -277,6 +348,30 @@ export default function OwnerAccountPage() {
             `}
           >
             Wallet & Payouts
+          </button>
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`
+              py-4 px-1 border-b-2 font-medium text-sm transition-colors
+              ${activeTab === 'notifications'
+                ? 'border-navy-900 text-navy-900'
+                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+              }
+            `}
+          >
+            Notifications
+          </button>
+          <button
+            onClick={() => setActiveTab('support')}
+            className={`
+              py-4 px-1 border-b-2 font-medium text-sm transition-colors
+              ${activeTab === 'support'
+                ? 'border-navy-900 text-navy-900'
+                : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+              }
+            `}
+          >
+            FAQ & Support
           </button>
         </nav>
       </div>

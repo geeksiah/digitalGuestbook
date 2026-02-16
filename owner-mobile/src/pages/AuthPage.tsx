@@ -113,92 +113,94 @@ const AuthPage = () => {
             </IonSegment>
           ) : null}
 
-          <form className="auth-form" onSubmit={submit}>
-            {mode === 'register' ? (
-              <label className="field">
-                <span>Full name</span>
-                <input
-                  className="native-input"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-            ) : null}
-
-            <label className="field">
-              <span>Email</span>
-              <input
-                className="native-input"
-                type="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-
-            {mode !== 'reset' ? (
-              <label className="field">
-                <span>Password</span>
-                <div className="input-row">
-                  <input
-                    className="native-input"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                  <button
-                    className="toggle-inline"
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                  >
-                    {showPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-              </label>
-            ) : null}
-
-            {mode === 'register' ? (
-              <>
+          <section className="surface-card">
+            <form className="auth-form" onSubmit={submit}>
+              {mode === 'register' ? (
                 <label className="field">
-                  <span>Phone (optional)</span>
-                  <input
-                    className="native-input"
-                    type="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Company (optional)</span>
+                  <span>Full name</span>
                   <input
                     className="native-input"
                     type="text"
-                    value={company}
-                    onChange={(event) => setCompany(event.target.value)}
+                    required
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
                   />
                 </label>
-              </>
-            ) : null}
+              ) : null}
 
-            {mode === 'reset' ? (
               <label className="field">
-                <span>Reason (optional)</span>
-                <textarea
-                  className="native-input native-textarea"
-                  value={resetReason}
-                  onChange={(event) => setResetReason(event.target.value)}
+                <span>Email</span>
+                <input
+                  className="native-input"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                 />
               </label>
-            ) : null}
 
-            <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
-              {loading ? 'Please wait...' : labels.cta}
-            </IonButton>
-          </form>
+              {mode !== 'reset' ? (
+                <label className="field">
+                  <span>Password</span>
+                  <div className="input-row">
+                    <input
+                      className="native-input"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                    <button
+                      className="toggle-inline"
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </label>
+              ) : null}
+
+              {mode === 'register' ? (
+                <>
+                  <label className="field">
+                    <span>Phone (optional)</span>
+                    <input
+                      className="native-input"
+                      type="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Company (optional)</span>
+                    <input
+                      className="native-input"
+                      type="text"
+                      value={company}
+                      onChange={(event) => setCompany(event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {mode === 'reset' ? (
+                <label className="field">
+                  <span>Reason (optional)</span>
+                  <textarea
+                    className="native-input native-textarea"
+                    value={resetReason}
+                    onChange={(event) => setResetReason(event.target.value)}
+                  />
+                </label>
+              ) : null}
+
+              <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
+                {loading ? 'Please wait...' : labels.cta}
+              </IonButton>
+            </form>
+          </section>
 
           <div className="auth-alt-actions">
             {mode !== 'setup' ? (

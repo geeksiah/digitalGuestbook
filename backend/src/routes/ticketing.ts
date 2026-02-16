@@ -524,7 +524,7 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       throw new AppError('Paystack amount does not match order total', 400);
     }
 
-    const ticketCurrency = event.ticketTypes[0]?.currency || 'USD';
+    const ticketCurrency = event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD';
     if ((verification.currency || '').toUpperCase() !== ticketCurrency.toUpperCase()) {
       throw new AppError('Paystack currency does not match event currency', 400);
     }
@@ -564,7 +564,7 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       ticketType: ticketTypeName,
       ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
       amountPaid: amountPaid,
-      currency: event.ticketTypes[0]?.currency || 'USD',
+      currency: event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD',
       paymentStatus: 'PAID',
       paymentMethod: paymentMethod,
       paymentRef: paymentReference,
@@ -604,7 +604,7 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       platformFee: platformFee,
       processingFee: processingFee,
       netAmount: finalAmount - platformFee,
-      currency: event.ticketTypes[0]?.currency || 'USD',
+      currency: event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD',
       paymentMethod: paymentMethod,
       paymentRef: paymentReference,
       ticketTypeName: event.ticketTypes[0]?.name,

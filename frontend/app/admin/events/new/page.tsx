@@ -62,6 +62,7 @@ export default function NewEventPage() {
     endDate: '',
     endTime: '',
     timezone: 'UTC',
+    defaultCurrency: 'USD',
     venue: '',
     ownerId: '',
     invitationOnly: true,
@@ -239,6 +240,7 @@ export default function NewEventPage() {
         date: dateTime.toISOString(),
         endDate: endDateTime?.toISOString(),
         timezone: formData.timezone,
+        defaultCurrency: formData.defaultCurrency,
         venue: formData.venue || undefined,
         ownerId: formData.ownerId || undefined,
         invitationOnly: formData.invitationOnly,
@@ -535,6 +537,23 @@ export default function NewEventPage() {
                 <option value="Europe/Paris">Paris</option>
                 <option value="Asia/Tokyo">Tokyo</option>
                 <option value="Africa/Accra">Ghana (GMT)</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="defaultCurrency" className="label">Default Currency</label>
+              <select
+                id="defaultCurrency"
+                className="input"
+                value={formData.defaultCurrency}
+                onChange={(e) => setFormData({ ...formData, defaultCurrency: e.target.value })}
+              >
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="GHS">GHS</option>
+                <option value="KES">KES</option>
+                <option value="NGN">NGN</option>
               </select>
             </div>
           </div>

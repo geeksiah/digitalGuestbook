@@ -50,6 +50,15 @@ router.patch('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandle
             : toNonNegativeNumber(body.platformFeeFixed, 0),
         processingFeePercent: toNonNegativeNumber(body.processingFeePercent, 2.9),
         processingFeeFixed: toNonNegativeNumber(body.processingFeeFixed, 0.3),
+        ownerMobileLatestVersion: body.ownerMobileLatestVersion,
+        ownerMobileMinimumVersion: body.ownerMobileMinimumVersion,
+        ownerMobileAndroidStoreUrl: body.ownerMobileAndroidStoreUrl,
+        ownerMobileIosStoreUrl: body.ownerMobileIosStoreUrl,
+        supportEmail: body.supportEmail,
+        supportWhatsAppNumber: body.supportWhatsAppNumber,
+        faqContentJson: body.faqContentJson,
+        oneSignalAppId: body.oneSignalAppId,
+        oneSignalApiKey: body.oneSignalApiKey,
     };
     // Remove system fields
     delete data.id;

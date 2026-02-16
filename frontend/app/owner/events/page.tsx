@@ -12,8 +12,10 @@ interface Event {
   name: string;
   slug: string;
   date: string;
+  defaultCurrency?: string;
   venue: string | null;
   currentPhase: string;
+  approvalStatus?: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | string;
   _count: {
     rsvps: number;
     invitations: number;
@@ -33,6 +35,16 @@ export default function OwnerEventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pre' | 'live' | 'post'>('all');
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createData, setCreateData] = useState({
+    name: '',
+    slug: '',
+    date: '',
+    timezone: 'UTC',
+    defaultCurrency: 'USD',
+    venue: '',
+  });
 
   useEffect(() => {
     fetchEvents();
@@ -77,6 +89,33 @@ export default function OwnerEventsPage() {
         return true;
       });
 
+  const createEvent = async () => {
+    if (!createData.name.trim() || !createData.slug.trim() || !createData.date) {
+      toast.error('Name, slug and date are required');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await ownerDashboardApi.createEvent({
+        name: createData.name.trim(),
+        slug: createData.slug.trim().toLowerCase().replace(/\s+/g, '-'),
+        date: new Date(createData.date).toISOString(),
+        timezone: createData.timezone || 'UTC',
+        defaultCurrency: createData.defaultCurrency || 'USD',
+        venue: createData.venue || undefined,
+      });
+      toast.success('Event created and submitted for admin approval');
+      setShowCreate(false);
+      setCreateData({ name: '', slug: '', date: '', timezone: 'UTC', defaultCurrency: 'USD', venue: '' });
+      await fetchEvents();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to create event');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -88,6 +127,64 @@ export default function OwnerEventsPage() {
   return (
     <div className="space-y-7">
       <DashboardPageHeader title="Events" subtitle="Manage RSVP, guestbook media, itinerary, invites, tickets, and payouts" />
+
+      <DashboardSection
+        title="Create Event"
+        subtitle="Quick create wizard (events start in pending admin approval)"
+        action={(
+          <button className="btn-outline" onClick={() => setShowCreate((prev) => !prev)}>
+            {showCreate ? 'Close' : 'Quick create'}
+          </button>
+        )}
+      >
+        {showCreate ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              className="input"
+              placeholder="Event name"
+              value={createData.name}
+              onChange={(event) => setCreateData((prev) => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="input"
+              placeholder="event-slug"
+              value={createData.slug}
+              onChange={(event) => setCreateData((prev) => ({ ...prev, slug: event.target.value }))}
+            />
+            <input
+              className="input"
+              type="datetime-local"
+              value={createData.date}
+              onChange={(event) => setCreateData((prev) => ({ ...prev, date: event.target.value }))}
+            />
+            <select
+              className="input"
+              value={createData.defaultCurrency}
+              onChange={(event) => setCreateData((prev) => ({ ...prev, defaultCurrency: event.target.value }))}
+            >
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="GHS">GHS</option>
+              <option value="KES">KES</option>
+              <option value="NGN">NGN</option>
+            </select>
+            <input
+              className="input"
+              placeholder="Venue (optional)"
+              value={createData.venue}
+              onChange={(event) => setCreateData((prev) => ({ ...prev, venue: event.target.value }))}
+            />
+            <div className="md:col-span-2 flex justify-end">
+              <button className="btn-primary" onClick={createEvent} disabled={creating}>
+                {creating ? 'Creating...' : 'Create Event'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-surface-600">Use quick create for new events. Admin approval is required before activation.</p>
+        )}
+      </DashboardSection>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card py-4">
@@ -179,6 +276,12 @@ export default function OwnerEventsPage() {
                         </span>
                       )}
                     </div>
+                    {event.approvalStatus ? (
+                      <p className="text-xs text-surface-500 mt-1">Approval: {event.approvalStatus}</p>
+                    ) : null}
+                    {event.defaultCurrency ? (
+                      <p className="text-xs text-surface-500 mt-1">Default currency: {event.defaultCurrency}</p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-6 ml-4">
                     <div className="text-right">

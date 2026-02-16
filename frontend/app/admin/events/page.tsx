@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { eventsApi } from '@/lib/api';
+import { adminApi, eventsApi } from '@/lib/api';
 import { formatDate, getPhaseLabel, cn } from '@/lib/utils';
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
@@ -25,6 +25,8 @@ interface Event {
     checkIns: number;
     mediaAssets: number;
   };
+  approvalStatus?: string;
+  Owner?: { id: string; name: string; email: string };
 }
 
 // Monochrome icons
@@ -40,6 +42,8 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('active');
+  const [pendingApprovals, setPendingApprovals] = useState<Event[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEvents();
@@ -54,10 +58,32 @@ export default function EventsPage() {
       
       const response = await eventsApi.list(params);
       setEvents(response.data.events);
+      const pending = await adminApi.getPendingApprovals();
+      setPendingApprovals(pending.data?.events || []);
     } catch (error) {
       toast.error('Failed to load events');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const reviewApproval = async (eventId: string, approve: boolean) => {
+    setReviewingId(eventId);
+    try {
+      if (approve) {
+        await adminApi.approveEvent(eventId);
+        toast.success('Event approved');
+      } else {
+        const reason = window.prompt('Rejection reason');
+        if (!reason) return;
+        await adminApi.rejectEvent(eventId, reason);
+        toast.success('Event rejected');
+      }
+      await fetchEvents();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Action failed');
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -119,6 +145,47 @@ export default function EventsPage() {
           <p className="text-lg font-semibold text-brand-900 mt-1 capitalize">{filter}</p>
         </div>
       </div>
+
+      <DashboardSection
+        title="Pending Approvals"
+        subtitle="Owner-created events awaiting admin review"
+      >
+        {pendingApprovals.length === 0 ? (
+          <p className="text-sm text-surface-500">No pending owner events.</p>
+        ) : (
+          <div className="space-y-3">
+            {pendingApprovals.map((event) => (
+              <div key={event.id} className="rounded-xl border border-surface-200 bg-white px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-brand-900">{event.name}</p>
+                    <p className="text-xs text-surface-500 mt-1">
+                      Owner: {event.Owner?.name || 'Unknown'} ({event.Owner?.email || 'No email'})
+                    </p>
+                    <p className="text-xs text-surface-500 mt-1">Date: {formatDate(event.date, 'MMM d, yyyy')}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="btn-outline text-rose-600 border-rose-200 hover:bg-rose-50"
+                      disabled={reviewingId === event.id}
+                      onClick={() => reviewApproval(event.id, false)}
+                    >
+                      Reject
+                    </button>
+                    <button
+                      className="btn-primary"
+                      disabled={reviewingId === event.id}
+                      onClick={() => reviewApproval(event.id, true)}
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DashboardSection>
 
       <DashboardSection
         title="Event List"

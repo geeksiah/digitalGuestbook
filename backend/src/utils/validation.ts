@@ -36,6 +36,12 @@ export const createEventSchema = z.object({
   endDate: z.string().datetime().optional().nullable(),
   timezone: z.string().default('UTC'),
   venue: z.string().optional().nullable(),
+  defaultCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Default currency must be a 3-letter code')
+    .default('USD'),
   
   // Owner
   ownerId: z.string().uuid().optional(),
@@ -117,6 +123,12 @@ export const updateEventSchema = z.object({
   endDate: z.string().datetime().optional().nullable(),
   timezone: z.string().optional(),
   venue: z.string().optional().nullable(),
+  defaultCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Default currency must be a 3-letter code')
+    .optional(),
   
   // Owner
   ownerId: z.string().uuid().optional().nullable(),

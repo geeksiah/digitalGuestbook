@@ -1,4 +1,3 @@
-import { Suspense, lazy } from 'react';
 import {
   IonIcon,
   IonLabel,
@@ -15,33 +14,31 @@ import {
 } from 'ionicons/icons';
 import { Redirect, Route } from 'react-router-dom';
 
-const HomePage = lazy(() => import('../pages/HomePage'));
-const EventsPage = lazy(() => import('../pages/EventsPage'));
-const EventDetailsPage = lazy(() => import('../pages/EventDetailsPage'));
-const PayoutsPage = lazy(() => import('../pages/PayoutsPage'));
-const AccountPage = lazy(() => import('../pages/AccountPage'));
+import HomePage from '../pages/HomePage';
+import EventsPage from '../pages/EventsPage';
+import EventDetailsPage from '../pages/EventDetailsPage';
+import PayoutsPage from '../pages/PayoutsPage';
+import AccountPage from '../pages/AccountPage';
 
 const AppShell = () => {
   return (
     <IonTabs>
-      <Suspense fallback={<div className="screen-content"><p className="muted-text">Loading...</p></div>}>
-        <IonRouterOutlet>
-          <Route path="/app/home" component={HomePage} exact />
-          <Route path="/app/events" component={EventsPage} exact />
-          <Route path="/app/events/:eventId" component={EventDetailsPage} exact />
-          <Route path="/app/payouts" component={PayoutsPage} exact />
-          <Route path="/app/account" component={AccountPage} exact />
-          <Route exact path="/app/profile">
-            <Redirect to="/app/account" />
-          </Route>
-          <Route exact path="/app/wallet">
-            <Redirect to="/app/payouts" />
-          </Route>
-          <Route exact path="/app">
-            <Redirect to="/app/home" />
-          </Route>
-        </IonRouterOutlet>
-      </Suspense>
+      <IonRouterOutlet>
+        <Route path="/app/home" component={HomePage} exact />
+        <Route path="/app/events" component={EventsPage} exact />
+        <Route path="/app/events/:eventId" component={EventDetailsPage} exact />
+        <Route path="/app/payouts" component={PayoutsPage} exact />
+        <Route path="/app/account" component={AccountPage} exact />
+        <Route exact path="/app/profile">
+          <Redirect to="/app/account" />
+        </Route>
+        <Route exact path="/app/wallet">
+          <Redirect to="/app/payouts" />
+        </Route>
+        <Route exact path="/app">
+          <Redirect to="/app/home" />
+        </Route>
+      </IonRouterOutlet>
 
       <IonTabBar slot="bottom" className="owner-tab-bar">
         <IonTabButton tab="home" href="/app/home">

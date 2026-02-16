@@ -19,7 +19,7 @@ import { useSessionStore } from '../store/session';
 import type { PaystackBank, Wallet } from '../types/domain';
 import { getErrorMessage } from '../utils/error';
 
-type AccountTab = 'profile' | 'password' | 'wallet';
+type AccountTab = 'profile' | 'password' | 'wallet' | 'notifications' | 'support';
 
 const AccountPage = () => {
   const router = useIonRouter();
@@ -33,6 +33,21 @@ const AccountPage = () => {
   const [paystackLoading, setPaystackLoading] = useState(false);
   const [paystackBanks, setPaystackBanks] = useState<PaystackBank[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    notificationsEnabled: true,
+    marketingEnabled: true,
+    soundEnabled: true,
+    hapticsEnabled: true,
+  });
+  const [supportContent, setSupportContent] = useState<{
+    supportEmail: string | null;
+    supportWhatsAppNumber: string | null;
+    faq: Array<{ question: string; answer: string }>;
+  }>({
+    supportEmail: null,
+    supportWhatsAppNumber: null,
+    faq: [],
+  });
 
   const [profileData, setProfileData] = useState({
     name: owner?.name || '',
@@ -121,6 +136,16 @@ const AccountPage = () => {
     });
     void loadWallet();
     void loadPaystackBanks(paystackSetup.country, paystackSetup.currency);
+    void ownerDashboardApi.notificationPreferences()
+      .then((response) => {
+        if (response.data?.preferences) {
+          setNotificationPrefs(response.data.preferences);
+        }
+      })
+      .catch(() => null);
+    void ownerDashboardApi.supportContent()
+      .then((response) => setSupportContent(response.data))
+      .catch(() => null);
   });
 
   const isPaystackMethod = useMemo(() => walletData.preferredMethod === 'paystack', [walletData.preferredMethod]);
@@ -224,6 +249,18 @@ const AccountPage = () => {
     router.push('/auth', 'root');
   };
 
+  const saveNotificationPrefs = async () => {
+    setLoading(true);
+    try {
+      await ownerDashboardApi.updateNotificationPreferences(notificationPrefs);
+      present({ message: 'Notification settings saved', duration: 1800, color: 'success' });
+    } catch (error: unknown) {
+      present({ message: getErrorMessage(error, 'Failed to save notification settings'), duration: 2200, color: 'danger' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <IonPage>
       <IonHeader translucent>
@@ -242,6 +279,8 @@ const AccountPage = () => {
               <IonSegmentButton value="profile">Profile</IonSegmentButton>
               <IonSegmentButton value="password">Password</IonSegmentButton>
               <IonSegmentButton value="wallet">Wallet</IonSegmentButton>
+              <IonSegmentButton value="notifications">Notifications</IonSegmentButton>
+              <IonSegmentButton value="support">Support</IonSegmentButton>
             </IonSegment>
           </section>
 
@@ -561,6 +600,90 @@ const AccountPage = () => {
                 </div>
               </section>
             </>
+          ) : null}
+
+          {tab === 'notifications' ? (
+            <section className="surface-card">
+              <h3>Notification preferences</h3>
+              <p className="muted-text">Control push behavior across your owner app experience.</p>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.notificationsEnabled}
+                  onChange={(event) =>
+                    setNotificationPrefs((prev) => ({ ...prev, notificationsEnabled: event.target.checked }))
+                  }
+                />
+                <span>Enable notifications</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.marketingEnabled}
+                  onChange={(event) =>
+                    setNotificationPrefs((prev) => ({ ...prev, marketingEnabled: event.target.checked }))
+                  }
+                />
+                <span>Enable marketing campaigns</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.soundEnabled}
+                  onChange={(event) =>
+                    setNotificationPrefs((prev) => ({ ...prev, soundEnabled: event.target.checked }))
+                  }
+                />
+                <span>Notification sound</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.hapticsEnabled}
+                  onChange={(event) =>
+                    setNotificationPrefs((prev) => ({ ...prev, hapticsEnabled: event.target.checked }))
+                  }
+                />
+                <span>Haptic feedback</span>
+              </label>
+              <IonButton className="solid-cta" expand="block" disabled={loading} onClick={saveNotificationPrefs}>
+                {loading ? 'Saving...' : 'Save notification settings'}
+              </IonButton>
+            </section>
+          ) : null}
+
+          {tab === 'support' ? (
+            <section className="surface-card">
+              <h3>FAQ and contact support</h3>
+              <p className="muted-text">Use support channels below for account and event assistance.</p>
+              {supportContent.supportEmail ? (
+                <a className="inline-link" href={`mailto:${supportContent.supportEmail}`}>
+                  Email: {supportContent.supportEmail}
+                </a>
+              ) : null}
+              {supportContent.supportWhatsAppNumber ? (
+                <a
+                  className="inline-link"
+                  href={`https://wa.me/${supportContent.supportWhatsAppNumber.replace(/[^\d]/g, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  WhatsApp: {supportContent.supportWhatsAppNumber}
+                </a>
+              ) : null}
+              <div className="event-list">
+                {supportContent.faq.length === 0 ? (
+                  <p className="muted-text">No FAQ content configured yet.</p>
+                ) : (
+                  supportContent.faq.map((item, index) => (
+                    <article key={index} className="event-list-item static stack">
+                      <p className="event-title">{item.question}</p>
+                      <p className="event-subline">{item.answer}</p>
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
           ) : null}
 
           <section className="surface-card">

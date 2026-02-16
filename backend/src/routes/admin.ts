@@ -3,6 +3,10 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 import { queuePaystackTransferForPayout } from '../services/payoutAutomation.js';
+import { dispatchCampaign } from '../services/pushCampaigns.js';
+import { sendPushToOwners } from '../services/ownerNotifications.js';
+import { featureFlags } from '../utils/featureFlags.js';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -41,6 +45,289 @@ router.get('/dashboard/stats', authenticateAdmin, asyncHandler(async (req, res) 
       totalPendingPayoutAmount: totalPayoutAmount._sum.requestedAmount || 0,
     },
   });
+}));
+
+/**
+ * GET /api/admin/events/pending-approvals
+ */
+router.get('/events/pending-approvals', authenticateAdmin, asyncHandler(async (_req, res) => {
+  const events = await prisma.event.findMany({
+    where: {
+      approvalStatus: 'PENDING_REVIEW',
+    },
+    include: {
+      Owner: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      approvalSubmittedAt: 'asc',
+    },
+  });
+
+  res.json({ events });
+}));
+
+/**
+ * POST /api/admin/events/:eventId/approve
+ */
+router.post('/events/:eventId/approve', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!featureFlags.ownerEventApproval) {
+    throw new AppError('Event approval workflow is disabled', 400);
+  }
+  const { eventId } = req.params;
+  const adminId = req.admin!.id;
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      id: true,
+      ownerId: true,
+      approvalStatus: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  if (!event) throw new AppError('Event not found', 404);
+
+  const updated = await prisma.event.update({
+    where: { id: event.id },
+    data: {
+      approvalStatus: 'APPROVED',
+      approvalReviewedAt: new Date(),
+      approvalReviewedByAdminId: adminId,
+      approvalRejectionReason: null,
+    },
+  });
+
+  if (event.ownerId) {
+    await sendPushToOwners([event.ownerId], {
+      title: 'Event approved',
+      body: `${event.name} is now approved.`,
+      deepLink: `/app/events/${event.id}`,
+      type: 'EVENT_APPROVAL',
+      data: {
+        eventId: event.id,
+        status: 'APPROVED',
+      },
+      isMarketing: false,
+    });
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      adminId,
+      eventId: event.id,
+      action: 'OWNER_EVENT_APPROVED',
+      entityType: 'EVENT',
+      entityId: event.id,
+      details: JSON.stringify({
+        previousStatus: event.approvalStatus,
+      }),
+    },
+  });
+
+  res.json({ event: updated });
+}));
+
+/**
+ * POST /api/admin/events/:eventId/reject
+ */
+router.post('/events/:eventId/reject', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!featureFlags.ownerEventApproval) {
+    throw new AppError('Event approval workflow is disabled', 400);
+  }
+  const { eventId } = req.params;
+  const adminId = req.admin!.id;
+  const reason = String(req.body?.reason || '').trim();
+  if (!reason) {
+    throw new AppError('Rejection reason is required', 400);
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      id: true,
+      ownerId: true,
+      approvalStatus: true,
+      name: true,
+    },
+  });
+
+  if (!event) throw new AppError('Event not found', 404);
+
+  const updated = await prisma.event.update({
+    where: { id: event.id },
+    data: {
+      approvalStatus: 'REJECTED',
+      approvalReviewedAt: new Date(),
+      approvalReviewedByAdminId: adminId,
+      approvalRejectionReason: reason,
+    },
+  });
+
+  if (event.ownerId) {
+    await sendPushToOwners([event.ownerId], {
+      title: 'Event needs updates',
+      body: `${event.name} was rejected. Open details to review feedback.`,
+      deepLink: `/app/events/${event.id}/approval`,
+      type: 'EVENT_APPROVAL',
+      data: {
+        eventId: event.id,
+        status: 'REJECTED',
+        reason,
+      },
+      isMarketing: false,
+    });
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      adminId,
+      eventId: event.id,
+      action: 'OWNER_EVENT_REJECTED',
+      entityType: 'EVENT',
+      entityId: event.id,
+      details: JSON.stringify({
+        previousStatus: event.approvalStatus,
+        reason,
+      }),
+    },
+  });
+
+  res.json({ event: updated });
+}));
+
+const pushCampaignSchema = z.object({
+  title: z.string().min(2),
+  body: z.string().min(2),
+  deepLink: z.string().optional(),
+  audienceType: z.enum(['ALL_OWNERS', 'ACTIVE_OWNERS', 'PENDING_APPROVAL_OWNERS', 'CUSTOM_OWNER_IDS']),
+  ownerIds: z.array(z.string()).optional(),
+  scheduleAt: z.coerce.date().optional(),
+});
+
+/**
+ * GET /api/admin/push-campaigns
+ */
+router.get('/push-campaigns', authenticateAdmin, asyncHandler(async (_req, res) => {
+  if (!featureFlags.ownerMarketingCampaigns) {
+    throw new AppError('Marketing campaigns are disabled', 400);
+  }
+  const campaigns = await (prisma as any).pushCampaign.findMany({
+    include: {
+      audiences: true,
+      _count: {
+        select: {
+          deliveries: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  res.json({ campaigns });
+}));
+
+/**
+ * POST /api/admin/push-campaigns
+ */
+router.post('/push-campaigns', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!featureFlags.ownerMarketingCampaigns) {
+    throw new AppError('Marketing campaigns are disabled', 400);
+  }
+  const adminId = req.admin!.id;
+  const input = pushCampaignSchema.parse(req.body || {});
+  const audiencePayload = input.ownerIds && input.ownerIds.length > 0 ? JSON.stringify(input.ownerIds) : null;
+
+  const campaign = await (prisma as any).pushCampaign.create({
+    data: {
+      title: input.title,
+      body: input.body,
+      deepLink: input.deepLink || null,
+      status: input.scheduleAt ? 'SCHEDULED' : 'DRAFT',
+      scheduledAt: input.scheduleAt || null,
+      createdByAdminId: adminId,
+      audiences: {
+        create: {
+          audienceType: input.audienceType,
+          audienceQuery: audiencePayload,
+        },
+      },
+    },
+    include: {
+      audiences: true,
+    },
+  });
+
+  res.status(201).json({ campaign });
+}));
+
+/**
+ * POST /api/admin/push-campaigns/:id/send-now
+ */
+router.post('/push-campaigns/:id/send-now', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!featureFlags.ownerMarketingCampaigns) {
+    throw new AppError('Marketing campaigns are disabled', 400);
+  }
+  const dispatch = await dispatchCampaign(req.params.id);
+  res.json({ dispatch });
+}));
+
+/**
+ * POST /api/admin/push-campaigns/:id/schedule
+ */
+router.post('/push-campaigns/:id/schedule', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!featureFlags.ownerMarketingCampaigns) {
+    throw new AppError('Marketing campaigns are disabled', 400);
+  }
+  const scheduledAt = z.coerce.date().parse(req.body?.scheduledAt);
+  const campaign = await (prisma as any).pushCampaign.update({
+    where: { id: req.params.id },
+    data: {
+      status: 'SCHEDULED',
+      scheduledAt,
+    },
+  });
+
+  res.json({ campaign });
+}));
+
+/**
+ * GET /api/admin/push-campaigns/:id/report
+ */
+router.get('/push-campaigns/:id/report', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!featureFlags.ownerMarketingCampaigns) {
+    throw new AppError('Marketing campaigns are disabled', 400);
+  }
+  const campaign = await (prisma as any).pushCampaign.findUnique({
+    where: { id: req.params.id },
+    include: {
+      audiences: true,
+      deliveries: true,
+    },
+  });
+
+  if (!campaign) throw new AppError('Campaign not found', 404);
+
+  const report = (campaign.deliveries as Array<any>).reduce(
+    (acc, delivery) => {
+      acc.total += 1;
+      const key = String(delivery.status || 'UNKNOWN');
+      acc.byStatus[key] = (acc.byStatus[key] || 0) + 1;
+      return acc;
+    },
+    { total: 0, byStatus: {} as Record<string, number> }
+  );
+
+  res.json({ campaign, report });
 }));
 
 // ============================================

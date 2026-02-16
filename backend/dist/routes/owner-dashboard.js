@@ -10,9 +10,11 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const phase_js_1 = require("../utils/phase.js");
+const featureFlags_js_1 = require("../utils/featureFlags.js");
 const zod_1 = require("zod");
 const notifications_js_1 = require("../services/notifications.js");
 const invitation_js_1 = require("../services/invitation.js");
+const ownerNotifications_js_1 = require("../services/ownerNotifications.js");
 const paystack_js_1 = require("../services/paystack.js");
 const payoutAutomation_js_1 = require("../services/payoutAutomation.js");
 const router = (0, express_1.Router)();
@@ -25,6 +27,115 @@ const getInvitePublicUrl = (token) => {
     if (frontend)
         return `${frontend}/invite/${token}`;
     return `/invite/${token}`;
+};
+const eventCreateSchema = zod_1.z.object({
+    name: zod_1.z.string().min(2, 'Event name is required'),
+    slug: zod_1.z
+        .string()
+        .min(2, 'Slug is required')
+        .regex(/^[a-z0-9-]+$/, 'Slug must contain lowercase letters, numbers, and hyphens'),
+    description: zod_1.z.string().optional(),
+    date: zod_1.z.coerce.date(),
+    endDate: zod_1.z.coerce.date().optional(),
+    timezone: zod_1.z.string().optional(),
+    venue: zod_1.z.string().optional(),
+    ownerName: zod_1.z.string().optional(),
+    ownerEmail: zod_1.z.string().email().optional(),
+    ownerPhone: zod_1.z.string().optional(),
+    organizationName: zod_1.z.string().optional(),
+    defaultCurrency: zod_1.z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{3}$/, 'Default currency must be a 3-letter code')
+        .default('USD'),
+});
+const eventUpdateSchema = zod_1.z.object({
+    name: zod_1.z.string().min(2).optional(),
+    description: zod_1.z.string().nullable().optional(),
+    date: zod_1.z.coerce.date().optional(),
+    endDate: zod_1.z.coerce.date().nullable().optional(),
+    timezone: zod_1.z.string().optional(),
+    venue: zod_1.z.string().nullable().optional(),
+    ownerName: zod_1.z.string().nullable().optional(),
+    ownerEmail: zod_1.z.string().email().nullable().optional(),
+    ownerPhone: zod_1.z.string().nullable().optional(),
+    organizationName: zod_1.z.string().nullable().optional(),
+    defaultCurrency: zod_1.z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{3}$/, 'Default currency must be a 3-letter code')
+        .optional(),
+});
+const rsvpStatusSchema = zod_1.z.object({
+    status: zod_1.z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+    reason: zod_1.z.string().max(400).optional(),
+});
+const inviteValidateSchema = zod_1.z.object({
+    invites: zod_1.z.array(zod_1.z.object({
+        name: zod_1.z.string().trim().optional(),
+        phone: zod_1.z.string().trim().optional(),
+        email: zod_1.z.string().trim().email().optional(),
+    })),
+});
+const normalizePhone = (value) => String(value || '').replace(/[^\d+]/g, '');
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const transitionRsvpStatus = async ({ eventId, ownerId, rsvpId, status, reason, }) => {
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: { id: true },
+    });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    const rsvp = await prisma_js_1.default.rSVP.findFirst({
+        where: { id: rsvpId, eventId },
+    });
+    if (!rsvp)
+        throw new errorHandler_js_1.AppError('RSVP not found', 404);
+    const fromStatus = String(rsvp.status || 'PENDING').toUpperCase();
+    if (fromStatus === status) {
+        return { rsvp, invitation: null, transitioned: false };
+    }
+    const updatedRsvp = await prisma_js_1.default.rSVP.update({
+        where: { id: rsvp.id },
+        data: {
+            status,
+            reviewedAt: new Date(),
+        },
+    });
+    await prisma_js_1.default.rSVPStatusAudit.create({
+        data: {
+            rsvpId: rsvp.id,
+            eventId,
+            fromStatus,
+            toStatus: status,
+            reason: reason || null,
+            changedByOwnerId: ownerId,
+        },
+    });
+    let invitation = null;
+    if (status === 'APPROVED' && rsvp.attendance === 'YES') {
+        invitation = await (0, invitation_js_1.generateInvitationPass)(rsvp.id);
+        if (invitation) {
+            (0, notifications_js_1.sendInvitationNotifications)(invitation.id).catch((error) => console.error('[Owner RSVP transition] Invitation send failed:', error));
+        }
+    }
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            eventId,
+            action: `RSVP_STATUS_CHANGED_BY_OWNER_${status}`,
+            entityType: 'RSVP',
+            entityId: rsvp.id,
+            details: JSON.stringify({
+                ownerId,
+                fromStatus,
+                toStatus: status,
+                reason: reason || null,
+            }),
+        },
+    });
+    return { rsvp: updatedRsvp, invitation, transitioned: true };
 };
 /**
  * GET /api/owner-dashboard/events
@@ -64,6 +175,70 @@ router.get('/events', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         currentPhase: (0, phase_js_1.calculateEventPhase)(event),
     }));
     res.json({ events: eventsWithPhase });
+}));
+/**
+ * POST /api/owner-dashboard/events
+ * Owner creates a new event (pending admin approval when FF is enabled)
+ */
+router.post('/events', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const data = eventCreateSchema.parse(req.body || {});
+    const approvalStatus = featureFlags_js_1.featureFlags.ownerEventApproval ? 'PENDING_REVIEW' : 'APPROVED';
+    const approvalSubmittedAt = featureFlags_js_1.featureFlags.ownerEventApproval ? new Date() : null;
+    const event = await prisma_js_1.default.event.create({
+        data: {
+            ownerId,
+            name: data.name,
+            slug: data.slug,
+            description: data.description || null,
+            date: data.date,
+            endDate: data.endDate || null,
+            timezone: data.timezone || 'UTC',
+            venue: data.venue || null,
+            ownerName: data.ownerName || null,
+            ownerEmail: data.ownerEmail || null,
+            ownerPhone: data.ownerPhone || null,
+            organizationName: data.organizationName || null,
+            defaultCurrency: data.defaultCurrency || 'USD',
+            approvalStatus,
+            approvalSubmittedAt,
+            approvalReviewedAt: null,
+            approvalReviewedByAdminId: null,
+            approvalRejectionReason: null,
+        },
+    });
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            eventId: event.id,
+            action: 'OWNER_EVENT_CREATED',
+            entityType: 'EVENT',
+            entityId: event.id,
+            details: JSON.stringify({
+                ownerId,
+                approvalStatus: event.approvalStatus,
+            }),
+        },
+    });
+    if (featureFlags_js_1.featureFlags.ownerEventApproval) {
+        const admins = await prisma_js_1.default.admin.findMany({
+            select: { id: true },
+        });
+        for (const admin of admins) {
+            await prisma_js_1.default.auditLog.create({
+                data: {
+                    adminId: admin.id,
+                    eventId: event.id,
+                    action: 'OWNER_EVENT_SUBMITTED_FOR_APPROVAL',
+                    entityType: 'EVENT',
+                    entityId: event.id,
+                    details: JSON.stringify({
+                        ownerId,
+                    }),
+                },
+            });
+        }
+    }
+    res.status(201).json({ event });
 }));
 /**
  * GET /api/owner-dashboard/events/:eventId
@@ -112,6 +287,90 @@ router.get('/events/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, r
         event: {
             ...event,
             currentPhase: (0, phase_js_1.calculateEventPhase)(event),
+        },
+    });
+}));
+/**
+ * PATCH /api/owner-dashboard/events/:eventId
+ * Edit owner event while pending/rejected (or anytime if approval feature disabled)
+ */
+router.patch('/events/:eventId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: {
+            id: true,
+            approvalStatus: true,
+        },
+    });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    if (featureFlags_js_1.featureFlags.ownerEventApproval
+        && event.approvalStatus === 'APPROVED') {
+        throw new errorHandler_js_1.AppError('Approved events cannot be edited from owner quick edit', 400);
+    }
+    const payload = eventUpdateSchema.parse(req.body || {});
+    const shouldResubmit = featureFlags_js_1.featureFlags.ownerEventApproval;
+    const updated = await prisma_js_1.default.event.update({
+        where: { id: event.id },
+        data: {
+            ...payload,
+            approvalStatus: shouldResubmit ? 'PENDING_REVIEW' : event.approvalStatus,
+            approvalSubmittedAt: shouldResubmit ? new Date() : undefined,
+            approvalReviewedAt: shouldResubmit ? null : undefined,
+            approvalReviewedByAdminId: shouldResubmit ? null : undefined,
+            approvalRejectionReason: shouldResubmit ? null : undefined,
+        },
+    });
+    await prisma_js_1.default.auditLog.create({
+        data: {
+            eventId: event.id,
+            action: 'OWNER_EVENT_UPDATED',
+            entityType: 'EVENT',
+            entityId: event.id,
+            details: JSON.stringify({
+                ownerId,
+                approvalStatus: updated.approvalStatus,
+            }),
+        },
+    });
+    res.json({ event: updated });
+}));
+/**
+ * GET /api/owner-dashboard/events/:eventId/approval
+ */
+router.get('/events/:eventId/approval', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: {
+            id: true,
+            approvalStatus: true,
+            approvalSubmittedAt: true,
+            approvalReviewedAt: true,
+            approvalRejectionReason: true,
+            approvalReviewedByAdmin: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                },
+            },
+            updatedAt: true,
+        },
+    });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    res.json({
+        approval: {
+            status: event.approvalStatus,
+            submittedAt: event.approvalSubmittedAt,
+            reviewedAt: event.approvalReviewedAt,
+            rejectionReason: event.approvalRejectionReason,
+            reviewedBy: event.approvalReviewedByAdmin,
+            updatedAt: event.updatedAt,
         },
     });
 }));
@@ -251,55 +510,43 @@ router.post('/events/:eventId/rsvps/:rsvpId/review', (0, errorHandler_js_1.async
     const ownerId = req.ownerId;
     const { eventId, rsvpId } = req.params;
     const status = String(req.body?.status || '').toUpperCase();
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-        throw new errorHandler_js_1.AppError('Invalid status. Must be APPROVED or REJECTED', 400);
+    if (!['APPROVED', 'REJECTED', 'PENDING'].includes(status)) {
+        throw new errorHandler_js_1.AppError('Invalid status. Must be PENDING, APPROVED, or REJECTED', 400);
     }
-    const event = await prisma_js_1.default.event.findFirst({
-        where: { id: eventId, ownerId },
-        select: { id: true, invitationOnly: true },
-    });
-    if (!event) {
-        throw new errorHandler_js_1.AppError('Event not found', 404);
-    }
-    const rsvp = await prisma_js_1.default.rSVP.findFirst({
-        where: { id: rsvpId, eventId },
-    });
-    if (!rsvp) {
-        throw new errorHandler_js_1.AppError('RSVP not found', 404);
-    }
-    if (rsvp.status !== 'PENDING') {
-        throw new errorHandler_js_1.AppError('RSVP has already been reviewed', 400);
-    }
-    const updatedRsvp = await prisma_js_1.default.rSVP.update({
-        where: { id: rsvp.id },
-        data: {
-            status,
-            reviewedAt: new Date(),
-        },
-    });
-    let invitation = null;
-    if (status === 'APPROVED' && rsvp.attendance === 'YES') {
-        invitation = await (0, invitation_js_1.generateInvitationPass)(rsvp.id);
-        if (invitation) {
-            (0, notifications_js_1.sendInvitationNotifications)(invitation.id).catch((err) => console.error('[Owner RSVP Review] Failed to send invitation notifications:', err));
-        }
-    }
-    await prisma_js_1.default.auditLog.create({
-        data: {
-            eventId,
-            action: status === 'APPROVED' ? 'RSVP_APPROVED_BY_OWNER' : 'RSVP_REJECTED_BY_OWNER',
-            entityType: 'RSVP',
-            entityId: rsvp.id,
-            details: JSON.stringify({
-                ownerId,
-                guestName: rsvp.primaryName,
-            }),
-        },
+    const transition = await transitionRsvpStatus({
+        eventId,
+        ownerId,
+        rsvpId,
+        status: status,
+        reason: req.body?.reason ? String(req.body.reason) : undefined,
     });
     res.json({
-        rsvp: updatedRsvp,
-        invitation,
-        message: status === 'APPROVED' ? 'RSVP approved successfully' : 'RSVP rejected successfully',
+        rsvp: transition.rsvp,
+        invitation: transition.invitation,
+        message: transition.transitioned
+            ? `RSVP status updated to ${status}`
+            : `RSVP already ${status}`,
+    });
+}));
+/**
+ * PATCH /api/owner-dashboard/events/:eventId/rsvps/:rsvpId/status
+ * Reversible RSVP tri-state transitions with audit trail
+ */
+router.patch('/events/:eventId/rsvps/:rsvpId/status', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId, rsvpId } = req.params;
+    const input = rsvpStatusSchema.parse(req.body || {});
+    const transition = await transitionRsvpStatus({
+        eventId,
+        ownerId,
+        rsvpId,
+        status: input.status,
+        reason: input.reason,
+    });
+    res.json({
+        rsvp: transition.rsvp,
+        invitation: transition.invitation,
+        transitioned: transition.transitioned,
     });
 }));
 /**
@@ -594,6 +841,61 @@ router.get('/events/:eventId/rsvp-invites', (0, errorHandler_js_1.asyncHandler)(
     });
     res.json({ invites });
 }));
+const buildInviteValidation = (invitesInput) => {
+    const rows = [];
+    const seen = new Set();
+    invitesInput.forEach((invite, index) => {
+        const normalizedPhone = normalizePhone(invite.phone);
+        const normalizedEmail = invite.email ? normalizeEmail(invite.email) : null;
+        const key = `${normalizedPhone}::${normalizedEmail || ''}`;
+        const errors = [];
+        if (!normalizedPhone)
+            errors.push('Phone number is required');
+        if (invite.email && !normalizedEmail)
+            errors.push('Email format is invalid');
+        const duplicate = seen.has(key);
+        if (!duplicate)
+            seen.add(key);
+        rows.push({
+            index,
+            name: invite.name ? String(invite.name).trim() : null,
+            phone: String(invite.phone || '').trim(),
+            email: invite.email ? String(invite.email).trim() : null,
+            valid: errors.length === 0 && !duplicate,
+            errors,
+            duplicate,
+            normalizedPhone,
+            normalizedEmail,
+        });
+    });
+    return rows;
+};
+/**
+ * POST /api/owner-dashboard/events/:eventId/rsvp-invites/validate
+ * Validate invite payload and return dedupe preview
+ */
+router.post('/events/:eventId/rsvp-invites/validate', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const { eventId } = req.params;
+    const input = inviteValidateSchema.parse(req.body || {});
+    const event = await prisma_js_1.default.event.findFirst({
+        where: { id: eventId, ownerId },
+        select: { id: true },
+    });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    const rows = buildInviteValidation(input.invites);
+    const summary = rows.reduce((acc, row) => {
+        if (row.valid)
+            acc.valid += 1;
+        if (!row.valid && row.errors.length)
+            acc.invalid += 1;
+        if (row.duplicate)
+            acc.duplicates += 1;
+        return acc;
+    }, { total: rows.length, valid: 0, invalid: 0, duplicates: 0 });
+    res.json({ summary, rows });
+}));
 /**
  * POST /api/owner-dashboard/events/:eventId/rsvp-invites/batch
  * Create and send invite batch
@@ -601,7 +903,8 @@ router.get('/events/:eventId/rsvp-invites', (0, errorHandler_js_1.asyncHandler)(
 router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const ownerId = req.ownerId;
     const { eventId } = req.params;
-    const invitesInput = Array.isArray(req.body?.invites) ? req.body.invites : [];
+    const validateInput = inviteValidateSchema.parse(req.body || {});
+    const invitesInput = validateInput.invites;
     const expiresInHours = Number(req.body?.expiresInHours || 240);
     if (!invitesInput.length) {
         throw new errorHandler_js_1.AppError('invites must be a non-empty array', 400);
@@ -618,12 +921,34 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
         throw new errorHandler_js_1.AppError('Event not found', 404);
     const created = [];
     const failed = [];
-    for (const input of invitesInput) {
-        const inviteePhone = String(input?.phone || '').trim();
-        const inviteeName = input?.name ? String(input.name).trim() : null;
-        const inviteeEmail = input?.email ? String(input.email).trim() : null;
-        if (!inviteePhone) {
-            failed.push({ phone: '', reason: 'Phone number is required' });
+    const skipped = [];
+    const rows = buildInviteValidation(invitesInput);
+    for (const row of rows) {
+        if (!row.valid) {
+            skipped.push({
+                index: row.index,
+                phone: row.phone,
+                reason: row.duplicate ? 'Duplicate invite in batch' : row.errors.join(', ') || 'Invalid invite',
+            });
+            continue;
+        }
+        const inviteePhone = row.phone;
+        const inviteeName = row.name;
+        const inviteeEmail = row.email;
+        const exists = await prisma_js_1.default.rsvpInvite.findFirst({
+            where: {
+                eventId,
+                inviteePhone,
+                status: { in: ['SENT', 'OPENED', 'RESPONDED'] },
+            },
+            select: { id: true },
+        });
+        if (exists) {
+            skipped.push({
+                index: row.index,
+                phone: inviteePhone,
+                reason: 'Invite already exists for this phone',
+            });
             continue;
         }
         const token = (0, crypto_1.randomBytes)(20).toString('hex');
@@ -649,6 +974,7 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
             });
             if (!delivery.success) {
                 failed.push({
+                    index: row.index,
                     phone: inviteePhone,
                     reason: ('error' in delivery && delivery.error) ? delivery.error : 'Failed to send WhatsApp invite',
                 });
@@ -657,7 +983,11 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
             created.push(invite);
         }
         catch (error) {
-            failed.push({ phone: inviteePhone, reason: error?.message || 'Failed to send WhatsApp invite' });
+            failed.push({
+                index: row.index,
+                phone: inviteePhone,
+                reason: error?.message || 'Failed to send WhatsApp invite',
+            });
         }
     }
     await prisma_js_1.default.auditLog.create({
@@ -669,15 +999,19 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
                 ownerId,
                 sentCount: created.length,
                 failedCount: failed.length,
+                skippedCount: skipped.length,
             }),
         },
     });
     res.status(201).json({
         message: 'Invite batch processed',
+        totalCount: rows.length,
         sentCount: created.length,
         failedCount: failed.length,
+        skippedCount: skipped.length,
         invites: created,
         failed,
+        skipped,
     });
 }));
 /**
@@ -851,6 +1185,142 @@ router.get('/events/:eventId/gift-orders', (0, errorHandler_js_1.asyncHandler)(a
         };
     });
     res.json({ orders: ordersWithEarnings });
+}));
+/**
+ * GET /api/owner-dashboard/notification-preferences
+ */
+router.get('/notification-preferences', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const preference = await (0, ownerNotifications_js_1.getOrCreateOwnerNotificationPreference)(ownerId);
+    res.json({ preferences: preference });
+}));
+/**
+ * PATCH /api/owner-dashboard/notification-preferences
+ */
+router.patch('/notification-preferences', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const input = zod_1.z
+        .object({
+        notificationsEnabled: zod_1.z.boolean().optional(),
+        marketingEnabled: zod_1.z.boolean().optional(),
+        soundEnabled: zod_1.z.boolean().optional(),
+        hapticsEnabled: zod_1.z.boolean().optional(),
+    })
+        .parse(req.body || {});
+    const preferences = await (0, ownerNotifications_js_1.updateOwnerNotificationPreference)(ownerId, input);
+    res.json({ preferences });
+}));
+/**
+ * POST /api/owner-dashboard/devices/register
+ */
+router.post('/devices/register', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const input = zod_1.z
+        .object({
+        platform: zod_1.z.string().min(2),
+        oneSignalPlayerId: zod_1.z.string().optional(),
+        appVersion: zod_1.z.string().optional(),
+        deviceModel: zod_1.z.string().optional(),
+        osVersion: zod_1.z.string().optional(),
+    })
+        .parse(req.body || {});
+    const device = await (0, ownerNotifications_js_1.registerOwnerDevice)(ownerId, input);
+    res.status(201).json({ device });
+}));
+/**
+ * POST /api/owner-dashboard/devices/unregister
+ */
+router.post('/devices/unregister', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const input = zod_1.z
+        .object({
+        oneSignalPlayerId: zod_1.z.string().optional(),
+    })
+        .parse(req.body || {});
+    await (0, ownerNotifications_js_1.unregisterOwnerDevice)(ownerId, input.oneSignalPlayerId);
+    res.json({ message: 'Device unregistered' });
+}));
+/**
+ * GET /api/owner-dashboard/notifications
+ */
+router.get('/notifications', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 30)));
+    const [notifications, total, unread] = await Promise.all([
+        prisma_js_1.default.ownerNotification.findMany({
+            where: { ownerId },
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit,
+        }),
+        prisma_js_1.default.ownerNotification.count({ where: { ownerId } }),
+        prisma_js_1.default.ownerNotification.count({ where: { ownerId, isRead: false } }),
+    ]);
+    res.json({
+        notifications,
+        unreadCount: unread,
+        pagination: {
+            page,
+            limit,
+            total,
+        },
+    });
+}));
+/**
+ * PATCH /api/owner-dashboard/notifications/:id/read
+ */
+router.patch('/notifications/:id/read', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const ownerId = req.ownerId;
+    const id = req.params.id;
+    const notification = await prisma_js_1.default.ownerNotification.findFirst({
+        where: { id, ownerId },
+    });
+    if (!notification)
+        throw new errorHandler_js_1.AppError('Notification not found', 404);
+    const updated = await prisma_js_1.default.ownerNotification.update({
+        where: { id },
+        data: {
+            isRead: true,
+            readAt: new Date(),
+        },
+    });
+    res.json({ notification: updated });
+}));
+/**
+ * GET /api/owner-dashboard/support-content
+ */
+router.get('/support-content', (0, errorHandler_js_1.asyncHandler)(async (_req, res) => {
+    const settings = await prisma_js_1.default.systemSettings.findUnique({
+        where: { id: 'default' },
+        select: {
+            supportEmail: true,
+            supportWhatsAppNumber: true,
+            faqContentJson: true,
+        },
+    });
+    let faq = [];
+    if (settings?.faqContentJson) {
+        try {
+            const parsed = JSON.parse(settings.faqContentJson);
+            if (Array.isArray(parsed)) {
+                faq = parsed
+                    .map((item) => ({
+                    question: String(item?.question || ''),
+                    answer: String(item?.answer || ''),
+                }))
+                    .filter((item) => item.question && item.answer);
+            }
+        }
+        catch {
+            faq = [];
+        }
+    }
+    res.json({
+        supportEmail: settings?.supportEmail || null,
+        supportWhatsAppNumber: settings?.supportWhatsAppNumber || null,
+        faq,
+    });
 }));
 /**
  * GET /api/owner-dashboard/wallet

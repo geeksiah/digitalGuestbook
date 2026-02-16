@@ -516,9 +516,21 @@ router.get('/:token/sales/by-ticket', validateOwnerToken, async (req, res) => {
 router.get('/:token/wallet', validateOwnerToken, async (req, res) => {
     try {
         const eventId = req.eventId;
-        let wallet = await prisma.payoutWallet.findUnique({
-            where: { eventId },
+        const event = await prisma.event.findUnique({
+            where: { id: eventId },
+            select: { ownerId: true },
         });
+        let wallet = null;
+        if (event?.ownerId) {
+            wallet = await prisma.ownerWallet.findUnique({
+                where: { ownerId: event.ownerId },
+            });
+        }
+        if (!wallet) {
+            wallet = await prisma.payoutWallet.findUnique({
+                where: { eventId },
+            });
+        }
         // Return null if not configured
         if (!wallet) {
             return res.json({ wallet: null, configured: false });
@@ -541,43 +553,88 @@ router.get('/:token/wallet', validateOwnerToken, async (req, res) => {
 router.post('/:token/wallet', validateOwnerToken, async (req, res) => {
     try {
         const eventId = req.eventId;
-        const { bankName, accountName, accountNumber, routingNumber, swiftCode, mobileProvider, mobileNumber, paypalEmail, stripeAccountId, paystackSubaccount, preferredMethod, currency, autoPayoutEnabled, autoPayoutThreshold, } = req.body;
-        const wallet = await prisma.payoutWallet.upsert({
-            where: { eventId },
-            update: {
-                bankName,
-                accountName,
-                accountNumber,
-                routingNumber,
-                swiftCode,
-                mobileProvider,
-                mobileNumber,
-                paypalEmail,
-                stripeAccountId,
-                paystackSubaccount,
-                preferredMethod: preferredMethod || 'bank',
-                currency: currency || 'USD',
-                autoPayoutEnabled: autoPayoutEnabled || false,
-                autoPayoutThreshold: autoPayoutThreshold || 100,
-            },
-            create: {
-                eventId,
-                bankName,
-                accountName,
-                accountNumber,
-                routingNumber,
-                swiftCode,
-                mobileProvider,
-                mobileNumber,
-                paypalEmail,
-                stripeAccountId,
-                paystackSubaccount,
-                preferredMethod: preferredMethod || 'bank',
-                currency: currency || 'USD',
-                autoPayoutEnabled: autoPayoutEnabled || false,
-                autoPayoutThreshold: autoPayoutThreshold || 100,
-            },
+        const event = await prisma.event.findUnique({
+            where: { id: eventId },
+            select: { ownerId: true },
         });
+        const { bankName, accountName, accountNumber, routingNumber, swiftCode, mobileProvider, mobileNumber, paypalEmail, stripeAccountId, paystackSubaccount, preferredMethod, currency, autoPayoutEnabled, autoPayoutThreshold, } = req.body;
+        let wallet;
+        if (event?.ownerId) {
+            wallet = await prisma.ownerWallet.upsert({
+                where: { ownerId: event.ownerId },
+                update: {
+                    bankName,
+                    accountName,
+                    accountNumber,
+                    routingNumber,
+                    swiftCode,
+                    mobileProvider,
+                    mobileNumber,
+                    paypalEmail,
+                    stripeAccountId,
+                    paystackSubaccount,
+                    preferredMethod: preferredMethod || 'bank',
+                    currency: currency || 'USD',
+                    autoPayoutEnabled: autoPayoutEnabled || false,
+                    autoPayoutThreshold: autoPayoutThreshold || 100,
+                },
+                create: {
+                    ownerId: event.ownerId,
+                    bankName,
+                    accountName,
+                    accountNumber,
+                    routingNumber,
+                    swiftCode,
+                    mobileProvider,
+                    mobileNumber,
+                    paypalEmail,
+                    stripeAccountId,
+                    paystackSubaccount,
+                    preferredMethod: preferredMethod || 'bank',
+                    currency: currency || 'USD',
+                    autoPayoutEnabled: autoPayoutEnabled || false,
+                    autoPayoutThreshold: autoPayoutThreshold || 100,
+                },
+            });
+        }
+        else {
+            wallet = await prisma.payoutWallet.upsert({
+                where: { eventId },
+                update: {
+                    bankName,
+                    accountName,
+                    accountNumber,
+                    routingNumber,
+                    swiftCode,
+                    mobileProvider,
+                    mobileNumber,
+                    paypalEmail,
+                    stripeAccountId,
+                    paystackSubaccount,
+                    preferredMethod: preferredMethod || 'bank',
+                    currency: currency || 'USD',
+                    autoPayoutEnabled: autoPayoutEnabled || false,
+                    autoPayoutThreshold: autoPayoutThreshold || 100,
+                },
+                create: {
+                    eventId,
+                    bankName,
+                    accountName,
+                    accountNumber,
+                    routingNumber,
+                    swiftCode,
+                    mobileProvider,
+                    mobileNumber,
+                    paypalEmail,
+                    stripeAccountId,
+                    paystackSubaccount,
+                    preferredMethod: preferredMethod || 'bank',
+                    currency: currency || 'USD',
+                    autoPayoutEnabled: autoPayoutEnabled || false,
+                    autoPayoutThreshold: autoPayoutThreshold || 100,
+                },
+            });
+        }
         // Log the action
         await prisma.auditLog.create({
             data: {
@@ -617,11 +674,19 @@ router.get('/:token/payouts', validateOwnerToken, async (req, res) => {
 router.post('/:token/payouts/request', validateOwnerToken, async (req, res) => {
     try {
         const eventId = req.eventId;
+        const event = await prisma.event.findUnique({
+            where: { id: eventId },
+            select: { ownerId: true },
+        });
         const { amount, notes } = req.body;
         // Get wallet to check if configured
-        const wallet = await prisma.payoutWallet.findUnique({
-            where: { eventId },
-        });
+        const wallet = event?.ownerId
+            ? await prisma.ownerWallet.findUnique({
+                where: { ownerId: event.ownerId },
+            })
+            : await prisma.payoutWallet.findUnique({
+                where: { eventId },
+            });
         if (!wallet) {
             return res.status(400).json({ error: 'Please configure your payout wallet first' });
         }

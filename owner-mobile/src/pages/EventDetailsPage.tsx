@@ -46,6 +46,12 @@ const EventDetailsPage = () => {
   const [reviewingRsvpId, setReviewingRsvpId] = useState<string | null>(null);
   const [checkins, setCheckins] = useState<CheckIn[]>([]);
   const [media, setMedia] = useState<MediaAsset[]>([]);
+  const [mediaFilter, setMediaFilter] = useState<'ALL' | 'PHOTO' | 'VIDEO' | 'AUDIO'>('ALL');
+  const [mediaSelectMode, setMediaSelectMode] = useState(false);
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [deletingMedia, setDeletingMedia] = useState(false);
+  const [downloadingMedia, setDownloadingMedia] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState<MediaAsset | null>(null);
   const [tickets, setTickets] = useState<TicketType[]>([]);
   const [domains, setDomains] = useState<DomainRecord[]>([]);
   const [domainHost, setDomainHost] = useState('');
@@ -54,8 +60,16 @@ const EventDetailsPage = () => {
   const [inviteLines, setInviteLines] = useState('');
   const [inviteExpiryHours, setInviteExpiryHours] = useState(240);
   const [sendingInvites, setSendingInvites] = useState(false);
+  const [validatingInvites, setValidatingInvites] = useState(false);
+  const [inviteValidation, setInviteValidation] = useState<{
+    total: number;
+    valid: number;
+    invalid: number;
+    duplicates: number;
+  } | null>(null);
   const [giftOrders, setGiftOrders] = useState<GiftOrder[]>([]);
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
+  const [showItineraryOptionalFields, setShowItineraryOptionalFields] = useState(false);
   const [savingItinerary, setSavingItinerary] = useState(false);
   const [creatingMcLink, setCreatingMcLink] = useState(false);
   const [mcControlUrl, setMcControlUrl] = useState('');
@@ -205,6 +219,18 @@ const EventDetailsPage = () => {
     gifts: giftOrders.length
   }), [domains.length, event?._count.checkIns, event?._count.mediaAssets, event?._count.rsvps, giftOrders.length, invites.length, itineraryItems.length, tickets.length]);
 
+  const filteredMedia = useMemo(() => {
+    if (mediaFilter === 'ALL') return media;
+    return media.filter((asset) => String(asset.type).toUpperCase() === mediaFilter);
+  }, [media, mediaFilter]);
+
+  const mediaAlbums = useMemo(() => {
+    const photos = media.filter((asset) => String(asset.type).toUpperCase() === 'PHOTO');
+    const videos = media.filter((asset) => String(asset.type).toUpperCase() === 'VIDEO');
+    const audios = media.filter((asset) => String(asset.type).toUpperCase() === 'AUDIO');
+    return { photos, videos, audios };
+  }, [media]);
+
   const copyEventLink = async () => {
     if (!event) return;
     const ok = await copyText(`${window.location.origin}/e/${event.slug}`);
@@ -217,12 +243,16 @@ const EventDetailsPage = () => {
     present({ message: ok ? 'MC link copied' : 'Unable to copy MC link', duration: 1800, color: ok ? 'success' : 'danger' });
   };
 
-  const reviewRsvp = async (rsvpId: string, status: 'APPROVED' | 'REJECTED') => {
+  const reviewRsvp = async (rsvpId: string, status: 'PENDING' | 'APPROVED' | 'REJECTED') => {
     if (!eventId) return;
     setReviewingRsvpId(rsvpId);
     try {
-      await ownerDashboardApi.reviewRsvp(eventId, rsvpId, status);
-      present({ message: status === 'APPROVED' ? 'RSVP approved' : 'RSVP rejected', duration: 1800, color: 'success' });
+      await ownerDashboardApi.updateRsvpStatus(eventId, rsvpId, status);
+      present({
+        message: status === 'APPROVED' ? 'RSVP approved' : status === 'REJECTED' ? 'RSVP rejected' : 'RSVP set to pending',
+        duration: 1800,
+        color: 'success'
+      });
       await Promise.all([loadRsvps(), loadEvent()]);
     } catch (error: unknown) {
       toastError(error, 'Failed to review RSVP');
@@ -281,6 +311,15 @@ const EventDetailsPage = () => {
     exportToCsv(`checkins-${event.slug}.csv`, headers, rows);
   };
 
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const addItinerary = async (formEvent: FormEvent) => {
     formEvent.preventDefault();
     if (!eventId) return;
@@ -293,11 +332,12 @@ const EventDetailsPage = () => {
       await itineraryApi.createItem(eventId, {
         title: newItinerary.title.trim(),
         description: newItinerary.description || undefined,
-        startsAt: newItinerary.startsAt ? new Date(newItinerary.startsAt).toISOString() : undefined,
-        endsAt: newItinerary.endsAt ? new Date(newItinerary.endsAt).toISOString() : undefined,
-        location: newItinerary.location || undefined
+        startsAt: showItineraryOptionalFields && newItinerary.startsAt ? new Date(newItinerary.startsAt).toISOString() : undefined,
+        endsAt: showItineraryOptionalFields && newItinerary.endsAt ? new Date(newItinerary.endsAt).toISOString() : undefined,
+        location: showItineraryOptionalFields ? newItinerary.location || undefined : undefined
       });
       setNewItinerary({ title: '', description: '', startsAt: '', endsAt: '', location: '' });
+      setShowItineraryOptionalFields(false);
       present({ message: 'Itinerary item added', duration: 1800, color: 'success' });
       await loadItinerary();
     } catch (error: unknown) {
@@ -424,11 +464,41 @@ const EventDetailsPage = () => {
       present({ message: 'Add at least one invite line', duration: 1800, color: 'danger' });
       return;
     }
+
+    try {
+      setValidatingInvites(true);
+      const preview = await ownerDashboardApi.validateInvites(eventId, parsed);
+      setInviteValidation(preview.data.summary);
+      if (!preview.data.summary.valid) {
+        present({
+          message: 'No valid invites after validation. Fix duplicates/invalid rows.',
+          duration: 2200,
+          color: 'danger'
+        });
+        return;
+      }
+    } catch (error: unknown) {
+      toastError(error, 'Failed to validate invites');
+      return;
+    } finally {
+      setValidatingInvites(false);
+    }
+
     setSendingInvites(true);
     try {
       const response = await ownerDashboardApi.sendInvites(eventId, { invites: parsed, expiresInHours: inviteExpiryHours });
       setInviteLines('');
-      present({ message: `Sent ${String(response.data.sentCount || 0)} invite(s)`, duration: 1800, color: 'success' });
+      setInviteValidation({
+        total: Number(response.data.totalCount || parsed.length),
+        valid: Number(response.data.sentCount || 0),
+        invalid: Number(response.data.failedCount || 0),
+        duplicates: Number(response.data.skippedCount || 0),
+      });
+      present({
+        message: `Sent ${String(response.data.sentCount || 0)} invite(s), skipped ${String(response.data.skippedCount || 0)}`,
+        duration: 2200,
+        color: 'success'
+      });
       await loadInvites();
     } catch (error: unknown) {
       toastError(error, 'Failed to send invites');
@@ -444,6 +514,68 @@ const EventDetailsPage = () => {
       await loadInvites();
     } catch (error: unknown) {
       toastError(error, 'Failed to resend invite');
+    }
+  };
+
+  const toggleSelectMedia = (mediaId: string) => {
+    setSelectedMediaIds((prev) =>
+      prev.includes(mediaId) ? prev.filter((id) => id !== mediaId) : [...prev, mediaId]
+    );
+  };
+
+  const deleteSelectedMedia = async () => {
+    if (!selectedMediaIds.length) return;
+    setDeletingMedia(true);
+    try {
+      await ownerDashboardApi.bulkDeleteMedia(selectedMediaIds);
+      present({ message: `${selectedMediaIds.length} item(s) deleted`, duration: 1800, color: 'success' });
+      setSelectedMediaIds([]);
+      setMediaSelectMode(false);
+      await loadMedia();
+    } catch (error: unknown) {
+      toastError(error, 'Failed to delete media');
+    } finally {
+      setDeletingMedia(false);
+    }
+  };
+
+  const deleteSingleMedia = async (mediaId: string) => {
+    setDeletingMedia(true);
+    try {
+      await ownerDashboardApi.deleteMedia(mediaId);
+      present({ message: 'Media deleted', duration: 1800, color: 'success' });
+      await loadMedia();
+    } catch (error: unknown) {
+      toastError(error, 'Failed to delete media');
+    } finally {
+      setDeletingMedia(false);
+    }
+  };
+
+  const downloadSingleMedia = async (asset: MediaAsset) => {
+    setDownloadingMedia(true);
+    try {
+      const response = await ownerDashboardApi.downloadMedia(asset.id);
+      downloadBlob(response.data, asset.fileName || `media-${asset.id}`);
+    } catch (error: unknown) {
+      toastError(error, 'Failed to download media');
+    } finally {
+      setDownloadingMedia(false);
+    }
+  };
+
+  const downloadAlbum = async (type?: 'PHOTO' | 'VIDEO' | 'AUDIO') => {
+    if (!eventId) return;
+    setDownloadingMedia(true);
+    try {
+      const response = await ownerDashboardApi.downloadAllMedia(eventId, type);
+      const suffix = type ? type.toLowerCase() : 'all-media';
+      const fileName = `${event?.slug || 'event'}-${suffix}.zip`;
+      downloadBlob(response.data, fileName);
+    } catch (error: unknown) {
+      toastError(error, 'Failed to download media album');
+    } finally {
+      setDownloadingMedia(false);
     }
   };
 
@@ -523,6 +655,19 @@ const EventDetailsPage = () => {
                       <p className="metric-value">{event._count.invitations}</p>
                     </article>
                   </div>
+                  <div className="event-list-item static stack">
+                    <div className="row-between">
+                      <p className="event-title">Approval status</p>
+                      <span className={'status-pill ' + statusToneClass(event.approvalStatus || 'APPROVED')}>
+                        {event.approvalStatus || 'APPROVED'}
+                      </span>
+                    </div>
+                    <p className="event-subline">Default currency: {event.defaultCurrency || 'USD'}</p>
+                    <p className="event-subline">Submitted: {formatDate(event.approvalSubmittedAt || event.date)}</p>
+                    {event.approvalRejectionReason ? (
+                      <p className="event-subline">Feedback: {event.approvalRejectionReason}</p>
+                    ) : null}
+                  </div>
                 </section>
               ) : null}
 
@@ -548,12 +693,34 @@ const EventDetailsPage = () => {
                         </div>
                         <p className="event-subline">{rsvp.attendance} - {rsvp.guestCount} guest(s) - {formatDateTime(rsvp.submittedAt)}</p>
                         <p className="event-subline">{rsvp.email || rsvp.phone || '-'}</p>
-                        {rsvp.status === 'PENDING' ? (
-                          <div className="inline-row">
-                            <IonButton size="small" color="danger" fill="outline" disabled={reviewingRsvpId === rsvp.id} onClick={() => reviewRsvp(rsvp.id, 'REJECTED')}>Reject</IonButton>
-                            <IonButton size="small" color="success" fill="outline" disabled={reviewingRsvpId === rsvp.id} onClick={() => reviewRsvp(rsvp.id, 'APPROVED')}>Approve</IonButton>
-                          </div>
-                        ) : null}
+                        <div className="inline-row wrap">
+                          <IonButton
+                            size="small"
+                            color="success"
+                            fill="outline"
+                            disabled={reviewingRsvpId === rsvp.id || rsvp.status === 'APPROVED'}
+                            onClick={() => reviewRsvp(rsvp.id, 'APPROVED')}
+                          >
+                            Approve
+                          </IonButton>
+                          <IonButton
+                            size="small"
+                            color="danger"
+                            fill="outline"
+                            disabled={reviewingRsvpId === rsvp.id || rsvp.status === 'REJECTED'}
+                            onClick={() => reviewRsvp(rsvp.id, 'REJECTED')}
+                          >
+                            Reject
+                          </IonButton>
+                          <IonButton
+                            size="small"
+                            fill="outline"
+                            disabled={reviewingRsvpId === rsvp.id || rsvp.status === 'PENDING'}
+                            onClick={() => reviewRsvp(rsvp.id, 'PENDING')}
+                          >
+                            Set pending
+                          </IonButton>
+                        </div>
                       </article>
                     ))}
                   </div>
@@ -581,20 +748,105 @@ const EventDetailsPage = () => {
 
               {activeTab === 'media' ? (
                 <section className="surface-card">
-                  <h3>Guestbook Media</h3>
-                  {!media.length ? <p className="muted-text">No media uploaded yet.</p> : null}
+                  <div className="row-between">
+                    <h3>Guestbook Media</h3>
+                    <div className="inline-row wrap">
+                      <IonButton size="small" fill="outline" disabled={downloadingMedia} onClick={() => downloadAlbum()}>
+                        Download all
+                      </IonButton>
+                      <IonButton
+                        size="small"
+                        fill="outline"
+                        onClick={() => {
+                          setMediaSelectMode((prev) => !prev);
+                          setSelectedMediaIds([]);
+                        }}
+                      >
+                        {mediaSelectMode ? 'Cancel select' : 'Select'}
+                      </IonButton>
+                    </div>
+                  </div>
+                  <div className="inline-row wrap">
+                    <span className="status-pill tone-info">Photos: {mediaAlbums.photos.length}</span>
+                    <span className="status-pill tone-warning">Videos: {mediaAlbums.videos.length}</span>
+                    <span className="status-pill tone-neutral">Audio: {mediaAlbums.audios.length}</span>
+                  </div>
+                  <IonSegment
+                    value={mediaFilter}
+                    onIonChange={(segmentEvent) =>
+                      setMediaFilter((segmentEvent.detail.value as 'ALL' | 'PHOTO' | 'VIDEO' | 'AUDIO') || 'ALL')
+                    }
+                  >
+                    <IonSegmentButton value="ALL">All</IonSegmentButton>
+                    <IonSegmentButton value="PHOTO">Photos</IonSegmentButton>
+                    <IonSegmentButton value="VIDEO">Videos</IonSegmentButton>
+                    <IonSegmentButton value="AUDIO">Audio</IonSegmentButton>
+                  </IonSegment>
+                  {mediaSelectMode && selectedMediaIds.length > 0 ? (
+                    <div className="inline-row wrap">
+                      <span className="muted-text">{selectedMediaIds.length} selected</span>
+                      <IonButton size="small" color="danger" fill="outline" disabled={deletingMedia} onClick={deleteSelectedMedia}>
+                        {deletingMedia ? 'Deleting...' : 'Delete selected'}
+                      </IonButton>
+                    </div>
+                  ) : null}
+                  {!filteredMedia.length ? <p className="muted-text">No media uploaded yet.</p> : null}
                   <div className="event-list">
-                    {media.map((asset) => (
+                    {filteredMedia.map((asset) => (
                       <article className="event-list-item static stack" key={asset.id}>
                         <div className="row-between">
-                          <p className="event-title">{asset.fileName}</p>
+                          <div className="inline-row">
+                            {mediaSelectMode ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedMediaIds.includes(asset.id)}
+                                onChange={() => toggleSelectMedia(asset.id)}
+                              />
+                            ) : null}
+                            <p className="event-title">{asset.fileName}</p>
+                          </div>
                           <span className={'status-pill tone-info'}>{asset.type}</span>
                         </div>
                         <p className="event-subline">Guest: {asset.guestName || 'Unknown'} - {formatDateTime(asset.createdAt)}</p>
-                        <a href={asset.filePath} target="_blank" rel="noreferrer" className="inline-link">Open file</a>
+                        {String(asset.type).toUpperCase() === 'PHOTO' ? (
+                          <button className="inline-link" onClick={() => setLightboxPhoto(asset)}>
+                            Open photo
+                          </button>
+                        ) : null}
+                        {String(asset.type).toUpperCase() === 'VIDEO' ? (
+                          <video controls preload="metadata" style={{ width: '100%', borderRadius: 12 }}>
+                            <source src={asset.filePath} />
+                          </video>
+                        ) : null}
+                        {String(asset.type).toUpperCase() === 'AUDIO' ? (
+                          <audio controls preload="metadata" style={{ width: '100%' }}>
+                            <source src={asset.filePath} />
+                          </audio>
+                        ) : null}
+                        <div className="inline-row wrap">
+                          <IonButton size="small" fill="outline" disabled={downloadingMedia} onClick={() => downloadSingleMedia(asset)}>
+                            Download
+                          </IonButton>
+                          <IonButton size="small" color="danger" fill="outline" disabled={deletingMedia} onClick={() => deleteSingleMedia(asset.id)}>
+                            Delete
+                          </IonButton>
+                        </div>
                       </article>
                     ))}
                   </div>
+                  {lightboxPhoto ? (
+                    <div className="surface-card">
+                      <div className="row-between">
+                        <h3>{lightboxPhoto.fileName}</h3>
+                        <IonButton size="small" fill="clear" onClick={() => setLightboxPhoto(null)}>Close</IonButton>
+                      </div>
+                      <img
+                        src={lightboxPhoto.filePath}
+                        alt={lightboxPhoto.fileName}
+                        style={{ width: '100%', borderRadius: 14 }}
+                      />
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -643,18 +895,30 @@ const EventDetailsPage = () => {
                         <span>Description</span>
                         <textarea className="native-input native-textarea" value={newItinerary.description} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, description: inputEvent.target.value }))} />
                       </label>
-                      <label className="field">
-                        <span>Starts at</span>
-                        <input className="native-input" type="datetime-local" value={newItinerary.startsAt} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, startsAt: inputEvent.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>Ends at</span>
-                        <input className="native-input" type="datetime-local" value={newItinerary.endsAt} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, endsAt: inputEvent.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>Location</span>
-                        <input className="native-input" value={newItinerary.location} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, location: inputEvent.target.value }))} />
-                      </label>
+                      <IonButton
+                        size="small"
+                        fill="outline"
+                        type="button"
+                        onClick={() => setShowItineraryOptionalFields((prev) => !prev)}
+                      >
+                        {showItineraryOptionalFields ? 'Hide optional date/time/location' : 'Add optional date/time/location'}
+                      </IonButton>
+                      {showItineraryOptionalFields ? (
+                        <>
+                          <label className="field">
+                            <span>Starts at (optional)</span>
+                            <input className="native-input" type="datetime-local" value={newItinerary.startsAt} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, startsAt: inputEvent.target.value }))} />
+                          </label>
+                          <label className="field">
+                            <span>Ends at (optional)</span>
+                            <input className="native-input" type="datetime-local" value={newItinerary.endsAt} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, endsAt: inputEvent.target.value }))} />
+                          </label>
+                          <label className="field">
+                            <span>Location (optional)</span>
+                            <input className="native-input" value={newItinerary.location} onChange={(inputEvent) => setNewItinerary((prev) => ({ ...prev, location: inputEvent.target.value }))} />
+                          </label>
+                        </>
+                      ) : null}
                       <IonButton className="solid-cta" type="submit" expand="block" disabled={savingItinerary}>
                         {savingItinerary ? 'Adding...' : 'Add itinerary item'}
                       </IonButton>
@@ -701,8 +965,8 @@ const EventDetailsPage = () => {
               {activeTab === 'invites' ? (
                 <>
                   <section className="surface-card">
-                    <h3>Send WhatsApp invites</h3>
-                    <p className="muted-text">One per line: phone OR name,phone OR name,phone,email.</p>
+                    <h3>Bulk invite studio</h3>
+                    <p className="muted-text">Professional mode: paste lines now, CSV and contacts sync hooks are ready for the next iteration.</p>
                     <div className="inline-row wrap">
                       <span className="status-pill tone-neutral">Total: {inviteStats.total}</span>
                       <span className="status-pill tone-warning">Sent: {inviteStats.sent}</span>
@@ -710,6 +974,14 @@ const EventDetailsPage = () => {
                       <span className="status-pill tone-success">Responded: {inviteStats.responded}</span>
                       <span className="status-pill tone-danger">Expired: {inviteStats.expired}</span>
                     </div>
+                    {inviteValidation ? (
+                      <div className="inline-row wrap">
+                        <span className="status-pill tone-neutral">Parsed: {inviteValidation.total}</span>
+                        <span className="status-pill tone-success">Valid: {inviteValidation.valid}</span>
+                        <span className="status-pill tone-danger">Invalid: {inviteValidation.invalid}</span>
+                        <span className="status-pill tone-warning">Duplicates: {inviteValidation.duplicates}</span>
+                      </div>
+                    ) : null}
                     <label className="field">
                       <span>Invite lines</span>
                       <textarea className="native-input native-textarea" value={inviteLines} placeholder="+233xxxxxxxxx&#10;Ama,+233xxxxxxxxx,ama@email.com" onChange={(inputEvent) => setInviteLines(inputEvent.target.value)} />
@@ -724,8 +996,8 @@ const EventDetailsPage = () => {
                         <option value={720}>30 days</option>
                       </select>
                     </label>
-                    <IonButton className="solid-cta" expand="block" disabled={sendingInvites} onClick={sendInvites}>
-                      {sendingInvites ? 'Sending...' : 'Send invites'}
+                    <IonButton className="solid-cta" expand="block" disabled={sendingInvites || validatingInvites} onClick={sendInvites}>
+                      {validatingInvites ? 'Validating...' : sendingInvites ? 'Sending...' : 'Validate and send invites'}
                     </IonButton>
                   </section>
 

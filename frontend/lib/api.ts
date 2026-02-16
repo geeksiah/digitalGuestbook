@@ -164,6 +164,8 @@ export const publicApi = {
   getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/public/event/token/${token}`),
   getRsvpInvite: (token: string) => axios.get(`${API_BASE_URL}/api/public/rsvp-invite/${token}`),
   resolveDomain: (host: string) => axios.get(`${API_BASE_URL}/api/public/domain/${encodeURIComponent(host)}`),
+  checkMobileVersion: (params: { platform: 'android' | 'ios'; version: string }) =>
+    axios.get(`${API_BASE_URL}/api/public/mobile-version-check`, { params }),
   getItinerary: (slug: string, since?: string) =>
     axios.get(`${API_BASE_URL}/api/public/event/${slug}/itinerary`, {
       params: since ? { since } : undefined,
@@ -280,6 +282,15 @@ export const adminApi = {
   getPayouts: (params?: any) => api.get('/admin/payouts', { params }),
   processPayout: (id: string, data: any) => api.post(`/admin/payouts/${id}/process`, data),
   rejectPayout: (id: string, reason: string) => api.post(`/admin/payouts/${id}/reject`, { reason }),
+  getPendingApprovals: () => api.get('/admin/events/pending-approvals'),
+  approveEvent: (eventId: string) => api.post(`/admin/events/${eventId}/approve`, {}),
+  rejectEvent: (eventId: string, reason: string) => api.post(`/admin/events/${eventId}/reject`, { reason }),
+  createPushCampaign: (data: any) => api.post('/admin/push-campaigns', data),
+  listPushCampaigns: () => api.get('/admin/push-campaigns'),
+  sendPushCampaignNow: (id: string) => api.post(`/admin/push-campaigns/${id}/send-now`, {}),
+  schedulePushCampaign: (id: string, scheduledAt: string) =>
+    api.post(`/admin/push-campaigns/${id}/schedule`, { scheduledAt }),
+  getPushCampaignReport: (id: string) => api.get(`/admin/push-campaigns/${id}/report`),
   users: (params?: any) => api.get('/admin/users', { params }),
 };
 
@@ -384,8 +395,20 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
       params, headers: ownerHeaders(),
     }),
+  createEvent: (data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events`, data, {
+      headers: ownerHeaders(),
+    }),
   getEvent: (eventId: string) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, {
+      headers: ownerHeaders(),
+    }),
+  updateEvent: (eventId: string, data: any) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, data, {
+      headers: ownerHeaders(),
+    }),
+  getEventApproval: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/approval`, {
       headers: ownerHeaders(),
     }),
   getPayouts: (params?: any) =>
@@ -433,6 +456,10 @@ export const ownerDashboardApi = {
     axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps/${rsvpId}/review`, { status }, {
       headers: ownerHeaders(),
     }),
+  updateRsvpStatus: (eventId: string, rsvpId: string, status: 'PENDING' | 'APPROVED' | 'REJECTED', reason?: string) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvps/${rsvpId}/status`, { status, reason }, {
+      headers: ownerHeaders(),
+    }),
   getMedia: (eventId: string) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/media`, {
       headers: ownerHeaders(),
@@ -461,6 +488,10 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites`, {
       headers: ownerHeaders(),
     }),
+  validateRsvpInvites: (eventId: string, invites: Array<{ name?: string; phone?: string; email?: string }>) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites/validate`, { invites }, {
+      headers: ownerHeaders(),
+    }),
   sendRsvpInvites: (eventId: string, data: any) =>
     axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites/batch`, data, {
       headers: ownerHeaders(),
@@ -479,6 +510,46 @@ export const ownerDashboardApi = {
     }),
   getGiftOrders: (eventId: string) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/gift-orders`, {
+      headers: ownerHeaders(),
+    }),
+  getNotificationPreferences: () =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/notification-preferences`, {
+      headers: ownerHeaders(),
+    }),
+  updateNotificationPreferences: (data: {
+    notificationsEnabled?: boolean;
+    marketingEnabled?: boolean;
+    soundEnabled?: boolean;
+    hapticsEnabled?: boolean;
+  }) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/notification-preferences`, data, {
+      headers: ownerHeaders(),
+    }),
+  registerDevice: (data: {
+    platform: string;
+    oneSignalPlayerId?: string;
+    appVersion?: string;
+    deviceModel?: string;
+    osVersion?: string;
+  }) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/devices/register`, data, {
+      headers: ownerHeaders(),
+    }),
+  unregisterDevice: (oneSignalPlayerId?: string) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/devices/unregister`, { oneSignalPlayerId }, {
+      headers: ownerHeaders(),
+    }),
+  getNotifications: (params?: { page?: number; limit?: number }) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/notifications`, {
+      params,
+      headers: ownerHeaders(),
+    }),
+  markNotificationRead: (id: string) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/notifications/${id}/read`, {}, {
+      headers: ownerHeaders(),
+    }),
+  getSupportContent: () =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/support-content`, {
       headers: ownerHeaders(),
     }),
 };

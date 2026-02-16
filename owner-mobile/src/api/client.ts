@@ -61,14 +61,53 @@ export const ownerAuthApi = {
 export const ownerDashboardApi = {
   stats: () => api.get<{ stats: OwnerStats }>('/owner-dashboard/stats'),
   events: () => api.get<{ events: OwnerEvent[] }>('/owner-dashboard/events'),
+  createEvent: (payload: {
+    name: string;
+    slug: string;
+    description?: string;
+    date: string;
+    endDate?: string;
+    timezone?: string;
+    defaultCurrency?: string;
+    venue?: string;
+    ownerName?: string;
+    ownerEmail?: string;
+    ownerPhone?: string;
+    organizationName?: string;
+  }) => api.post<{ event: OwnerEvent }>('/owner-dashboard/events', payload),
   event: (eventId: string) => api.get<{ event: OwnerEvent }>('/owner-dashboard/events/' + eventId),
+  updateEvent: (eventId: string, payload: Record<string, unknown>) =>
+    api.patch<{ event: OwnerEvent }>('/owner-dashboard/events/' + eventId, payload),
+  eventApproval: (eventId: string) =>
+    api.get<{
+      approval: {
+        status: string;
+        submittedAt: string | null;
+        reviewedAt: string | null;
+        rejectionReason: string | null;
+      };
+    }>('/owner-dashboard/events/' + eventId + '/approval'),
   rsvps: (eventId: string, status?: string) =>
     api.get<{ rsvps: RSVP[] }>('/owner-dashboard/events/' + eventId + '/rsvps', {
       params: status && status !== 'all' ? { status } : undefined
     }),
   reviewRsvp: (eventId: string, rsvpId: string, status: 'APPROVED' | 'REJECTED') =>
     api.post('/owner-dashboard/events/' + eventId + '/rsvps/' + rsvpId + '/review', { status }),
+  updateRsvpStatus: (
+    eventId: string,
+    rsvpId: string,
+    status: 'PENDING' | 'APPROVED' | 'REJECTED',
+    reason?: string
+  ) => api.patch('/owner-dashboard/events/' + eventId + '/rsvps/' + rsvpId + '/status', { status, reason }),
   media: (eventId: string) => api.get<{ media: MediaAsset[] }>('/owner-dashboard/events/' + eventId + '/media'),
+  deleteMedia: (mediaId: string) => api.delete('/media/' + mediaId),
+  bulkDeleteMedia: (mediaIds: string[]) => api.post('/media/bulk-delete', { mediaIds }),
+  downloadMedia: (mediaId: string) => api.get('/media/' + mediaId + '/download', { responseType: 'blob' }),
+  downloadAllMedia: (eventId: string, type?: 'PHOTO' | 'VIDEO' | 'AUDIO') =>
+    api.get('/media/event/' + eventId + '/download-all', {
+      params: type ? { type } : undefined,
+      responseType: 'blob',
+    }),
   checkins: (eventId: string) =>
     api.get<{ checkIns: CheckIn[] }>('/owner-dashboard/events/' + eventId + '/checkins'),
   tickets: (eventId: string) =>
@@ -86,6 +125,19 @@ export const ownerDashboardApi = {
     api.delete('/owner-dashboard/events/' + eventId + '/domains/' + domainId),
   invites: (eventId: string) =>
     api.get<{ invites: RsvpInvite[] }>('/owner-dashboard/events/' + eventId + '/rsvp-invites'),
+  validateInvites: (eventId: string, invites: Array<{ name?: string; phone?: string; email?: string }>) =>
+    api.post<{
+      summary: { total: number; valid: number; invalid: number; duplicates: number };
+      rows: Array<{
+        index: number;
+        name: string | null;
+        phone: string;
+        email: string | null;
+        valid: boolean;
+        errors: string[];
+        duplicate: boolean;
+      }>;
+    }>('/owner-dashboard/events/' + eventId + '/rsvp-invites/validate', { invites }),
   sendInvites: (
     eventId: string,
     payload: { invites: Array<{ name?: string; phone: string; email?: string }>; expiresInHours?: number }
@@ -108,6 +160,40 @@ export const ownerDashboardApi = {
     percentageCharge?: number;
   }) => api.post<{ wallet: Wallet }>('/owner-dashboard/wallet/paystack/connect', payload),
   payouts: () => api.get<PayoutResponse>('/owner-dashboard/payouts'),
+  notificationPreferences: () =>
+    api.get<{
+      preferences: {
+        notificationsEnabled: boolean;
+        marketingEnabled: boolean;
+        soundEnabled: boolean;
+        hapticsEnabled: boolean;
+      };
+    }>('/owner-dashboard/notification-preferences'),
+  updateNotificationPreferences: (payload: {
+    notificationsEnabled?: boolean;
+    marketingEnabled?: boolean;
+    soundEnabled?: boolean;
+    hapticsEnabled?: boolean;
+  }) => api.patch('/owner-dashboard/notification-preferences', payload),
+  registerDevice: (payload: {
+    platform: string;
+    oneSignalPlayerId?: string;
+    appVersion?: string;
+    deviceModel?: string;
+    osVersion?: string;
+  }) => api.post('/owner-dashboard/devices/register', payload),
+  unregisterDevice: (oneSignalPlayerId?: string) =>
+    api.post('/owner-dashboard/devices/unregister', { oneSignalPlayerId }),
+  notifications: (params?: { page?: number; limit?: number }) =>
+    api.get('/owner-dashboard/notifications', { params }),
+  markNotificationRead: (notificationId: string) =>
+    api.patch('/owner-dashboard/notifications/' + notificationId + '/read', {}),
+  supportContent: () =>
+    api.get<{
+      supportEmail: string | null;
+      supportWhatsAppNumber: string | null;
+      faq: Array<{ question: string; answer: string }>;
+    }>('/owner-dashboard/support-content'),
   requestPayout: (payload: {
     eventId: string;
     requestedAmount: number;
@@ -148,6 +234,16 @@ export const itineraryApi = {
     api.post('/itinerary/events/' + eventId + '/items/reorder', { itemIds }),
   createMcSession: (eventId: string) =>
     api.post<{ sessionToken: string }>('/itinerary/events/' + eventId + '/mc-session', {})
+};
+
+export const publicApi = {
+  checkMobileVersion: (platform: 'android' | 'ios', version: string) =>
+    api.get<{
+      status: 'UP_TO_DATE' | 'UPDATE_AVAILABLE' | 'UPDATE_REQUIRED';
+      latestVersion: string;
+      minimumVersion: string;
+      storeUrl: string | null;
+    }>('/public/mobile-version-check', { params: { platform, version } }),
 };
 
 export default api;

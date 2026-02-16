@@ -12,6 +12,8 @@
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android",
     "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "assets:check": "powershell -ExecutionPolicy Bypass -File ./scripts/prepare-brand-assets.ps1",
+    "assets:generate": "npm run assets:check && npx @capacitor/assets generate --android --ios",
     "android:live": "concurrently -n DEV,CAP \"npm run dev:host\" \"wait-on tcp:5174 && npx cap run android -l --host 10.0.2.2 --port 5174\"",
     "ios:live": "concurrently -n DEV,CAP \"npm run dev:host\" \"wait-on tcp:5174 && npx cap run ios -l --host localhost --port 5174\""
   },

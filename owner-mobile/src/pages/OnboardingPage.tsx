@@ -40,6 +40,15 @@ const OnboardingPage = () => {
           <p className="eyebrow">Owner App</p>
           <h1>{current.title}</h1>
           <p className="body">{current.body}</p>
+          <div className="surface-card">
+            <h3>What you get</h3>
+            <p className="muted-text">Fast operations, clear data, and low-friction decisions for event teams.</p>
+            <div className="inline-row wrap">
+              <span className="status-pill tone-info">Realtime insights</span>
+              <span className="status-pill tone-success">Smooth approvals</span>
+              <span className="status-pill tone-warning">Wallet-ready payouts</span>
+            </div>
+          </div>
 
           <div className="steps-row" aria-label="Onboarding progress">
             {steps.map((_, i) => (

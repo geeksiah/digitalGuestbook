@@ -32,7 +32,10 @@ model Admin {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  auditLogs AuditLog[]
+  auditLogs             AuditLog[]
+  reviewedEvents        Event[]                @relation("EventApprovalReviewer")
+  pushCampaigns         PushCampaign[]         @relation("PushCampaignCreatedByAdmin")
+  rsvpStatusAudits      RSVPStatusAudit[]      @relation("RsvpStatusChangedByAdmin")
   passwordResetRequests PasswordResetRequest[]
 }
 
@@ -61,10 +64,15 @@ model Owner {
   lastLoginAt DateTime?
 
   // Relations
-  events Event[]
-  wallet OwnerWallet?
-  passwordResetRequests PasswordResetRequest[]
-  sentRsvpInvites RsvpInvite[]
+  events                 Event[]
+  wallet                 OwnerWallet?
+  passwordResetRequests  PasswordResetRequest[]
+  sentRsvpInvites        RsvpInvite[]
+  notificationPreference OwnerNotificationPreference?
+  devices                OwnerDevice[]
+  notifications          OwnerNotification[]
+  pushDeliveries         PushCampaignDelivery[]
+  rsvpStatusAudits       RSVPStatusAudit[]            @relation("RsvpStatusChangedByOwner")
 }
 
 // Owner Wallet Configuration (for payouts across all events)
@@ -84,13 +92,13 @@ model OwnerWallet {
   mobileNumber   String?
 
   // Digital Wallets
-  paypalEmail        String?
-  stripeAccountId    String? // Stripe Connect account
-  paystackSubaccount String?
-  paystackRecipientCode String?
-  paystackRecipientType String?
-  paystackRecipientName String?
-  paystackRecipientBankCode String?
+  paypalEmail                String?
+  stripeAccountId            String? // Stripe Connect account
+  paystackSubaccount         String?
+  paystackRecipientCode      String?
+  paystackRecipientType      String?
+  paystackRecipientName      String?
+  paystackRecipientBankCode  String?
   paystackRecipientUpdatedAt DateTime?
 
   // Payout Preferences
@@ -110,21 +118,78 @@ model OwnerWallet {
   owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
 
-// Password Reset Requests (pending admin approval)
-model PasswordResetRequest {
-  id        String   @id @default(uuid())
-  ownerId   String
-  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
-  reason    String?  // Owner's reason for requesting reset
-  newPasswordHash String? // Set when admin approves (temporary until owner sets new password)
-  approvedBy String? // Admin ID who approved/rejected
-  rejectedReason String? // Reason for rejection
-  expiresAt DateTime? // Expiration for approved requests
+model OwnerNotificationPreference {
+  id      String @id @default(uuid())
+  ownerId String @unique
+
+  notificationsEnabled Boolean @default(true)
+  marketingEnabled     Boolean @default(true)
+  soundEnabled         Boolean @default(true)
+  hapticsEnabled       Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+model OwnerDevice {
+  id      String @id @default(uuid())
+  ownerId String
+
+  platform          String // android | ios | web
+  oneSignalPlayerId String?
+  appVersion        String?
+  deviceModel       String?
+  osVersion         String?
+  isActive          Boolean  @default(true)
+  lastSeenAt        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner      Owner                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deliveries PushCampaignDelivery[]
+
+  @@index([ownerId, isActive])
+  @@index([oneSignalPlayerId])
+}
+
+model OwnerNotification {
+  id      String @id @default(uuid())
+  ownerId String
+
+  type      String    @default("SYSTEM")
+  title     String
+  body      String
+  deepLink  String?
+  dataJson  String?
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  owner      Owner                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deliveries PushCampaignDelivery[]
+
+  @@index([ownerId, createdAt])
+  @@index([ownerId, isRead])
+}
+
+// Password Reset Requests (pending admin approval)
+model PasswordResetRequest {
+  id              String    @id @default(uuid())
+  ownerId         String
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reason          String? // Owner's reason for requesting reset
+  newPasswordHash String? // Set when admin approves (temporary until owner sets new password)
+  approvedBy      String? // Admin ID who approved/rejected
+  rejectedReason  String? // Reason for rejection
+  expiresAt       DateTime? // Expiration for approved requests
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  owner Owner  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   admin Admin? @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
@@ -144,6 +209,7 @@ model Event {
   endDate     DateTime?
   timezone    String    @default("UTC")
   venue       String?
+  defaultCurrency String @default("USD")
 
   // Social metadata
   socialTitle       String?
@@ -174,15 +240,22 @@ model Event {
   checkInEnabled    Boolean @default(true)
 
   // Invitation-Only Flag (Critical per SRS Section 4.3)
-  invitationOnly Boolean @default(false)
+  invitationOnly   Boolean @default(false)
   strictInviteOnly Boolean @default(false)
 
+  // Owner submission approval workflow
+  approvalStatus            String    @default("APPROVED") // PENDING_REVIEW | APPROVED | REJECTED
+  approvalSubmittedAt       DateTime?
+  approvalReviewedAt        DateTime?
+  approvalReviewedByAdminId String?
+  approvalRejectionReason   String?
+
   // Itinerary/Gifting toggles
-  itineraryEnabled Boolean @default(false)
-  itineraryTemplateId String?
-  giftingEnabled Boolean @default(false)
+  itineraryEnabled        Boolean @default(false)
+  itineraryTemplateId     String?
+  giftingEnabled          Boolean @default(false)
   itineraryPageTemplateId String?
-  giftingPageTemplateId String?
+  giftingPageTemplateId   String?
 
   // Template Assignments
   invitationTemplateId     String?
@@ -193,8 +266,8 @@ model Event {
   guestbookPhotoTemplateId String?
   boothTemplateId          String?
   thankYouTemplateId       String?
-liveLandingTemplateId    String?  // Landing page during LIVE phase
-  eventEndedTemplateId     String?  // Landing page after POST_EVENT
+  liveLandingTemplateId    String? // Landing page during LIVE phase
+  eventEndedTemplateId     String? // Landing page after POST_EVENT
 
   // Event Owner Portal Access
   ownerAccessToken String @unique @default(uuid())
@@ -243,22 +316,23 @@ liveLandingTemplateId    String?  // Landing page during LIVE phase
   updatedAt  DateTime @updatedAt
 
   // Relations
-  invitationTemplate     Template? @relation("InvitationTemplate", fields: [invitationTemplateId], references: [id])
-  rsvpTemplate           Template? @relation("RsvpTemplate", fields: [rsvpTemplateId], references: [id])
-  guestbookTemplate      Template? @relation("GuestbookTemplate", fields: [guestbookTemplateId], references: [id])
-  guestbookVideoTemplate Template? @relation("GuestbookVideoTemplate", fields: [guestbookVideoTemplateId], references: [id])
-  guestbookAudioTemplate Template? @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
-  guestbookPhotoTemplate Template? @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
-  boothTemplate          Template? @relation("BoothTemplate", fields: [boothTemplateId], references: [id])
-  boothVideoTemplate     Template? @relation("BoothVideoTemplate", fields: [boothVideoTemplateId], references: [id])
-  boothAudioTemplate     Template? @relation("BoothAudioTemplate", fields: [boothAudioTemplateId], references: [id])
-  boothPhotoTemplate     Template? @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
-  thankYouTemplate       Template? @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
-  liveLandingTemplate    Template? @relation("LiveLandingTemplate", fields: [liveLandingTemplateId], references: [id])
-  eventEndedTemplate     Template? @relation("EventEndedTemplate", fields: [eventEndedTemplateId], references: [id])
-  itineraryPageTemplate  Template? @relation("ItineraryPageTemplate", fields: [itineraryPageTemplateId], references: [id])
-  giftingPageTemplate    Template? @relation("GiftingPageTemplate", fields: [giftingPageTemplateId], references: [id])
-  itineraryTemplate      ItineraryTemplate? @relation("EventSelectedItineraryTemplate", fields: [itineraryTemplateId], references: [id])
+  approvalReviewedByAdmin Admin?             @relation("EventApprovalReviewer", fields: [approvalReviewedByAdminId], references: [id], onDelete: SetNull)
+  invitationTemplate      Template?          @relation("InvitationTemplate", fields: [invitationTemplateId], references: [id])
+  rsvpTemplate            Template?          @relation("RsvpTemplate", fields: [rsvpTemplateId], references: [id])
+  guestbookTemplate       Template?          @relation("GuestbookTemplate", fields: [guestbookTemplateId], references: [id])
+  guestbookVideoTemplate  Template?          @relation("GuestbookVideoTemplate", fields: [guestbookVideoTemplateId], references: [id])
+  guestbookAudioTemplate  Template?          @relation("GuestbookAudioTemplate", fields: [guestbookAudioTemplateId], references: [id])
+  guestbookPhotoTemplate  Template?          @relation("GuestbookPhotoTemplate", fields: [guestbookPhotoTemplateId], references: [id])
+  boothTemplate           Template?          @relation("BoothTemplate", fields: [boothTemplateId], references: [id])
+  boothVideoTemplate      Template?          @relation("BoothVideoTemplate", fields: [boothVideoTemplateId], references: [id])
+  boothAudioTemplate      Template?          @relation("BoothAudioTemplate", fields: [boothAudioTemplateId], references: [id])
+  boothPhotoTemplate      Template?          @relation("BoothPhotoTemplate", fields: [boothPhotoTemplateId], references: [id])
+  thankYouTemplate        Template?          @relation("ThankYouTemplate", fields: [thankYouTemplateId], references: [id])
+  liveLandingTemplate     Template?          @relation("LiveLandingTemplate", fields: [liveLandingTemplateId], references: [id])
+  eventEndedTemplate      Template?          @relation("EventEndedTemplate", fields: [eventEndedTemplateId], references: [id])
+  itineraryPageTemplate   Template?          @relation("ItineraryPageTemplate", fields: [itineraryPageTemplateId], references: [id])
+  giftingPageTemplate     Template?          @relation("GiftingPageTemplate", fields: [giftingPageTemplateId], references: [id])
+  itineraryTemplate       ItineraryTemplate? @relation("EventSelectedItineraryTemplate", fields: [itineraryTemplateId], references: [id])
 
   rsvps                RSVP[]
   invitations          Invitation[]
@@ -283,6 +357,10 @@ liveLandingTemplateId    String?  // Landing page during LIVE phase
   itineraryMcSessions  ItineraryMcSession[]
   giftOrders           GiftOrder[]
   giftPackages         EventGiftPackage[]
+  rsvpStatusAudits     RSVPStatusAudit[]
+
+  @@index([ownerId, approvalStatus])
+  @@index([approvalStatus, approvalSubmittedAt])
 }
 
 // ============================================
@@ -409,27 +487,27 @@ model PayoutRequest {
   payoutMethod    String // bank | mobile | paypal | stripe | paystack
 
   // Status
-  status String @default("PENDING") // PENDING | PROCESSING | FULFILLED | DELAYED | REJECTED
+  status       String @default("PENDING") // PENDING | PROCESSING | FULFILLED | DELAYED | REJECTED
   ledgerStatus String @default("REQUESTED") // REQUESTED | TRANSFER_PENDING | TRANSFER_SUCCESS | TRANSFER_FAILED | TRANSFER_REVERSED | REJECTED | MANUAL_REVIEW
 
   // Processing Info
-  processedAt     DateTime?
-  processedBy     String? // Admin ID
-  payoutReference String? @unique // Internal payout reference
-  transactionRef  String? // External payout reference (legacy/manual)
-  gateway         String? // paystack | manual
-  gatewayTransferCode String? @unique
-  gatewayTransferReference String? @unique
-  gatewayRecipientCode String?
-  gatewayStatus   String?
-  reconciliationVersion Int @default(0)
-  webhookLastEvent String?
-  webhookLastPayload String?
-  failureCode     String?
-  failureMessage  String?
-  reconciledAt    DateTime?
-  rejectionReason String?
-  requestedByOwnerId String?
+  processedAt              DateTime?
+  processedBy              String? // Admin ID
+  payoutReference          String?   @unique // Internal payout reference
+  transactionRef           String? // External payout reference (legacy/manual)
+  gateway                  String? // paystack | manual
+  gatewayTransferCode      String?   @unique
+  gatewayTransferReference String?   @unique
+  gatewayRecipientCode     String?
+  gatewayStatus            String?
+  reconciliationVersion    Int       @default(0)
+  webhookLastEvent         String?
+  webhookLastPayload       String?
+  failureCode              String?
+  failureMessage           String?
+  reconciledAt             DateTime?
+  rejectionReason          String?
+  requestedByOwnerId       String?
 
   // Notes
   notes String?
@@ -442,14 +520,14 @@ model PayoutRequest {
 }
 
 model PaystackWebhookEvent {
-  id          String   @id @default(uuid())
-  dedupeKey   String   @unique
-  event       String
-  reference   String?
+  id           String    @id @default(uuid())
+  dedupeKey    String    @unique
+  event        String
+  reference    String?
   transferCode String?
-  payload     String
-  processedAt DateTime?
-  createdAt   DateTime @default(now())
+  payload      String
+  processedAt  DateTime?
+  createdAt    DateTime  @default(now())
 
   @@index([event])
   @@index([reference])
@@ -553,9 +631,32 @@ model RSVP {
   updatedAt DateTime @updatedAt
 
   // Relations
-  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  invitation Invitation?
-  invites    RsvpInvite[]
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitation    Invitation?
+  invites       RsvpInvite[]
+  statusHistory RSVPStatusAudit[]
+}
+
+model RSVPStatusAudit {
+  id      String @id @default(uuid())
+  rsvpId  String
+  eventId String
+
+  fromStatus String
+  toStatus   String
+  reason     String?
+
+  changedByOwnerId String?
+  changedByAdminId String?
+  changedAt        DateTime @default(now())
+
+  rsvp           RSVP   @relation(fields: [rsvpId], references: [id], onDelete: Cascade)
+  event          Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  changedByOwner Owner? @relation("RsvpStatusChangedByOwner", fields: [changedByOwnerId], references: [id], onDelete: SetNull)
+  changedByAdmin Admin? @relation("RsvpStatusChangedByAdmin", fields: [changedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([rsvpId, changedAt])
+  @@index([eventId, changedAt])
 }
 
 // ============================================
@@ -786,16 +887,16 @@ model Invitation {
 // ============================================
 
 model BoothDownloadToken {
-  id        String   @id @default(uuid())
-  mediaId   String?  @unique // Optional: for backward compatibility with single photo downloads
-  sessionId String?  // Session identifier (deviceId + timestamp window) for multi-photo downloads
-  eventId   String   // Event ID for session-based queries
-  deviceId  String?  // Device ID for session grouping
-  token     String   @unique // Secure download token
+  id        String    @id @default(uuid())
+  mediaId   String?   @unique // Optional: for backward compatibility with single photo downloads
+  sessionId String? // Session identifier (deviceId + timestamp window) for multi-photo downloads
+  eventId   String // Event ID for session-based queries
+  deviceId  String? // Device ID for session grouping
+  token     String    @unique // Secure download token
   expiresAt DateTime // Token expiration (24 hours)
-  used      Boolean  @default(false) // Track if token has been used
+  used      Boolean   @default(false) // Track if token has been used
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   // Relations
   media MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: Cascade)
@@ -859,7 +960,7 @@ model MediaAsset {
   duration Int? // seconds (for video/audio)
 
   // Processing Status
-  status      String   @default("UPLOADING") // UPLOADING | READY | FAILED | PROCESSING_THUMBNAIL
+  status        String  @default("UPLOADING") // UPLOADING | READY | FAILED | PROCESSING_THUMBNAIL
   thumbnailPath String?
 
   // Access Mode (SRS Section 9.1)
@@ -873,12 +974,12 @@ model MediaAsset {
   updatedAt DateTime @updatedAt
 
   // Relations
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event         Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
   downloadToken BoothDownloadToken?
-@@index([eventId, type, deviceId, createdAt])
-@@index([eventId, captureMode, deviceId, createdAt])
-@@index([eventId, status])
 
+  @@index([eventId, type, deviceId, createdAt])
+  @@index([eventId, captureMode, deviceId, createdAt])
+  @@index([eventId, status])
 }
 
 // ============================================
@@ -915,6 +1016,64 @@ model Broadcast {
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
+model PushCampaign {
+  id    String @id @default(uuid())
+  title String
+  body  String
+
+  deepLink         String?
+  status           String    @default("DRAFT") // DRAFT | QUEUED | SENT | FAILED | SCHEDULED
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  createdByAdminId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  createdByAdmin Admin?                 @relation("PushCampaignCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  audiences      PushCampaignAudience[]
+  deliveries     PushCampaignDelivery[]
+
+  @@index([status, scheduledAt])
+}
+
+model PushCampaignAudience {
+  id         String @id @default(uuid())
+  campaignId String
+
+  audienceType  String // ALL_OWNERS | ACTIVE_OWNERS | PENDING_APPROVAL_OWNERS | CUSTOM_OWNER_IDS
+  audienceQuery String?
+  createdAt     DateTime @default(now())
+
+  campaign PushCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model PushCampaignDelivery {
+  id      String @id @default(uuid())
+  ownerId String
+
+  campaignId          String?
+  ownerNotificationId String?
+  deviceId            String?
+  oneSignalPlayerId   String?
+  status              String    @default("QUEUED") // QUEUED | SENT | FAILED | OPENED | CLICKED
+  failureReason       String?
+  sentAt              DateTime?
+  openedAt            DateTime?
+  clickedAt           DateTime?
+  createdAt           DateTime  @default(now())
+
+  campaign          PushCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  owner             Owner              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerNotification OwnerNotification? @relation(fields: [ownerNotificationId], references: [id], onDelete: SetNull)
+  device            OwnerDevice?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, status])
+  @@index([ownerId, status])
+  @@index([ownerNotificationId])
+}
+
 // ============================================
 // CUSTOM DOMAINS
 // ============================================
@@ -942,15 +1101,15 @@ model EventDomain {
 // ============================================
 
 model RsvpInvite {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   eventId           String
   rsvpId            String?
-  token             String   @unique
+  token             String    @unique
   inviteeName       String?
   inviteePhone      String
   inviteeEmail      String?
   providerMessageId String?
-  status            String   @default("SENT") // SENT | OPENED | RESPONDED | EXPIRED
+  status            String    @default("SENT") // SENT | OPENED | RESPONDED | EXPIRED
   initialResponse   String? // YES | NO
   partySize         Int?
   note              String?
@@ -958,13 +1117,13 @@ model RsvpInvite {
   openedAt          DateTime?
   respondedAt       DateTime?
   expiresAt         DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   // Relations
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  rsvp    RSVP?  @relation(fields: [rsvpId], references: [id], onDelete: SetNull)
-  sender  Owner? @relation(fields: [sentByOwnerId], references: [id], onDelete: SetNull)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rsvp   RSVP?  @relation(fields: [rsvpId], references: [id], onDelete: SetNull)
+  sender Owner? @relation(fields: [sentByOwnerId], references: [id], onDelete: SetNull)
 
   @@index([eventId])
   @@index([status])
@@ -972,13 +1131,13 @@ model RsvpInvite {
 }
 
 model WhatsappWebhookEvent {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   provider          String // META | TWILIO
-  providerMessageId String   @unique
+  providerMessageId String    @unique
   eventType         String?
   payload           String
   processedAt       DateTime?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   @@index([provider])
 }
@@ -997,29 +1156,29 @@ model ItineraryTemplate {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  eventsUsingAsDefault Event[]             @relation("EventSelectedItineraryTemplate")
+  eventsUsingAsDefault Event[]              @relation("EventSelectedItineraryTemplate")
   items                EventItineraryItem[]
 }
 
 model ItineraryMcSession {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   eventId     String
-  token       String   @unique
+  token       String    @unique
   displayName String?
-  isActive    Boolean  @default(true)
+  isActive    Boolean   @default(true)
   expiresAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   // Relations
-  event          Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event          Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
   completedItems EventItineraryItem[] @relation("ItineraryItemCompletedBySession")
 
   @@index([eventId])
 }
 
 model EventItineraryItem {
-  id                   String   @id @default(uuid())
+  id                   String    @id @default(uuid())
   eventId              String
   templateId           String?
   title                String
@@ -1027,16 +1186,16 @@ model EventItineraryItem {
   startsAt             DateTime?
   endsAt               DateTime?
   location             String?
-  sortOrder            Int      @default(0)
-  isCompleted          Boolean  @default(false)
+  sortOrder            Int       @default(0)
+  isCompleted          Boolean   @default(false)
   completedAt          DateTime?
   completedBySessionId String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   // Relations
-  event              Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  template           ItineraryTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  event              Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  template           ItineraryTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
   completedBySession ItineraryMcSession? @relation("ItineraryItemCompletedBySession", fields: [completedBySessionId], references: [id], onDelete: SetNull)
 
   @@index([eventId, sortOrder])
@@ -1079,7 +1238,7 @@ model EventGiftPackage {
 }
 
 model GiftOrder {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   eventId          String
   guestName        String
   guestPhone       String?
@@ -1088,15 +1247,15 @@ model GiftOrder {
   note             String?
   paymentMethod    String?
   paymentReference String?
-  currency         String   @default("USD")
-  totalAmount      Float    @default(0)
+  currency         String    @default("USD")
+  totalAmount      Float     @default(0)
   cashGiftAmount   Float?
-  status           String   @default("PENDING") // PENDING | PAID | FAILED | REFUNDED | CANCELLED
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  status           String    @default("PENDING") // PENDING | PAID | FAILED | REFUNDED | CANCELLED
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // Relations
-  event Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   items GiftOrderItem[]
 
   @@index([eventId, status])
@@ -1136,12 +1295,25 @@ model SystemSettings {
   smsEnabled      Boolean @default(false)
   whatsappEnabled Boolean @default(false)
 
+  // Owner app update + support controls
+  ownerMobileLatestVersion   String?
+  ownerMobileMinimumVersion  String?
+  ownerMobileAndroidStoreUrl String?
+  ownerMobileIosStoreUrl     String?
+  supportEmail               String?
+  supportWhatsAppNumber      String?
+  faqContentJson             String?
+
+  // Push provider settings
+  oneSignalAppId  String?
+  oneSignalApiKey String?
+
   // Global commerce fee defaults
-  platformFeeMode      String  @default("PERCENTAGE") // PERCENTAGE | FIXED
-  platformFeePercent   Float   @default(5.0) // Platform fee percentage
+  platformFeeMode      String @default("PERCENTAGE") // PERCENTAGE | FIXED
+  platformFeePercent   Float  @default(5.0) // Platform fee percentage
   platformFeeFixed     Float? // Optional fixed fee amount
-  processingFeePercent Float   @default(2.9) // Processor fee percentage
-  processingFeeFixed   Float   @default(0.30) // Processor fixed fee
+  processingFeePercent Float  @default(2.9) // Processor fee percentage
+  processingFeeFixed   Float  @default(0.30) // Processor fixed fee
 
   // Default providers (reference by id)
   defaultEmailProviderId    String?

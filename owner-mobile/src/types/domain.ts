@@ -52,9 +52,14 @@ export interface OwnerEvent {
   endDate?: string | null;
   venue: string | null;
   timezone?: string;
+  defaultCurrency?: string;
   currentPhase: EventPhase;
   invitationOnly?: boolean;
   strictInviteOnly?: boolean;
+  approvalStatus?: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | string;
+  approvalSubmittedAt?: string | null;
+  approvalReviewedAt?: string | null;
+  approvalRejectionReason?: string | null;
   itineraryEnabled?: boolean;
   giftingEnabled?: boolean;
   _count: EventCounters;

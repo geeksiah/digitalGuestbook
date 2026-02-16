@@ -22,7 +22,68 @@ const phase_js_1 = require("../utils/phase.js");
 const template_helper_js_1 = require("../utils/template-helper.js");
 const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const itineraryRealtime_js_1 = require("../services/itineraryRealtime.js");
+const featureFlags_js_1 = require("../utils/featureFlags.js");
 const router = (0, express_1.Router)();
+const compareSemver = (a, b) => {
+    const parse = (input) => String(input || '0.0.0')
+        .split('.')
+        .map((part) => Number(part.replace(/[^\d]/g, '') || 0))
+        .slice(0, 3);
+    const left = parse(a);
+    const right = parse(b);
+    for (let index = 0; index < 3; index += 1) {
+        const l = left[index] || 0;
+        const r = right[index] || 0;
+        if (l > r)
+            return 1;
+        if (l < r)
+            return -1;
+    }
+    return 0;
+};
+/**
+ * GET /api/public/mobile-version-check
+ */
+router.get('/mobile-version-check', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    if (!featureFlags_js_1.featureFlags.ownerUpdateCheck) {
+        return res.json({
+            status: 'UP_TO_DATE',
+            reason: 'disabled',
+        });
+    }
+    const platformRaw = String(req.query.platform || 'android').toLowerCase();
+    const platform = platformRaw === 'ios' ? 'ios' : 'android';
+    const currentVersion = String(req.query.version || '0.0.0');
+    const settings = await prisma_js_1.default.systemSettings.findUnique({
+        where: { id: 'default' },
+        select: {
+            ownerMobileLatestVersion: true,
+            ownerMobileMinimumVersion: true,
+            ownerMobileAndroidStoreUrl: true,
+            ownerMobileIosStoreUrl: true,
+        },
+    });
+    const latestVersion = settings?.ownerMobileLatestVersion || currentVersion;
+    const minimumVersion = settings?.ownerMobileMinimumVersion || currentVersion;
+    const storeUrl = platform === 'ios'
+        ? settings?.ownerMobileIosStoreUrl || null
+        : settings?.ownerMobileAndroidStoreUrl || null;
+    let status = 'UP_TO_DATE';
+    if (compareSemver(currentVersion, minimumVersion) < 0) {
+        status = 'UPDATE_REQUIRED';
+    }
+    else if (compareSemver(currentVersion, latestVersion) < 0) {
+        status = 'UPDATE_AVAILABLE';
+    }
+    return res.json({
+        status,
+        currentVersion,
+        latestVersion,
+        minimumVersion,
+        platform,
+        storeUrl,
+    });
+}));
 // ─── Event select fields ───────────────────────────────────────────────────────
 const EVENT_PUBLIC_SELECT = {
     id: true,
