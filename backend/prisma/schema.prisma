@@ -344,7 +344,7 @@ model Event {
   ticketTypes          TicketType[]
   promoCodes           PromoCode[]
   eventPaymentGateways EventPaymentGateway[]
-  payoutWallet         PayoutWallet?
+  payoutWallet         PayoutWallet? // DEPRECATED: Use OwnerWallet via Owner relation instead
   transactions         Transaction[]
   payoutRequests       PayoutRequest[]
   reelJobs             ReelJob[]
@@ -402,7 +402,8 @@ model ReelJob {
 // EVENT OWNER PAYOUT SYSTEM
 // ============================================
 
-// Payout Wallet Configuration per Event
+// DEPRECATED: Per-event wallet is no longer used. All payouts use OwnerWallet instead.
+// Kept for data preservation - do not use in new code.
 model PayoutWallet {
   id      String @id @default(uuid())
   eventId String @unique

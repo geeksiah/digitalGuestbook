@@ -76,7 +76,7 @@ const HomePage = () => {
     <IonPage>
       <IonHeader translucent>
         <IonToolbar>
-          <IonTitle>Owner Home</IonTitle>
+          <IonTitle>Home</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -87,12 +87,19 @@ const HomePage = () => {
 
         <main className="screen-content">
           <section className="hero-card">
-            <p className="eyebrow">Welcome back</p>
-            <h2>{owner?.name || 'Event Owner'}</h2>
-            <p>Snapshot of live operations, attendance, and payout readiness for your events.</p>
-            <div className="inline-row wrap">
-              <button className="inline-link" onClick={() => router.push('/app/payouts', 'forward')}>Open payouts</button>
-              <button className="inline-link" onClick={() => router.push('/app/account', 'forward')}>Account settings</button>
+            <div className="inline-row" style={{ gap: 14 }}>
+              <div className="avatar-circle">
+                {(owner?.name || 'O').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="eyebrow">Welcome back</p>
+                <h2 style={{ fontSize: 22 }}>{owner?.name || 'Event Owner'}</h2>
+              </div>
+            </div>
+            <p>Your event operations at a glance.</p>
+            <div className="inline-row wrap" style={{ marginTop: 4 }}>
+              <button className="inline-link" onClick={() => router.push('/app/payouts', 'forward')}>Payouts</button>
+              <button className="inline-link" onClick={() => router.push('/app/analytics', 'forward')}>Analytics</button>
             </div>
           </section>
 
@@ -153,8 +160,10 @@ const HomePage = () => {
               {notifications.map((notification) => (
                 <article key={notification.id} className="event-list-item static stack">
                   <div className="row-between">
-                    <p className="event-title">{notification.title}</p>
-                    {!notification.isRead ? <span className="status-pill tone-info">New</span> : null}
+                    <div className="inline-row" style={{ gap: 8 }}>
+                      {!notification.isRead ? <span className="unread-dot" /> : null}
+                      <p className="event-title">{notification.title}</p>
+                    </div>
                   </div>
                   <p className="event-subline">{notification.body}</p>
                   <div className="inline-row wrap">

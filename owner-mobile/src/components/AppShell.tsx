@@ -10,7 +10,7 @@ import {
   homeOutline,
   calendarOutline,
   cashOutline,
-  personCircleOutline
+  ellipsisHorizontalOutline
 } from 'ionicons/icons';
 import { Redirect, Route } from 'react-router-dom';
 
@@ -19,6 +19,9 @@ import EventsPage from '../pages/EventsPage';
 import EventDetailsPage from '../pages/EventDetailsPage';
 import PayoutsPage from '../pages/PayoutsPage';
 import AccountPage from '../pages/AccountPage';
+import MorePage from '../pages/MorePage';
+import AnalyticsPage from '../pages/AnalyticsPage';
+import SupportPage from '../pages/SupportPage';
 
 const AppShell = () => {
   return (
@@ -29,6 +32,9 @@ const AppShell = () => {
         <Route path="/app/events/:eventId" component={EventDetailsPage} exact />
         <Route path="/app/payouts" component={PayoutsPage} exact />
         <Route path="/app/account" component={AccountPage} exact />
+        <Route path="/app/more" component={MorePage} exact />
+        <Route path="/app/analytics" component={AnalyticsPage} exact />
+        <Route path="/app/support" component={SupportPage} exact />
         <Route exact path="/app/profile">
           <Redirect to="/app/account" />
         </Route>
@@ -56,9 +62,9 @@ const AppShell = () => {
           <IonLabel>Payouts</IonLabel>
         </IonTabButton>
 
-        <IonTabButton tab="account" href="/app/account">
-          <IonIcon aria-hidden="true" icon={personCircleOutline} />
-          <IonLabel>Account</IonLabel>
+        <IonTabButton tab="more" href="/app/more">
+          <IonIcon aria-hidden="true" icon={ellipsisHorizontalOutline} />
+          <IonLabel>More</IonLabel>
         </IonTabButton>
       </IonTabBar>
     </IonTabs>

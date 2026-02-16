@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useMemo, useState } from 'react';
 import {
+  IonBackButton,
   IonButton,
+  IonButtons,
   IonContent,
   IonHeader,
   IonPage,
@@ -265,6 +267,7 @@ const AccountPage = () => {
     <IonPage>
       <IonHeader translucent>
         <IonToolbar>
+          <IonButtons slot="start"><IonBackButton defaultHref="/app/more" /></IonButtons>
           <IonTitle>Account</IonTitle>
         </IonToolbar>
       </IonHeader>
@@ -274,12 +277,24 @@ const AccountPage = () => {
         </IonRefresher>
 
         <main className="screen-content">
+          <section className="hero-card compact">
+            <div className="inline-row" style={{ gap: 14 }}>
+              <div className="avatar-circle lg">
+                {(owner?.name || 'O').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 style={{ fontSize: 20 }}>{owner?.name || 'Owner'}</h2>
+                <p className="event-subline">{owner?.email}</p>
+              </div>
+            </div>
+          </section>
+
           <section className="surface-card">
-            <IonSegment value={tab} onIonChange={(event) => setTab((event.detail.value as AccountTab) || 'profile')}>
+            <IonSegment scrollable value={tab} onIonChange={(event) => setTab((event.detail.value as AccountTab) || 'profile')}>
               <IonSegmentButton value="profile">Profile</IonSegmentButton>
               <IonSegmentButton value="password">Password</IonSegmentButton>
               <IonSegmentButton value="wallet">Wallet</IonSegmentButton>
-              <IonSegmentButton value="notifications">Notifications</IonSegmentButton>
+              <IonSegmentButton value="notifications">Alerts</IonSegmentButton>
               <IonSegmentButton value="support">Support</IonSegmentButton>
             </IonSegment>
           </section>
@@ -686,10 +701,8 @@ const AccountPage = () => {
             </section>
           ) : null}
 
-          <section className="surface-card">
-            <h3>Session</h3>
-            <p className="muted-text">Signed in as {owner?.email || 'Unknown owner'}</p>
-            <IonButton color="medium" expand="block" onClick={onSignOut}>
+          <section className="surface-card" style={{ marginTop: 8 }}>
+            <IonButton color="danger" fill="outline" expand="block" onClick={onSignOut}>
               Sign out
             </IonButton>
           </section>

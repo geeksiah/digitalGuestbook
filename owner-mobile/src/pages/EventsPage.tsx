@@ -18,6 +18,7 @@ import { useIonRouter } from '@ionic/react';
 import { ownerDashboardApi } from '../api/client';
 import type { OwnerEvent } from '../types/domain';
 import { phaseLabel } from '../utils/format';
+import DateFilter, { type DateRange } from '../components/DateFilter';
 
 const EventsPage = () => {
   const router = useIonRouter();
@@ -25,6 +26,7 @@ const EventsPage = () => {
   const [events, setEvents] = useState<OwnerEvent[]>([]);
   const [search, setSearch] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<'all' | 'PRE_EVENT' | 'LIVE' | 'POST_EVENT'>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createData, setCreateData] = useState({
@@ -54,6 +56,10 @@ const EventsPage = () => {
     return events.filter((event) => {
       const matchesPhase = phaseFilter === 'all' ? true : event.currentPhase === phaseFilter;
       if (!matchesPhase) return false;
+      if (dateRange.from && dateRange.to) {
+        const eventDate = new Date(event.date);
+        if (eventDate < dateRange.from || eventDate > dateRange.to) return false;
+      }
       if (!value) return true;
       return (
         event.name.toLowerCase().includes(value) ||
@@ -61,7 +67,7 @@ const EventsPage = () => {
         (event.venue || '').toLowerCase().includes(value)
       );
     });
-  }, [events, phaseFilter, search]);
+  }, [events, phaseFilter, search, dateRange]);
 
   const createEvent = async () => {
     if (!createData.name.trim() || !createData.slug.trim() || !createData.date) {
@@ -168,6 +174,8 @@ const EventsPage = () => {
             )}
           </section>
 
+          <DateFilter value={dateRange} onChange={setDateRange} />
+
           <section className="surface-card">
             <h3>Phase filter</h3>
             <IonSegment
@@ -191,7 +199,12 @@ const EventsPage = () => {
           />
 
           <section className="surface-card event-list">
-            {!filtered.length ? <p className="muted-text">No matching events.</p> : null}
+            {!filtered.length ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">{'\u{1F4C5}'}</div>
+                <p>No matching events found.</p>
+              </div>
+            ) : null}
             {filtered.map((event) => (
               <button
                 key={event.id}
@@ -201,17 +214,11 @@ const EventsPage = () => {
                 <div>
                   <p className="event-title">{event.name}</p>
                   <p className="event-subline">
-                    {new Date(event.date).toLocaleDateString()} {event.venue ? '- ' + event.venue : ''}
+                    {new Date(event.date).toLocaleDateString()}{event.venue ? ' \u00b7 ' + event.venue : ''}
                   </p>
                   <p className="event-subline">
-                    {event._count.rsvps} RSVPs - {event._count.checkIns} check-ins - {event._count.mediaAssets} media
+                    {event._count.rsvps} RSVPs &middot; {event._count.checkIns} check-ins &middot; {event._count.mediaAssets} media
                   </p>
-                  {event.approvalStatus ? (
-                    <p className="event-subline">Approval: {event.approvalStatus}</p>
-                  ) : null}
-                  {event.defaultCurrency ? (
-                    <p className="event-subline">Default currency: {event.defaultCurrency}</p>
-                  ) : null}
                 </div>
                 <span className={'phase-chip phase-' + String(event.currentPhase || '').toLowerCase()}>
                   {phaseLabel(event.currentPhase)}

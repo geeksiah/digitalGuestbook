@@ -99,8 +99,9 @@ const AuthPage = () => {
         <div className="auth-wrap">
           <div className="auth-hero">
             <div className="brand-mark">E</div>
+            <span className="brand-tagline">EventPeepo Owner</span>
             <h1>{labels.title}</h1>
-            <p>Clean, fast owner operations built for live event conditions.</p>
+            <p>Manage events, track guests, and collect payouts from one workspace.</p>
           </div>
 
           {showRegisterSwitch ? (

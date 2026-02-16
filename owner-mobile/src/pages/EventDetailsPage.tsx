@@ -611,13 +611,13 @@ const EventDetailsPage = () => {
           {!loading && event ? (
             <>
               <section className="hero-card compact">
-                <p className="eyebrow">Event</p>
-                <h2>{event.name}</h2>
-                <p>{formatDateTime(event.date)} {event.venue ? '- ' + event.venue : ''}</p>
-                <div className="inline-row">
+                <div className="row-between">
+                  <p className="eyebrow">Event</p>
                   <span className={'phase-chip phase-' + String(event.currentPhase).toLowerCase()}>{phaseLabel(event.currentPhase)}</span>
-                  <IonButton size="small" fill="outline" onClick={copyEventLink}>Copy public link</IonButton>
                 </div>
+                <h2>{event.name}</h2>
+                <p className="event-subline">{formatDateTime(event.date)}{event.venue ? ' \u00b7 ' + event.venue : ''}</p>
+                <IonButton size="small" fill="outline" onClick={copyEventLink}>Copy public link</IonButton>
               </section>
 
               <section className="surface-card">
@@ -688,10 +688,13 @@ const EventDetailsPage = () => {
                     {rsvps.map((rsvp) => (
                       <article className="event-list-item static stack" key={rsvp.id}>
                         <div className="row-between">
-                          <p className="event-title">{rsvp.primaryName}</p>
+                          <div className="inline-row" style={{ gap: 10 }}>
+                            <div className="avatar-circle sm">{(rsvp.primaryName || '?').charAt(0).toUpperCase()}</div>
+                            <p className="event-title">{rsvp.primaryName}</p>
+                          </div>
                           <span className={'status-pill ' + statusToneClass(rsvp.status)}>{rsvp.status}</span>
                         </div>
-                        <p className="event-subline">{rsvp.attendance} - {rsvp.guestCount} guest(s) - {formatDateTime(rsvp.submittedAt)}</p>
+                        <p className="event-subline">{rsvp.attendance} \u00b7 {rsvp.guestCount} guest(s) \u00b7 {formatDateTime(rsvp.submittedAt)}</p>
                         <p className="event-subline">{rsvp.email || rsvp.phone || '-'}</p>
                         <div className="inline-row wrap">
                           <IonButton

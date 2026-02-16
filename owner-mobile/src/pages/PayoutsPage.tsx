@@ -17,6 +17,7 @@ import { ownerDashboardApi } from '../api/client';
 import type { OwnerEvent, PayoutRecord, PayoutResponse, PayoutStatus } from '../types/domain';
 import { formatCurrency, formatDate, statusToneClass } from '../utils/format';
 import { getErrorMessage } from '../utils/error';
+import DateFilter, { type DateRange } from '../components/DateFilter';
 
 type PayoutFilter = 'all' | 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'DELAYED' | 'REJECTED';
 
@@ -35,6 +36,7 @@ const PayoutsPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<PayoutFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [events, setEvents] = useState<OwnerEvent[]>([]);
   const [payoutData, setPayoutData] = useState<PayoutResponse | null>(null);
   const [formData, setFormData] = useState({
@@ -74,9 +76,15 @@ const PayoutsPage = () => {
 
   const filteredPayouts = useMemo(() => {
     const list = payoutData?.payouts || [];
-    if (filter === 'all') return list;
-    return list.filter((item) => item.status === filter);
-  }, [filter, payoutData]);
+    return list.filter((item) => {
+      if (filter !== 'all' && item.status !== filter) return false;
+      if (dateRange.from && dateRange.to) {
+        const d = new Date(item.createdAt);
+        if (d < dateRange.from || d > dateRange.to) return false;
+      }
+      return true;
+    });
+  }, [filter, payoutData, dateRange]);
 
   const selectedEventBalance = useMemo(() => {
     const eventTotal = payoutData?.eventTotals.find((item) => item.eventId === formData.eventId);
@@ -128,14 +136,13 @@ const PayoutsPage = () => {
         </IonRefresher>
         <main className="screen-content">
           <section className="hero-card compact">
-            <p className="eyebrow">Payout Summary</p>
-            <h2>
+            <p className="balance-label">Available balance</p>
+            <p className="balance-amount">
               {formatCurrency('USD', payoutData?.overallTotals.availableBalance || 0)}
-            </h2>
-            <p>Available payout balance across your events</p>
-            <div className="inline-row">
-              <span>Pending: {formatCurrency('USD', payoutData?.overallTotals.pendingAmount || 0)}</span>
-              <span>Fulfilled: {formatCurrency('USD', payoutData?.overallTotals.fulfilledAmount || 0)}</span>
+            </p>
+            <div className="inline-row wrap" style={{ gap: 16, marginTop: 4 }}>
+              <span className="event-subline">Pending: {formatCurrency('USD', payoutData?.overallTotals.pendingAmount || 0)}</span>
+              <span className="event-subline">Fulfilled: {formatCurrency('USD', payoutData?.overallTotals.fulfilledAmount || 0)}</span>
             </div>
             <IonButton
               className="solid-cta"
@@ -201,6 +208,8 @@ const PayoutsPage = () => {
             </section>
           ) : null}
 
+          <DateFilter value={dateRange} onChange={setDateRange} />
+
           <section className="surface-card">
             <h3>Filter</h3>
             <IonSegment
@@ -219,7 +228,10 @@ const PayoutsPage = () => {
           <section className="surface-card">
             <h3>Payout Requests</h3>
             {!filteredPayouts.length && !loading ? (
-              <p className="muted-text">No payouts found for this filter.</p>
+              <div className="empty-state">
+                <div className="empty-state-icon">{'\u{1F4B3}'}</div>
+                <p>No payout requests yet.</p>
+              </div>
             ) : null}
             <div className="event-list">
               {filteredPayouts.map((payout: PayoutRecord) => {
@@ -231,7 +243,7 @@ const PayoutsPage = () => {
                       <span className={statusClass(payout.status)}>{payout.status}</span>
                     </div>
                     <p className="event-subline">
-                      {formatCurrency(currency, payout.requestedAmount)} - {formatDate(payout.createdAt)}
+                      {formatCurrency(currency, payout.requestedAmount)} &middot; {formatDate(payout.createdAt)}
                     </p>
                     {payout.notes ? <p className="event-subline">{payout.notes}</p> : null}
                   </article>

@@ -1,4 +1,4 @@
-import { IonContent, IonPage, IonSpinner } from '@ionic/react';
+import { IonContent, IonPage } from '@ionic/react';
 
 const LaunchGate = () => {
   return (
@@ -6,10 +6,13 @@ const LaunchGate = () => {
       <IonContent fullscreen className="launch-screen">
         <div className="launch-wrap">
           <div className="brand-mark">E</div>
-          <h1>EventPeepo Owner</h1>
-          <p>Preparing your workspace</p>
-          <p className="eyebrow">Live operations mode</p>
-          <IonSpinner name="crescent" />
+          <h1>EventPeepo</h1>
+          <p>Owner workspace</p>
+          <div className="pulse-loader">
+            <span />
+            <span />
+            <span />
+          </div>
         </div>
       </IonContent>
     </IonPage>
