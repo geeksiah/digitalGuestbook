@@ -7,7 +7,7 @@ import { authenticateOwnerAccount } from '../middleware/auth.js';
 import { calculateEventPhase } from '../utils/phase.js';
 import { featureFlags } from '../utils/featureFlags.js';
 import { z } from 'zod';
-import { sendInvitationNotifications, sendWhatsAppRsvpInvite } from '../services/notifications.js';
+import { sendInvitationNotifications, sendWhatsAppRsvpInvite, sendEmailRsvpInvite } from '../services/notifications.js';
 import { generateInvitationPass } from '../services/invitation.js';
 import {
   getOrCreateOwnerNotificationPreference,
@@ -93,9 +93,10 @@ const inviteValidateSchema = z.object({
     z.object({
       name: z.string().trim().optional(),
       phone: z.string().trim().optional(),
-      email: z.string().trim().email().optional(),
+      email: z.string().trim().optional(),
     })
   ),
+  channel: z.enum(['whatsapp', 'email', 'both']).optional().default('whatsapp'),
 });
 
 type InviteValidateRow = {
@@ -112,6 +113,7 @@ type InviteValidateRow = {
 
 const normalizePhone = (value: string | undefined) => String(value || '').replace(/[^\d+]/g, '');
 const normalizeEmail = (value: string | undefined) => String(value || '').trim().toLowerCase();
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 const transitionRsvpStatus = async ({
   eventId,
@@ -301,6 +303,22 @@ router.post('/events', asyncHandler(async (req, res) => {
   }
 
   res.status(201).json({ event });
+}));
+
+/**
+ * GET /api/owner-dashboard/events/check-slug?slug=xxx
+ * Check if a slug is available
+ */
+router.get('/events/check-slug', asyncHandler(async (req, res) => {
+  const slug = String(req.query.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if (!slug || slug.length < 2) {
+    return res.json({ available: false, slug, reason: 'Slug must be at least 2 characters' });
+  }
+  const existing = await prisma.event.findFirst({
+    where: { slug },
+    select: { id: true },
+  });
+  res.json({ available: !existing, slug });
 }));
 
 /**
@@ -979,18 +997,26 @@ router.get('/events/:eventId/rsvp-invites', asyncHandler(async (req, res) => {
   res.json({ invites });
 }));
 
-const buildInviteValidation = (invitesInput: Array<{ name?: string; phone?: string; email?: string }>) => {
+const buildInviteValidation = (invitesInput: Array<{ name?: string; phone?: string; email?: string }>, channel: string = 'whatsapp') => {
   const rows: InviteValidateRow[] = [];
   const seen = new Set<string>();
+  const needsPhone = channel === 'whatsapp' || channel === 'both';
+  const needsEmail = channel === 'email' || channel === 'both';
 
   invitesInput.forEach((invite, index) => {
     const normalizedPhone = normalizePhone(invite.phone);
     const normalizedEmail = invite.email ? normalizeEmail(invite.email) : null;
-    const key = `${normalizedPhone}::${normalizedEmail || ''}`;
+    const key = `${normalizedPhone || ''}::${normalizedEmail || ''}`;
     const errors: string[] = [];
 
-    if (!normalizedPhone) errors.push('Phone number is required');
-    if (invite.email && !normalizedEmail) errors.push('Email format is invalid');
+    if (needsPhone && !normalizedPhone) errors.push('Phone number is required');
+    if (needsEmail && !normalizedEmail) errors.push('Email is required');
+    if (normalizedPhone && normalizedPhone.replace(/[^\d]/g, '').length < 6) {
+      errors.push('Phone number format is invalid');
+    }
+    if (invite.email && (!normalizedEmail || !isValidEmail(normalizedEmail))) {
+      errors.push('Email format is invalid');
+    }
 
     const duplicate = seen.has(key);
     if (!duplicate) seen.add(key);
@@ -1026,7 +1052,7 @@ router.post('/events/:eventId/rsvp-invites/validate', asyncHandler(async (req, r
   });
   if (!event) throw new AppError('Event not found', 404);
 
-  const rows = buildInviteValidation(input.invites);
+  const rows = buildInviteValidation(input.invites, input.channel);
   const summary = rows.reduce(
     (acc, row) => {
       if (row.valid) acc.valid += 1;
@@ -1049,6 +1075,7 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
   const { eventId } = req.params;
   const validateInput = inviteValidateSchema.parse(req.body || {});
   const invitesInput = validateInput.invites;
+  const channel = validateInput.channel || 'whatsapp';
   const expiresInHours = Number(req.body?.expiresInHours || 240);
 
   if (!invitesInput.length) {
@@ -1065,38 +1092,44 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
   });
   if (!event) throw new AppError('Event not found', 404);
 
+  const sendViaWhatsApp = channel === 'whatsapp' || channel === 'both';
+  const sendViaEmail = channel === 'email' || channel === 'both';
+
   const created: any[] = [];
   const failed: Array<{ phone: string; reason: string; index: number }> = [];
   const skipped: Array<{ phone: string; reason: string; index: number }> = [];
-  const rows = buildInviteValidation(invitesInput);
+  const rows = buildInviteValidation(invitesInput, channel);
 
   for (const row of rows) {
     if (!row.valid) {
       skipped.push({
         index: row.index,
-        phone: row.phone,
+        phone: row.phone || row.email || '',
         reason: row.duplicate ? 'Duplicate invite in batch' : row.errors.join(', ') || 'Invalid invite',
       });
       continue;
     }
 
-    const inviteePhone = row.phone;
+    const inviteePhone = row.phone || null;
     const inviteeName = row.name;
     const inviteeEmail = row.email;
 
+    // Check for existing invite by phone or email
+    const existsWhere: any = { eventId, status: { in: ['SENT', 'OPENED', 'RESPONDED'] } };
+    if (inviteePhone) {
+      existsWhere.inviteePhone = inviteePhone;
+    } else if (inviteeEmail) {
+      existsWhere.inviteeEmail = inviteeEmail;
+    }
     const exists = await prisma.rsvpInvite.findFirst({
-      where: {
-        eventId,
-        inviteePhone,
-        status: { in: ['SENT', 'OPENED', 'RESPONDED'] },
-      },
+      where: existsWhere,
       select: { id: true },
     });
     if (exists) {
       skipped.push({
         index: row.index,
-        phone: inviteePhone,
-        reason: 'Invite already exists for this phone',
+        phone: inviteePhone || inviteeEmail || '',
+        reason: 'Invite already exists for this contact',
       });
       continue;
     }
@@ -1111,6 +1144,7 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
         inviteeName,
         inviteePhone,
         inviteeEmail,
+        channel,
         expiresAt,
         status: 'SENT',
         sentByOwnerId: ownerId,
@@ -1118,17 +1152,37 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
     });
 
     const inviteUrl = getInvitePublicUrl(invite.token);
+    const deliveryErrors: string[] = [];
+
     try {
-      const delivery = await sendWhatsAppRsvpInvite(inviteePhone, {
-        eventName: event.name,
-        inviteUrl,
-        token: invite.token,
-      });
-      if (!delivery.success) {
+      if (sendViaWhatsApp && inviteePhone) {
+        const waDelivery = await sendWhatsAppRsvpInvite(inviteePhone, {
+          eventName: event.name,
+          inviteUrl,
+          token: invite.token,
+        });
+        if (!waDelivery.success) {
+          deliveryErrors.push(('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed');
+        }
+      }
+
+      if (sendViaEmail && inviteeEmail) {
+        const emailDelivery = await sendEmailRsvpInvite(inviteeEmail, {
+          eventName: event.name,
+          inviteUrl,
+          token: invite.token,
+          inviteeName: inviteeName || undefined,
+        });
+        if (!emailDelivery.success) {
+          deliveryErrors.push(emailDelivery.error || 'Email send failed');
+        }
+      }
+
+      if (deliveryErrors.length && ((sendViaWhatsApp && sendViaEmail) ? deliveryErrors.length >= 2 : true)) {
         failed.push({
           index: row.index,
-          phone: inviteePhone,
-          reason: ('error' in delivery && delivery.error) ? delivery.error : 'Failed to send WhatsApp invite',
+          phone: inviteePhone || inviteeEmail || '',
+          reason: deliveryErrors.join('; '),
         });
         continue;
       }
@@ -1136,8 +1190,8 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
     } catch (error: any) {
       failed.push({
         index: row.index,
-        phone: inviteePhone,
-        reason: error?.message || 'Failed to send WhatsApp invite',
+        phone: inviteePhone || inviteeEmail || '',
+        reason: error?.message || 'Failed to send invite',
       });
     }
   }
@@ -1188,15 +1242,36 @@ router.post('/events/:eventId/rsvp-invites/:inviteId/resend', asyncHandler(async
   if (!invite) throw new AppError('Invite not found', 404);
 
   const inviteUrl = getInvitePublicUrl(invite.token);
-  const delivery = await sendWhatsAppRsvpInvite(invite.inviteePhone, {
-    eventName: event.name,
-    inviteUrl,
-    token: invite.token,
-    reminder: true,
-  });
-  if (!delivery.success) {
+  const inviteChannel = (invite as any).channel || 'whatsapp';
+  let delivered = false;
+  let lastError = '';
+
+  if ((inviteChannel === 'whatsapp' || inviteChannel === 'both') && invite.inviteePhone) {
+    const waDelivery = await sendWhatsAppRsvpInvite(invite.inviteePhone, {
+      eventName: event.name,
+      inviteUrl,
+      token: invite.token,
+      reminder: true,
+    });
+    if (waDelivery.success) delivered = true;
+    else lastError = ('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed';
+  }
+
+  if ((inviteChannel === 'email' || inviteChannel === 'both') && invite.inviteeEmail) {
+    const emailDelivery = await sendEmailRsvpInvite(invite.inviteeEmail, {
+      eventName: event.name,
+      inviteUrl,
+      token: invite.token,
+      reminder: true,
+      inviteeName: invite.inviteeName || undefined,
+    });
+    if (emailDelivery.success) delivered = true;
+    else lastError = emailDelivery.error || 'Email send failed';
+  }
+
+  if (!delivered) {
     throw new AppError(
-      ('error' in delivery && delivery.error) ? delivery.error : 'Failed to resend invite',
+      lastError || 'Failed to resend invite',
       500
     );
   }
@@ -1384,6 +1459,14 @@ router.patch('/notification-preferences', asyncHandler(async (req, res) => {
     .object({
       notificationsEnabled: z.boolean().optional(),
       marketingEnabled: z.boolean().optional(),
+      emailEnabled: z.boolean().optional(),
+      smsEnabled: z.boolean().optional(),
+      pushEnabled: z.boolean().optional(),
+      notifyRsvp: z.boolean().optional(),
+      notifyCheckIn: z.boolean().optional(),
+      notifyGift: z.boolean().optional(),
+      notifyTicketSold: z.boolean().optional(),
+      notifyMarketing: z.boolean().optional(),
       soundEnabled: z.boolean().optional(),
       hapticsEnabled: z.boolean().optional(),
     })
@@ -2014,4 +2097,3 @@ router.post('/payouts', asyncHandler(async (req, res) => {
 }));
 
 export default router;
-

@@ -65,6 +65,14 @@ export default function OwnerAccountPage() {
   const [notificationPrefs, setNotificationPrefs] = useState({
     notificationsEnabled: true,
     marketingEnabled: true,
+    emailEnabled: true,
+    smsEnabled: false,
+    pushEnabled: true,
+    notifyRsvp: true,
+    notifyCheckIn: true,
+    notifyGift: true,
+    notifyTicketSold: true,
+    notifyMarketing: true,
     soundEnabled: true,
     hapticsEnabled: true,
   });
@@ -141,11 +149,20 @@ export default function OwnerAccountPage() {
       setNotificationLoading(true);
       const response = await ownerDashboardApi.getNotificationPreferences();
       if (response.data?.preferences) {
+        const p = response.data.preferences;
         setNotificationPrefs({
-          notificationsEnabled: Boolean(response.data.preferences.notificationsEnabled),
-          marketingEnabled: Boolean(response.data.preferences.marketingEnabled),
-          soundEnabled: Boolean(response.data.preferences.soundEnabled),
-          hapticsEnabled: Boolean(response.data.preferences.hapticsEnabled),
+          notificationsEnabled: Boolean(p.notificationsEnabled),
+          marketingEnabled: Boolean(p.marketingEnabled),
+          emailEnabled: p.emailEnabled !== undefined ? Boolean(p.emailEnabled) : true,
+          smsEnabled: p.smsEnabled !== undefined ? Boolean(p.smsEnabled) : false,
+          pushEnabled: p.pushEnabled !== undefined ? Boolean(p.pushEnabled) : true,
+          notifyRsvp: p.notifyRsvp !== undefined ? Boolean(p.notifyRsvp) : true,
+          notifyCheckIn: p.notifyCheckIn !== undefined ? Boolean(p.notifyCheckIn) : true,
+          notifyGift: p.notifyGift !== undefined ? Boolean(p.notifyGift) : true,
+          notifyTicketSold: p.notifyTicketSold !== undefined ? Boolean(p.notifyTicketSold) : true,
+          notifyMarketing: p.notifyMarketing !== undefined ? Boolean(p.notifyMarketing) : true,
+          soundEnabled: Boolean(p.soundEnabled),
+          hapticsEnabled: Boolean(p.hapticsEnabled),
         });
       }
     } catch (error: any) {
@@ -757,70 +774,97 @@ export default function OwnerAccountPage() {
 
       {/* Notifications Tab */}
       {activeTab === 'notifications' && (
-        <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-          <div className="p-5 sm:p-6 border-b border-surface-200">
-            <h2 className="text-lg font-semibold text-navy-900">Notification Preferences</h2>
-            <p className="text-sm text-surface-500 mt-1">Choose what alerts you want to receive</p>
-          </div>
-
+        <div className="space-y-4">
           {notificationLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-7 w-7 border-2 border-brand-900 border-t-transparent" />
             </div>
           ) : (
-            <form onSubmit={handleNotificationSave}>
-              <div className="divide-y divide-surface-100">
-                {([
-                  {
-                    key: 'notificationsEnabled' as const,
-                    label: 'Push Notifications',
-                    description: 'Receive alerts for RSVPs, check-ins, and event updates',
-                  },
-                  {
-                    key: 'marketingEnabled' as const,
-                    label: 'Marketing & Tips',
-                    description: 'Product updates, feature announcements, and event tips',
-                  },
-                  {
-                    key: 'soundEnabled' as const,
-                    label: 'Sound',
-                    description: 'Play a sound when notifications arrive',
-                  },
-                  {
-                    key: 'hapticsEnabled' as const,
-                    label: 'Haptics',
-                    description: 'Vibrate on notification events (mobile only)',
-                  },
-                ]).map((pref) => (
-                  <label key={pref.key} htmlFor={pref.key} className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-navy-900">{pref.label}</p>
-                      <p className="text-sm text-surface-500 mt-0.5">{pref.description}</p>
-                    </div>
-                    <button
-                      type="button"
-                      id={pref.key}
-                      role="switch"
-                      aria-checked={notificationPrefs[pref.key]}
-                      onClick={() => setNotificationPrefs((prev) => ({ ...prev, [pref.key]: !prev[pref.key] }))}
-                      className={`
-                        relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200
-                        ${notificationPrefs[pref.key] ? 'bg-brand-900' : 'bg-surface-300'}
-                      `}
-                    >
-                      <span
-                        className={`
-                          inline-block h-4.5 w-4.5 rounded-full bg-white shadow-sm transform transition-transform duration-200
-                          ${notificationPrefs[pref.key] ? 'translate-x-[22px]' : 'translate-x-[3px]'}
-                        `}
-                        style={{ width: 18, height: 18 }}
-                      />
-                    </button>
-                  </label>
-                ))}
+            <form onSubmit={handleNotificationSave} className="space-y-4">
+              {/* Section A: Delivery Methods */}
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="px-5 sm:px-6 py-3.5 border-b border-surface-100 bg-brand-50/40">
+                  <h3 className="text-base font-semibold text-brand-900">Delivery Methods</h3>
+                  <p className="text-sm text-surface-500 mt-0.5">How you want to receive notifications</p>
+                </div>
+                <div className="divide-y divide-surface-100">
+                  {([
+                    { key: 'emailEnabled' as const, label: 'Email', description: 'Get notified via email' },
+                    { key: 'smsEnabled' as const, label: 'SMS', description: 'Get notified via text message' },
+                  ]).map((pref) => (
+                    <label key={pref.key} htmlFor={pref.key} className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors">
+                      <div className="min-w-0">
+                        <p className="text-base font-medium text-navy-900">{pref.label}</p>
+                        <p className="text-sm text-surface-500 mt-0.5">{pref.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        id={pref.key}
+                        role="switch"
+                        aria-checked={notificationPrefs[pref.key]}
+                        onClick={() => setNotificationPrefs((prev) => ({ ...prev, [pref.key]: !prev[pref.key] }))}
+                        className={cn(
+                          'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200',
+                          notificationPrefs[pref.key] ? 'bg-brand-900' : 'bg-surface-300'
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block rounded-full bg-white shadow-sm transform transition-transform duration-200',
+                            notificationPrefs[pref.key] ? 'translate-x-[22px]' : 'translate-x-[3px]'
+                          )}
+                          style={{ width: 18, height: 18 }}
+                        />
+                      </button>
+                    </label>
+                  ))}
+                </div>
               </div>
 
-              <div className="px-5 sm:px-6 py-4 bg-surface-50 border-t border-surface-200">
+              {/* Section B: Notification Content */}
+              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                <div className="px-5 sm:px-6 py-3.5 border-b border-surface-100 bg-brand-50/40">
+                  <h3 className="text-base font-semibold text-brand-900">Notifications</h3>
+                  <p className="text-sm text-surface-500 mt-0.5">Choose what you want to be notified about</p>
+                </div>
+                <div className="divide-y divide-surface-100">
+                  {([
+                    { key: 'notifyRsvp' as const, label: 'New RSVPs', description: 'When someone RSVPs to your event' },
+                    { key: 'notifyCheckIn' as const, label: 'Check-ins', description: 'When a guest checks in at your event' },
+                    { key: 'notifyGift' as const, label: 'Gifts Received', description: 'When a guest sends a gift or contribution' },
+                    { key: 'notifyTicketSold' as const, label: 'Ticket Sales', description: 'When a ticket is purchased for your event' },
+                    { key: 'notifyMarketing' as const, label: 'Marketing & Tips', description: 'Product updates, features, and event tips' },
+                  ]).map((pref) => (
+                    <label key={pref.key} htmlFor={pref.key} className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors">
+                      <div className="min-w-0">
+                        <p className="text-base font-medium text-navy-900">{pref.label}</p>
+                        <p className="text-sm text-surface-500 mt-0.5">{pref.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        id={pref.key}
+                        role="switch"
+                        aria-checked={notificationPrefs[pref.key]}
+                        onClick={() => setNotificationPrefs((prev) => ({ ...prev, [pref.key]: !prev[pref.key] }))}
+                        className={cn(
+                          'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200',
+                          notificationPrefs[pref.key] ? 'bg-brand-900' : 'bg-surface-300'
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block rounded-full bg-white shadow-sm transform transition-transform duration-200',
+                            notificationPrefs[pref.key] ? 'translate-x-[22px]' : 'translate-x-[3px]'
+                          )}
+                          style={{ width: 18, height: 18 }}
+                        />
+                      </button>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-1">
                 <button type="submit" disabled={loading} className="btn-primary w-full sm:w-auto">
                   {loading ? 'Saving...' : 'Save Preferences'}
                 </button>

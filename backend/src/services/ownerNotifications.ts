@@ -4,6 +4,17 @@ import { randomUUID } from 'crypto';
 type NotificationPreferenceInput = {
   notificationsEnabled?: boolean;
   marketingEnabled?: boolean;
+  // Delivery methods
+  emailEnabled?: boolean;
+  smsEnabled?: boolean;
+  pushEnabled?: boolean;
+  // Content preferences
+  notifyRsvp?: boolean;
+  notifyCheckIn?: boolean;
+  notifyGift?: boolean;
+  notifyTicketSold?: boolean;
+  notifyMarketing?: boolean;
+  // Mobile-exclusive
   soundEnabled?: boolean;
   hapticsEnabled?: boolean;
 };
@@ -24,6 +35,20 @@ type PushNotificationInput = {
   type?: string;
   campaignId?: string | null;
   isMarketing?: boolean;
+};
+
+const shouldReceiveByContentPreference = (preference: any, input: PushNotificationInput) => {
+  const type = String(input.type || '').toUpperCase();
+  if (input.isMarketing || type === 'MARKETING') {
+    return Boolean(preference.notifyMarketing) && Boolean(preference.marketingEnabled);
+  }
+  if (type === 'RSVP') return Boolean(preference.notifyRsvp);
+  if (type === 'CHECK_IN' || type === 'CHECKIN') return Boolean(preference.notifyCheckIn);
+  if (type === 'GIFT') return Boolean(preference.notifyGift);
+  if (type === 'TICKET_SOLD' || type === 'TICKETSALE' || type === 'TICKET_SALE') {
+    return Boolean(preference.notifyTicketSold);
+  }
+  return true;
 };
 
 const toSettings = async () => {
@@ -50,6 +75,14 @@ export async function getOrCreateOwnerNotificationPreference(ownerId: string) {
       ownerId,
       notificationsEnabled: true,
       marketingEnabled: true,
+      emailEnabled: true,
+      smsEnabled: false,
+      pushEnabled: true,
+      notifyRsvp: true,
+      notifyCheckIn: true,
+      notifyGift: true,
+      notifyTicketSold: true,
+      notifyMarketing: true,
       soundEnabled: true,
       hapticsEnabled: true,
     },
@@ -66,6 +99,14 @@ export async function updateOwnerNotificationPreference(
     data: {
       notificationsEnabled: input.notificationsEnabled ?? existing.notificationsEnabled,
       marketingEnabled: input.marketingEnabled ?? existing.marketingEnabled,
+      emailEnabled: input.emailEnabled ?? existing.emailEnabled,
+      smsEnabled: input.smsEnabled ?? existing.smsEnabled,
+      pushEnabled: input.pushEnabled ?? existing.pushEnabled,
+      notifyRsvp: input.notifyRsvp ?? existing.notifyRsvp,
+      notifyCheckIn: input.notifyCheckIn ?? existing.notifyCheckIn,
+      notifyGift: input.notifyGift ?? existing.notifyGift,
+      notifyTicketSold: input.notifyTicketSold ?? existing.notifyTicketSold,
+      notifyMarketing: input.notifyMarketing ?? existing.notifyMarketing,
       soundEnabled: input.soundEnabled ?? existing.soundEnabled,
       hapticsEnabled: input.hapticsEnabled ?? existing.hapticsEnabled,
     },
@@ -212,8 +253,8 @@ export async function sendPushToOwners(ownerIds: string[], input: PushNotificati
 
   for (const owner of owners) {
     const preference = owner.notificationPreference || (await getOrCreateOwnerNotificationPreference(owner.id));
-    if (!preference.notificationsEnabled) continue;
-    if (input.isMarketing && !preference.marketingEnabled) continue;
+    if (!preference.notificationsEnabled || !preference.pushEnabled) continue;
+    if (!shouldReceiveByContentPreference(preference, input)) continue;
 
     const notification = await createOwnerNotification(owner.id, input);
 

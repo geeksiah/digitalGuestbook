@@ -75,6 +75,10 @@ export const ownerDashboardApi = {
     ownerPhone?: string;
     organizationName?: string;
   }) => api.post<{ event: OwnerEvent }>('/owner-dashboard/events', payload),
+  checkSlugAvailability: (slug: string) =>
+    api.get<{ available: boolean; slug: string; reason?: string }>('/owner-dashboard/events/check-slug', {
+      params: { slug }
+    }),
   event: (eventId: string) => api.get<{ event: OwnerEvent }>('/owner-dashboard/events/' + eventId),
   updateEvent: (eventId: string, payload: Record<string, unknown>) =>
     api.patch<{ event: OwnerEvent }>('/owner-dashboard/events/' + eventId, payload),
@@ -125,7 +129,11 @@ export const ownerDashboardApi = {
     api.delete('/owner-dashboard/events/' + eventId + '/domains/' + domainId),
   invites: (eventId: string) =>
     api.get<{ invites: RsvpInvite[] }>('/owner-dashboard/events/' + eventId + '/rsvp-invites'),
-  validateInvites: (eventId: string, invites: Array<{ name?: string; phone?: string; email?: string }>) =>
+  validateInvites: (
+    eventId: string,
+    invites: Array<{ name?: string; phone?: string; email?: string }>,
+    channel: 'whatsapp' | 'email' | 'both' = 'whatsapp'
+  ) =>
     api.post<{
       summary: { total: number; valid: number; invalid: number; duplicates: number };
       rows: Array<{
@@ -137,10 +145,14 @@ export const ownerDashboardApi = {
         errors: string[];
         duplicate: boolean;
       }>;
-    }>('/owner-dashboard/events/' + eventId + '/rsvp-invites/validate', { invites }),
+    }>('/owner-dashboard/events/' + eventId + '/rsvp-invites/validate', { invites, channel }),
   sendInvites: (
     eventId: string,
-    payload: { invites: Array<{ name?: string; phone: string; email?: string }>; expiresInHours?: number }
+    payload: {
+      invites: Array<{ name?: string; phone?: string; email?: string }>;
+      expiresInHours?: number;
+      channel?: 'whatsapp' | 'email' | 'both';
+    }
   ) => api.post('/owner-dashboard/events/' + eventId + '/rsvp-invites/batch', payload),
   resendInvite: (eventId: string, inviteId: string) =>
     api.post('/owner-dashboard/events/' + eventId + '/rsvp-invites/' + inviteId + '/resend', {}),
@@ -165,6 +177,14 @@ export const ownerDashboardApi = {
       preferences: {
         notificationsEnabled: boolean;
         marketingEnabled: boolean;
+        emailEnabled: boolean;
+        smsEnabled: boolean;
+        pushEnabled: boolean;
+        notifyRsvp: boolean;
+        notifyCheckIn: boolean;
+        notifyGift: boolean;
+        notifyTicketSold: boolean;
+        notifyMarketing: boolean;
         soundEnabled: boolean;
         hapticsEnabled: boolean;
       };
@@ -172,6 +192,14 @@ export const ownerDashboardApi = {
   updateNotificationPreferences: (payload: {
     notificationsEnabled?: boolean;
     marketingEnabled?: boolean;
+    emailEnabled?: boolean;
+    smsEnabled?: boolean;
+    pushEnabled?: boolean;
+    notifyRsvp?: boolean;
+    notifyCheckIn?: boolean;
+    notifyGift?: boolean;
+    notifyTicketSold?: boolean;
+    notifyMarketing?: boolean;
     soundEnabled?: boolean;
     hapticsEnabled?: boolean;
   }) => api.patch('/owner-dashboard/notification-preferences', payload),

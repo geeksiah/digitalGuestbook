@@ -125,14 +125,16 @@ export interface DomainRecord {
 export interface RsvpInvite {
   id: string;
   inviteeName?: string | null;
-  inviteePhone: string;
+  inviteePhone?: string | null;
   inviteeEmail?: string | null;
+  channel?: 'whatsapp' | 'email' | 'both' | string;
   status: 'SENT' | 'OPENED' | 'RESPONDED' | 'EXPIRED' | string;
   initialResponse?: 'YES' | 'NO' | null;
   partySize?: number | null;
   note?: string | null;
   expiresAt?: string | null;
-  sentAt: string;
+  sentAt?: string;
+  createdAt?: string;
   openedAt?: string | null;
   respondedAt?: string | null;
 }

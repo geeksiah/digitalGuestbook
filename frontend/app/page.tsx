@@ -958,7 +958,7 @@ export default function HomePage() {
             <a href="https://eventpeepo.com/#contact" className="text-sm font-bold text-gray-500 hover:text-[#063932] transition-colors hidden sm:block" target="_blank" rel="noopener noreferrer">
               Contact Us
             </a>
-            <a href="/admin/login" className="bg-[#063932] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#084d43] transition-all shadow-lg hover:shadow-[#063932]/20 active:scale-95" target="_blank" rel="noopener noreferrer">
+            <a href="/owner/login" className="bg-[#063932] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#084d43] transition-all shadow-lg hover:shadow-[#063932]/20 active:scale-95" target="_blank" rel="noopener noreferrer">
               Client Dashboard
             </a>
           </div>
@@ -987,7 +987,7 @@ export default function HomePage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
-                <a href="/admin/login" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]" target="_blank" rel="noopener noreferrer">
+                <a href="/owner/login" className="h-14 px-10 rounded-xl bg-[#063932] text-white font-bold text-base flex items-center justify-center hover:bg-[#084d43] transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 min-w-[200px]" target="_blank" rel="noopener noreferrer">
                   Client Dashboard
                 </a>
                 {/* 5. CTA Text Change */}

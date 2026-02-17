@@ -42,7 +42,7 @@ export function DashboardSection({
   return (
     <section className={cn('bg-white rounded-xl border border-surface-200/80 shadow-soft overflow-hidden animate-in', className)}>
       {(title || subtitle || action) ? (
-        <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-surface-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-surface-50/50">
+        <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-surface-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-brand-50/40">
           <div className="min-w-0">
             {title ? <h2 className="text-base sm:text-lg font-semibold text-brand-900">{title}</h2> : null}
             {subtitle ? <p className="text-xs sm:text-sm text-surface-500 mt-0.5 leading-relaxed">{subtitle}</p> : null}

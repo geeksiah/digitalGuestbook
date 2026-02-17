@@ -122,10 +122,25 @@ model OwnerNotificationPreference {
   id      String @id @default(uuid())
   ownerId String @unique
 
+  // Legacy (kept for backward compat)
   notificationsEnabled Boolean @default(true)
   marketingEnabled     Boolean @default(true)
-  soundEnabled         Boolean @default(true)
-  hapticsEnabled       Boolean @default(true)
+
+  // Delivery methods
+  emailEnabled Boolean @default(true)
+  smsEnabled   Boolean @default(false)
+  pushEnabled  Boolean @default(true)
+
+  // Content preferences
+  notifyRsvp       Boolean @default(true)
+  notifyCheckIn    Boolean @default(true)
+  notifyGift       Boolean @default(true)
+  notifyTicketSold Boolean @default(true)
+  notifyMarketing  Boolean @default(true)
+
+  // Mobile-exclusive
+  soundEnabled   Boolean @default(true)
+  hapticsEnabled Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1107,8 +1122,9 @@ model RsvpInvite {
   rsvpId            String?
   token             String    @unique
   inviteeName       String?
-  inviteePhone      String
+  inviteePhone      String?
   inviteeEmail      String?
+  channel           String    @default("whatsapp") // whatsapp | email | both
   providerMessageId String?
   status            String    @default("SENT") // SENT | OPENED | RESPONDED | EXPIRED
   initialResponse   String? // YES | NO

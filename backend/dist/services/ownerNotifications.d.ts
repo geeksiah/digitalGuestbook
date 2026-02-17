@@ -1,6 +1,14 @@
 type NotificationPreferenceInput = {
     notificationsEnabled?: boolean;
     marketingEnabled?: boolean;
+    emailEnabled?: boolean;
+    smsEnabled?: boolean;
+    pushEnabled?: boolean;
+    notifyRsvp?: boolean;
+    notifyCheckIn?: boolean;
+    notifyGift?: boolean;
+    notifyTicketSold?: boolean;
+    notifyMarketing?: boolean;
     soundEnabled?: boolean;
     hapticsEnabled?: boolean;
 };

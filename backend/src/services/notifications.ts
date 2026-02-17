@@ -649,6 +649,42 @@ export async function sendWhatsAppRsvpInvite(to: string, input: WhatsAppRsvpInvi
   };
 }
 
+export async function sendEmailRsvpInvite(to: string, input: WhatsAppRsvpInviteInput & { inviteeName?: string }) {
+  console.log('[Email RSVP Invite] Sending invite to:', to);
+  const subject = input.reminder
+    ? `Reminder: RSVP for ${input.eventName}`
+    : `You're Invited to ${input.eventName}`;
+
+  const greeting = input.inviteeName ? `Hi ${input.inviteeName},` : 'Hi,';
+  const opener = input.reminder
+    ? `This is a reminder to RSVP for <strong>${input.eventName}</strong>.`
+    : `You have been invited to <strong>${input.eventName}</strong>.`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <p style="font-size: 16px; color: #1a1a1a;">${greeting}</p>
+      <p style="font-size: 16px; color: #1a1a1a;">${opener}</p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${input.inviteUrl}" style="display: inline-block; background: #0d7a6a; color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">
+          View Invite &amp; RSVP
+        </a>
+      </div>
+      <p style="font-size: 14px; color: #666;">Or copy this link: ${input.inviteUrl}</p>
+      <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #999;">This invitation was sent via Digital Guestbook.</p>
+    </div>
+  `;
+
+  const text = `${greeting}\n\n${input.reminder ? `Reminder: RSVP for ${input.eventName}.` : `You are invited to ${input.eventName}.`}\n\nRSVP here: ${input.inviteUrl}`;
+
+  try {
+    const result = await sendEmail(to, subject, html, text);
+    return { success: result.success !== false, mode: 'email' as const, error: result.success === false ? (result as any).error : undefined };
+  } catch (error: any) {
+    return { success: false, mode: 'email' as const, error: error.message };
+  }
+}
+
 // ============================================
 // BROADCAST & NOTIFICATION FUNCTIONS
 // ============================================
@@ -1083,6 +1119,7 @@ export default {
   sendSMS,
   sendWhatsApp,
   sendWhatsAppRsvpInvite,
+  sendEmailRsvpInvite,
   sendEmailWithProvider,
   sendSmsWithProvider,
   sendWhatsappWithProvider,

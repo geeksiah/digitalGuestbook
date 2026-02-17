@@ -331,7 +331,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </main>
 
         {/* Mobile bottom tab bar */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200/60 bg-white/95 backdrop-blur-xl lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-brand-900 bg-brand-950 backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-4 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             {navigation.map((item) => {
               const isActive = isNavActive(item.href);
@@ -343,19 +343,19 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-70',
                     isActive
-                      ? 'text-brand-900 bg-brand-50/60'
-                      : 'text-surface-500'
+                      ? 'text-white bg-white/15'
+                      : 'text-brand-300/70'
                   )}
                 >
                   <span className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-xl transition-all [&>svg]:w-[22px] [&>svg]:h-[22px]',
-                    isActive ? 'text-brand-900' : 'text-surface-500'
+                    isActive ? 'text-white' : 'text-brand-300/70'
                   )}>
                     {item.icon}
                   </span>
                   <span className={cn(
                     'text-[11px] font-medium leading-none',
-                    isActive ? 'font-semibold text-brand-900' : 'text-surface-500'
+                    isActive ? 'font-semibold text-white' : 'text-brand-400'
                   )}>
                     {item.name}
                   </span>

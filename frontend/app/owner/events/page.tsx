@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ownerDashboardApi } from '@/lib/api';
-import { formatDate, cn } from '@/lib/utils';
+import { formatDate, cn, slugify } from '@/lib/utils';
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
 
@@ -37,6 +37,9 @@ export default function OwnerEventsPage() {
   const [filter, setFilter] = useState<'all' | 'pre' | 'live' | 'post'>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [slugChecking, setSlugChecking] = useState(false);
   const [createData, setCreateData] = useState({
     name: '',
     slug: '',
@@ -89,9 +92,53 @@ export default function OwnerEventsPage() {
         return true;
       });
 
+  const checkSlug = async (slug: string) => {
+    if (!slug || slug.length < 2) {
+      setSlugAvailable(null);
+      return;
+    }
+    setSlugChecking(true);
+    try {
+      const res = await ownerDashboardApi.checkSlugAvailability(slug);
+      setSlugAvailable(res.data.available);
+    } catch {
+      setSlugAvailable(null);
+    } finally {
+      setSlugChecking(false);
+    }
+  };
+
+  const handleNameChange = (value: string) => {
+    setCreateData((prev) => {
+      const next = { ...prev, name: value };
+      if (!slugManuallyEdited) {
+        next.slug = slugify(value);
+      }
+      return next;
+    });
+  };
+
+  const handleSlugChange = (value: string) => {
+    setSlugManuallyEdited(true);
+    setSlugAvailable(null);
+    setCreateData((prev) => ({ ...prev, slug: value.toLowerCase().replace(/[^a-z0-9-]/g, '') }));
+  };
+
   const createEvent = async () => {
     if (!createData.name.trim() || !createData.slug.trim() || !createData.date) {
       toast.error('Name, slug and date are required');
+      return;
+    }
+    const normalizedSlug = createData.slug.trim().toLowerCase().replace(/\s+/g, '-');
+    try {
+      const slugCheck = await ownerDashboardApi.checkSlugAvailability(normalizedSlug);
+      if (!slugCheck.data?.available) {
+        setSlugAvailable(false);
+        toast.error('Slug already exists. Please choose another.');
+        return;
+      }
+    } catch {
+      toast.error('Could not verify slug availability');
       return;
     }
 
@@ -99,7 +146,7 @@ export default function OwnerEventsPage() {
     try {
       await ownerDashboardApi.createEvent({
         name: createData.name.trim(),
-        slug: createData.slug.trim().toLowerCase().replace(/\s+/g, '-'),
+        slug: normalizedSlug,
         date: new Date(createData.date).toISOString(),
         timezone: createData.timezone || 'UTC',
         defaultCurrency: createData.defaultCurrency || 'USD',
@@ -107,6 +154,8 @@ export default function OwnerEventsPage() {
       });
       toast.success('Event created and submitted for admin approval');
       setShowCreate(false);
+      setSlugManuallyEdited(false);
+      setSlugAvailable(null);
       setCreateData({ name: '', slug: '', date: '', timezone: 'UTC', defaultCurrency: 'USD', venue: '' });
       await fetchEvents();
     } catch (error: any) {
@@ -144,14 +193,26 @@ export default function OwnerEventsPage() {
               className="input"
               placeholder="Event name"
               value={createData.name}
-              onChange={(event) => setCreateData((prev) => ({ ...prev, name: event.target.value }))}
+              onChange={(event) => handleNameChange(event.target.value)}
             />
-            <input
-              className="input"
-              placeholder="event-slug"
-              value={createData.slug}
-              onChange={(event) => setCreateData((prev) => ({ ...prev, slug: event.target.value }))}
-            />
+            <div className="relative">
+              <input
+                className={cn(
+                  'input pr-8',
+                  slugAvailable === true && 'border-emerald-400 focus:border-emerald-500',
+                  slugAvailable === false && 'border-red-400 focus:border-red-500'
+                )}
+                placeholder="event-slug"
+                value={createData.slug}
+                onChange={(event) => handleSlugChange(event.target.value)}
+                onBlur={() => checkSlug(createData.slug)}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs">
+                {slugChecking && <span className="text-surface-400">...</span>}
+                {!slugChecking && slugAvailable === true && <span className="text-emerald-600">&#10003;</span>}
+                {!slugChecking && slugAvailable === false && <span className="text-red-500">taken</span>}
+              </span>
+            </div>
             <input
               className="input"
               type="datetime-local"

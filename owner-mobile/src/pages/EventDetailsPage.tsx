@@ -59,6 +59,7 @@ const EventDetailsPage = () => {
   const [invites, setInvites] = useState<RsvpInvite[]>([]);
   const [inviteLines, setInviteLines] = useState('');
   const [inviteExpiryHours, setInviteExpiryHours] = useState(240);
+  const [inviteChannel, setInviteChannel] = useState<'whatsapp' | 'email' | 'both'>('whatsapp');
   const [sendingInvites, setSendingInvites] = useState(false);
   const [validatingInvites, setValidatingInvites] = useState(false);
   const [inviteValidation, setInviteValidation] = useState<{
@@ -243,6 +244,11 @@ const EventDetailsPage = () => {
     present({ message: ok ? 'MC link copied' : 'Unable to copy MC link', duration: 1800, color: ok ? 'success' : 'danger' });
   };
 
+  const copyShareLink = async (path: string, label: string) => {
+    const ok = await copyText(`${window.location.origin}${path}`);
+    present({ message: ok ? `${label} link copied` : 'Unable to copy link', duration: 1800, color: ok ? 'success' : 'danger' });
+  };
+
   const reviewRsvp = async (rsvpId: string, status: 'PENDING' | 'APPROVED' | 'REJECTED') => {
     if (!eventId) return;
     setReviewingRsvpId(rsvpId);
@@ -261,13 +267,24 @@ const EventDetailsPage = () => {
     }
   };
 
-  const parseInviteLines = (raw: string): Array<{ name?: string; phone: string; email?: string }> => {
-    return raw.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
-      const parts = line.split(',').map((part) => part.trim());
-      if (parts.length === 1) return { phone: parts[0] };
-      if (parts.length === 2) return { name: parts[0], phone: parts[1] };
-      return { name: parts[0], phone: parts[1], email: parts[2] };
-    }).filter((invite) => Boolean(invite.phone));
+  const parseInviteLines = (raw: string): Array<{ name?: string; phone?: string; email?: string }> => {
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(',').map((part) => part.trim());
+        if (parts.length === 1) {
+          if (parts[0].includes('@')) return { email: parts[0] };
+          return { phone: parts[0] };
+        }
+        if (parts.length === 2) {
+          if (parts[1].includes('@')) return { name: parts[0], email: parts[1] };
+          return { name: parts[0], phone: parts[1] };
+        }
+        return { name: parts[0], phone: parts[1], email: parts[2] };
+      })
+      .filter((invite) => Boolean(invite.phone || invite.email));
   };
 
   const exportToCsv = (fileName: string, headers: string[], rows: Array<Array<string | number>>) => {
@@ -467,7 +484,7 @@ const EventDetailsPage = () => {
 
     try {
       setValidatingInvites(true);
-      const preview = await ownerDashboardApi.validateInvites(eventId, parsed);
+      const preview = await ownerDashboardApi.validateInvites(eventId, parsed, inviteChannel);
       setInviteValidation(preview.data.summary);
       if (!preview.data.summary.valid) {
         present({
@@ -486,7 +503,11 @@ const EventDetailsPage = () => {
 
     setSendingInvites(true);
     try {
-      const response = await ownerDashboardApi.sendInvites(eventId, { invites: parsed, expiresInHours: inviteExpiryHours });
+      const response = await ownerDashboardApi.sendInvites(eventId, {
+        invites: parsed,
+        expiresInHours: inviteExpiryHours,
+        channel: inviteChannel,
+      });
       setInviteLines('');
       setInviteValidation({
         total: Number(response.data.totalCount || parsed.length),
@@ -670,6 +691,21 @@ const EventDetailsPage = () => {
                           <p className="event-subline">Feedback: {event.approvalRejectionReason}</p>
                         ) : null}
                       </article>
+                    </div>
+                  </section>
+
+                  <section className="surface-card">
+                    <h3>Shareable links</h3>
+                    <div className="inline-row wrap">
+                      <IonButton size="small" fill="outline" onClick={() => copyShareLink(`/e/${event.slug}/rsvp`, 'RSVP')}>
+                        Copy RSVP link
+                      </IonButton>
+                      <IonButton size="small" fill="outline" onClick={() => copyShareLink(`/gift/${event.slug}`, 'Gift')}>
+                        Copy Gift link
+                      </IonButton>
+                      <IonButton size="small" fill="outline" onClick={() => copyShareLink(`/e/${event.slug}/itinerary`, 'Itinerary')}>
+                        Copy Itinerary link
+                      </IonButton>
                     </div>
                   </section>
                 </>
@@ -991,8 +1027,36 @@ const EventDetailsPage = () => {
                       </div>
                     ) : null}
                     <label className="field">
+                      <span>Send via</span>
+                      <select
+                        className="native-select"
+                        value={inviteChannel}
+                        onChange={(inputEvent) => setInviteChannel((inputEvent.target.value as 'whatsapp' | 'email' | 'both') || 'whatsapp')}
+                      >
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="email">Email</option>
+                        <option value="both">Both</option>
+                      </select>
+                    </label>
+                    <label className="field">
                       <span>Invite lines</span>
-                      <textarea className="native-input native-textarea" value={inviteLines} placeholder="+233xxxxxxxxx&#10;Ama,+233xxxxxxxxx,ama@email.com" onChange={(inputEvent) => setInviteLines(inputEvent.target.value)} />
+                      <textarea
+                        className="native-input native-textarea"
+                        value={inviteLines}
+                        placeholder={
+                          inviteChannel === 'whatsapp'
+                            ? '+233xxxxxxxxx\nAma,+233xxxxxxxxx,ama@email.com'
+                            : inviteChannel === 'email'
+                              ? 'ama@email.com\nAma,ama@email.com'
+                              : 'Ama,+233xxxxxxxxx,ama@email.com'
+                        }
+                        onChange={(inputEvent) => setInviteLines(inputEvent.target.value)}
+                      />
+                      <p className="muted-text">
+                        {inviteChannel === 'whatsapp' ? 'Format: phone or name,phone or name,phone,email' : null}
+                        {inviteChannel === 'email' ? 'Format: email or name,email' : null}
+                        {inviteChannel === 'both' ? 'Format: name,phone,email (both required)' : null}
+                      </p>
                     </label>
                     <label className="field">
                       <span>Expiry (hours)</span>
@@ -1019,8 +1083,9 @@ const EventDetailsPage = () => {
                             <p className="event-title">{invite.inviteeName || '-'}</p>
                             <span className={'status-pill ' + statusToneClass(invite.status)}>{invite.status}</span>
                           </div>
-                          <p className="event-subline">{invite.inviteePhone}</p>
-                          <p className="event-subline">Sent: {formatDate(invite.sentAt)} - Expires: {formatDate(invite.expiresAt)}</p>
+                          <p className="event-subline">{invite.inviteePhone || invite.inviteeEmail || '-'}</p>
+                          <p className="event-subline">Channel: {(invite.channel || 'whatsapp').toUpperCase()}</p>
+                          <p className="event-subline">Sent: {formatDate(invite.sentAt || invite.createdAt)} - Expires: {formatDate(invite.expiresAt)}</p>
                           <div className="inline-row">
                             <IonButton size="small" fill="outline" onClick={() => resendInvite(invite.id)} disabled={invite.status === 'RESPONDED'}>
                               Resend

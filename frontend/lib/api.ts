@@ -399,6 +399,10 @@ export const ownerDashboardApi = {
     axios.post(`${API_BASE_URL}/api/owner-dashboard/events`, data, {
       headers: ownerHeaders(),
     }),
+  checkSlugAvailability: (slug: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/check-slug`, {
+      params: { slug }, headers: ownerHeaders(),
+    }),
   getEvent: (eventId: string) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}`, {
       headers: ownerHeaders(),
@@ -488,8 +492,12 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites`, {
       headers: ownerHeaders(),
     }),
-  validateRsvpInvites: (eventId: string, invites: Array<{ name?: string; phone?: string; email?: string }>) =>
-    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites/validate`, { invites }, {
+  validateRsvpInvites: (
+    eventId: string,
+    invites: Array<{ name?: string; phone?: string; email?: string }>,
+    channel: 'whatsapp' | 'email' | 'both' = 'whatsapp'
+  ) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/rsvp-invites/validate`, { invites, channel }, {
       headers: ownerHeaders(),
     }),
   sendRsvpInvites: (eventId: string, data: any) =>
@@ -519,6 +527,14 @@ export const ownerDashboardApi = {
   updateNotificationPreferences: (data: {
     notificationsEnabled?: boolean;
     marketingEnabled?: boolean;
+    emailEnabled?: boolean;
+    smsEnabled?: boolean;
+    pushEnabled?: boolean;
+    notifyRsvp?: boolean;
+    notifyCheckIn?: boolean;
+    notifyGift?: boolean;
+    notifyTicketSold?: boolean;
+    notifyMarketing?: boolean;
     soundEnabled?: boolean;
     hapticsEnabled?: boolean;
   }) =>

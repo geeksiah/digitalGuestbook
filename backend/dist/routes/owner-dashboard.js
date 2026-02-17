@@ -76,11 +76,13 @@ const inviteValidateSchema = zod_1.z.object({
     invites: zod_1.z.array(zod_1.z.object({
         name: zod_1.z.string().trim().optional(),
         phone: zod_1.z.string().trim().optional(),
-        email: zod_1.z.string().trim().email().optional(),
+        email: zod_1.z.string().trim().optional(),
     })),
+    channel: zod_1.z.enum(['whatsapp', 'email', 'both']).optional().default('whatsapp'),
 });
 const normalizePhone = (value) => String(value || '').replace(/[^\d+]/g, '');
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const transitionRsvpStatus = async ({ eventId, ownerId, rsvpId, status, reason, }) => {
     const event = await prisma_js_1.default.event.findFirst({
         where: { id: eventId, ownerId },
@@ -239,6 +241,21 @@ router.post('/events', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         }
     }
     res.status(201).json({ event });
+}));
+/**
+ * GET /api/owner-dashboard/events/check-slug?slug=xxx
+ * Check if a slug is available
+ */
+router.get('/events/check-slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const slug = String(req.query.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!slug || slug.length < 2) {
+        return res.json({ available: false, slug, reason: 'Slug must be at least 2 characters' });
+    }
+    const existing = await prisma_js_1.default.event.findFirst({
+        where: { slug },
+        select: { id: true },
+    });
+    res.json({ available: !existing, slug });
 }));
 /**
  * GET /api/owner-dashboard/events/:eventId
@@ -841,18 +858,26 @@ router.get('/events/:eventId/rsvp-invites', (0, errorHandler_js_1.asyncHandler)(
     });
     res.json({ invites });
 }));
-const buildInviteValidation = (invitesInput) => {
+const buildInviteValidation = (invitesInput, channel = 'whatsapp') => {
     const rows = [];
     const seen = new Set();
+    const needsPhone = channel === 'whatsapp' || channel === 'both';
+    const needsEmail = channel === 'email' || channel === 'both';
     invitesInput.forEach((invite, index) => {
         const normalizedPhone = normalizePhone(invite.phone);
         const normalizedEmail = invite.email ? normalizeEmail(invite.email) : null;
-        const key = `${normalizedPhone}::${normalizedEmail || ''}`;
+        const key = `${normalizedPhone || ''}::${normalizedEmail || ''}`;
         const errors = [];
-        if (!normalizedPhone)
+        if (needsPhone && !normalizedPhone)
             errors.push('Phone number is required');
-        if (invite.email && !normalizedEmail)
+        if (needsEmail && !normalizedEmail)
+            errors.push('Email is required');
+        if (normalizedPhone && normalizedPhone.replace(/[^\d]/g, '').length < 6) {
+            errors.push('Phone number format is invalid');
+        }
+        if (invite.email && (!normalizedEmail || !isValidEmail(normalizedEmail))) {
             errors.push('Email format is invalid');
+        }
         const duplicate = seen.has(key);
         if (!duplicate)
             seen.add(key);
@@ -884,7 +909,7 @@ router.post('/events/:eventId/rsvp-invites/validate', (0, errorHandler_js_1.asyn
     });
     if (!event)
         throw new errorHandler_js_1.AppError('Event not found', 404);
-    const rows = buildInviteValidation(input.invites);
+    const rows = buildInviteValidation(input.invites, input.channel);
     const summary = rows.reduce((acc, row) => {
         if (row.valid)
             acc.valid += 1;
@@ -905,6 +930,7 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
     const { eventId } = req.params;
     const validateInput = inviteValidateSchema.parse(req.body || {});
     const invitesInput = validateInput.invites;
+    const channel = validateInput.channel || 'whatsapp';
     const expiresInHours = Number(req.body?.expiresInHours || 240);
     if (!invitesInput.length) {
         throw new errorHandler_js_1.AppError('invites must be a non-empty array', 400);
@@ -919,35 +945,41 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
     });
     if (!event)
         throw new errorHandler_js_1.AppError('Event not found', 404);
+    const sendViaWhatsApp = channel === 'whatsapp' || channel === 'both';
+    const sendViaEmail = channel === 'email' || channel === 'both';
     const created = [];
     const failed = [];
     const skipped = [];
-    const rows = buildInviteValidation(invitesInput);
+    const rows = buildInviteValidation(invitesInput, channel);
     for (const row of rows) {
         if (!row.valid) {
             skipped.push({
                 index: row.index,
-                phone: row.phone,
+                phone: row.phone || row.email || '',
                 reason: row.duplicate ? 'Duplicate invite in batch' : row.errors.join(', ') || 'Invalid invite',
             });
             continue;
         }
-        const inviteePhone = row.phone;
+        const inviteePhone = row.phone || null;
         const inviteeName = row.name;
         const inviteeEmail = row.email;
+        // Check for existing invite by phone or email
+        const existsWhere = { eventId, status: { in: ['SENT', 'OPENED', 'RESPONDED'] } };
+        if (inviteePhone) {
+            existsWhere.inviteePhone = inviteePhone;
+        }
+        else if (inviteeEmail) {
+            existsWhere.inviteeEmail = inviteeEmail;
+        }
         const exists = await prisma_js_1.default.rsvpInvite.findFirst({
-            where: {
-                eventId,
-                inviteePhone,
-                status: { in: ['SENT', 'OPENED', 'RESPONDED'] },
-            },
+            where: existsWhere,
             select: { id: true },
         });
         if (exists) {
             skipped.push({
                 index: row.index,
-                phone: inviteePhone,
-                reason: 'Invite already exists for this phone',
+                phone: inviteePhone || inviteeEmail || '',
+                reason: 'Invite already exists for this contact',
             });
             continue;
         }
@@ -960,23 +992,41 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
                 inviteeName,
                 inviteePhone,
                 inviteeEmail,
+                channel,
                 expiresAt,
                 status: 'SENT',
                 sentByOwnerId: ownerId,
             },
         });
         const inviteUrl = getInvitePublicUrl(invite.token);
+        const deliveryErrors = [];
         try {
-            const delivery = await (0, notifications_js_1.sendWhatsAppRsvpInvite)(inviteePhone, {
-                eventName: event.name,
-                inviteUrl,
-                token: invite.token,
-            });
-            if (!delivery.success) {
+            if (sendViaWhatsApp && inviteePhone) {
+                const waDelivery = await (0, notifications_js_1.sendWhatsAppRsvpInvite)(inviteePhone, {
+                    eventName: event.name,
+                    inviteUrl,
+                    token: invite.token,
+                });
+                if (!waDelivery.success) {
+                    deliveryErrors.push(('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed');
+                }
+            }
+            if (sendViaEmail && inviteeEmail) {
+                const emailDelivery = await (0, notifications_js_1.sendEmailRsvpInvite)(inviteeEmail, {
+                    eventName: event.name,
+                    inviteUrl,
+                    token: invite.token,
+                    inviteeName: inviteeName || undefined,
+                });
+                if (!emailDelivery.success) {
+                    deliveryErrors.push(emailDelivery.error || 'Email send failed');
+                }
+            }
+            if (deliveryErrors.length && ((sendViaWhatsApp && sendViaEmail) ? deliveryErrors.length >= 2 : true)) {
                 failed.push({
                     index: row.index,
-                    phone: inviteePhone,
-                    reason: ('error' in delivery && delivery.error) ? delivery.error : 'Failed to send WhatsApp invite',
+                    phone: inviteePhone || inviteeEmail || '',
+                    reason: deliveryErrors.join('; '),
                 });
                 continue;
             }
@@ -985,8 +1035,8 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
         catch (error) {
             failed.push({
                 index: row.index,
-                phone: inviteePhone,
-                reason: error?.message || 'Failed to send WhatsApp invite',
+                phone: inviteePhone || inviteeEmail || '',
+                reason: error?.message || 'Failed to send invite',
             });
         }
     }
@@ -1033,14 +1083,36 @@ router.post('/events/:eventId/rsvp-invites/:inviteId/resend', (0, errorHandler_j
     if (!invite)
         throw new errorHandler_js_1.AppError('Invite not found', 404);
     const inviteUrl = getInvitePublicUrl(invite.token);
-    const delivery = await (0, notifications_js_1.sendWhatsAppRsvpInvite)(invite.inviteePhone, {
-        eventName: event.name,
-        inviteUrl,
-        token: invite.token,
-        reminder: true,
-    });
-    if (!delivery.success) {
-        throw new errorHandler_js_1.AppError(('error' in delivery && delivery.error) ? delivery.error : 'Failed to resend invite', 500);
+    const inviteChannel = invite.channel || 'whatsapp';
+    let delivered = false;
+    let lastError = '';
+    if ((inviteChannel === 'whatsapp' || inviteChannel === 'both') && invite.inviteePhone) {
+        const waDelivery = await (0, notifications_js_1.sendWhatsAppRsvpInvite)(invite.inviteePhone, {
+            eventName: event.name,
+            inviteUrl,
+            token: invite.token,
+            reminder: true,
+        });
+        if (waDelivery.success)
+            delivered = true;
+        else
+            lastError = ('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed';
+    }
+    if ((inviteChannel === 'email' || inviteChannel === 'both') && invite.inviteeEmail) {
+        const emailDelivery = await (0, notifications_js_1.sendEmailRsvpInvite)(invite.inviteeEmail, {
+            eventName: event.name,
+            inviteUrl,
+            token: invite.token,
+            reminder: true,
+            inviteeName: invite.inviteeName || undefined,
+        });
+        if (emailDelivery.success)
+            delivered = true;
+        else
+            lastError = emailDelivery.error || 'Email send failed';
+    }
+    if (!delivered) {
+        throw new errorHandler_js_1.AppError(lastError || 'Failed to resend invite', 500);
     }
     const updated = await prisma_js_1.default.rsvpInvite.update({
         where: { id: invite.id },
@@ -1203,6 +1275,14 @@ router.patch('/notification-preferences', (0, errorHandler_js_1.asyncHandler)(as
         .object({
         notificationsEnabled: zod_1.z.boolean().optional(),
         marketingEnabled: zod_1.z.boolean().optional(),
+        emailEnabled: zod_1.z.boolean().optional(),
+        smsEnabled: zod_1.z.boolean().optional(),
+        pushEnabled: zod_1.z.boolean().optional(),
+        notifyRsvp: zod_1.z.boolean().optional(),
+        notifyCheckIn: zod_1.z.boolean().optional(),
+        notifyGift: zod_1.z.boolean().optional(),
+        notifyTicketSold: zod_1.z.boolean().optional(),
+        notifyMarketing: zod_1.z.boolean().optional(),
         soundEnabled: zod_1.z.boolean().optional(),
         hapticsEnabled: zod_1.z.boolean().optional(),
     })

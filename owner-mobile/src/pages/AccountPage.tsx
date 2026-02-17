@@ -38,6 +38,14 @@ const AccountPage = () => {
   const [notificationPrefs, setNotificationPrefs] = useState({
     notificationsEnabled: true,
     marketingEnabled: true,
+    emailEnabled: true,
+    smsEnabled: false,
+    pushEnabled: true,
+    notifyRsvp: true,
+    notifyCheckIn: true,
+    notifyGift: true,
+    notifyTicketSold: true,
+    notifyMarketing: true,
     soundEnabled: true,
     hapticsEnabled: true,
   });
@@ -141,7 +149,21 @@ const AccountPage = () => {
     void ownerDashboardApi.notificationPreferences()
       .then((response) => {
         if (response.data?.preferences) {
-          setNotificationPrefs(response.data.preferences);
+          const next = response.data.preferences;
+          setNotificationPrefs({
+            notificationsEnabled: Boolean(next.notificationsEnabled),
+            marketingEnabled: Boolean(next.marketingEnabled),
+            emailEnabled: next.emailEnabled !== undefined ? Boolean(next.emailEnabled) : true,
+            smsEnabled: next.smsEnabled !== undefined ? Boolean(next.smsEnabled) : false,
+            pushEnabled: next.pushEnabled !== undefined ? Boolean(next.pushEnabled) : true,
+            notifyRsvp: next.notifyRsvp !== undefined ? Boolean(next.notifyRsvp) : true,
+            notifyCheckIn: next.notifyCheckIn !== undefined ? Boolean(next.notifyCheckIn) : true,
+            notifyGift: next.notifyGift !== undefined ? Boolean(next.notifyGift) : true,
+            notifyTicketSold: next.notifyTicketSold !== undefined ? Boolean(next.notifyTicketSold) : true,
+            notifyMarketing: next.notifyMarketing !== undefined ? Boolean(next.notifyMarketing) : true,
+            soundEnabled: Boolean(next.soundEnabled),
+            hapticsEnabled: Boolean(next.hapticsEnabled),
+          });
         }
       })
       .catch(() => null);
@@ -620,7 +642,104 @@ const AccountPage = () => {
           {tab === 'notifications' ? (
             <section className="surface-card">
               <h3>Notification preferences</h3>
-              <p className="muted-text">Control push behavior across your owner app experience.</p>
+              <p className="muted-text">Control delivery channels, content types, and mobile behavior.</p>
+
+              <div className="surface-card">
+                <h4>Delivery methods</h4>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.emailEnabled}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, emailEnabled: event.target.checked }))}
+                  />
+                  <span>Email notifications</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.smsEnabled}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, smsEnabled: event.target.checked }))}
+                  />
+                  <span>SMS notifications</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.pushEnabled}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, pushEnabled: event.target.checked }))}
+                  />
+                  <span>Push notifications</span>
+                </label>
+              </div>
+
+              <div className="surface-card">
+                <h4>Notification content</h4>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.notifyRsvp}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, notifyRsvp: event.target.checked }))}
+                  />
+                  <span>New RSVPs</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.notifyCheckIn}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, notifyCheckIn: event.target.checked }))}
+                  />
+                  <span>Check-ins</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.notifyGift}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, notifyGift: event.target.checked }))}
+                  />
+                  <span>Gifts received</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.notifyTicketSold}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, notifyTicketSold: event.target.checked }))}
+                  />
+                  <span>Ticket sales</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.notifyMarketing}
+                    onChange={(event) => setNotificationPrefs((prev) => ({ ...prev, notifyMarketing: event.target.checked }))}
+                  />
+                  <span>Marketing and tips</span>
+                </label>
+              </div>
+
+              <div className="surface-card">
+                <h4>Mobile only</h4>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.soundEnabled}
+                    onChange={(event) =>
+                      setNotificationPrefs((prev) => ({ ...prev, soundEnabled: event.target.checked }))
+                    }
+                  />
+                  <span>Notification sound</span>
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={notificationPrefs.hapticsEnabled}
+                    onChange={(event) =>
+                      setNotificationPrefs((prev) => ({ ...prev, hapticsEnabled: event.target.checked }))
+                    }
+                  />
+                  <span>Haptic feedback</span>
+                </label>
+              </div>
+
               <label className="checkbox-field">
                 <input
                   type="checkbox"
@@ -629,7 +748,7 @@ const AccountPage = () => {
                     setNotificationPrefs((prev) => ({ ...prev, notificationsEnabled: event.target.checked }))
                   }
                 />
-                <span>Enable notifications</span>
+                <span>Master notification switch</span>
               </label>
               <label className="checkbox-field">
                 <input
@@ -641,26 +760,7 @@ const AccountPage = () => {
                 />
                 <span>Enable marketing campaigns</span>
               </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={notificationPrefs.soundEnabled}
-                  onChange={(event) =>
-                    setNotificationPrefs((prev) => ({ ...prev, soundEnabled: event.target.checked }))
-                  }
-                />
-                <span>Notification sound</span>
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={notificationPrefs.hapticsEnabled}
-                  onChange={(event) =>
-                    setNotificationPrefs((prev) => ({ ...prev, hapticsEnabled: event.target.checked }))
-                  }
-                />
-                <span>Haptic feedback</span>
-              </label>
+
               <IonButton className="solid-cta" expand="block" disabled={loading} onClick={saveNotificationPrefs}>
                 {loading ? 'Saving...' : 'Save notification settings'}
               </IonButton>

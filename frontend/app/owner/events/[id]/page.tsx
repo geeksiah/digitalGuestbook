@@ -69,14 +69,16 @@ interface GiftOrder {
 interface RsvpInvite {
   id: string;
   inviteeName: string | null;
-  inviteePhone: string;
+  inviteePhone: string | null;
   inviteeEmail: string | null;
+  channel?: 'whatsapp' | 'email' | 'both' | string;
   status: 'SENT' | 'OPENED' | 'RESPONDED' | 'EXPIRED';
   initialResponse: 'YES' | 'NO' | null;
   partySize: number | null;
   note: string | null;
   expiresAt: string | null;
-  sentAt: string;
+  sentAt?: string;
+  createdAt?: string;
   openedAt: string | null;
   respondedAt: string | null;
 }
@@ -242,6 +244,7 @@ export default function OwnerEventDetailPage() {
   const [sendingInvites, setSendingInvites] = useState(false);
   const [inviteLines, setInviteLines] = useState('');
   const [inviteExpiryHours, setInviteExpiryHours] = useState(240);
+  const [inviteChannel, setInviteChannel] = useState<'whatsapp' | 'email' | 'both'>('whatsapp');
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
   const [loadingItinerary, setLoadingItinerary] = useState(false);
   const [savingItinerary, setSavingItinerary] = useState(false);
@@ -567,14 +570,22 @@ export default function OwnerEventDetailPage() {
       .map((line) => {
         const parts = line.split(',').map((part) => part.trim());
         if (parts.length === 1) {
+          // Single value: if it looks like an email, treat as email; otherwise phone
+          if (parts[0].includes('@')) {
+            return { email: parts[0] };
+          }
           return { phone: parts[0] };
         }
         if (parts.length === 2) {
+          // name,phone or name,email
+          if (parts[1].includes('@')) {
+            return { name: parts[0], email: parts[1] };
+          }
           return { name: parts[0], phone: parts[1] };
         }
         return { name: parts[0], phone: parts[1], email: parts[2] };
       })
-      .filter((invite) => invite.phone);
+      .filter((invite) => invite.phone || invite.email);
   };
 
   const handleSendInvites = async () => {
@@ -589,6 +600,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.sendRsvpInvites(eventId, {
         invites: parsedInvites,
         expiresInHours: inviteExpiryHours,
+        channel: inviteChannel,
       });
       toast.success(`Sent ${r.data.sentCount || 0} invite(s)`);
       setInviteLines('');
@@ -954,19 +966,28 @@ export default function OwnerEventDetailPage() {
                     <dd className="mt-1 text-sm text-brand-900">{event.venue}</dd>
                   </div>
                 )}
-                <div>
-                  <dt className="text-sm font-medium text-surface-600">Public Link</dt>
-                  <dd className="mt-1">
+              </dl>
+              {/* Shareable Links */}
+              <div className="mt-5 pt-5 border-t border-surface-100">
+                <h4 className="text-sm font-semibold text-surface-600 mb-3">Shareable Links</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label: 'Event Page', path: `/e/${event.slug}` },
+                    { label: 'RSVP Page', path: `/e/${event.slug}/rsvp` },
+                    { label: 'Gift Page', path: `/gift/${event.slug}` },
+                    { label: 'Itinerary', path: `/e/${event.slug}/itinerary` },
+                  ].map((link) => (
                     <button
-                      onClick={() => handleCopyLink(`/e/${event.slug}`)}
-                      className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700"
+                      key={link.label}
+                      onClick={() => handleCopyLink(link.path)}
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
                     >
                       {Icons.copy}
-                      <span className="ml-1">Copy Link</span>
+                      <span className="text-sm font-medium text-brand-900 truncate">{link.label}</span>
                     </button>
-                  </dd>
+                  ))}
                 </div>
-              </dl>
+              </div>
             </div>
           </div>
         )}
@@ -1261,7 +1282,7 @@ export default function OwnerEventDetailPage() {
         {/* Media Tab */}
         {activeTab === 'media' && (
           <div>
-            <MediaGallery eventId={eventId} media={media} isAdmin={false} />
+            <MediaGallery eventId={eventId} eventSlug={event?.slug} media={media} isAdmin={false} onRefresh={fetchMedia} />
           </div>
         )}
 
@@ -1602,7 +1623,7 @@ export default function OwnerEventDetailPage() {
         {activeTab === 'invites' && (
           <div className="space-y-4">
             <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
-              <h3 className="font-semibold text-brand-900">Send WhatsApp RSVP Invites</h3>
+              <h3 className="font-semibold text-brand-900">Send RSVP Invites</h3>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-xs">
                 <div className="rounded-md border border-surface-200 bg-surface-50 px-3 py-2">
                   <p className="text-surface-500">Total</p>
@@ -1625,12 +1646,54 @@ export default function OwnerEventDetailPage() {
                   <p className="font-semibold text-rose-800">{inviteStats.expired}</p>
                 </div>
               </div>
+
+              {/* Channel selector */}
+              <div>
+                <label className="text-sm font-medium text-surface-600 mb-1.5 block">Send via</label>
+                <div className="inline-flex rounded-lg border border-surface-200 bg-surface-100 p-1 gap-0.5">
+                  {([
+                    { value: 'whatsapp' as const, label: 'WhatsApp' },
+                    { value: 'email' as const, label: 'Email' },
+                    { value: 'both' as const, label: 'Both' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setInviteChannel(opt.value)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                        inviteChannel === opt.value
+                          ? 'bg-white text-brand-900 shadow-sm'
+                          : 'text-surface-600 hover:text-brand-900'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <p className="text-sm text-surface-600">
-                One invite per line. Format: <span className="font-mono">phone</span> or <span className="font-mono">name,phone</span> or <span className="font-mono">name,phone,email</span>.
+                One invite per line. Format:{' '}
+                {inviteChannel === 'whatsapp' && (
+                  <><span className="font-mono">phone</span> or <span className="font-mono">name,phone</span> or <span className="font-mono">name,phone,email</span></>
+                )}
+                {inviteChannel === 'email' && (
+                  <><span className="font-mono">email</span> or <span className="font-mono">name,email</span></>
+                )}
+                {inviteChannel === 'both' && (
+                  <><span className="font-mono">name,phone,email</span> (both phone and email required)</>
+                )}
               </p>
               <textarea
                 className="input min-h-[140px]"
-                placeholder="+233xxxxxxxxx&#10;Ama Serwaa,+233xxxxxxxxx,ama@email.com"
+                placeholder={
+                  inviteChannel === 'whatsapp'
+                    ? '+233xxxxxxxxx\nAma Serwaa,+233xxxxxxxxx,ama@email.com'
+                    : inviteChannel === 'email'
+                    ? 'ama@email.com\nAma Serwaa,ama@email.com'
+                    : 'Ama Serwaa,+233xxxxxxxxx,ama@email.com'
+                }
                 value={inviteLines}
                 onChange={(e) => setInviteLines(e.target.value)}
               />
@@ -1663,7 +1726,7 @@ export default function OwnerEventDetailPage() {
               <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
                 {invites.length === 0 ? (
                   <div className="px-6 py-6 text-center text-sm text-surface-500">
-                    No WhatsApp invites sent yet
+                    No invites sent yet
                   </div>
                 ) : (
                   <>
@@ -1674,7 +1737,7 @@ export default function OwnerEventDetailPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-brand-900 truncate">{invite.inviteeName || '-'}</p>
-                              <p className="text-xs text-surface-500">{invite.inviteePhone}</p>
+                              <p className="text-xs text-surface-500">{invite.inviteePhone || invite.inviteeEmail || '-'}</p>
                             </div>
                             <span
                               className={cn(
@@ -1689,8 +1752,9 @@ export default function OwnerEventDetailPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-surface-600">
+                            <span>Channel: {(invite.channel || 'whatsapp').toUpperCase()}</span>
                             <span>Response: {invite.initialResponse || '-'}</span>
-                            <span>Sent: {formatDate(invite.sentAt)}</span>
+                            <span>Sent: {formatDate(invite.sentAt || invite.createdAt || '')}</span>
                           </div>
                           <button
                             className="btn-outline !text-xs !px-2.5 !py-1.5"
@@ -1709,7 +1773,8 @@ export default function OwnerEventDetailPage() {
                         <thead className="bg-surface-50">
                           <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Invitee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Phone</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Channel</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Sent</th>
@@ -1721,7 +1786,8 @@ export default function OwnerEventDetailPage() {
                           {invites.map((invite) => (
                             <tr key={invite.id}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{invite.inviteeName || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{invite.inviteePhone}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{invite.inviteePhone || invite.inviteeEmail || '-'}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{(invite.channel || 'whatsapp').toUpperCase()}</td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span
                                   className={cn(
@@ -1739,7 +1805,7 @@ export default function OwnerEventDetailPage() {
                                 {invite.initialResponse || '-'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                                {formatDate(invite.sentAt)}
+                                {formatDate(invite.sentAt || invite.createdAt || '')}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
                                 {invite.expiresAt ? formatDate(invite.expiresAt) : '-'}
@@ -1916,6 +1982,3 @@ export default function OwnerEventDetailPage() {
     </div>
   );
 }
-
-
-

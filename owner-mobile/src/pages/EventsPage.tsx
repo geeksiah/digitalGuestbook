@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   IonButton,
   IonContent,
@@ -31,6 +31,9 @@ const EventsPage = () => {
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [checkingSlug, setCheckingSlug] = useState(false);
   const [createData, setCreateData] = useState({
     name: '',
     slug: '',
@@ -39,6 +42,15 @@ const EventsPage = () => {
     defaultCurrency: 'USD',
     venue: '',
   });
+
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +64,28 @@ const EventsPage = () => {
   useIonViewWillEnter(() => {
     void load();
   });
+
+  useEffect(() => {
+    if (!showCreate) return;
+    const slug = createData.slug.trim().toLowerCase();
+    if (!slug || slug.length < 2) {
+      setSlugAvailable(null);
+      setCheckingSlug(false);
+      return;
+    }
+    const timer = window.setTimeout(async () => {
+      setCheckingSlug(true);
+      try {
+        const response = await ownerDashboardApi.checkSlugAvailability(slug);
+        setSlugAvailable(Boolean(response.data?.available));
+      } catch {
+        setSlugAvailable(null);
+      } finally {
+        setCheckingSlug(false);
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [createData.slug, showCreate]);
 
   const filtered = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -76,6 +110,10 @@ const EventsPage = () => {
       present({ message: 'Name, slug, and date are required', duration: 2000, color: 'danger' });
       return;
     }
+    if (slugAvailable === false) {
+      present({ message: 'Slug already exists. Please choose another one.', duration: 2200, color: 'danger' });
+      return;
+    }
     setCreating(true);
     try {
       await ownerDashboardApi.createEvent({
@@ -88,6 +126,8 @@ const EventsPage = () => {
       });
       present({ message: 'Event created and submitted for admin approval', duration: 2200, color: 'success' });
       setShowCreate(false);
+      setSlugManuallyEdited(false);
+      setSlugAvailable(null);
       setCreateData({ name: '', slug: '', date: '', timezone: 'UTC', defaultCurrency: 'USD', venue: '' });
       await load();
     } catch {
@@ -112,7 +152,20 @@ const EventsPage = () => {
           <section className="surface-card">
             <div className="row-between">
               <h3>Create event</h3>
-              <IonButton size="small" fill="outline" onClick={() => setShowCreate((prev) => !prev)}>
+              <IonButton
+                size="small"
+                fill="outline"
+                onClick={() => {
+                  setShowCreate((prev) => {
+                    const next = !prev;
+                    if (!next) {
+                      setSlugManuallyEdited(false);
+                      setSlugAvailable(null);
+                    }
+                    return next;
+                  });
+                }}
+              >
                 {showCreate ? 'Close' : 'Quick create'}
               </IonButton>
             </div>
@@ -123,7 +176,16 @@ const EventsPage = () => {
                   <input
                     className="native-input"
                     value={createData.name}
-                    onChange={(event) => setCreateData((prev) => ({ ...prev, name: event.target.value }))}
+                    onChange={(event) =>
+                      setCreateData((prev) => {
+                        const name = event.target.value;
+                        return {
+                          ...prev,
+                          name,
+                          slug: slugManuallyEdited ? prev.slug : slugify(name),
+                        };
+                      })
+                    }
                   />
                 </label>
                 <label className="field">
@@ -131,9 +193,16 @@ const EventsPage = () => {
                   <input
                     className="native-input"
                     value={createData.slug}
-                    onChange={(event) => setCreateData((prev) => ({ ...prev, slug: event.target.value }))}
+                    onChange={(event) => {
+                      setSlugManuallyEdited(true);
+                      setSlugAvailable(null);
+                      setCreateData((prev) => ({ ...prev, slug: slugify(event.target.value) }));
+                    }}
                     placeholder="my-event-2026"
                   />
+                  {checkingSlug ? <p className="muted-text">Checking slug...</p> : null}
+                  {!checkingSlug && slugAvailable === true ? <p className="muted-text" style={{ color: 'var(--success)' }}>Slug is available.</p> : null}
+                  {!checkingSlug && slugAvailable === false ? <p className="muted-text" style={{ color: 'var(--danger)' }}>Slug is already taken.</p> : null}
                 </label>
                 <label className="field">
                   <span>Date</span>

@@ -5,7 +5,11 @@
       "Bash(npx cap sync:*)",
       "Bash(./gradlew assembleDebug:*)",
       "Bash(npx next build)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
