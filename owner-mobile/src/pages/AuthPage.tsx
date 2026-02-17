@@ -6,7 +6,6 @@ import {
   IonPage,
   IonSegment,
   IonSegmentButton,
-  IonText,
   useIonRouter,
   useIonToast
 } from '@ionic/react';
@@ -33,10 +32,32 @@ const AuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const labels = useMemo(() => {
-    if (mode === 'register') return { title: 'Create owner account', cta: 'Create account' };
-    if (mode === 'setup') return { title: 'Set your password', cta: 'Set password' };
-    if (mode === 'reset') return { title: 'Request password reset', cta: 'Submit request' };
-    return { title: 'Sign in to owner app', cta: 'Sign in' };
+    if (mode === 'register') {
+      return {
+        hero: 'Create your\nowner account',
+        panelTitle: 'Sign up',
+        cta: 'Create account'
+      };
+    }
+    if (mode === 'setup') {
+      return {
+        hero: 'Set your\naccount password',
+        panelTitle: 'Set password',
+        cta: 'Set password'
+      };
+    }
+    if (mode === 'reset') {
+      return {
+        hero: 'Recover access\nsecurely',
+        panelTitle: 'Password reset',
+        cta: 'Submit request'
+      };
+    }
+    return {
+      hero: 'Welcome back\nto Owner',
+      panelTitle: 'Sign in',
+      cta: 'Sign in'
+    };
   }, [mode]);
 
   const notify = (message: string, color: 'success' | 'danger' = 'success') =>
@@ -99,38 +120,47 @@ const AuthPage = () => {
     <IonPage>
       <IonContent fullscreen className="auth-screen">
         <div className="auth-wrap">
-          <div className="auth-hero">
+          <section className="auth-hero-pane">
             <div className="brand-mark">EP</div>
-            <span className="brand-tagline">EventPeepo Owner</span>
-            <h1>{labels.title}</h1>
-            <p>Manage events, track guests, and collect payouts from one workspace.</p>
-            <div className="auth-trust-row">
-              <span className="auth-trust-pill">
+            <div>
+              <p className="eyebrow" style={{ color: 'rgba(255,255,255,0.74)' }}>EventPeepo owner app</p>
+              <h1 style={{ whiteSpace: 'pre-line' }}>{labels.hero}</h1>
+              <p>Fast operations for events, guests, and payouts.</p>
+            </div>
+            <div className="auth-chip-row">
+              <span className="auth-chip">
                 <IonIcon icon={shieldCheckmarkOutline} />
                 Secure
               </span>
-              <span className="auth-trust-pill">
+              <span className="auth-chip">
                 <IonIcon icon={barChartOutline} />
-                Real-time metrics
+                Real-time
               </span>
-              <span className="auth-trust-pill">
+              <span className="auth-chip">
                 <IonIcon icon={sparklesOutline} />
-                Fast workflows
+                Optimized UI
               </span>
             </div>
-          </div>
+          </section>
 
-          {showRegisterSwitch ? (
-            <IonSegment
-              value={mode}
-              onIonChange={(event) => setMode((event.detail.value as 'login' | 'register') || 'login')}
-            >
-              <IonSegmentButton value="login">Sign in</IonSegmentButton>
-              <IonSegmentButton value="register">Sign up</IonSegmentButton>
-            </IonSegment>
-          ) : null}
+          <section className="auth-panel">
+            <div className="auth-title-row">
+              <div>
+                <h2>{labels.panelTitle}</h2>
+                <p>{mode === 'register' ? 'Create access to your owner workspace.' : 'Continue with your credentials.'}</p>
+              </div>
+            </div>
 
-          <section className="surface-card auth-card">
+            {showRegisterSwitch ? (
+              <IonSegment
+                value={mode}
+                onIonChange={(event) => setMode((event.detail.value as 'login' | 'register') || 'login')}
+              >
+                <IonSegmentButton value="login">Sign in</IonSegmentButton>
+                <IonSegmentButton value="register">Sign up</IonSegmentButton>
+              </IonSegment>
+            ) : null}
+
             <form className="auth-form" onSubmit={submit}>
               {mode === 'register' ? (
                 <label className="field">
@@ -217,24 +247,22 @@ const AuthPage = () => {
                 {loading ? 'Please wait...' : labels.cta}
               </IonButton>
             </form>
-          </section>
 
-          <div className="auth-alt-actions">
-            {mode !== 'setup' ? (
-              <IonButton fill="clear" size="small" onClick={() => setMode(mode === 'reset' ? 'login' : 'reset')}>
-                {mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}
-              </IonButton>
-            ) : (
-              <IonButton fill="clear" size="small" onClick={() => setMode('login')}>
-                Back to sign in
-              </IonButton>
-            )}
-            {mode === 'setup' ? (
-              <IonText color="medium" className="tiny-note">
-                Your account exists already. Set a password to continue.
-              </IonText>
-            ) : null}
-          </div>
+            <div className="auth-alt-actions">
+              {mode !== 'setup' ? (
+                <IonButton fill="clear" size="small" onClick={() => setMode(mode === 'reset' ? 'login' : 'reset')}>
+                  {mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}
+                </IonButton>
+              ) : (
+                <IonButton fill="clear" size="small" onClick={() => setMode('login')}>
+                  Back to sign in
+                </IonButton>
+              )}
+              {mode === 'setup' ? (
+                <p className="tiny-note">Your account exists. Set your password to continue.</p>
+              ) : null}
+            </div>
+          </section>
         </div>
       </IonContent>
     </IonPage>

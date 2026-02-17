@@ -1,44 +1,36 @@
 import { useState } from 'react';
 import { IonButton, IonContent, IonIcon, IonPage, useIonRouter } from '@ionic/react';
 import {
-  barChartOutline,
-  checkmarkCircleOutline,
-  compassOutline,
   flashOutline,
-  phonePortraitOutline,
-  searchOutline,
-  shieldCheckmarkOutline,
-  walletOutline
+  peopleOutline,
+  qrCodeOutline,
 } from 'ionicons/icons';
 import { useOnboardingStore } from '../store/onboarding';
 
 const steps = [
   {
-    icon: compassOutline,
-    title: 'Own Every\nEvent Moment',
-    body: 'Track RSVP activity, check-ins, media, and revenue from one clean owner workspace.',
-    features: [
-      { icon: barChartOutline, text: 'Real-time event insights' },
-      { icon: checkmarkCircleOutline, text: 'Smooth guest approvals' },
-    ]
+    title: 'Run Every Event\nFrom One Place',
+    subtitle: 'Live visibility across RSVPs, check-ins, media, and revenue.',
+    focusIcon: peopleOutline,
+    focusTitle: 'Real-time owner command center',
+    focusBody: 'Stay in control before, during, and after the event.',
+    stats: ['RSVP flow', 'Check-in ready', 'Live updates']
   },
   {
-    icon: flashOutline,
-    title: 'Move Fast\nDuring Live Events',
-    body: 'Get the right numbers quickly so approvals, decisions, and follow-up happen without friction.',
-    features: [
-      { icon: phonePortraitOutline, text: 'Mobile-first operations' },
-      { icon: searchOutline, text: 'Instant search and filters' },
-    ]
+    title: 'Move Faster\nOn Event Day',
+    subtitle: 'Short actions, bold layouts, and clear controls built for mobile speed.',
+    focusIcon: flashOutline,
+    focusTitle: 'Fast actions with less friction',
+    focusBody: 'Approve, review, and share in seconds.',
+    stats: ['Touch optimized', 'Readable UI', 'Clear actions']
   },
   {
-    icon: walletOutline,
-    title: 'Get Paid\nwith Confidence',
-    body: 'Manage payout-ready balances and wallet settings in a focused, low-stress flow.',
-    features: [
-      { icon: walletOutline, text: 'Wallet-ready payouts' },
-      { icon: shieldCheckmarkOutline, text: 'Secure transactions' },
-    ]
+    title: 'Deliver Premium\nGuest Experience',
+    subtitle: 'Use invite links, secure access, and payout tools in one polished app.',
+    focusIcon: qrCodeOutline,
+    focusTitle: 'Professional event operations',
+    focusBody: 'Designed to look premium while staying practical.',
+    stats: ['Share links', 'Secure access', 'Payout tracking']
   }
 ];
 
@@ -65,44 +57,57 @@ const OnboardingPage = () => {
   return (
     <IonPage>
       <IonContent fullscreen className="onboarding-screen">
-        <div className="onboarding-wrap" style={{ position: 'relative' }}>
+        <div className="onboarding-wrap">
           <button className="skip-btn" onClick={onSkip}>Skip</button>
 
-          <div className="onboarding-step-icon">
-            <IonIcon icon={current.icon} />
-          </div>
-          <h1 style={{ whiteSpace: 'pre-line' }}>{current.title}</h1>
-          <p className="body">{current.body}</p>
+          <section className="onboarding-visual">
+            <div className="onboarding-hero">
+              <p className="eyebrow">EventPeepo owner app</p>
+              <h1 style={{ whiteSpace: 'pre-line' }}>{current.title}</h1>
+              <p className="onboarding-subtitle">{current.subtitle}</p>
+            </div>
 
-          <div className="surface-card onboarding-feature-card">
-            {current.features.map((feature, i) => (
-              <div key={i} className="onboarding-feature-row">
-                <div className="feature-icon">
-                  <IonIcon icon={feature.icon} />
-                </div>
-                <span className="feature-text">{feature.text}</span>
+            <div className="onboarding-orb-grid" aria-hidden="true">
+              <span className="onboarding-orb accent" />
+              <span className="onboarding-orb" />
+              <span className="onboarding-orb" />
+            </div>
+          </section>
+
+          <section className="onboarding-panel">
+            <div className="onboarding-stat-row">
+              {current.stats.map((stat) => (
+                <span key={stat} className="onboarding-stat">{stat}</span>
+              ))}
+            </div>
+
+            <div className="onboarding-focus">
+              <IonIcon icon={current.focusIcon} />
+              <div>
+                <strong>{current.focusTitle}</strong>
+                <span>{current.focusBody}</span>
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div className="steps-row" aria-label="Onboarding progress">
-            {steps.map((_, i) => (
-              <span key={i} className={'step-dot' + (i === index ? ' is-active' : '')} />
-            ))}
-          </div>
+            <div className="steps-row" aria-label="Onboarding progress">
+              {steps.map((_, i) => (
+                <span key={i} className={'step-dot' + (i === index ? ' is-active' : '')} />
+              ))}
+            </div>
 
-          <div className="onboarding-actions">
-            {index > 0 ? (
-              <IonButton fill="clear" onClick={() => setIndex((prev) => prev - 1)}>
-                Back
+            <div className="onboarding-actions">
+              {index > 0 ? (
+                <IonButton fill="clear" onClick={() => setIndex((prev) => prev - 1)}>
+                  Back
+                </IonButton>
+              ) : (
+                <span />
+              )}
+              <IonButton className="solid-cta" onClick={onNext}>
+                {index < steps.length - 1 ? 'Continue' : 'Start now'}
               </IonButton>
-            ) : (
-              <span />
-            )}
-            <IonButton className="solid-cta" onClick={onNext}>
-              {index < steps.length - 1 ? 'Continue' : 'Get started'}
-            </IonButton>
-          </div>
+            </div>
+          </section>
         </div>
       </IonContent>
     </IonPage>

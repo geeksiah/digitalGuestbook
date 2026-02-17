@@ -331,7 +331,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </main>
 
         {/* Mobile bottom tab bar */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-brand-900 bg-brand-950 backdrop-blur-xl lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-brand-700/50 bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 shadow-[0_-10px_30px_rgba(6,57,50,0.35)] backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-4 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             {navigation.map((item) => {
               const isActive = isNavActive(item.href);
@@ -341,21 +341,21 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-70',
+                    'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-80',
                     isActive
-                      ? 'text-white bg-white/15'
-                      : 'text-brand-300/70'
+                      ? 'text-white bg-white/15 ring-1 ring-white/25'
+                      : 'text-brand-100/80'
                   )}
                 >
                   <span className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-xl transition-all [&>svg]:w-[22px] [&>svg]:h-[22px]',
-                    isActive ? 'text-white' : 'text-brand-300/70'
+                    isActive ? 'text-white' : 'text-brand-100/80'
                   )}>
                     {item.icon}
                   </span>
                   <span className={cn(
                     'text-[11px] font-medium leading-none',
-                    isActive ? 'font-semibold text-white' : 'text-brand-400'
+                    isActive ? 'font-semibold text-white' : 'text-brand-100/85'
                   )}>
                     {item.name}
                   </span>
