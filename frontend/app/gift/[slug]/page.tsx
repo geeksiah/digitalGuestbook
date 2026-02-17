@@ -37,7 +37,7 @@ interface SettlementPolicy {
 export default function GiftPage() {
   const params = useParams();
   const slug = params.slug as string;
-  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'gifting');
+  const { loading: templateLoading, available: hasTemplate, html: templateHtml } = useBackendTemplate(slug, 'gifting');
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -56,6 +56,15 @@ export default function GiftPage() {
   const [selectedGatewayId, setSelectedGatewayId] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   const [note, setNote] = useState('');
+  const templateLooksPlaceholder = useMemo(() => {
+    if (!templateHtml) return false;
+    const compact = templateHtml.replace(/\s+/g, ' ').toLowerCase();
+    if (compact.includes('gifting catalog')) return true;
+    const textOnly = compact.replace(/<[^>]+>/g, '').trim();
+    return textOnly === 'gifting catalog';
+  }, [templateHtml]);
+  const useBackendTemplateView = hasTemplate && !templateLooksPlaceholder;
+
   const resolveGiftThumbnailUrl = (path: string | null | undefined) => {
     if (!path) return null;
     if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
@@ -71,7 +80,7 @@ export default function GiftPage() {
   };
 
   useEffect(() => {
-    if (!slug || templateLoading || hasTemplate) return;
+    if (!slug || templateLoading || useBackendTemplateView) return;
 
     const run = async () => {
       try {
@@ -91,19 +100,7 @@ export default function GiftPage() {
       }
     };
     if (slug) run();
-  }, [slug, templateLoading, hasTemplate]);
-
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="gifting" />;
-  }
+  }, [slug, templateLoading, useBackendTemplateView]);
 
   const selectedPackageItems = useMemo(
     () => Object.entries(quantities)
@@ -186,6 +183,18 @@ export default function GiftPage() {
       setSubmitting(false);
     }
   };
+
+  if (templateLoading) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
+
+  if (useBackendTemplateView) {
+    return <BackendTemplateFrame slug={slug} endpoint="gifting" />;
+  }
 
   if (loading) {
     return (

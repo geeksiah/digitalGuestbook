@@ -529,13 +529,183 @@ const EventDetailsPage = () => {
     }
   };
 
-  const downloadInviteTemplate = () => {
-    const csv = 'name,phone,email\nAma Serwaa,+233240000001,ama@example.com';
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const downloadInviteTemplate = (format: 'csv' | 'xlsx') => {
+    if (format === 'csv') {
+      const csv = 'name,phone,email\nAma Serwaa,+233240000001,ama@example.com';
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'invite-template.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const xml = {
+      contentTypes: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>`,
+      rels: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+      workbook: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Invites" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+      workbookRels: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>`,
+      sharedStrings: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="6" uniqueCount="6">
+  <si><t>name</t></si>
+  <si><t>phone</t></si>
+  <si><t>email</t></si>
+  <si><t>Ama Serwaa</t></si>
+  <si><t>+233240000001</t></si>
+  <si><t>ama@example.com</t></si>
+</sst>`,
+      worksheet: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="s"><v>0</v></c>
+      <c r="B1" t="s"><v>1</v></c>
+      <c r="C1" t="s"><v>2</v></c>
+    </row>
+    <row r="2">
+      <c r="A2" t="s"><v>3</v></c>
+      <c r="B2" t="s"><v>4</v></c>
+      <c r="C2" t="s"><v>5</v></c>
+    </row>
+  </sheetData>
+</worksheet>`,
+    };
+
+    const files: Array<{ name: string; bytes: Uint8Array }> = [
+      { name: '[Content_Types].xml', bytes: new TextEncoder().encode(xml.contentTypes) },
+      { name: '_rels/.rels', bytes: new TextEncoder().encode(xml.rels) },
+      { name: 'xl/workbook.xml', bytes: new TextEncoder().encode(xml.workbook) },
+      { name: 'xl/_rels/workbook.xml.rels', bytes: new TextEncoder().encode(xml.workbookRels) },
+      { name: 'xl/sharedStrings.xml', bytes: new TextEncoder().encode(xml.sharedStrings) },
+      { name: 'xl/worksheets/sheet1.xml', bytes: new TextEncoder().encode(xml.worksheet) },
+    ];
+
+    const crcTable = (() => {
+      const table = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) {
+          c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        table[i] = c >>> 0;
+      }
+      return table;
+    })();
+
+    const crc32 = (bytes: Uint8Array) => {
+      let crc = 0xffffffff;
+      for (let i = 0; i < bytes.length; i++) {
+        crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 0xff];
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    };
+
+    const now = new Date();
+    const dosTime = ((now.getHours() & 0x1f) << 11) | ((now.getMinutes() & 0x3f) << 5) | ((Math.floor(now.getSeconds() / 2)) & 0x1f);
+    const dosDate = (((Math.max(1980, now.getFullYear()) - 1980) & 0x7f) << 9) | (((now.getMonth() + 1) & 0x0f) << 5) | (now.getDate() & 0x1f);
+
+    const encodedFiles = files.map((file) => ({
+      nameBytes: new TextEncoder().encode(file.name),
+      data: file.bytes,
+      crc: crc32(file.bytes),
+      offset: 0
+    }));
+
+    let localSize = 0;
+    encodedFiles.forEach((file) => {
+      file.offset = localSize;
+      localSize += 30 + file.nameBytes.length + file.data.length;
+    });
+
+    let centralSize = 0;
+    encodedFiles.forEach((file) => {
+      centralSize += 46 + file.nameBytes.length;
+    });
+
+    const totalSize = localSize + centralSize + 22;
+    const out = new Uint8Array(totalSize);
+    const view = new DataView(out.buffer);
+    let cursor = 0;
+
+    const writeBytes = (bytes: Uint8Array) => {
+      out.set(bytes, cursor);
+      cursor += bytes.length;
+    };
+
+    encodedFiles.forEach((file) => {
+      view.setUint32(cursor, 0x04034b50, true); cursor += 4;
+      view.setUint16(cursor, 20, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, dosTime, true); cursor += 2;
+      view.setUint16(cursor, dosDate, true); cursor += 2;
+      view.setUint32(cursor, file.crc, true); cursor += 4;
+      view.setUint32(cursor, file.data.length, true); cursor += 4;
+      view.setUint32(cursor, file.data.length, true); cursor += 4;
+      view.setUint16(cursor, file.nameBytes.length, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      writeBytes(file.nameBytes);
+      writeBytes(file.data);
+    });
+
+    const centralOffset = cursor;
+    encodedFiles.forEach((file) => {
+      view.setUint32(cursor, 0x02014b50, true); cursor += 4;
+      view.setUint16(cursor, 20, true); cursor += 2;
+      view.setUint16(cursor, 20, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, dosTime, true); cursor += 2;
+      view.setUint16(cursor, dosDate, true); cursor += 2;
+      view.setUint32(cursor, file.crc, true); cursor += 4;
+      view.setUint32(cursor, file.data.length, true); cursor += 4;
+      view.setUint32(cursor, file.data.length, true); cursor += 4;
+      view.setUint16(cursor, file.nameBytes.length, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint16(cursor, 0, true); cursor += 2;
+      view.setUint32(cursor, 0, true); cursor += 4;
+      view.setUint32(cursor, file.offset, true); cursor += 4;
+      writeBytes(file.nameBytes);
+    });
+
+    const centralLength = cursor - centralOffset;
+    view.setUint32(cursor, 0x06054b50, true); cursor += 4;
+    view.setUint16(cursor, 0, true); cursor += 2;
+    view.setUint16(cursor, 0, true); cursor += 2;
+    view.setUint16(cursor, encodedFiles.length, true); cursor += 2;
+    view.setUint16(cursor, encodedFiles.length, true); cursor += 2;
+    view.setUint32(cursor, centralLength, true); cursor += 4;
+    view.setUint32(cursor, centralOffset, true); cursor += 4;
+    view.setUint16(cursor, 0, true); cursor += 2;
+
+    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'invite-template.csv';
+    link.download = 'invite-template.xlsx';
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -1300,7 +1470,7 @@ const EventDetailsPage = () => {
                 <>
                   <section className="surface-card">
                     <h3>Bulk invite studio</h3>
-                    <p className="muted-text">Professional mode: paste lines now, CSV and contacts sync hooks are ready for the next iteration.</p>
+                    <p className="muted-text">Paste invite lines, import CSV/XLSX, or sync device contacts.</p>
                     <div className="inline-row wrap">
                       <span className="status-pill tone-neutral">Total: {inviteStats.total}</span>
                       <span className="status-pill tone-warning">Sent: {inviteStats.sent}</span>
@@ -1342,8 +1512,11 @@ const EventDetailsPage = () => {
                         >
                           {importingInvites ? 'Importing...' : 'Import CSV/XLSX'}
                         </IonButton>
-                        <IonButton size="small" fill="clear" onClick={downloadInviteTemplate}>
-                          Download CSV template
+                        <IonButton size="small" fill="clear" onClick={() => downloadInviteTemplate('csv')}>
+                          CSV template
+                        </IonButton>
+                        <IonButton size="small" fill="clear" onClick={() => downloadInviteTemplate('xlsx')}>
+                          XLSX template
                         </IonButton>
                         <input
                           ref={inviteFileInputRef}

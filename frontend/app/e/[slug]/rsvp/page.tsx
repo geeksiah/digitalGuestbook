@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { publicApi } from '@/lib/api';
+import { useParams, useSearchParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import { publicApi, rsvpApi, ticketingApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+
+type FieldType = 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox' | 'radio' | 'textarea' | 'date';
 
 interface EventData {
   event: {
@@ -16,213 +19,519 @@ interface EventData {
     date: string;
     venue: string | null;
     phase: string;
-    capabilities: {
-      canViewInvitation: boolean;
-      canSubmitRsvp: boolean;
-      canAccessGuestbook: boolean;
-      canCheckIn: boolean;
-      canViewThankYou: boolean;
-    };
-    services: {
-      invitation: boolean;
-      rsvp: boolean;
-      guestbook: boolean;
-      checkIn: boolean;
-    };
     invitationOnly: boolean;
-  };
-  urls: {
-    rsvp: string | null;
-    guestbook: string | null;
-    booth: string | null;
-    thankYou: string;
+    strictInviteOnly: boolean;
+    capabilities: {
+      canSubmitRsvp: boolean;
+    };
   };
 }
 
-export default function EventPage() {
+interface EventFormField {
+  id: string;
+  fieldName: string;
+  label: string;
+  type: FieldType;
+  placeholder?: string | null;
+  helpText?: string | null;
+  options?: string[] | null;
+  required: boolean;
+  minLength?: number | null;
+  maxLength?: number | null;
+  pattern?: string | null;
+}
+
+interface TicketOption {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  currency: string;
+  available: number;
+  maxPerOrder: number;
+}
+
+interface PaymentGatewayOption {
+  id: string;
+  name: string;
+  gateway: string;
+  currency: string;
+  publicKey?: string | null;
+}
+
+interface PublicTicketingForm {
+  eventId: string;
+  eventName: string;
+  rsvpMode: string;
+  fields: EventFormField[];
+  tickets: TicketOption[];
+  paymentGateways: PaymentGatewayOption[];
+}
+
+const formatMoney = (currency: string, amount: number) => {
+  const safeCurrency = String(currency || 'USD').toUpperCase();
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: safeCurrency }).format(amount);
+  } catch {
+    return `${safeCurrency} ${amount.toFixed(2)}`;
+  }
+};
+
+export default function EventRsvpPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
 
-  // ── ALL HOOKS AT THE TOP — unconditionally ──────────────────────────────────
-  const [data, setData] = useState<EventData | null>(null);
+  const { loading: templateLoading, available: hasTemplate, html: templateHtml } = useBackendTemplate(slug, 'rsvp');
+  const templateLooksPlaceholder = useMemo(() => {
+    if (!templateHtml) return false;
+    const compact = templateHtml.replace(/\s+/g, ' ').toLowerCase();
+    if (compact.includes('rsvp / ticket page') || compact.includes('ticket checkout flow')) return true;
+    const textOnly = compact.replace(/<[^>]+>/g, '').trim();
+    return textOnly === 'rsvp / ticket page';
+  }, [templateHtml]);
+  const useBackendTemplateView = hasTemplate && !templateLooksPlaceholder;
+
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [eventData, setEventData] = useState<EventData | null>(null);
+  const [ticketingForm, setTicketingForm] = useState<PublicTicketingForm | null>(null);
 
-  // Check all three phase templates using the hook
-  // The hook does a fast HEAD request first, so unused ones are cheap
-  const { loading: invLoading, available: hasInvitation } = useBackendTemplate(slug, 'invitation');
-  const { loading: liveLoading, available: hasLive } = useBackendTemplate(slug, 'live');
-  const { loading: endedLoading, available: hasEnded } = useBackendTemplate(slug, 'ended');
+  const [primaryName, setPrimaryName] = useState('');
+  const [secondaryName, setSecondaryName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [attendance, setAttendance] = useState<'YES' | 'NO' | 'MAYBE'>('YES');
+  const [guestCount, setGuestCount] = useState(1);
+  const [mealPreference, setMealPreference] = useState('');
+  const [dietaryNotes, setDietaryNotes] = useState('');
+  const [note, setNote] = useState('');
 
-  // Fetch event data
+  const [ticketQuantities, setTicketQuantities] = useState<Record<string, number>>({});
+  const [selectedGatewayId, setSelectedGatewayId] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [customFields, setCustomFields] = useState<Record<string, string | boolean>>({});
+
+  const isPaidMode = String(ticketingForm?.rsvpMode || '').toLowerCase() === 'paid';
+
+  const selectedTickets = useMemo(() => {
+    const catalog = ticketingForm?.tickets || [];
+    return catalog
+      .map((ticket) => ({
+        ticketTypeId: ticket.id,
+        quantity: ticketQuantities[ticket.id] || 0,
+        ticket,
+      }))
+      .filter((item) => item.quantity > 0);
+  }, [ticketQuantities, ticketingForm?.tickets]);
+
+  const totalTicketAmount = useMemo(
+    () => selectedTickets.reduce((sum, item) => sum + item.ticket.price * item.quantity, 0),
+    [selectedTickets]
+  );
+
+  const totalTicketQty = useMemo(
+    () => selectedTickets.reduce((sum, item) => sum + item.quantity, 0),
+    [selectedTickets]
+  );
+
+  const selectedGateway = useMemo(() => {
+    const list = ticketingForm?.paymentGateways || [];
+    if (!list.length) return null;
+    return list.find((gateway) => gateway.id === selectedGatewayId) || list[0];
+  }, [ticketingForm?.paymentGateways, selectedGatewayId]);
+
   useEffect(() => {
-    const fetchEvent = async () => {
+    if (!slug || templateLoading || useBackendTemplateView) return;
+
+    let cancelled = false;
+    const run = async () => {
       try {
-        const response = await publicApi.getEvent(slug);
-        setData(response.data);
-      } catch (err: any) {
-        setError(err.response?.data?.error || 'Event not found');
+        setLoading(true);
+        setError(null);
+
+        const [eventResponse, formResponse] = await Promise.all([
+          publicApi.getEvent(slug),
+          ticketingApi.getPublicForm(slug),
+        ]);
+
+        if (cancelled) return;
+
+        setEventData(eventResponse.data);
+        setTicketingForm(formResponse.data);
+        const firstGatewayId = formResponse.data?.paymentGateways?.[0]?.id;
+        if (firstGatewayId) setSelectedGatewayId((current) => current || firstGatewayId);
+      } catch (requestError: any) {
+        if (cancelled) return;
+        setError(requestError?.response?.data?.error || 'Unable to load RSVP page.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    if (slug) fetchEvent();
-  }, [slug]);
 
-  // ── Wait for event data AND all template checks ─────────────────────────────
-  const allChecksComplete = !loading && !invLoading && !liveLoading && !endedLoading;
+    run();
 
-  if (!allChecksComplete) {
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, templateLoading, useBackendTemplateView]);
+
+  const updateTicketQty = (ticketId: string, nextValue: number, maxPerOrder: number, available: number) => {
+    const safeMax = Math.max(0, Math.min(maxPerOrder, available));
+    const safeQty = Math.max(0, Math.min(nextValue, safeMax));
+    setTicketQuantities((prev) => ({ ...prev, [ticketId]: safeQty }));
+  };
+
+  const renderCustomField = (field: EventFormField) => {
+    const fieldKey = field.fieldName;
+    const value = customFields[fieldKey];
+    const options = Array.isArray(field.options) ? field.options : [];
+
+    const commonProps = {
+      required: field.required,
+      name: fieldKey,
+      placeholder: field.placeholder || undefined,
+    };
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
-      </div>
-    );
-  }
+      <label key={field.id} className="block space-y-1.5">
+        <span className="text-sm font-medium text-surface-700">{field.label}</span>
 
-  // ── Error state ──────────────────────────────────────────────────────────────
-  if (error || !data) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-display font-bold text-white mb-4">
-            Event Not Found
-          </h1>
-          <p className="text-surface-400 mb-8">{error}</p>
-          <Link href="/" className="btn-primary">Go Home</Link>
-        </div>
-      </div>
-    );
-  }
+        {field.type === 'textarea' ? (
+          <textarea
+            className="input min-h-[90px]"
+            value={String(value || '')}
+            onChange={(event) => setCustomFields((prev) => ({ ...prev, [fieldKey]: event.target.value }))}
+            {...commonProps}
+          />
+        ) : null}
 
-  const { event, urls } = data;
+        {field.type === 'select' ? (
+          <select
+            className="input"
+            value={String(value || '')}
+            onChange={(event) => setCustomFields((prev) => ({ ...prev, [fieldKey]: event.target.value }))}
+            {...commonProps}
+          >
+            <option value="">Select {field.label}</option>
+            {options.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        ) : null}
 
-  // ── PHASE-AWARE TEMPLATE ROUTING ─────────────────────────────────────────────
-
-  // POST_EVENT → ended template or default thank-you UI
-  if (event.phase === 'POST_EVENT') {
-    if (hasEnded) {
-      return <BackendTemplateFrame slug={slug} endpoint="ended" />;
-    }
-    // Default thank-you UI
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-1/2 -right-1/4 w-[500px] h-[500px] rounded-full bg-primary-500/10 blur-3xl" />
-        </div>
-        <div className="relative bg-white max-w-lg rounded-2xl shadow-elegant p-12 text-center">
-          <div className="w-16 h-16 mx-auto rounded-full bg-primary-500/20 flex items-center justify-center mb-6">
-            <svg className="w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
+        {field.type === 'radio' ? (
+          <div className="flex flex-wrap gap-2">
+            {options.map((option) => (
+              <label key={option} className="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-sm">
+                <input
+                  type="radio"
+                  name={fieldKey}
+                  checked={String(value || '') === option}
+                  onChange={() => setCustomFields((prev) => ({ ...prev, [fieldKey]: option }))}
+                  required={field.required}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
           </div>
-          <h1 className="text-3xl font-display font-bold text-navy-900 mb-4">Thank You</h1>
-          <h2 className="text-xl text-surface-700 mb-6">For Being Part of Our Special Day</h2>
-          <p className="text-surface-600">We are deeply grateful for your presence, your love, and your support.</p>
-        </div>
-      </div>
-    );
-  }
+        ) : null}
 
-  // LIVE → live landing template or default live UI
-  if (event.phase === 'LIVE') {
-    if (hasLive) {
-      return <BackendTemplateFrame slug={slug} endpoint="live" />;
+        {field.type === 'checkbox' ? (
+          <label className="inline-flex items-center gap-2 text-sm text-surface-700">
+            <input
+              type="checkbox"
+              checked={Boolean(value)}
+              onChange={(event) => setCustomFields((prev) => ({ ...prev, [fieldKey]: event.target.checked }))}
+              required={field.required}
+            />
+            <span>{field.helpText || 'Check to confirm'}</span>
+          </label>
+        ) : null}
+
+        {!['textarea', 'select', 'radio', 'checkbox'].includes(field.type) ? (
+          <input
+            className="input"
+            type={field.type === 'phone' ? 'tel' : field.type}
+            value={String(value || '')}
+            onChange={(event) => setCustomFields((prev) => ({ ...prev, [fieldKey]: event.target.value }))}
+            minLength={field.minLength || undefined}
+            maxLength={field.maxLength || undefined}
+            pattern={field.pattern || undefined}
+            {...commonProps}
+          />
+        ) : null}
+
+        {field.helpText ? <p className="text-xs text-surface-500">{field.helpText}</p> : null}
+      </label>
+    );
+  };
+
+  const onSubmit = async () => {
+    if (!eventData) return;
+    if (!primaryName.trim()) {
+      toast.error('Primary name is required');
+      return;
     }
-    // Default live UI — show guestbook/booth links
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] rounded-full bg-primary-500/10 blur-3xl" />
-          <div className="absolute -bottom-1/2 -left-1/4 w-[600px] h-[600px] rounded-full bg-primary-500/5 blur-3xl" />
-        </div>
-        <div className="relative min-h-screen flex items-center justify-center p-4 py-12">
-          <div className="w-full max-w-xl">
-            <div className="bg-white rounded-2xl shadow-elegant overflow-hidden">
-              <div className="h-2 bg-gradient-to-r from-primary-400 via-primary-500 to-primary-400" />
-              <div className="p-8 sm:p-12 text-center">
-                <div className="w-16 h-16 mx-auto rounded-full bg-green-500/20 flex items-center justify-center mb-6">
-                  <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h1 className="text-3xl sm:text-4xl font-display font-bold text-navy-900 mb-4">{event.name}</h1>
-                <p className="text-lg text-green-600 font-medium mb-6">Event is Live!</p>
-                {event.description && <p className="text-surface-600 mb-8">{event.description}</p>}
 
-                <div className="space-y-3">
-                  {event.services?.guestbook && (
-                    <Link href={`/e/${event.slug}/guestbook`} className="block w-full bg-primary-500 text-white py-3 px-6 rounded-lg font-medium hover:bg-primary-600 transition-colors">
-                      Open Guestbook
-                    </Link>
-                  )}
-                  <Link href={`/e/${event.slug}/booth`} className="block w-full bg-surface-100 text-navy-900 py-3 px-6 rounded-lg font-medium hover:bg-surface-200 transition-colors">
-                    Photo Booth
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
+    const customFieldsJson = Object.keys(customFields).length
+      ? JSON.stringify(customFields)
+      : undefined;
+    const customFieldsObject = Object.keys(customFields).length
+      ? customFields
+      : undefined;
+
+    if (isPaidMode) {
+      if (!selectedTickets.length) {
+        toast.error('Select at least one ticket');
+        return;
+      }
+      if (!phone.trim()) {
+        toast.error('Phone is required for ticket checkout');
+        return;
+      }
+      if (!selectedGateway?.id) {
+        toast.error('Select a payment gateway');
+        return;
+      }
+      if (!paymentReference.trim()) {
+        toast.error('Payment reference is required');
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        await ticketingApi.publicCheckout(slug, {
+          primaryName: primaryName.trim(),
+          secondaryName: secondaryName.trim() || undefined,
+          email: email.trim() || undefined,
+          phone: phone.trim(),
+          tickets: selectedTickets.map((item) => ({ ticketTypeId: item.ticketTypeId, quantity: item.quantity })),
+          promoCode: promoCode.trim() || undefined,
+          paymentGatewayId: selectedGateway.id,
+          paymentMethod: selectedGateway.gateway,
+          paymentReference: paymentReference.trim(),
+          customFields: customFieldsObject,
+          attendance: 'YES',
+          guestCount: totalTicketQty || 1,
+          note: note.trim() || undefined,
+          submissionChannel: 'web',
+        });
+
+        toast.success('Ticket checkout submitted successfully');
+      } catch (requestError: any) {
+        toast.error(requestError?.response?.data?.error || 'Ticket checkout failed');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (eventData.event.strictInviteOnly) {
+      const inviteToken = searchParams.get('inviteToken') || searchParams.get('token') || '';
+      if (!inviteToken) {
+        toast.error('This event requires an invite token.');
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    try {
+      await rsvpApi.submit(slug, {
+        primaryName: primaryName.trim(),
+        secondaryName: secondaryName.trim() || undefined,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        attendance,
+        guestCount,
+        mealPreference: mealPreference.trim() || undefined,
+        dietaryNotes: dietaryNotes.trim() || undefined,
+        note: note.trim() || undefined,
+        customFields: customFieldsJson,
+        submissionChannel: 'WEB',
+        inviteToken: searchParams.get('inviteToken') || searchParams.get('token') || undefined,
+      });
+
+      toast.success('RSVP submitted successfully');
+    } catch (requestError: any) {
+      toast.error(requestError?.response?.data?.error || 'RSVP submission failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (templateLoading) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
+
+  if (useBackendTemplateView) {
+    return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
+
+  if (error || !eventData) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
+        <div className="max-w-md rounded-2xl border border-surface-200 bg-white p-6 text-center shadow-soft">
+          <h1 className="text-2xl font-bold text-brand-900">RSVP Unavailable</h1>
+          <p className="mt-2 text-surface-600">{error || 'This RSVP page could not be loaded.'}</p>
+          <Link href={`/e/${slug}`} className="btn-primary mt-5 inline-flex">Back to event</Link>
         </div>
       </div>
     );
   }
 
-  // PRE_EVENT → invitation template or default invitation UI
-  if (hasInvitation) {
-    return <BackendTemplateFrame slug={slug} endpoint="invitation" />;
+  if (!eventData.event.capabilities.canSubmitRsvp) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
+        <div className="max-w-md rounded-2xl border border-surface-200 bg-white p-6 text-center shadow-soft">
+          <h1 className="text-2xl font-bold text-brand-900">RSVP Closed</h1>
+          <p className="mt-2 text-surface-600">RSVP is not available in this event phase.</p>
+          <Link href={`/e/${slug}`} className="btn-primary mt-5 inline-flex">Back to event</Link>
+        </div>
+      </div>
+    );
   }
 
-  // Default invitation UI
+  const defaultCurrency = selectedTickets[0]?.ticket.currency || selectedGateway?.currency || 'USD';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] rounded-full bg-primary-500/10 blur-3xl" />
-        <div className="absolute -bottom-1/2 -left-1/4 w-[600px] h-[600px] rounded-full bg-primary-500/5 blur-3xl" />
-      </div>
-      <div className="relative min-h-screen flex items-center justify-center p-4 py-12">
-        <div className="w-full max-w-xl">
-          <div className="bg-white rounded-2xl shadow-elegant overflow-hidden">
-            <div className="h-2 bg-gradient-to-r from-primary-400 via-primary-500 to-primary-400" />
-            <div className="p-8 sm:p-12 text-center">
-              <h1 className="text-3xl sm:text-4xl font-display font-bold text-navy-900 mb-4">{event.name}</h1>
-              {event.description && <p className="text-surface-600 mb-6">{event.description}</p>}
+    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-emerald-50 to-white pb-24">
+      <div className="mx-auto w-full max-w-[440px] space-y-4 px-3 py-5">
+        <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)]">
+          <h1 className="text-xl font-bold text-brand-950">{eventData.event.name}</h1>
+          <p className="mt-1 text-sm text-surface-600">{formatDate(eventData.event.date)}{eventData.event.venue ? ` - ${eventData.event.venue}` : ''}</p>
+          <p className="mt-2 text-sm text-surface-600">
+            {isPaidMode ? 'Choose tickets and complete checkout.' : 'Complete your RSVP details.'}
+          </p>
+        </section>
 
-              <div className="bg-surface-50 rounded-lg p-6 mb-6">
-                <div className="space-y-2 text-sm text-surface-600">
-                  {event.date && (
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span>{formatDate(event.date)}</span>
+        {isPaidMode ? (
+          <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)]">
+            <h2 className="text-base font-semibold text-brand-900">Ticket Selection</h2>
+            <div className="mt-3 space-y-2">
+              {(ticketingForm?.tickets || []).map((ticket) => (
+                <article key={ticket.id} className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-brand-900">{ticket.name}</p>
+                      <p className="text-xs text-surface-600">{ticket.description || 'General access ticket'}</p>
+                      <p className="mt-1 text-xs font-semibold text-rose-500">{formatMoney(ticket.currency, ticket.price)} / ticket</p>
                     </div>
-                  )}
-                  {event.venue && (
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>{event.venue}</span>
+                    <div className="inline-flex items-center rounded-full border border-surface-300 bg-white">
+                      <button
+                        type="button"
+                        className="h-8 w-8 text-sm font-semibold text-brand-900"
+                        onClick={() => updateTicketQty(ticket.id, (ticketQuantities[ticket.id] || 0) - 1, ticket.maxPerOrder, ticket.available)}
+                      >
+                        -
+                      </button>
+                      <span className="min-w-8 text-center text-sm font-semibold text-brand-900">{ticketQuantities[ticket.id] || 0}</span>
+                      <button
+                        type="button"
+                        className="h-8 w-8 text-sm font-semibold text-brand-900"
+                        onClick={() => updateTicketQty(ticket.id, (ticketQuantities[ticket.id] || 0) + 1, ticket.maxPerOrder, ticket.available)}
+                      >
+                        +
+                      </button>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {event.services?.rsvp && (
-                  <Link href={`/e/${event.slug}/rsvp`} className="block w-full bg-primary-500 text-white py-3 px-6 rounded-lg font-medium hover:bg-primary-600 transition-colors">
-                    RSVP Now
-                  </Link>
-                )}
-              </div>
+                  </div>
+                  <p className="mt-2 text-xs text-amber-700">Available: {ticket.available} - Max/order: {ticket.maxPerOrder}</p>
+                </article>
+              ))}
+              {(!ticketingForm?.tickets || ticketingForm.tickets.length === 0) ? (
+                <p className="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-4 text-sm text-surface-600">
+                  No active tickets are available for this event.
+                </p>
+              ) : null}
             </div>
+          </section>
+        ) : null}
+
+        <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)] space-y-3">
+          <h2 className="text-base font-semibold text-brand-900">Contact Information</h2>
+          <input className="input" placeholder="Primary name" value={primaryName} onChange={(event) => setPrimaryName(event.target.value)} />
+          <input className="input" placeholder="Secondary name (optional)" value={secondaryName} onChange={(event) => setSecondaryName(event.target.value)} />
+          <input className="input" placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <input className="input" placeholder={isPaidMode ? 'Phone (required)' : 'Phone (optional)'} type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} />
+
+          {!isPaidMode ? (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                {(['YES', 'NO', 'MAYBE'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setAttendance(option)}
+                    className={`rounded-xl border px-3 py-2 text-sm font-medium ${attendance === option ? 'border-brand-900 bg-brand-900 text-white' : 'border-surface-200 bg-white text-surface-700'}`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={20}
+                value={guestCount}
+                onChange={(event) => setGuestCount(Math.max(1, Math.min(20, Number(event.target.value || 1))))}
+                placeholder="Guest count"
+              />
+              <input className="input" placeholder="Meal preference (optional)" value={mealPreference} onChange={(event) => setMealPreference(event.target.value)} />
+              <textarea className="input min-h-[88px]" placeholder="Dietary notes (optional)" value={dietaryNotes} onChange={(event) => setDietaryNotes(event.target.value)} />
+            </>
+          ) : null}
+
+          {(ticketingForm?.fields || []).map(renderCustomField)}
+
+          {isPaidMode ? (
+            <>
+              <h3 className="pt-1 text-sm font-semibold text-brand-900">Payment Information</h3>
+              <select className="input" value={selectedGatewayId} onChange={(event) => setSelectedGatewayId(event.target.value)}>
+                {(ticketingForm?.paymentGateways || []).length > 0 ? (
+                  ticketingForm!.paymentGateways.map((gateway) => (
+                    <option key={gateway.id} value={gateway.id}>
+                      {gateway.name} ({gateway.gateway.toUpperCase()} - {gateway.currency})
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No payment gateway configured</option>
+                )}
+              </select>
+              <input className="input" placeholder="Promo code (optional)" value={promoCode} onChange={(event) => setPromoCode(event.target.value)} />
+              <input className="input" placeholder="Payment reference" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} />
+            </>
+          ) : null}
+
+          <textarea className="input min-h-[88px]" placeholder="Note (optional)" value={note} onChange={(event) => setNote(event.target.value)} />
+        </section>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 border-t border-surface-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[440px] items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-surface-500">{isPaidMode ? 'Order total' : 'RSVP'}</p>
+            <p className="text-sm font-semibold text-brand-900">
+              {isPaidMode ? `${defaultCurrency} ${totalTicketAmount.toFixed(2)}` : `${attendance} - ${guestCount} guest(s)`}
+            </p>
           </div>
-          <div className="text-center mt-8">
-            <p className="text-surface-500 text-sm">Powered by EventPeepo</p>
-          </div>
+          <button className="btn-primary px-5" disabled={submitting} onClick={onSubmit}>
+            {submitting ? 'Submitting...' : isPaidMode ? 'Pay Now' : 'Submit RSVP'}
+          </button>
         </div>
       </div>
     </div>

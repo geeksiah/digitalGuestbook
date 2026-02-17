@@ -256,6 +256,11 @@ export const ticketingApi = {
   // Payment gateway methods
   getPaymentGateway: (eventId: string) => api.get(`/payment-gateways/event/${eventId}`),
   updatePaymentGateway: (eventId: string, data: any) => api.post(`/payment-gateways/event/${eventId}`, data),
+  // Public checkout/form methods
+  getPublicForm: (eventSlug: string) =>
+    axios.get(`${API_BASE_URL}/api/ticketing/public/${eventSlug}/form`),
+  publicCheckout: (eventSlug: string, data: any) =>
+    axios.post(`${API_BASE_URL}/api/ticketing/public/${eventSlug}/checkout`, data),
 };
 
 // Owners API (admin)

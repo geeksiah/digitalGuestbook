@@ -383,7 +383,7 @@ const AccountPage = () => {
     <IonPage>
       <IonHeader translucent>
         <IonToolbar>
-          <IonButtons slot="start"><IonBackButton defaultHref="/app/more" /></IonButtons>
+          <IonButtons slot="start"><IonBackButton defaultHref="/app/home" /></IonButtons>
           <IonTitle>Account</IonTitle>
         </IonToolbar>
       </IonHeader>

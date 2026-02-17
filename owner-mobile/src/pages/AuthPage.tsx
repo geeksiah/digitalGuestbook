@@ -119,10 +119,10 @@ const AuthPage = () => {
       <IonContent fullscreen className="auth-screen">
         <div className="auth-wrap">
           <section className="auth-hero-pane">
-            <div className="brand-mark">EP</div>
+            <img className="brand-logo" src="/img/logo-light.svg" alt="EventPeepo" />
             <div>
               <h1 style={{ whiteSpace: 'pre-line' }}>{labels.hero}</h1>
-              <p>Fast operations for events, guests, and payouts.</p>
+              <p>Manage events, guests, and payouts.</p>
             </div>
           </section>
 
@@ -130,7 +130,7 @@ const AuthPage = () => {
             <div className="auth-title-row">
               <div>
                 <h2>{labels.panelTitle}</h2>
-                <p>{mode === 'register' ? 'Create access to your owner workspace.' : 'Continue with your credentials.'}</p>
+                <p>{mode === 'register' ? 'Set up your workspace.' : 'Continue securely.'}</p>
               </div>
             </div>
 

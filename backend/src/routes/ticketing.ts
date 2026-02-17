@@ -340,6 +340,7 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     walletState,
   });
   const paystackWallet = walletState.walletByType.get('paystack');
+  const isPaidMode = String(event.rsvpMode || '').toLowerCase() === 'paid';
 
   res.json({
     eventId: event.id,
@@ -347,9 +348,9 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     rsvpMode: event.rsvpMode,
     requireApproval: event.requireApproval,
     fields,
-    tickets: event.rsvpMode === 'rsvp' ? [] : tickets,
+    tickets: isPaidMode ? tickets : [],
     walletMode: walletState.mode,
-    paymentGateways: event.rsvpMode !== 'rsvp' && visibleGateways?.length > 0
+    paymentGateways: isPaidMode && visibleGateways?.length > 0
       ? visibleGateways.map((eg: any) => {
           const g = eg.paymentGateway;
           const splitConfig =
