@@ -884,10 +884,116 @@ export default function OwnerAccountPage() {
                 )}
 
                 {selectedWalletType === 'paystack' && (
-                  <div className="rounded-lg border border-brand-100 bg-brand-50 p-3">
-                    <p className="text-sm text-brand-900">
-                      Use the Paystack automation section below to connect or reconnect subaccount routing.
-                    </p>
+                  <div className="space-y-4 rounded-lg border border-brand-100 bg-brand-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-brand-900">Paystack Automation</p>
+                        <p className="text-xs text-brand-800/80 mt-1">
+                          Connect your bank account for direct owner routing.
+                        </p>
+                      </div>
+                      {walletData.paystackSubaccount ? (
+                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                          Not connected
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Country</label>
+                        <select
+                          className="input"
+                          value={paystackSetup.country}
+                          onChange={(e) => {
+                            const nextCountry = e.target.value;
+                            const nextCurrency = nextCountry === 'nigeria' ? 'NGN' : 'GHS';
+                            setPaystackSetup((prev) => ({ ...prev, country: nextCountry, currency: nextCurrency, bankCode: '' }));
+                            fetchPaystackBanks(nextCountry, nextCurrency);
+                          }}
+                        >
+                          <option value="ghana">Ghana</option>
+                          <option value="nigeria">Nigeria</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Currency</label>
+                        <select
+                          className="input"
+                          value={paystackSetup.currency}
+                          onChange={(e) => setPaystackSetup((prev) => ({ ...prev, currency: e.target.value }))}
+                        >
+                          <option value="GHS">GHS</option>
+                          <option value="NGN">NGN</option>
+                          <option value="USD">USD</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Bank</label>
+                        <select
+                          className="input"
+                          value={paystackSetup.bankCode}
+                          onChange={(e) => setPaystackSetup((prev) => ({ ...prev, bankCode: e.target.value }))}
+                        >
+                          <option value="">Select bank</option>
+                          {paystackBanks.map((bank) => (
+                            <option key={`${bank.code}-${bank.name}`} value={bank.code}>
+                              {bank.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Account Number</label>
+                        <input
+                          type="text"
+                          className="input"
+                          value={paystackSetup.accountNumber}
+                          onChange={(e) =>
+                            setPaystackSetup((prev) => ({
+                              ...prev,
+                              accountNumber: e.target.value.replace(/[^\d]/g, '').slice(0, 12),
+                            }))
+                          }
+                          placeholder="0123456789"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="label">Business Name (Optional)</label>
+                        <input
+                          type="text"
+                          className="input"
+                          value={paystackSetup.businessName}
+                          onChange={(e) => setPaystackSetup((prev) => ({ ...prev, businessName: e.target.value }))}
+                          placeholder={owner?.company || owner?.name || 'Your business name'}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={paystackLoading || disablePaystackConnect}
+                        onClick={handleConnectPaystack}
+                      >
+                        {paystackLoading ? 'Connecting...' : 'Connect Paystack'}
+                      </button>
+                      {walletData.paystackSubaccount ? (
+                        <span className="text-xs text-brand-900/70">
+                          Subaccount: <span className="font-mono">{walletData.paystackSubaccount}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                    {disablePaystackConnect ? (
+                      <p className="text-xs text-amber-700">
+                        Manual/offline wallet is active. Disable manual mode first to connect automated Paystack routing.
+                      </p>
+                    ) : null}
                   </div>
                 )}
 
@@ -908,121 +1014,15 @@ export default function OwnerAccountPage() {
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button type="submit" disabled={loading} className="btn-primary">
+                  <button
+                    type="submit"
+                    disabled={loading || (selectedWalletType === 'paystack' && !walletData.paystackSubaccount)}
+                    className="btn-primary"
+                  >
                     {loading ? 'Saving...' : selectedWalletId ? 'Update Wallet' : 'Add Wallet'}
                   </button>
                 </div>
               </form>
-
-              <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-brand-900">Automated Paystack Payout</h3>
-                    <p className="text-sm text-brand-800/80 mt-1">
-                      Connect your bank account for direct owner routing when guests pay with Paystack.
-                    </p>
-                  </div>
-                  {walletData.paystackSubaccount ? (
-                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                      Connected
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Not connected</span>
-                  )}
-                </div>
-
-                <div className="mt-4 grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="label">Country</label>
-                    <select
-                      className="input"
-                      value={paystackSetup.country}
-                      onChange={(e) => {
-                        const nextCountry = e.target.value;
-                        const nextCurrency = nextCountry === 'nigeria' ? 'NGN' : 'GHS';
-                        setPaystackSetup((prev) => ({ ...prev, country: nextCountry, currency: nextCurrency, bankCode: '' }));
-                        fetchPaystackBanks(nextCountry, nextCurrency);
-                      }}
-                    >
-                      <option value="ghana">Ghana</option>
-                      <option value="nigeria">Nigeria</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Currency</label>
-                    <select
-                      className="input"
-                      value={paystackSetup.currency}
-                      onChange={(e) => setPaystackSetup((prev) => ({ ...prev, currency: e.target.value }))}
-                    >
-                      <option value="GHS">GHS</option>
-                      <option value="NGN">NGN</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Bank</label>
-                    <select
-                      className="input"
-                      value={paystackSetup.bankCode}
-                      onChange={(e) => setPaystackSetup((prev) => ({ ...prev, bankCode: e.target.value }))}
-                    >
-                      <option value="">Select bank</option>
-                      {paystackBanks.map((bank) => (
-                        <option key={`${bank.code}-${bank.name}`} value={bank.code}>
-                          {bank.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Account Number</label>
-                    <input
-                      type="text"
-                      className="input"
-                      value={paystackSetup.accountNumber}
-                      onChange={(e) =>
-                        setPaystackSetup((prev) => ({
-                          ...prev,
-                          accountNumber: e.target.value.replace(/[^\d]/g, '').slice(0, 12),
-                        }))
-                      }
-                      placeholder="0123456789"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="label">Business Name (Optional)</label>
-                    <input
-                      type="text"
-                      className="input"
-                      value={paystackSetup.businessName}
-                      onChange={(e) => setPaystackSetup((prev) => ({ ...prev, businessName: e.target.value }))}
-                      placeholder={owner?.company || owner?.name || 'Your business name'}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={paystackLoading || disablePaystackConnect}
-                    onClick={handleConnectPaystack}
-                  >
-                    {paystackLoading ? 'Connecting...' : 'Connect Paystack'}
-                  </button>
-                  {walletData.paystackSubaccount ? (
-                    <span className="text-xs text-brand-900/70">
-                      Subaccount: <span className="font-mono">{walletData.paystackSubaccount}</span>
-                    </span>
-                  ) : null}
-                </div>
-                {disablePaystackConnect ? (
-                  <p className="text-xs text-amber-700 mt-3">
-                    Manual/offline wallet is active. Disable manual mode first to connect automated Paystack routing.
-                  </p>
-                ) : null}
-              </div>
             </div>
           )}
         </div>

@@ -288,6 +288,36 @@ router.get('/:token/checkins', validateOwnerToken, async (req: Request, res: Res
   }
 });
 
+// GET /api/event-owner/:token/tickets - Get ticket types for event
+router.get('/:token/tickets', validateOwnerToken, async (req: Request, res: Response) => {
+  try {
+    const eventId = (req as any).eventId;
+
+    const tickets = await prisma.ticketType.findMany({
+      where: { eventId },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        currency: true,
+        quantityTotal: true,
+        quantitySold: true,
+        maxPerOrder: true,
+        saleStartDate: true,
+        saleEndDate: true,
+        isActive: true,
+      },
+    });
+
+    res.json({ tickets });
+  } catch (error) {
+    console.error('Error fetching tickets:', error);
+    res.status(500).json({ error: 'Failed to fetch tickets' });
+  }
+});
+
 // GET /api/event-owner/:token/media/download - Download all media as ZIP
 router.get('/:token/media/download', validateOwnerToken, async (req: Request, res: Response) => {
   try {

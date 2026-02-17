@@ -222,6 +222,34 @@ const EventDetailsPage = () => {
     gifts: giftOrders.length
   }), [domains.length, event?._count.checkIns, event?._count.mediaAssets, event?._count.rsvps, giftOrders.length, invites.length, itineraryItems.length, tickets.length]);
 
+  const ticketSummary = useMemo(() => {
+    return tickets.reduce(
+      (summary, ticket) => {
+        const sold = Math.max(0, Number(ticket.quantitySold || 0));
+        const gross = sold * Number(ticket.price || 0);
+        return {
+          sold: summary.sold + sold,
+          gross: summary.gross + gross,
+        };
+      },
+      { sold: 0, gross: 0 }
+    );
+  }, [tickets]);
+
+  const giftSummary = useMemo(() => {
+    return giftOrders.reduce(
+      (summary, order) => {
+        const total = Number(order.totalAmount || 0);
+        const net = Number(order.ownerNetAmount || 0);
+        return {
+          total: summary.total + total,
+          net: summary.net + net,
+        };
+      },
+      { total: 0, net: 0 }
+    );
+  }, [giftOrders]);
+
   const filteredMedia = useMemo(() => {
     if (mediaFilter === 'ALL') return media;
     return media.filter((asset) => String(asset.type).toUpperCase() === mediaFilter);
@@ -1356,7 +1384,17 @@ const EventDetailsPage = () => {
 
               {activeTab === 'tickets' ? (
                 <section className="surface-card">
-                  <h3>Ticket Performance</h3>
+                  <div className="row-between">
+                    <h3>Ticket Performance</h3>
+                    <span className="status-pill tone-info">Sold: {ticketSummary.sold}</span>
+                  </div>
+                  {tickets.length ? (
+                    <div className="inline-row wrap" style={{ marginTop: 8 }}>
+                      <span className="status-pill tone-success">
+                        Gross: {formatCurrency(event?.defaultCurrency || tickets[0]?.currency || 'USD', ticketSummary.gross)}
+                      </span>
+                    </div>
+                  ) : null}
                   {!tickets.length ? <p className="muted-text">No tickets configured.</p> : null}
                   <div className="event-list">
                     {tickets.map((ticket) => (
@@ -1368,7 +1406,8 @@ const EventDetailsPage = () => {
                           </span>
                         </div>
                         <p className="event-subline">{ticket.price > 0 ? formatCurrency(ticket.currency, ticket.price) : 'Free'}</p>
-                        <p className="event-subline">Sold: {ticket.quantitySold} / {ticket.quantityTotal}</p>
+                        <p className="event-subline">Sold: {ticket.quantitySold} / {ticket.quantityTotal || 'Unlimited'}</p>
+                        <p className="event-subline">Revenue: {formatCurrency(ticket.currency, Number(ticket.price || 0) * Number(ticket.quantitySold || 0))}</p>
                       </article>
                     ))}
                   </div>
@@ -1631,7 +1670,20 @@ const EventDetailsPage = () => {
 
               {activeTab === 'gifts' ? (
                 <section className="surface-card">
-                  <h3>Gift orders</h3>
+                  <div className="row-between">
+                    <h3>Gift orders</h3>
+                    <span className="status-pill tone-info">Orders: {giftOrders.length}</span>
+                  </div>
+                  {giftOrders.length ? (
+                    <div className="inline-row wrap" style={{ marginTop: 8 }}>
+                      <span className="status-pill tone-success">
+                        Total: {formatCurrency(event?.defaultCurrency || giftOrders[0]?.currency || 'USD', giftSummary.total)}
+                      </span>
+                      <span className="status-pill tone-warning">
+                        Net: {formatCurrency(event?.defaultCurrency || giftOrders[0]?.currency || 'USD', giftSummary.net)}
+                      </span>
+                    </div>
+                  ) : null}
                   {!giftOrders.length ? <p className="muted-text">No gift orders yet.</p> : null}
                   <div className="event-list">
                     {giftOrders.map((order) => (

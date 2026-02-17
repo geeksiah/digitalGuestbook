@@ -98,7 +98,7 @@ router.get('/', authenticateAdmin, asyncHandler(async (req, res) => {
  * GET /api/payment-gateways/:id
  * Get a specific payment gateway
  */
-router.get('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+router.get('/:id([0-9a-fA-F-]{36})', authenticateAdmin, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const gateway = await prisma.paymentGateway.findUnique({
@@ -176,7 +176,7 @@ router.post('/', authenticateAdmin, asyncHandler(async (req, res) => {
  * PUT /api/payment-gateways/:id
  * Update a payment gateway
  */
-router.put('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+router.put('/:id([0-9a-fA-F-]{36})', authenticateAdmin, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const data = paymentGatewaySchema.partial().parse(req.body);
 
@@ -219,7 +219,7 @@ router.put('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
  * DELETE /api/payment-gateways/:id
  * Delete a payment gateway (only if not used by any events)
  */
-router.delete('/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+router.delete('/:id([0-9a-fA-F-]{36})', authenticateAdmin, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   // Check if gateway is used by any events
@@ -332,6 +332,84 @@ router.put('/events/:eventId', authenticateAdmin, asyncHandler(async (req, res) 
   });
 
   res.json({ eventGateways: masked });
+}));
+
+/**
+ * Legacy compatibility
+ * GET /api/payment-gateways/event/:eventId
+ */
+router.get('/event/:eventId', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+
+  const eventGateways = await prisma.eventPaymentGateway.findMany({
+    where: { eventId, isActive: true },
+    include: { paymentGateway: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  const primary = eventGateways[0]?.paymentGateway || null;
+  res.json({
+    gateway: primary,
+    eventGateways,
+  });
+}));
+
+/**
+ * Legacy compatibility
+ * POST /api/payment-gateways/event/:eventId
+ */
+router.post('/event/:eventId', authenticateAdmin, asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+  const input = req.body || {};
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) throw new AppError('Event not found', 404);
+
+  let gatewayIds: Array<{ paymentGatewayId: string; isActive?: boolean; sortOrder?: number }> = [];
+  if (Array.isArray(input.gatewayIds)) {
+    gatewayIds = input.gatewayIds.map((item: any, index: number) => ({
+      paymentGatewayId: String(item?.paymentGatewayId || item?.id || ''),
+      isActive: item?.isActive !== false,
+      sortOrder: typeof item?.sortOrder === 'number' ? item.sortOrder : index,
+    })).filter((item: { paymentGatewayId: string }) => item.paymentGatewayId);
+  } else if (input.paymentGatewayId || input.id) {
+    gatewayIds = [{ paymentGatewayId: String(input.paymentGatewayId || input.id), isActive: true, sortOrder: 0 }];
+  } else if (input.gateway) {
+    const byType = await prisma.paymentGateway.findFirst({
+      where: {
+        gateway: String(input.gateway),
+        isActive: true,
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (byType?.id) {
+      gatewayIds = [{ paymentGatewayId: byType.id, isActive: true, sortOrder: 0 }];
+    }
+  }
+
+  await prisma.eventPaymentGateway.deleteMany({ where: { eventId } });
+  if (gatewayIds.length > 0) {
+    await prisma.eventPaymentGateway.createMany({
+      data: gatewayIds.map((item, index) => ({
+        eventId,
+        paymentGatewayId: item.paymentGatewayId,
+        isActive: item.isActive !== false,
+        sortOrder: item.sortOrder ?? index,
+      })),
+    });
+  }
+
+  const eventGateways = await prisma.eventPaymentGateway.findMany({
+    where: { eventId },
+    include: { paymentGateway: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  res.json({
+    gateway: eventGateways[0]?.paymentGateway || null,
+    eventGateways,
+  });
 }));
 
 export default router;

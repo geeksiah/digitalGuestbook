@@ -73,7 +73,7 @@
 
   /* Toolbar */
   --toolbar-bg: rgba(241, 246, 245, 0.88);
-  --tabbar-bg: linear-gradient(90deg, #0a5f53 0%, #0f806f 50%, #13a899 100%);
+  --tabbar-bg: linear-gradient(90deg, #1c806e 0%, #0f8f81 50%, #22c58b 100%);
   --tabbar-clearance: 124px;
 }
 
@@ -120,7 +120,7 @@ body.dark {
   --shadow-glow: 0 4px 20px var(--brand-accent-glow);
 
   --toolbar-bg: rgba(12, 21, 18, 0.9);
-  --tabbar-bg: linear-gradient(90deg, #0a5f53 0%, #0f806f 50%, #13a899 100%);
+  --tabbar-bg: linear-gradient(90deg, #1c806e 0%, #0f8f81 50%, #22c58b 100%);
 }
 
 /* ================================================
@@ -1150,33 +1150,33 @@ button.event-list-item:active { transform: scale(0.985); background: var(--surfa
 .owner-tab-bar {
   --background: var(--tabbar-bg);
   --border: 0;
-  border-top: 1px solid rgba(167, 243, 208, 0.42);
-  box-shadow: 0 -10px 30px rgba(6, 57, 50, 0.24);
-  padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+  border-top: 1px solid rgba(209, 250, 229, 0.56);
+  box-shadow: 0 -10px 30px rgba(10, 77, 69, 0.22);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
   padding-top: 8px;
   backdrop-filter: saturate(180%) blur(24px);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
 }
 
 ion-tab-button {
-  --color: rgba(236, 253, 245, 0.9);
+  --color: rgba(236, 253, 245, 0.94);
   --color-selected: #ffffff;
-  --padding-bottom: 5px;
-  --padding-top: 4px;
+  --padding-bottom: 6px;
+  --padding-top: 5px;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
   min-width: 0;
-  min-height: 58px;
+  min-height: 62px;
   border-radius: 12px;
   transition: color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
 
 ion-tab-button ion-icon {
-  font-size: 24px;
-  width: 36px;
-  height: 36px;
+  font-size: 26px;
+  width: 38px;
+  height: 38px;
   padding: 6px;
   border-radius: 12px;
   transition: background-color 180ms ease;

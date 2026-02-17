@@ -6,7 +6,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
 import { verifyPaystackTransaction } from '../services/paystack.js';
-import { BUCKETS, uploadToSupabase } from '../services/supabaseStorage.js';
+import { BUCKETS, buildPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 import { getSystemFeeDefaults, resolveEventFeeConfig } from '../utils/fees.js';
 import {
   filterEventGatewaysForOwner,
@@ -200,7 +200,10 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
 
   res.json({
     event: eventPublic,
-    packages,
+    packages: packages.map((pkg) => ({
+      ...pkg,
+      thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+    })),
     momoEnabled: true,
     walletMode: walletState.mode,
     settlementPolicy: {
@@ -624,7 +627,12 @@ router.get('/packages', authenticateAdmin, asyncHandler(async (_req, res) => {
   const packages = await prisma.giftPackage.findMany({
     orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
   });
-  res.json({ packages });
+  res.json({
+    packages: packages.map((pkg) => ({
+      ...pkg,
+      thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+    })),
+  });
 }));
 
 router.post('/packages/upload-image', authenticateAdmin, giftPackageImageUpload.single('image'), asyncHandler(async (req, res) => {
@@ -721,6 +729,7 @@ router.get('/events/:eventId/packages', authenticateAdmin, asyncHandler(async (r
     assignedPackageIds: Array.from(assignedSet),
     packages: packages.map((pkg) => ({
       ...pkg,
+      thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
       assigned: assignedSet.has(pkg.id),
     })),
   });

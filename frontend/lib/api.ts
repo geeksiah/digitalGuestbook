@@ -161,7 +161,7 @@ export const checkInApi = {
 // Public API (no auth required)
 export const publicApi = {
   getEvent: (slug: string) => axios.get(`${API_BASE_URL}/api/public/event/${slug}`),
-  getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/public/event/token/${token}`),
+  getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}`),
   getRsvpInvite: (token: string) => axios.get(`${API_BASE_URL}/api/public/rsvp-invite/${token}`),
   resolveDomain: (host: string) => axios.get(`${API_BASE_URL}/api/public/domain/${encodeURIComponent(host)}`),
   checkMobileVersion: (params: { platform: 'android' | 'ios'; version: string }) =>
@@ -182,9 +182,12 @@ export const guestbookApi = {
     axios.get(`${API_BASE_URL}/api/guestbook/${eventId}/booth`),
   upload: (eventId: string, formData: FormData, accessCode?: string) =>
     axios.post(
-      `${API_BASE_URL}/api/guestbook/${eventId}/upload${accessCode ? `?accessCode=${accessCode}` : ''}`,
+      `${API_BASE_URL}/api/guestbook/${eventId}/upload`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: accessCode ? { accessCode } : undefined,
+      }
     ),
   boothUpload: (eventId: string, formData: FormData) =>
     axios.post(
@@ -198,13 +201,13 @@ export const guestbookApi = {
 
 // Couple Portal API
 export const coupleApi = {
-  getEvent: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}`),
-  getRsvps: (token: string, params?: any) => axios.get(`${API_BASE_URL}/api/couple/${token}/rsvps`, { params }),
+  getEvent: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}`),
+  getRsvps: (token: string, params?: any) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/rsvps`, { params }),
   reviewRsvp: (token: string, rsvpId: string, status: 'APPROVED' | 'REJECTED') =>
-    axios.post(`${API_BASE_URL}/api/couple/${token}/rsvps/${rsvpId}/review`, { status }),
-  getMedia: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/media`),
-  getCheckIns: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/checkins`),
-  downloadMedia: (token: string) => axios.get(`${API_BASE_URL}/api/couple/${token}/media/download`, { responseType: 'blob' }),
+    axios.post(`${API_BASE_URL}/api/event-owner/${token}/rsvps/${rsvpId}/review`, { status }),
+  getMedia: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/media`),
+  getCheckIns: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/checkins`),
+  downloadMedia: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}/media/download`, { responseType: 'blob' }),
 };
 
 // System Settings API (admin only)
@@ -268,7 +271,7 @@ export const ownersApi = {
   list: (params?: any) => api.get('/owners', { params }),
   get: (id: string) => api.get(`/owners/${id}`),
   create: (data: any) => api.post('/owners', data),
-  update: (id: string, data: any) => api.patch(`/owners/${id}`, data),
+  update: (id: string, data: any) => api.put(`/owners/${id}`, data),
   delete: (id: string) => api.delete(`/owners/${id}`),
   getWallet: (id: string) => api.get(`/owners/${id}/wallet`),
   updateWallet: (id: string, data: any) => api.post(`/owners/${id}/wallet`, data),
@@ -278,7 +281,7 @@ export const ownersApi = {
     api.post(`/owners/${id}/wallet/paystack/connect`, data),
   // common pattern: assign/unassign owner to event
   assignToEvent: (eventId: string, ownerId: string) =>
-    api.post(`/events/${eventId}/owner`, { ownerId }),
+    api.patch(`/events/${eventId}`, { ownerId }),
     resendWelcomeEmail: (id: string) => api.post(`/owners/${id}/resend-welcome-email`),
   changePassword: (id: string, newPassword: string) =>
     api.post(`/owners/${id}/change-password`, { newPassword }),
@@ -337,9 +340,9 @@ export const eventOwnerApi = {
 };
 
 export const promoCodeApi = {
-  list: (eventId: string) => api.get(`/promo-codes/event/${eventId}`),
-  create: (eventId: string, data: any) => api.post(`/promo-codes/event/${eventId}`, data),
-  update: (id: string, data: any) => api.patch(`/promo-codes/${id}`, data),
+  list: (eventId: string) => api.get(`/promo-codes/events/${eventId}`),
+  create: (eventId: string, data: any) => api.post(`/promo-codes/events/${eventId}`, data),
+  update: (id: string, data: any) => api.put(`/promo-codes/${id}`, data),
   delete: (id: string) => api.delete(`/promo-codes/${id}`),
 };
 

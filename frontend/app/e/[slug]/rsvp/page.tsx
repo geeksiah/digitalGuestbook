@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { publicApi, rsvpApi, ticketingApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -82,16 +81,6 @@ export default function EventRsvpPage() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
 
-  const { loading: templateLoading, available: hasTemplate, html: templateHtml } = useBackendTemplate(slug, 'rsvp');
-  const templateLooksPlaceholder = useMemo(() => {
-    if (!templateHtml) return false;
-    const compact = templateHtml.replace(/\s+/g, ' ').toLowerCase();
-    if (compact.includes('rsvp / ticket page') || compact.includes('ticket checkout flow')) return true;
-    const textOnly = compact.replace(/<[^>]+>/g, '').trim();
-    return textOnly === 'rsvp / ticket page';
-  }, [templateHtml]);
-  const useBackendTemplateView = hasTemplate && !templateLooksPlaceholder;
-
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,9 +131,19 @@ export default function EventRsvpPage() {
     if (!list.length) return null;
     return list.find((gateway) => gateway.id === selectedGatewayId) || list[0];
   }, [ticketingForm?.paymentGateways, selectedGatewayId]);
+  const hasGatewayOptions = (ticketingForm?.paymentGateways || []).length > 0;
+  const paidReadyToSubmit =
+    Boolean(primaryName.trim()) &&
+    Boolean(phone.trim()) &&
+    Boolean(selectedGateway?.id) &&
+    Boolean(paymentReference.trim()) &&
+    selectedTickets.length > 0 &&
+    hasGatewayOptions;
+  const freeReadyToSubmit = Boolean(primaryName.trim());
+  const submitDisabled = submitting || (isPaidMode ? !paidReadyToSubmit : !freeReadyToSubmit);
 
   useEffect(() => {
-    if (!slug || templateLoading || useBackendTemplateView) return;
+    if (!slug) return;
 
     let cancelled = false;
     const run = async () => {
@@ -176,7 +175,7 @@ export default function EventRsvpPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, templateLoading, useBackendTemplateView]);
+  }, [slug]);
 
   const updateTicketQty = (ticketId: string, nextValue: number, maxPerOrder: number, available: number) => {
     const safeMax = Math.max(0, Math.min(maxPerOrder, available));
@@ -362,18 +361,6 @@ export default function EventRsvpPage() {
     }
   };
 
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
-  if (useBackendTemplateView) {
-    return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
@@ -409,20 +396,25 @@ export default function EventRsvpPage() {
   const defaultCurrency = selectedTickets[0]?.ticket.currency || selectedGateway?.currency || 'USD';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-emerald-50 to-white pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-emerald-50 to-white pb-32">
       <div className="mx-auto w-full max-w-[440px] space-y-4 px-3 py-5">
         <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)]">
-          <h1 className="text-xl font-bold text-brand-950">{eventData.event.name}</h1>
-          <p className="mt-1 text-sm text-surface-600">{formatDate(eventData.event.date)}{eventData.event.venue ? ` - ${eventData.event.venue}` : ''}</p>
+          <h1 className="text-xl font-bold tracking-tight text-brand-950">{eventData.event.name}</h1>
+          <p className="mt-1 text-sm text-surface-600">
+            {formatDate(eventData.event.date)}{eventData.event.venue ? ` - ${eventData.event.venue}` : ''}
+          </p>
           <p className="mt-2 text-sm text-surface-600">
-            {isPaidMode ? 'Choose tickets and complete checkout.' : 'Complete your RSVP details.'}
+            {isPaidMode ? 'Select tickets, add contact details, then complete payment.' : 'Complete your RSVP details below.'}
           </p>
         </section>
 
         {isPaidMode ? (
           <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)]">
-            <h2 className="text-base font-semibold text-brand-900">Ticket Selection</h2>
-            <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-brand-900">Ticket Selection</h2>
+              <span className="badge badge-info">{totalTicketQty} selected</span>
+            </div>
+            <div className="mt-3 space-y-2.5">
               {(ticketingForm?.tickets || []).map((ticket) => (
                 <article key={ticket.id} className="rounded-xl border border-surface-200 bg-surface-50 p-3">
                   <div className="flex items-start justify-between gap-3">
@@ -434,7 +426,7 @@ export default function EventRsvpPage() {
                     <div className="inline-flex items-center rounded-full border border-surface-300 bg-white">
                       <button
                         type="button"
-                        className="h-8 w-8 text-sm font-semibold text-brand-900"
+                        className="h-8 w-8 text-base font-semibold text-brand-900"
                         onClick={() => updateTicketQty(ticket.id, (ticketQuantities[ticket.id] || 0) - 1, ticket.maxPerOrder, ticket.available)}
                       >
                         -
@@ -442,14 +434,14 @@ export default function EventRsvpPage() {
                       <span className="min-w-8 text-center text-sm font-semibold text-brand-900">{ticketQuantities[ticket.id] || 0}</span>
                       <button
                         type="button"
-                        className="h-8 w-8 text-sm font-semibold text-brand-900"
+                        className="h-8 w-8 text-base font-semibold text-brand-900"
                         onClick={() => updateTicketQty(ticket.id, (ticketQuantities[ticket.id] || 0) + 1, ticket.maxPerOrder, ticket.available)}
                       >
                         +
                       </button>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-amber-700">Available: {ticket.available} - Max/order: {ticket.maxPerOrder}</p>
+                  <p className="mt-2 text-xs text-amber-700">Available: {ticket.available} · Max/order: {ticket.maxPerOrder}</p>
                 </article>
               ))}
               {(!ticketingForm?.tickets || ticketingForm.tickets.length === 0) ? (
@@ -457,6 +449,13 @@ export default function EventRsvpPage() {
                   No active tickets are available for this event.
                 </p>
               ) : null}
+            </div>
+
+            <div className="mt-3 rounded-xl border border-surface-200 bg-white p-3">
+              <div className="flex items-center justify-between text-sm">
+                <p className="text-surface-600">Order subtotal</p>
+                <p className="font-semibold text-brand-900">{defaultCurrency} {totalTicketAmount.toFixed(2)}</p>
+              </div>
             </div>
           </section>
         ) : null}
@@ -512,8 +511,13 @@ export default function EventRsvpPage() {
                   <option value="">No payment gateway configured</option>
                 )}
               </select>
+              {!hasGatewayOptions ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  No active payment gateway is configured for this event yet.
+                </div>
+              ) : null}
               <input className="input" placeholder="Promo code (optional)" value={promoCode} onChange={(event) => setPromoCode(event.target.value)} />
-              <input className="input" placeholder="Payment reference" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} />
+              <input className="input" placeholder="Payment reference / transaction id" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} />
             </>
           ) : null}
 
@@ -521,15 +525,19 @@ export default function EventRsvpPage() {
         </section>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 border-t border-surface-200 bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-emerald-100 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[440px] items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs text-surface-500">{isPaidMode ? 'Order total' : 'RSVP'}</p>
+            <p className="text-xs text-surface-500">{isPaidMode ? 'Order total' : 'RSVP status'}</p>
             <p className="text-sm font-semibold text-brand-900">
               {isPaidMode ? `${defaultCurrency} ${totalTicketAmount.toFixed(2)}` : `${attendance} - ${guestCount} guest(s)`}
             </p>
           </div>
-          <button className="btn-primary px-5" disabled={submitting} onClick={onSubmit}>
+          <button
+            className="btn-primary px-5"
+            disabled={submitDisabled}
+            onClick={onSubmit}
+          >
             {submitting ? 'Submitting...' : isPaidMode ? 'Pay Now' : 'Submit RSVP'}
           </button>
         </div>

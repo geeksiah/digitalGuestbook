@@ -718,6 +718,85 @@ const AccountPage = () => {
                     </label>
                   ) : null}
 
+                  {selectedWalletType === 'paystack' ? (
+                    <div className="surface-card">
+                      <h4>Paystack automation</h4>
+                      <p className="muted-text">
+                        {walletData.paystackSubaccount ? `Connected: ${walletData.paystackSubaccount}` : 'Not connected yet'}
+                      </p>
+                      <label className="field">
+                        <span>Country</span>
+                        <select
+                          className="native-select"
+                          value={paystackSetup.country}
+                          onChange={(event) => {
+                            const country = event.target.value;
+                            const currency = country === 'nigeria' ? 'NGN' : 'GHS';
+                            setPaystackSetup((prev) => ({ ...prev, country, currency, bankCode: '' }));
+                            void loadPaystackBanks(country, currency);
+                          }}
+                        >
+                          <option value="ghana">Ghana</option>
+                          <option value="nigeria">Nigeria</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Currency</span>
+                        <select
+                          className="native-select"
+                          value={paystackSetup.currency}
+                          onChange={(event) => setPaystackSetup((prev) => ({ ...prev, currency: event.target.value }))}
+                        >
+                          <option value="GHS">GHS</option>
+                          <option value="NGN">NGN</option>
+                          <option value="USD">USD</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Bank</span>
+                        <select
+                          className="native-select"
+                          value={paystackSetup.bankCode}
+                          onChange={(event) => setPaystackSetup((prev) => ({ ...prev, bankCode: event.target.value }))}
+                        >
+                          <option value="">Select bank</option>
+                          {paystackBanks.map((bank) => (
+                            <option key={bank.code} value={bank.code}>
+                              {bank.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Account number</span>
+                        <input
+                          className="native-input"
+                          value={paystackSetup.accountNumber}
+                          onChange={(event) =>
+                            setPaystackSetup((prev) => ({
+                              ...prev,
+                              accountNumber: event.target.value.replace(/[^\d]/g, '').slice(0, 12)
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Business name (optional)</span>
+                        <input
+                          className="native-input"
+                          value={paystackSetup.businessName}
+                          onChange={(event) => setPaystackSetup((prev) => ({ ...prev, businessName: event.target.value }))}
+                        />
+                      </label>
+                      <IonButton className="solid-cta" expand="block" onClick={onConnectPaystack} disabled={paystackLoading || disablePaystackConnect}>
+                        {paystackLoading ? 'Connecting...' : 'Connect Paystack'}
+                      </IonButton>
+                      {disablePaystackConnect ? (
+                        <p className="muted-text">Manual/offline wallet is active. Disable it before Paystack automation.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <label className="field">
                     <span>Currency</span>
                     <select
@@ -733,89 +812,15 @@ const AccountPage = () => {
                       <option value="KES">KES</option>
                     </select>
                   </label>
-                  <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
+                  <IonButton
+                    className="solid-cta"
+                    type="submit"
+                    expand="block"
+                    disabled={loading || (selectedWalletType === 'paystack' && !walletData.paystackSubaccount)}
+                  >
                     {loading ? 'Saving...' : selectedWalletId ? 'Update wallet' : 'Add wallet'}
                   </IonButton>
                 </form>
-              </section>
-
-              <section className="surface-card">
-                <h3>Paystack automation</h3>
-                <p className="muted-text">
-                  {wallet?.paystackSubaccount ? 'Connected: ' + wallet.paystackSubaccount : 'Not connected yet'}
-                </p>
-                <div className="auth-form">
-                  <label className="field">
-                    <span>Country</span>
-                    <select
-                      className="native-select"
-                      value={paystackSetup.country}
-                      onChange={(event) => {
-                        const country = event.target.value;
-                        const currency = country === 'nigeria' ? 'NGN' : 'GHS';
-                        setPaystackSetup((prev) => ({ ...prev, country, currency, bankCode: '' }));
-                        void loadPaystackBanks(country, currency);
-                      }}
-                    >
-                      <option value="ghana">Ghana</option>
-                      <option value="nigeria">Nigeria</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Currency</span>
-                    <select
-                      className="native-select"
-                      value={paystackSetup.currency}
-                      onChange={(event) => setPaystackSetup((prev) => ({ ...prev, currency: event.target.value }))}
-                    >
-                      <option value="GHS">GHS</option>
-                      <option value="NGN">NGN</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Bank</span>
-                    <select
-                      className="native-select"
-                      value={paystackSetup.bankCode}
-                      onChange={(event) => setPaystackSetup((prev) => ({ ...prev, bankCode: event.target.value }))}
-                    >
-                      <option value="">Select bank</option>
-                      {paystackBanks.map((bank) => (
-                        <option key={bank.code} value={bank.code}>
-                          {bank.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Account number</span>
-                    <input
-                      className="native-input"
-                      value={paystackSetup.accountNumber}
-                      onChange={(event) =>
-                        setPaystackSetup((prev) => ({
-                          ...prev,
-                          accountNumber: event.target.value.replace(/[^\d]/g, '').slice(0, 12)
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Business name (optional)</span>
-                    <input
-                      className="native-input"
-                      value={paystackSetup.businessName}
-                      onChange={(event) => setPaystackSetup((prev) => ({ ...prev, businessName: event.target.value }))}
-                    />
-                  </label>
-                  <IonButton className="solid-cta" expand="block" onClick={onConnectPaystack} disabled={paystackLoading || disablePaystackConnect}>
-                    {paystackLoading ? 'Connecting...' : isPaystackMethod ? 'Reconnect Paystack' : 'Connect Paystack'}
-                  </IonButton>
-                  {disablePaystackConnect ? (
-                    <p className="muted-text">Manual/offline wallet is active. Disable it before Paystack automation.</p>
-                  ) : null}
-                </div>
               </section>
             </>
           ) : null}
