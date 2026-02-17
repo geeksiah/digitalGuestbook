@@ -214,9 +214,48 @@ export const coupleApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
   update: (data: any) => api.patch('/settings', data),
-  testEmail: (email: string) => api.post('/settings/test-email', { email }),
-  testSMS: (phone: string) => api.post('/settings/test-sms', { phone }),
-  testWhatsApp: (phone: string) => api.post('/settings/test-whatsapp', { phone }),
+  listEmailProviders: () => api.get('/settings/email-providers'),
+  listSmsProviders: () => api.get('/settings/sms-providers'),
+  listWhatsAppProviders: () => api.get('/settings/whatsapp-providers'),
+  testEmail: async (email: string, providerId?: string) => {
+    let resolvedProviderId = providerId;
+    if (!resolvedProviderId) {
+      const response = await api.get('/settings/email-providers');
+      const providers = response.data?.providers || [];
+      const preferred = providers.find((provider: any) => provider?.isDefault) || providers[0];
+      resolvedProviderId = preferred?.id;
+    }
+    if (!resolvedProviderId) {
+      throw new Error('No email provider configured');
+    }
+    return api.post(`/settings/email-providers/${resolvedProviderId}/test`, { email });
+  },
+  testSMS: async (phone: string, providerId?: string) => {
+    let resolvedProviderId = providerId;
+    if (!resolvedProviderId) {
+      const response = await api.get('/settings/sms-providers');
+      const providers = response.data?.providers || [];
+      const preferred = providers.find((provider: any) => provider?.isDefault) || providers[0];
+      resolvedProviderId = preferred?.id;
+    }
+    if (!resolvedProviderId) {
+      throw new Error('No SMS provider configured');
+    }
+    return api.post(`/settings/sms-providers/${resolvedProviderId}/test`, { phone });
+  },
+  testWhatsApp: async (phone: string, providerId?: string) => {
+    let resolvedProviderId = providerId;
+    if (!resolvedProviderId) {
+      const response = await api.get('/settings/whatsapp-providers');
+      const providers = response.data?.providers || [];
+      const preferred = providers.find((provider: any) => provider?.isDefault) || providers[0];
+      resolvedProviderId = preferred?.id;
+    }
+    if (!resolvedProviderId) {
+      throw new Error('No WhatsApp provider configured');
+    }
+    return api.post(`/settings/whatsapp-providers/${resolvedProviderId}/test`, { phone });
+  },
 };
 
 // Payment Gateway API (admin)
@@ -289,7 +328,7 @@ export const ownersApi = {
 
 // Admin API (admin dashboards, payouts, sales, etc.)
 export const adminApi = {
-  dashboard: () => api.get('/admin/dashboard'),
+  dashboard: () => api.get('/admin/dashboard/stats'),
   sales: (params?: any) => api.get('/admin/sales', { params }),
   getSales: (params?: any) => api.get('/admin/sales', { params }),
   payouts: (params?: any) => api.get('/admin/payouts', { params }),
@@ -305,7 +344,7 @@ export const adminApi = {
   schedulePushCampaign: (id: string, scheduledAt: string) =>
     api.post(`/admin/push-campaigns/${id}/schedule`, { scheduledAt }),
   getPushCampaignReport: (id: string) => api.get(`/admin/push-campaigns/${id}/report`),
-  users: (params?: any) => api.get('/admin/users', { params }),
+  users: (params?: any) => api.get('/owners', { params }),
 };
 
 // Event Owner “token” portal API (no admin_token; uses token in URL)

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host 0.0.0.0 --port 5174",
+    "contract:audit": "node ../scripts/endpoint-contract-audit.mjs",
     "lint": "tsc --noEmit",
     "build": "tsc && vite build",
     "preview": "vite preview",

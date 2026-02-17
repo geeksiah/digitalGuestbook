@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
+    "contract:audit": "node ../scripts/endpoint-contract-audit.mjs",
     "start": "node dist/index.js",
     "start:prod": "node dist/index.js",
     "db:generate": "prisma generate",

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "contract:audit": "node ../scripts/endpoint-contract-audit.mjs",
     "start": "next start",
     "lint": "next lint"
   },
