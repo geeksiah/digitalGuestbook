@@ -2,14 +2,12 @@ import { FormEvent, useMemo, useState } from 'react';
 import {
   IonButton,
   IonContent,
-  IonIcon,
   IonPage,
   IonSegment,
   IonSegmentButton,
   useIonRouter,
   useIonToast
 } from '@ionic/react';
-import { barChartOutline, shieldCheckmarkOutline, sparklesOutline } from 'ionicons/icons';
 import { ownerAuthApi } from '../api/client';
 import { useSessionStore } from '../store/session';
 import { getErrorMessage } from '../utils/error';
@@ -34,9 +32,9 @@ const AuthPage = () => {
   const labels = useMemo(() => {
     if (mode === 'register') {
       return {
-        hero: 'Create your\nowner account',
+        hero: 'Create\nAccount',
         panelTitle: 'Sign up',
-        cta: 'Create account'
+        cta: 'Create Account'
       };
     }
     if (mode === 'setup') {
@@ -54,7 +52,7 @@ const AuthPage = () => {
       };
     }
     return {
-      hero: 'Welcome back\nto Owner',
+      hero: 'Welcome Back!',
       panelTitle: 'Sign in',
       cta: 'Sign in'
     };
@@ -123,23 +121,8 @@ const AuthPage = () => {
           <section className="auth-hero-pane">
             <div className="brand-mark">EP</div>
             <div>
-              <p className="eyebrow" style={{ color: 'rgba(255,255,255,0.74)' }}>EventPeepo owner app</p>
               <h1 style={{ whiteSpace: 'pre-line' }}>{labels.hero}</h1>
               <p>Fast operations for events, guests, and payouts.</p>
-            </div>
-            <div className="auth-chip-row">
-              <span className="auth-chip">
-                <IonIcon icon={shieldCheckmarkOutline} />
-                Secure
-              </span>
-              <span className="auth-chip">
-                <IonIcon icon={barChartOutline} />
-                Real-time
-              </span>
-              <span className="auth-chip">
-                <IonIcon icon={sparklesOutline} />
-                Optimized UI
-              </span>
             </div>
           </section>
 
@@ -162,6 +145,7 @@ const AuthPage = () => {
             ) : null}
 
             <form className="auth-form" onSubmit={submit}>
+              <div className="auth-fields">
               {mode === 'register' ? (
                 <label className="field">
                   <span>Full name</span>
@@ -242,10 +226,13 @@ const AuthPage = () => {
                   />
                 </label>
               ) : null}
+              </div>
 
-              <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
-                {loading ? 'Please wait...' : labels.cta}
-              </IonButton>
+              <div className={'auth-submit-wrap' + (mode === 'register' ? ' is-sticky' : '')}>
+                <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
+                  {loading ? 'Please wait...' : labels.cta}
+                </IonButton>
+              </div>
             </form>
 
             <div className="auth-alt-actions">

@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { itineraryApi, ownerDashboardApi } from '@/lib/api';
@@ -245,6 +245,8 @@ export default function OwnerEventDetailPage() {
   const [inviteLines, setInviteLines] = useState('');
   const [inviteExpiryHours, setInviteExpiryHours] = useState(240);
   const [inviteChannel, setInviteChannel] = useState<'whatsapp' | 'email' | 'both'>('whatsapp');
+  const [importingInvites, setImportingInvites] = useState(false);
+  const inviteFileInputRef = useRef<HTMLInputElement | null>(null);
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
   const [loadingItinerary, setLoadingItinerary] = useState(false);
   const [savingItinerary, setSavingItinerary] = useState(false);
@@ -586,6 +588,298 @@ export default function OwnerEventDetailPage() {
         return { name: parts[0], phone: parts[1], email: parts[2] };
       })
       .filter((invite) => invite.phone || invite.email);
+  };
+
+  const parseCsvRow = (row: string) => {
+    const cols: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < row.length; i++) {
+      const char = row[i];
+      if (char === '"') {
+        if (inQuotes && row[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        cols.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    cols.push(current.trim());
+    return cols;
+  };
+
+  const buildInviteLine = (name: string, phone: string, email: string) => {
+    if (inviteChannel === 'whatsapp') {
+      if (name && phone && email) return `${name},${phone},${email}`;
+      if (name && phone) return `${name},${phone}`;
+      if (phone) return phone;
+      return '';
+    }
+    if (inviteChannel === 'email') {
+      if (name && email) return `${name},${email}`;
+      if (email) return email;
+      return '';
+    }
+    if (name && phone && email) return `${name},${phone},${email}`;
+    return '';
+  };
+
+  const importInviteRows = (rows: string[][]) => {
+    if (!rows.length) return 0;
+
+    const header = rows[0].map((v) => v.toLowerCase());
+    const hasHeader = header.some((v) => ['name', 'full name', 'phone', 'mobile', 'tel', 'email', 'e-mail'].includes(v));
+    const indexOfHeader = (labels: string[]) => header.findIndex((h) => labels.includes(h));
+    const nameIdx = hasHeader ? indexOfHeader(['name', 'full name']) : 0;
+    const phoneIdx = hasHeader ? indexOfHeader(['phone', 'mobile', 'tel']) : 1;
+    const emailIdx = hasHeader ? indexOfHeader(['email', 'e-mail']) : 2;
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+
+    const importedLines = dataRows
+      .map((cols) => {
+        const name = (nameIdx >= 0 ? cols[nameIdx] : cols[0] || '').trim();
+        const phone = (phoneIdx >= 0 ? cols[phoneIdx] : cols[1] || '').trim();
+        const email = (emailIdx >= 0 ? cols[emailIdx] : cols[2] || '').trim();
+        return buildInviteLine(name, phone, email);
+      })
+      .filter(Boolean);
+
+    if (!importedLines.length) return 0;
+
+    setInviteLines((prev) => {
+      const existing = prev
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const unique = Array.from(new Set([...existing, ...importedLines]));
+      return unique.join('\n');
+    });
+
+    return importedLines.length;
+  };
+
+  const importInviteText = (text: string) => {
+    const rows = text
+      .split(/\r?\n/)
+      .map((row) => row.trim())
+      .filter(Boolean)
+      .map(parseCsvRow);
+    return importInviteRows(rows);
+  };
+
+  const parseXlsxRows = async (file: File) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const view = new DataView(arrayBuffer);
+    const decoder = new TextDecoder();
+
+    const eocdSignature = 0x06054b50;
+    const centralSignature = 0x02014b50;
+    const localSignature = 0x04034b50;
+    let eocdOffset = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+      if (view.getUint32(i, true) === eocdSignature) {
+        eocdOffset = i;
+        break;
+      }
+    }
+    if (eocdOffset < 0) throw new Error('Invalid XLSX file');
+
+    const centralSize = view.getUint32(eocdOffset + 12, true);
+    const centralOffset = view.getUint32(eocdOffset + 16, true);
+
+    const unzipEntryText = async (entryName: string) => {
+      let offset = centralOffset;
+      const centralEnd = centralOffset + centralSize;
+      while (offset < centralEnd) {
+        if (view.getUint32(offset, true) !== centralSignature) break;
+        const compression = view.getUint16(offset + 10, true);
+        const compressedSize = view.getUint32(offset + 20, true);
+        const fileNameLength = view.getUint16(offset + 28, true);
+        const extraLength = view.getUint16(offset + 30, true);
+        const commentLength = view.getUint16(offset + 32, true);
+        const localOffset = view.getUint32(offset + 42, true);
+        const fileName = decoder.decode(bytes.slice(offset + 46, offset + 46 + fileNameLength));
+
+        if (fileName === entryName) {
+          if (view.getUint32(localOffset, true) !== localSignature) throw new Error('Invalid XLSX entry');
+          const localNameLen = view.getUint16(localOffset + 26, true);
+          const localExtraLen = view.getUint16(localOffset + 28, true);
+          const dataStart = localOffset + 30 + localNameLen + localExtraLen;
+          const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+
+          let uncompressed: Uint8Array;
+          if (compression === 0) {
+            uncompressed = compressed;
+          } else if (compression === 8) {
+            const inflateCtor = (globalThis as { DecompressionStream?: new (format: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
+            if (!inflateCtor) throw new Error('XLSX decompression not supported on this device');
+            const stream = new Blob([compressed]).stream().pipeThrough(new inflateCtor('deflate-raw'));
+            const inflated = await new Response(stream).arrayBuffer();
+            uncompressed = new Uint8Array(inflated);
+          } else {
+            throw new Error('Unsupported XLSX compression');
+          }
+          return decoder.decode(uncompressed);
+        }
+
+        offset += 46 + fileNameLength + extraLength + commentLength;
+      }
+      return '';
+    };
+
+    const listEntries = () => {
+      const entries: string[] = [];
+      let offset = centralOffset;
+      const centralEnd = centralOffset + centralSize;
+      while (offset < centralEnd) {
+        if (view.getUint32(offset, true) !== centralSignature) break;
+        const fileNameLength = view.getUint16(offset + 28, true);
+        const extraLength = view.getUint16(offset + 30, true);
+        const commentLength = view.getUint16(offset + 32, true);
+        const fileName = decoder.decode(bytes.slice(offset + 46, offset + 46 + fileNameLength));
+        entries.push(fileName);
+        offset += 46 + fileNameLength + extraLength + commentLength;
+      }
+      return entries;
+    };
+
+    const entries = listEntries();
+    const sharedStringsXml = entries.includes('xl/sharedStrings.xml') ? await unzipEntryText('xl/sharedStrings.xml') : '';
+    const worksheetPath = entries.includes('xl/worksheets/sheet1.xml')
+      ? 'xl/worksheets/sheet1.xml'
+      : (entries.find((name) => name.startsWith('xl/worksheets/') && name.endsWith('.xml')) || '');
+    if (!worksheetPath) throw new Error('No worksheet found in XLSX');
+    const worksheetXml = await unzipEntryText(worksheetPath);
+
+    const parser = new DOMParser();
+    const sharedStrings = sharedStringsXml
+      ? Array.from(parser.parseFromString(sharedStringsXml, 'application/xml').getElementsByTagName('si')).map((si) =>
+          Array.from(si.getElementsByTagName('t')).map((node) => node.textContent || '').join('')
+        )
+      : [];
+
+    const worksheetDoc = parser.parseFromString(worksheetXml, 'application/xml');
+    const rowNodes = Array.from(worksheetDoc.getElementsByTagName('row'));
+    const rows = rowNodes.map((rowNode) => {
+      const row: string[] = [];
+      const cells = Array.from(rowNode.getElementsByTagName('c'));
+      cells.forEach((cell) => {
+        const ref = cell.getAttribute('r') || '';
+        const colLetters = ref.replace(/[0-9]/g, '');
+        let colIndex = row.length;
+        if (colLetters) {
+          colIndex = 0;
+          for (let i = 0; i < colLetters.length; i++) {
+            colIndex = colIndex * 26 + (colLetters.charCodeAt(i) - 64);
+          }
+          colIndex -= 1;
+        }
+
+        const type = cell.getAttribute('t');
+        let value = '';
+        if (type === 's') {
+          const idx = Number(cell.getElementsByTagName('v')[0]?.textContent || '-1');
+          value = idx >= 0 ? String(sharedStrings[idx] || '') : '';
+        } else if (type === 'inlineStr') {
+          value = Array.from(cell.getElementsByTagName('t')).map((node) => node.textContent || '').join('');
+        } else {
+          value = cell.getElementsByTagName('v')[0]?.textContent || '';
+        }
+        row[colIndex] = value.trim();
+      });
+      return row;
+    });
+
+    return rows.filter((row) => row.some((value) => String(value || '').trim()));
+  };
+
+  const handleImportInviteFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const resetInput = () => {
+      if (inviteFileInputRef.current) inviteFileInputRef.current.value = '';
+    };
+
+    try {
+      setImportingInvites(true);
+      const lowerName = file.name.toLowerCase();
+      if (lowerName.endsWith('.xls') && !lowerName.endsWith('.xlsx')) {
+        toast.error('Legacy .xls is not supported. Use .xlsx or .csv');
+        return;
+      }
+      const imported = lowerName.endsWith('.xlsx')
+        ? importInviteRows(await parseXlsxRows(file))
+        : importInviteText(await file.text());
+      if (!imported) {
+        toast.error('No valid invite rows found in file');
+        return;
+      }
+      toast.success(`Imported ${imported} invite row(s)`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to import invite file';
+      toast.error(message);
+    } finally {
+      setImportingInvites(false);
+      resetInput();
+    }
+  };
+
+  const downloadInviteTemplate = () => {
+    const header = 'name,phone,email';
+    const sample = 'Ama Serwaa,+233240000001,ama@example.com';
+    const csv = `${header}\n${sample}`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'invite-template.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const syncContacts = async () => {
+    const contactPicker = (navigator as Navigator & {
+      contacts?: { select: (props: string[], options: { multiple: boolean }) => Promise<Array<{ name?: string[]; email?: string[]; tel?: string[] }>> };
+    }).contacts;
+    if (!contactPicker?.select) {
+      toast.error('Contact sync is not supported on this device/browser');
+      return;
+    }
+    try {
+      const contacts = await contactPicker.select(['name', 'email', 'tel'], { multiple: true });
+      const lines = contacts
+        .map((contact) => {
+          const name = String(contact.name?.[0] || '').trim();
+          const phone = String(contact.tel?.[0] || '').trim();
+          const email = String(contact.email?.[0] || '').trim();
+          return buildInviteLine(name, phone, email);
+        })
+        .filter(Boolean);
+
+      if (!lines.length) {
+        toast.error('No compatible contacts selected');
+        return;
+      }
+
+      setInviteLines((prev) => {
+        const existing = prev
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+        return Array.from(new Set([...existing, ...lines])).join('\n');
+      });
+      toast.success(`Synced ${lines.length} contact(s)`);
+    } catch {
+      toast.error('Contact sync canceled or failed');
+    }
   };
 
   const handleSendInvites = async () => {
@@ -1685,6 +1979,29 @@ export default function OwnerEventDetailPage() {
                   <><span className="font-mono">name,phone,email</span> (both phone and email required)</>
                 )}
               </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn-outline" onClick={syncContacts}>
+                  Sync Contacts
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  disabled={importingInvites}
+                  onClick={() => inviteFileInputRef.current?.click()}
+                >
+                  {importingInvites ? 'Importing...' : 'Import CSV/XLSX'}
+                </button>
+                <button type="button" className="btn-ghost" onClick={downloadInviteTemplate}>
+                  Download CSV Template
+                </button>
+                <input
+                  ref={inviteFileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls,text/csv"
+                  className="hidden"
+                  onChange={handleImportInviteFile}
+                />
+              </div>
               <textarea
                 className="input min-h-[140px]"
                 placeholder={
