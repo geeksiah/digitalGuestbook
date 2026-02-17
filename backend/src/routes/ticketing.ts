@@ -5,6 +5,11 @@ import { authenticateAdmin } from '../middleware/auth.js';
 import { z } from 'zod';
 import { verifyPaystackTransaction } from '../services/paystack.js';
 import { getSystemFeeDefaults, resolveEventFeeConfig } from '../utils/fees.js';
+import {
+  filterEventGatewaysForOwner,
+  resolveOwnerWalletState,
+  resolveRoutingForMethod,
+} from '../utils/walletPolicy.js';
 
 const router = Router();
 
@@ -245,10 +250,17 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     include: {
       Owner: {
         select: {
-          wallet: {
+          countryCode: true,
+          wallets: {
+            where: { isActive: true },
             select: {
-              paystackSubaccount: true,
+              id: true,
+              walletType: true,
+              isActive: true,
               isVerified: true,
+              currency: true,
+              paystackSubaccount: true,
+              paystackRecipientCode: true,
             },
           },
         },
@@ -308,6 +320,13 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     maxPerOrder: t.maxPerOrder,
   }));
 
+  const walletState = resolveOwnerWalletState((event.Owner?.wallets || []) as any[]);
+  const visibleGateways = filterEventGatewaysForOwner({
+    eventGateways: event.eventPaymentGateways as any[],
+    walletState,
+  });
+  const paystackWallet = walletState.walletByType.get('paystack');
+
   res.json({
     eventId: event.id,
     eventName: event.name,
@@ -315,15 +334,16 @@ router.get('/public/:eventSlug/form', asyncHandler(async (req, res) => {
     requireApproval: event.requireApproval,
     fields,
     tickets: event.rsvpMode === 'rsvp' ? [] : tickets,
-    paymentGateways: event.rsvpMode !== 'rsvp' && event.eventPaymentGateways?.length > 0
-      ? event.eventPaymentGateways.map((eg: any) => {
+    walletMode: walletState.mode,
+    paymentGateways: event.rsvpMode !== 'rsvp' && visibleGateways?.length > 0
+      ? visibleGateways.map((eg: any) => {
           const g = eg.paymentGateway;
           const splitConfig =
-            g.gateway === 'paystack' && event.Owner?.wallet?.paystackSubaccount
+            g.gateway === 'paystack' && paystackWallet?.paystackSubaccount
               ? {
-                  subaccount: event.Owner.wallet.paystackSubaccount,
+                  subaccount: paystackWallet.paystackSubaccount,
                   bearer: 'subaccount',
-                  ownerWalletVerified: Boolean(event.Owner.wallet.isVerified),
+                  ownerWalletVerified: Boolean(paystackWallet.isVerified),
                 }
               : null;
 
@@ -395,7 +415,18 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
     include: {
       Owner: {
         include: {
-          wallet: true,
+          wallets: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              walletType: true,
+              isActive: true,
+              isVerified: true,
+              currency: true,
+              paystackSubaccount: true,
+              paystackRecipientCode: true,
+            },
+          },
         },
       },
       ticketTypes: true,
@@ -491,6 +522,11 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
   const paymentReference = data.paymentReference?.trim();
   const paymentMethod = (data.paymentMethod || '').trim().toLowerCase();
   const isPaystackPayment = paymentMethod === 'paystack';
+  const ownerWalletState = resolveOwnerWalletState((event.Owner?.wallets || []) as any[]);
+  const payoutRoutingDecision = resolveRoutingForMethod({
+    paymentMethod,
+    walletState: ownerWalletState,
+  });
   if (!paymentReference) {
     throw new AppError('Payment reference is required', 400);
   }
@@ -511,6 +547,16 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
   if (!eventGateway) {
     throw new AppError('Payment gateway not configured for this event', 400);
   }
+  const allowedGateways = filterEventGatewaysForOwner({
+    eventGateways: event.eventPaymentGateways as any[],
+    walletState: ownerWalletState,
+  });
+  if (!allowedGateways.length) {
+    throw new AppError('No payment methods are enabled for this owner wallet setup', 400);
+  }
+  if (ownerWalletState.mode === 'AUTOMATED' && payoutRoutingDecision.payoutRouting !== 'OWNER_AUTOMATED') {
+    throw new AppError('Selected payment method is not enabled by the owner wallet configuration', 400);
+  }
 
   if (isPaystackPayment) {
     const verification = await verifyPaystackTransaction(paymentReference);
@@ -529,7 +575,10 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       throw new AppError('Paystack currency does not match event currency', 400);
     }
 
-    const expectedSubaccount = event.Owner?.wallet?.paystackSubaccount || null;
+    const expectedSubaccount =
+      payoutRoutingDecision.wallet && payoutRoutingDecision.wallet.walletType === 'paystack'
+        ? payoutRoutingDecision.wallet.paystackSubaccount || null
+        : null;
     const verifiedSubaccount =
       typeof verification.subaccount === 'string'
         ? verification.subaccount
@@ -607,6 +656,9 @@ router.post('/public/:eventSlug/checkout', asyncHandler(async (req, res) => {
       currency: event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD',
       paymentMethod: paymentMethod,
       paymentRef: paymentReference,
+      payoutRouting: payoutRoutingDecision.payoutRouting,
+      routedWalletType: payoutRoutingDecision.wallet?.walletType || null,
+      ownerWalletId: payoutRoutingDecision.wallet?.id || null,
       ticketTypeName: event.ticketTypes[0]?.name,
       ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
       buyerName: data.primaryName,

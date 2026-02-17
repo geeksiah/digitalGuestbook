@@ -50,6 +50,7 @@ model Owner {
   name         String
   phone        String?
   company      String?
+  countryCode  String?
 
   // Account Status
   isActive Boolean @default(true)
@@ -66,6 +67,7 @@ model Owner {
   // Relations
   events                 Event[]
   wallet                 OwnerWallet?
+  wallets                OwnerPayoutWallet[]
   passwordResetRequests  PasswordResetRequest[]
   sentRsvpInvites        RsvpInvite[]
   notificationPreference OwnerNotificationPreference?
@@ -116,6 +118,35 @@ model OwnerWallet {
 
   // Relations
   owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+model OwnerPayoutWallet {
+  id      String @id @default(uuid())
+  ownerId String
+
+  // manual | offline | stripe | paypal | paystack | flutterwave
+  walletType String
+  label      String?
+  currency   String  @default("USD")
+  countryCode String?
+  isActive   Boolean @default(true)
+  isVerified Boolean @default(false)
+  verifiedAt DateTime?
+
+  // Provider identifiers (if applicable)
+  providerAccountId    String?
+  paystackSubaccount   String?
+  paystackRecipientCode String?
+  detailsJson          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner        Owner          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  transactions Transaction[]  @relation("TransactionOwnerWallet")
+
+  @@index([ownerId, isActive])
+  @@index([ownerId, walletType, isActive])
 }
 
 model OwnerNotificationPreference {
@@ -475,6 +506,9 @@ model Transaction {
   // Payment Info
   paymentMethod String? // stripe | paystack | paypal | cash
   paymentRef    String? // External payment reference
+  payoutRouting String  @default("ADMIN_MANUAL") // ADMIN_MANUAL | OWNER_AUTOMATED
+  routedWalletType String?
+  ownerWalletId String?
 
   // Ticket Info
   ticketTypeName String?
@@ -489,7 +523,11 @@ model Transaction {
   updatedAt DateTime @updatedAt
 
   // Relations
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ownerWallet OwnerPayoutWallet? @relation("TransactionOwnerWallet", fields: [ownerWalletId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, payoutRouting, status])
+  @@index([ownerWalletId])
 }
 
 // Payout Requests from Event Owners

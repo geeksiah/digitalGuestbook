@@ -76,6 +76,14 @@ interface SalesAnalytics {
   };
   byType: Record<string, { count: number; gross: number; adminRevenue: number; ownerNet: number; processingFees: number }>;
   byStatus: Record<string, number>;
+  byCurrency: Array<{
+    currency: string;
+    count: number;
+    gross: number;
+    adminRevenue: number;
+    ownerNet: number;
+    processingFees: number;
+  }>;
 }
 
 interface PaginationInfo {
@@ -102,6 +110,13 @@ const money = (amount: number | null | undefined, currency?: string | null) => {
   } catch {
     return `${code} ${value.toFixed(2)}`;
   }
+};
+
+const aggregateMoney = (amount: number | null | undefined, currency?: string | null) => {
+  if (currency) return money(amount, currency);
+  const value = Number(amount || 0);
+  if (!Number.isFinite(value)) return '-';
+  return `${value.toFixed(2)} (multi-currency)`;
 };
 
 const statusClass = (status: string) => {
@@ -136,6 +151,12 @@ export default function SalesPage() {
     endDate: '',
     page: 1,
   });
+
+  const analyticsDisplayCurrency =
+    filters.eventId
+      ? transactions[0]?.currency || legacySales[0]?.currency || analytics?.byCurrency?.[0]?.currency || 'USD'
+      : (analytics?.byCurrency?.length === 1 ? analytics.byCurrency[0].currency : null);
+  const legacyTotalsCurrency = legacySales[0]?.currency || analyticsDisplayCurrency;
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -250,29 +271,29 @@ export default function SalesPage() {
           <div className="bg-white rounded-xl border border-surface-200 p-5">
             <p className="text-xs text-surface-500 uppercase tracking-wide">Tickets</p>
             <p className="text-2xl font-bold text-navy-900 mt-1">{analytics.totals.ticketTransactionCount}</p>
-            <p className="text-xs text-surface-500 mt-1">{money(analytics.totals.ticketRevenue, 'USD')}</p>
+            <p className="text-xs text-surface-500 mt-1">{aggregateMoney(analytics.totals.ticketRevenue, analyticsDisplayCurrency)}</p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-5">
             <p className="text-xs text-surface-500 uppercase tracking-wide">Gift Sales</p>
             <p className="text-2xl font-bold text-navy-900 mt-1">{analytics.totals.giftTransactionCount}</p>
-            <p className="text-xs text-surface-500 mt-1">{money(analytics.totals.giftRevenue, 'USD')}</p>
+            <p className="text-xs text-surface-500 mt-1">{aggregateMoney(analytics.totals.giftRevenue, analyticsDisplayCurrency)}</p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-5">
             <p className="text-xs text-surface-500 uppercase tracking-wide">Gross Revenue</p>
-            <p className="text-2xl font-bold text-brand-900 mt-1">{money(analytics.totals.grossRevenue, 'USD')}</p>
+            <p className="text-2xl font-bold text-brand-900 mt-1">{aggregateMoney(analytics.totals.grossRevenue, analyticsDisplayCurrency)}</p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-5">
             <p className="text-xs text-surface-500 uppercase tracking-wide">Admin Revenue</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{money(analytics.totals.adminRevenue, 'USD')}</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">{aggregateMoney(analytics.totals.adminRevenue, analyticsDisplayCurrency)}</p>
             <p className="text-xs text-surface-500 mt-1">{analytics.totals.adminRevenueTransactionCount} earning txns</p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-5">
             <p className="text-xs text-surface-500 uppercase tracking-wide">Owner Net</p>
-            <p className="text-2xl font-bold text-navy-900 mt-1">{money(analytics.totals.ownerNet, 'USD')}</p>
+            <p className="text-2xl font-bold text-navy-900 mt-1">{aggregateMoney(analytics.totals.ownerNet, analyticsDisplayCurrency)}</p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-5">
             <p className="text-xs text-surface-500 uppercase tracking-wide">Processing Fees</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{money(analytics.totals.processingFees, 'USD')}</p>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{aggregateMoney(analytics.totals.processingFees, analyticsDisplayCurrency)}</p>
           </div>
         </div>
       )}
@@ -499,7 +520,7 @@ export default function SalesPage() {
 
       {stats ? (
         <div className="text-xs text-surface-500">
-          Legacy ticket totals: {stats.totalSales} sales, {money(stats.totalRevenue, 'USD')} revenue.
+          Legacy ticket totals: {stats.totalSales} sales, {money(stats.totalRevenue, legacyTotalsCurrency)} revenue.
         </div>
       ) : null}
     </div>

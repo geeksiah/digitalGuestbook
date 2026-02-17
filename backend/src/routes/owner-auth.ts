@@ -15,6 +15,7 @@ const registerSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
   phone: z.string().optional(),
   company: z.string().optional(),
+  countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/).transform((v) => v.toUpperCase()).default('US'),
 });
 
 const loginSchema = z.object({
@@ -37,6 +38,7 @@ const updateProfileSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().optional(),
   company: z.string().optional(),
+  countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/).transform((v) => v.toUpperCase()).optional(),
 });
 
 const requestPasswordResetSchema = z.object({
@@ -84,6 +86,7 @@ router.post('/register', asyncHandler(async (req, res) => {
       passwordHash,
       phone: data.phone,
       company: data.company,
+      countryCode: data.countryCode,
       emailVerified: false, // Email verification can be added later
     },
     select: {
@@ -92,6 +95,7 @@ router.post('/register', asyncHandler(async (req, res) => {
       email: true,
       phone: true,
       company: true,
+      countryCode: true,
       isActive: true,
       createdAt: true,
     },
@@ -193,6 +197,7 @@ router.get('/me', authenticateOwnerAccount, asyncHandler(async (req, res) => {
       email: true,
       phone: true,
       company: true,
+      countryCode: true,
       isActive: true,
       emailVerified: true,
       createdAt: true,
@@ -398,6 +403,7 @@ router.put('/profile', authenticateOwnerAccount, asyncHandler(async (req, res) =
       email: true,
       phone: true,
       company: true,
+      countryCode: true,
       isActive: true,
       emailVerified: true,
       createdAt: true,

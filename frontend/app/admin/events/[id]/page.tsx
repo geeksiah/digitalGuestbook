@@ -186,6 +186,17 @@ const Icons = {
   reel: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>,
 };
 
+const formatCurrency = (amount: number | null | undefined, currency?: string | null) => {
+  const value = Number(amount || 0);
+  if (!Number.isFinite(value)) return '-';
+  const code = (currency || 'USD').toUpperCase();
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+  } catch {
+    return `${code} ${value.toFixed(2)}`;
+  }
+};
+
 export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1100,6 +1111,7 @@ export default function EventDetailPage() {
     { orders: 0, gross: 0, ownerNet: 0, adminRetained: 0, cash: 0, packageAmount: 0 }
   );
   const giftCurrency = giftOrders[0]?.currency || primaryEventCurrency;
+  const salesCurrency = sales[0]?.currency || event?.defaultCurrency || primaryEventCurrency;
 
   return (
     <div className="space-y-7">
@@ -2355,7 +2367,7 @@ export default function EventDetailPage() {
                   <div className="bg-white rounded-xl border border-surface-200 p-5">
                     <p className="text-sm text-surface-500 mb-1">Total Revenue</p>
                     <p className="text-3xl font-bold text-brand-900">
-                      ${(salesStats.totalRevenue || 0).toFixed(2)}
+                      {formatCurrency(salesStats.totalRevenue || 0, salesCurrency)}
                     </p>
                   </div>
                   <div className="bg-white rounded-xl border border-surface-200 p-5">
@@ -2415,7 +2427,7 @@ export default function EventDetailPage() {
                             </td>
                             <td className="py-3 px-4">
                               <p className="font-semibold text-brand-900">
-                                ${(sale.amountPaid || 0).toFixed(2)}
+                                {formatCurrency(sale.amountPaid || 0, sale.currency || salesCurrency)}
                               </p>
                             </td>
                             <td className="py-3 px-4">

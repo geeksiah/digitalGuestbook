@@ -230,23 +230,29 @@ export const paymentGatewaysApi = {
 
 // Ticketing API (admin/owner)
 export const ticketingApi = {
-  // Existing
-  listTickets: (eventId: string) => api.get(`/tickets/event/${eventId}`),
-  getTicket: (id: string) => api.get(`/tickets/${id}`),
-  createTicket: (eventId: string, data: any) => api.post(`/tickets/event/${eventId}`, data),
-  updateTicket: (id: string, data: any) => api.patch(`/tickets/${id}`, data),
-  deleteTicket: (id: string) => api.delete(`/tickets/${id}`),
-  stats: (eventId: string) => api.get(`/tickets/event/${eventId}/stats`),
-  getTicketTypes: (eventId: string) => api.get(`/tickets/event/${eventId}/types`),
+  // Ticket types
+  listTickets: (eventId: string) => api.get(`/ticketing/events/${eventId}/tickets/admin`),
+  getTicket: (eventId: string, ticketId: string) => api.get(`/ticketing/events/${eventId}/tickets/admin`, {
+    params: { ticketId },
+  }),
+  createTicket: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/tickets`, data),
+  updateTicket: (eventId: string, ticketId: string, data: any) =>
+    api.put(`/ticketing/events/${eventId}/tickets/${ticketId}`, data),
+  deleteTicket: (eventId: string, ticketId: string) =>
+    api.delete(`/ticketing/events/${eventId}/tickets/${ticketId}`),
+  stats: (eventId: string) => api.get(`/admin/sales`, { params: { eventId, type: 'ticket_sale', limit: 1 } }),
+  getTicketTypes: (eventId: string) => api.get(`/ticketing/events/${eventId}/tickets/admin`),
   // Custom Fields
   getCustomFields: (eventId: string) => api.get(`/ticketing/events/${eventId}/fields`),
   createCustomField: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/fields`, data),
   updateCustomField: (eventId: string, fieldId: string, data: any) => api.put(`/ticketing/events/${eventId}/fields/${fieldId}`, data),
   deleteCustomField: (eventId: string, fieldId: string) => api.delete(`/ticketing/events/${eventId}/fields/${fieldId}`),
   // NEW — aliases used by TicketsTab.tsx
-  createTicketType: (eventId: string, data: any) => api.post(`/tickets/event/${eventId}`, data),
-  updateTicketType: (eventId: string, id: string, data: any) => api.patch(`/tickets/${id}`, data),
-  deleteTicketType: (eventId: string, id: string) => api.delete(`/tickets/${id}`),
+  createTicketType: (eventId: string, data: any) => api.post(`/ticketing/events/${eventId}/tickets`, data),
+  updateTicketType: (eventId: string, id: string, data: any) =>
+    api.put(`/ticketing/events/${eventId}/tickets/${id}`, data),
+  deleteTicketType: (eventId: string, id: string) =>
+    api.delete(`/ticketing/events/${eventId}/tickets/${id}`),
   // Payment gateway methods
   getPaymentGateway: (eventId: string) => api.get(`/payment-gateways/event/${eventId}`),
   updatePaymentGateway: (eventId: string, data: any) => api.post(`/payment-gateways/event/${eventId}`, data),

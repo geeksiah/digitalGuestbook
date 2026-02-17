@@ -8,6 +8,11 @@ import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.
 import { verifyPaystackTransaction } from '../services/paystack.js';
 import { BUCKETS, uploadToSupabase } from '../services/supabaseStorage.js';
 import { getSystemFeeDefaults, resolveEventFeeConfig } from '../utils/fees.js';
+import {
+  filterEventGatewaysForOwner,
+  resolveOwnerWalletState,
+  resolveRoutingForMethod,
+} from '../utils/walletPolicy.js';
 
 const router = Router();
 
@@ -166,23 +171,44 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
     orderBy: { sortOrder: 'asc' },
   });
 
-  const ownerWallet = event.ownerId
-    ? await (prisma as any).ownerWallet.findUnique({
-        where: { ownerId: event.ownerId },
-        select: { paystackSubaccount: true, isVerified: true },
+  const ownerProfile = event.ownerId
+    ? await prisma.owner.findUnique({
+        where: { id: event.ownerId },
+        select: {
+          countryCode: true,
+          wallets: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              walletType: true,
+              isActive: true,
+              isVerified: true,
+              currency: true,
+              paystackSubaccount: true,
+              paystackRecipientCode: true,
+            },
+          },
+        },
       })
     : null;
+  const walletState = resolveOwnerWalletState((ownerProfile?.wallets || []) as any[]);
+  const visibleGateways = filterEventGatewaysForOwner({
+    eventGateways: eventGateways as any[],
+    walletState,
+  });
+  const paystackWallet = walletState.walletByType.get('paystack');
 
   res.json({
     event: eventPublic,
     packages,
     momoEnabled: true,
+    walletMode: walletState.mode,
     settlementPolicy: {
-      cashGift: ownerWallet?.paystackSubaccount ? 'split_to_owner_subaccount' : 'platform_settlement',
+      cashGift: walletState.mode === 'AUTOMATED' ? 'owner_wallet_routing' : 'platform_settlement',
       packagePurchase: 'platform_only',
       mixedPaystackCheckoutAllowed: false,
     },
-    paymentGateways: eventGateways.map((eventGateway) => {
+    paymentGateways: visibleGateways.map((eventGateway) => {
       const gateway = eventGateway.paymentGateway;
       const publicKey =
         gateway.gateway === 'paystack'
@@ -199,11 +225,11 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
         currency: gateway.currency,
         publicKey,
         splitConfig:
-          gateway.gateway === 'paystack' && ownerWallet?.paystackSubaccount
+          gateway.gateway === 'paystack' && paystackWallet?.paystackSubaccount
             ? {
-                subaccount: ownerWallet.paystackSubaccount,
+                subaccount: paystackWallet.paystackSubaccount,
                 bearer: 'subaccount',
-                ownerWalletVerified: Boolean(ownerWallet.isVerified),
+                ownerWalletVerified: Boolean(paystackWallet.isVerified),
               }
             : null,
       };
@@ -234,6 +260,23 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       platformFeeFixed: true,
       processingFeePercent: true,
       processingFeeFixed: true,
+      Owner: {
+        select: {
+          countryCode: true,
+          wallets: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              walletType: true,
+              isActive: true,
+              isVerified: true,
+              currency: true,
+              paystackSubaccount: true,
+              paystackRecipientCode: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!event) throw new AppError('Event not found', 404);
@@ -300,11 +343,16 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
 
   const requestedGatewayId = data.paymentGatewayId || null;
   const requestedPaymentMethod = (data.paymentMethod || '').trim().toLowerCase() || null;
+  const ownerWalletState = resolveOwnerWalletState((event.Owner?.wallets || []) as any[]);
+  const visibleGateways = filterEventGatewaysForOwner({
+    eventGateways: configuredGateways as any[],
+    walletState: ownerWalletState,
+  });
 
   const selectedGateway = requestedGatewayId
-    ? configuredGateways.find((gateway) => gateway.paymentGatewayId === requestedGatewayId)
+    ? visibleGateways.find((gateway) => gateway.paymentGatewayId === requestedGatewayId)
     : requestedPaymentMethod
-    ? configuredGateways.find((gateway) => gateway.paymentGateway.gateway === requestedPaymentMethod)
+    ? visibleGateways.find((gateway) => gateway.paymentGateway.gateway === requestedPaymentMethod)
     : null;
 
   if (requestedGatewayId && !selectedGateway) {
@@ -318,7 +366,7 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
     throw new AppError('Payment method does not match selected gateway', 400);
   }
   if (
-    configuredGateways.length > 0 &&
+    visibleGateways.length > 0 &&
     !selectedGateway &&
     (requestedGatewayId || requestedPaymentMethod || data.paymentReference)
   ) {
@@ -332,6 +380,13 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
   const currency = giftPackages[0]?.currency || selectedGateway?.paymentGateway.currency || 'USD';
   const paymentReference = data.paymentReference?.trim() || null;
   const isPaystackPayment = paymentMethod === 'paystack';
+  const payoutRoutingDecision = resolveRoutingForMethod({
+    paymentMethod,
+    walletState: ownerWalletState,
+  });
+  if (ownerWalletState.mode === 'AUTOMATED' && payoutRoutingDecision.payoutRouting !== 'OWNER_AUTOMATED') {
+    throw new AppError('Selected payment method is not enabled by this owner wallet setup', 400);
+  }
 
   if (
     selectedGateway &&
@@ -355,14 +410,6 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
     if (duplicate) {
       throw new AppError('This payment reference has already been used', 400);
     }
-  }
-
-  let ownerWallet: { paystackSubaccount: string | null; isVerified: boolean } | null = null;
-  if (event.ownerId) {
-    ownerWallet = await (prisma as any).ownerWallet.findUnique({
-      where: { ownerId: event.ownerId },
-      select: { paystackSubaccount: true, isVerified: true },
-    });
   }
 
   if (isPaystackPayment) {
@@ -390,7 +437,10 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       throw new AppError('Paystack currency does not match order currency', 400);
     }
 
-    const expectedSubaccount = ownerWallet?.paystackSubaccount || null;
+    const expectedSubaccount =
+      payoutRoutingDecision.wallet && payoutRoutingDecision.wallet.walletType === 'paystack'
+        ? payoutRoutingDecision.wallet.paystackSubaccount || null
+        : null;
     const verifiedSubaccount =
       typeof verification.subaccount === 'string'
         ? verification.subaccount
@@ -509,6 +559,9 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
             currency,
             paymentMethod: paymentMethod || 'unknown',
             paymentRef: paymentReference,
+            payoutRouting: payoutRoutingDecision.payoutRouting,
+            routedWalletType: payoutRoutingDecision.wallet?.walletType || null,
+            ownerWalletId: payoutRoutingDecision.wallet?.id || null,
             buyerName: data.guestName,
             buyerEmail: data.guestEmail || null,
             status: 'completed',
@@ -528,6 +581,9 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
             currency,
             paymentMethod: paymentMethod || 'unknown',
             paymentRef: paymentReference,
+            payoutRouting: payoutRoutingDecision.payoutRouting,
+            routedWalletType: payoutRoutingDecision.wallet?.walletType || null,
+            ownerWalletId: payoutRoutingDecision.wallet?.id || null,
             buyerName: data.guestName,
             buyerEmail: data.guestEmail || null,
             status: 'completed',

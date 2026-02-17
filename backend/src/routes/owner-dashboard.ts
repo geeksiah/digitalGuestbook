@@ -23,6 +23,12 @@ import {
   updatePaystackSubaccount,
 } from '../services/paystack.js';
 import { queuePaystackTransferForPayout } from '../services/payoutAutomation.js';
+import {
+  getAvailableWalletTypes,
+  isManualWalletType,
+  normalizeWalletType,
+  resolveOwnerWalletState,
+} from '../utils/walletPolicy.js';
 
 const router = Router();
 
@@ -1601,84 +1607,365 @@ router.get('/support-content', asyncHandler(async (_req, res) => {
   });
 }));
 
+const resolveLegacyPreferredMethod = (walletType: string) => {
+  if (walletType === 'stripe') return 'stripe';
+  if (walletType === 'paypal') return 'paypal';
+  if (walletType === 'paystack') return 'paystack';
+  return 'bank';
+};
+
+const buildLegacyWallet = (ownerWallet: any, ownerPayoutWallets: any[]) => {
+  const state = resolveOwnerWalletState(ownerPayoutWallets);
+  const preferred =
+    state.manualWallet ||
+    state.verifiedAutomatedWallets[0] ||
+    state.automatedWallets[0] ||
+    null;
+  if (!preferred && !ownerWallet) return null;
+  return {
+    ...(ownerWallet || {}),
+    preferredMethod: preferred
+      ? resolveLegacyPreferredMethod(normalizeWalletType(preferred.walletType))
+      : ownerWallet?.preferredMethod || 'bank',
+    currency: preferred?.currency || ownerWallet?.currency || 'USD',
+    isVerified: typeof preferred?.isVerified === 'boolean' ? preferred.isVerified : Boolean(ownerWallet?.isVerified),
+    paystackSubaccount: preferred?.paystackSubaccount || ownerWallet?.paystackSubaccount || null,
+    paystackRecipientCode: preferred?.paystackRecipientCode || ownerWallet?.paystackRecipientCode || null,
+  };
+};
+
 /**
  * GET /api/owner-dashboard/wallet
  * Get wallet configuration for the logged-in owner
  */
 router.get('/wallet', asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId;
-  
-  const owner = await prisma.owner.findUnique({
-    where: { id: ownerId },
-    include: { wallet: true },
-  });
-  
+  const ownerId = (req as any).ownerId as string;
+
+  const [owner, gateways, manualTransactions, manualPayouts] = await Promise.all([
+    prisma.owner.findUnique({
+      where: { id: ownerId },
+      include: { wallet: true, wallets: true },
+    }),
+    prisma.paymentGateway.findMany({
+      where: { isActive: true },
+      select: {
+        gateway: true,
+        stripePublicKey: true,
+        stripeSecretKey: true,
+        paystackPublicKey: true,
+        paystackSecretKey: true,
+        flutterwavePublicKey: true,
+        flutterwaveSecretKey: true,
+        customGatewayApiKey: true,
+        customGatewayApiSecret: true,
+        customGatewayApiUrl: true,
+        mtnMomoApiKey: true,
+        mtnMomoApiSecret: true,
+        mtnMomoSubscriptionKey: true,
+        telecelCashApiKey: true,
+        telecelCashApiSecret: true,
+        telecelCashMerchantId: true,
+        airteltigoCashApiKey: true,
+        airteltigoCashApiSecret: true,
+        airteltigoCashMerchantId: true,
+      },
+    }),
+    prisma.transaction.aggregate({
+      where: {
+        event: { ownerId },
+        status: 'completed',
+        payoutRouting: 'ADMIN_MANUAL',
+      },
+      _sum: {
+        grossAmount: true,
+        netAmount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+    prisma.payoutRequest.aggregate({
+      where: {
+        event: { ownerId },
+        status: { in: ['PROCESSING', 'FULFILLED'] },
+      },
+      _sum: {
+        requestedAmount: true,
+      },
+    }),
+  ]);
+
   if (!owner) {
     throw new AppError('Owner not found', 404);
   }
-  
+
+  const walletState = resolveOwnerWalletState(owner.wallets as any[]);
+  const paystackWallet = walletState.walletByType.get('paystack');
+  const owed = Number(manualTransactions._sum.netAmount || 0);
+  const settled = Number(manualPayouts._sum.requestedAmount || 0);
+  const outstanding = Math.max(0, owed - settled);
+
   res.json({
-    wallet: owner.wallet || null,
+    countryCode: owner.countryCode || null,
+    walletMode: walletState.mode,
+    availableWalletTypes: getAvailableWalletTypes({
+      paymentGateways: gateways as any[],
+      countryCode: owner.countryCode,
+    }),
+    wallets: owner.wallets || [],
+    wallet: buildLegacyWallet(owner.wallet, owner.wallets),
     paystackAutomationReady: Boolean(
-      owner.wallet?.paystackSubaccount && (owner.wallet as any)?.paystackRecipientCode
+      paystackWallet?.paystackSubaccount && paystackWallet?.paystackRecipientCode
     ),
+    manualSettlement: {
+      transactionCount: manualTransactions._count._all || 0,
+      amountReceived: Number(manualTransactions._sum.grossAmount || 0),
+      amountOwed: owed,
+      amountSettled: settled,
+      outstandingBalance: outstanding,
+    },
   });
 }));
 
 /**
  * POST /api/owner-dashboard/wallet
- * Create or update wallet configuration for the logged-in owner
+ * Add/update owner payout wallet (manual/offline/automated)
  */
 router.post('/wallet', asyncHandler(async (req, res) => {
-  const ownerId = (req as any).ownerId;
-  
+  const ownerId = (req as any).ownerId as string;
+
   const owner = await prisma.owner.findUnique({
     where: { id: ownerId },
+    include: { wallet: true, wallets: true },
   });
-  
-  if (!owner) {
-    throw new AppError('Owner not found', 404);
-  }
-  
+  if (!owner) throw new AppError('Owner not found', 404);
+
   const walletSchema = z.object({
-    // Bank Account Details
+    walletId: z.string().uuid().optional(),
+    walletType: z.enum(['manual', 'offline', 'stripe', 'paypal', 'paystack', 'flutterwave']).optional(),
+    preferredMethod: z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']).optional(),
+    label: z.string().max(120).optional(),
+    currency: z.string().trim().regex(/^[A-Za-z]{3}$/).transform((v) => v.toUpperCase()).optional(),
+    countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/).transform((v) => v.toUpperCase()).optional(),
+    providerAccountId: z.string().optional(),
+    paystackSubaccount: z.string().optional(),
+    paystackRecipientCode: z.string().optional(),
+    paypalEmail: z.string().email().optional(),
+    stripeAccountId: z.string().optional(),
     bankName: z.string().optional(),
     accountName: z.string().optional(),
     accountNumber: z.string().optional(),
     routingNumber: z.string().optional(),
     swiftCode: z.string().optional(),
-    
-    // Mobile Money
-    mobileProvider: z.enum(['mpesa', 'mtn', 'airtel']).optional(),
+    mobileProvider: z.string().optional(),
     mobileNumber: z.string().optional(),
-    
-    // Digital Wallets
-    paypalEmail: z.string().email().optional(),
-    stripeAccountId: z.string().optional(),
-    paystackSubaccount: z.string().optional(),
-    
-    // Payout Preferences
-    preferredMethod: z.enum(['bank', 'mobile', 'paypal', 'stripe', 'paystack']).default('bank'),
-    currency: z.string().default('USD'),
-    autoPayoutEnabled: z.boolean().optional(),
-    autoPayoutThreshold: z.number().optional(),
+    detailsJson: z.string().optional(),
+    isVerified: z.boolean().optional(),
+    isActive: z.boolean().optional(),
   });
-  
-  const data = walletSchema.parse(req.body);
-  
-  const wallet = await (prisma as any).ownerWallet.upsert({
+  const input = walletSchema.parse(req.body || {});
+  const legacyWalletType = input.preferredMethod
+    ? (input.preferredMethod === 'paypal' || input.preferredMethod === 'stripe' || input.preferredMethod === 'paystack'
+        ? input.preferredMethod
+        : 'manual')
+    : undefined;
+  const walletType = normalizeWalletType(input.walletType || legacyWalletType || '');
+  if (!walletType) {
+    throw new AppError('walletType or preferredMethod is required', 400);
+  }
+  const nextCountryCode = input.countryCode || owner.countryCode || 'US';
+
+  const gateways = await prisma.paymentGateway.findMany({
+    where: { isActive: true },
+    select: {
+      gateway: true,
+      stripePublicKey: true,
+      stripeSecretKey: true,
+      paystackPublicKey: true,
+      paystackSecretKey: true,
+      flutterwavePublicKey: true,
+      flutterwaveSecretKey: true,
+      customGatewayApiKey: true,
+      customGatewayApiSecret: true,
+      customGatewayApiUrl: true,
+      mtnMomoApiKey: true,
+      mtnMomoApiSecret: true,
+      mtnMomoSubscriptionKey: true,
+      telecelCashApiKey: true,
+      telecelCashApiSecret: true,
+      telecelCashMerchantId: true,
+      airteltigoCashApiKey: true,
+      airteltigoCashApiSecret: true,
+      airteltigoCashMerchantId: true,
+    },
+  });
+  const availableWalletTypes = getAvailableWalletTypes({
+    paymentGateways: gateways as any[],
+    countryCode: nextCountryCode,
+  });
+  if (!isManualWalletType(walletType) && !availableWalletTypes.includes(walletType)) {
+    throw new AppError(`Wallet type "${walletType}" is not available in ${nextCountryCode}`, 400);
+  }
+
+  const activeWallets = owner.wallets.filter((wallet: any) => wallet.isActive);
+  const activeManualWallet = activeWallets.find((wallet: any) => isManualWalletType(wallet.walletType));
+  const activeAutomatedWallets = activeWallets.filter((wallet: any) => !isManualWalletType(wallet.walletType));
+  const isEditingCurrentManual = Boolean(input.walletId && activeManualWallet?.id === input.walletId);
+
+  if (isManualWalletType(walletType) && activeAutomatedWallets.length > 0) {
+    throw new AppError('Manual/offline wallet cannot be enabled while automated wallets are active', 400);
+  }
+  if (!isManualWalletType(walletType) && activeManualWallet && !isEditingCurrentManual) {
+    throw new AppError('Disable manual/offline wallet before adding automated wallets', 400);
+  }
+
+  let details: Record<string, any> = {};
+  if (input.detailsJson) {
+    try {
+      details = JSON.parse(input.detailsJson);
+    } catch {
+      throw new AppError('detailsJson must be valid JSON', 400);
+    }
+  }
+  if (input.paypalEmail) details.paypalEmail = input.paypalEmail;
+  if (input.stripeAccountId) details.stripeAccountId = input.stripeAccountId;
+  if (input.bankName) details.bankName = input.bankName;
+  if (input.accountName) details.accountName = input.accountName;
+  if (input.accountNumber) details.accountNumber = input.accountNumber;
+  if (input.routingNumber) details.routingNumber = input.routingNumber;
+  if (input.swiftCode) details.swiftCode = input.swiftCode;
+  if (input.mobileProvider) details.mobileProvider = input.mobileProvider;
+  if (input.mobileNumber) details.mobileNumber = input.mobileNumber;
+
+  const defaultCurrency = input.currency || owner.wallet?.currency || 'USD';
+  let walletRecord: any;
+  if (input.walletId) {
+    const existing = await (prisma as any).ownerPayoutWallet.findFirst({
+      where: { id: input.walletId, ownerId },
+    });
+    if (!existing) throw new AppError('Wallet not found', 404);
+    walletRecord = await (prisma as any).ownerPayoutWallet.update({
+      where: { id: existing.id },
+      data: {
+        walletType,
+        label: input.label ?? undefined,
+        currency: defaultCurrency,
+        countryCode: nextCountryCode,
+        providerAccountId: input.providerAccountId ?? undefined,
+        paystackSubaccount: input.paystackSubaccount ?? undefined,
+        paystackRecipientCode: input.paystackRecipientCode ?? undefined,
+        detailsJson: Object.keys(details).length > 0 ? JSON.stringify(details) : undefined,
+        isVerified: input.isVerified ?? undefined,
+        isActive: input.isActive ?? true,
+        verifiedAt: input.isVerified === true ? new Date() : undefined,
+      },
+    });
+  } else if (isManualWalletType(walletType) && activeManualWallet) {
+    walletRecord = await (prisma as any).ownerPayoutWallet.update({
+      where: { id: activeManualWallet.id },
+      data: {
+        walletType,
+        label: input.label ?? undefined,
+        currency: defaultCurrency,
+        countryCode: nextCountryCode,
+        detailsJson: Object.keys(details).length > 0 ? JSON.stringify(details) : undefined,
+        isActive: input.isActive ?? true,
+      },
+    });
+  } else {
+    walletRecord = await (prisma as any).ownerPayoutWallet.create({
+      data: {
+        ownerId,
+        walletType,
+        label: input.label || null,
+        currency: defaultCurrency,
+        countryCode: nextCountryCode,
+        providerAccountId: input.providerAccountId || null,
+        paystackSubaccount: input.paystackSubaccount || null,
+        paystackRecipientCode: input.paystackRecipientCode || null,
+        detailsJson: Object.keys(details).length > 0 ? JSON.stringify(details) : null,
+        isVerified: Boolean(input.isVerified),
+        verifiedAt: input.isVerified ? new Date() : null,
+        isActive: input.isActive ?? true,
+      },
+    });
+  }
+
+  if (isManualWalletType(walletType)) {
+    await (prisma as any).ownerPayoutWallet.updateMany({
+      where: {
+        ownerId,
+        id: { not: walletRecord.id },
+        walletType: { in: ['manual', 'offline'] },
+      },
+      data: { isActive: false },
+    });
+  }
+
+  const legacyPreferredMethod = resolveLegacyPreferredMethod(walletType);
+  await (prisma as any).ownerWallet.upsert({
     where: { ownerId },
     create: {
       ownerId,
-      ...data,
+      preferredMethod: legacyPreferredMethod,
+      currency: walletRecord.currency,
+      paystackSubaccount: walletRecord.paystackSubaccount || null,
+      paystackRecipientCode: walletRecord.paystackRecipientCode || null,
+      isVerified: Boolean(walletRecord.isVerified),
+      verifiedAt: walletRecord.isVerified ? new Date() : null,
     },
-    update: data,
+    update: {
+      preferredMethod: legacyPreferredMethod,
+      currency: walletRecord.currency,
+      paystackSubaccount: walletRecord.paystackSubaccount || null,
+      paystackRecipientCode: walletRecord.paystackRecipientCode || null,
+      isVerified: Boolean(walletRecord.isVerified),
+      verifiedAt: walletRecord.isVerified ? new Date() : null,
+    },
   });
-  
-  // Create audit log (owner actions don't require audit log in current schema)
-  // Audit logs are primarily for admin actions
-  
-  res.json({ wallet, message: 'Wallet configuration saved successfully' });
+
+  await prisma.owner.update({
+    where: { id: ownerId },
+    data: { countryCode: nextCountryCode },
+  });
+
+  const latestOwner = await prisma.owner.findUnique({
+    where: { id: ownerId },
+    include: { wallet: true, wallets: true },
+  });
+  const state = resolveOwnerWalletState((latestOwner?.wallets || []) as any[]);
+  res.json({
+    wallet: buildLegacyWallet(latestOwner?.wallet, latestOwner?.wallets || []),
+    wallets: latestOwner?.wallets || [],
+    walletMode: state.mode,
+    message: 'Wallet saved successfully',
+  });
+}));
+
+router.delete('/wallet/:walletId', asyncHandler(async (req, res) => {
+  const ownerId = (req as any).ownerId as string;
+  const walletId = req.params.walletId;
+  const wallet = await (prisma as any).ownerPayoutWallet.findFirst({
+    where: { id: walletId, ownerId },
+  });
+  if (!wallet) throw new AppError('Wallet not found', 404);
+
+  await (prisma as any).ownerPayoutWallet.update({
+    where: { id: wallet.id },
+    data: { isActive: false },
+  });
+
+  const owner = await prisma.owner.findUnique({
+    where: { id: ownerId },
+    include: { wallet: true, wallets: true },
+  });
+  const state = resolveOwnerWalletState((owner?.wallets || []) as any[]);
+  res.json({
+    wallet: buildLegacyWallet(owner?.wallet, owner?.wallets || []),
+    wallets: owner?.wallets || [],
+    walletMode: state.mode,
+    message: 'Wallet removed successfully',
+  });
 }));
 
 /**
@@ -1702,7 +1989,7 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
 
   const owner = await prisma.owner.findUnique({
     where: { id: ownerId },
-    include: { wallet: true },
+    include: { wallet: true, wallets: true },
   });
 
   if (!owner) {
@@ -1720,6 +2007,15 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
   });
 
   const input = connectSchema.parse(req.body);
+  const ownerCountryCode = (input.country || owner.countryCode || '').trim().toUpperCase();
+  if (!ownerCountryCode) {
+    throw new AppError('Owner country is required before connecting Paystack', 400);
+  }
+  const state = resolveOwnerWalletState(owner.wallets as any[]);
+  if (state.manualWallet) {
+    throw new AppError('Disable manual/offline wallet before connecting Paystack', 400);
+  }
+
   const accountNumber = input.accountNumber.replace(/\s+/g, '');
   const bankCode = input.bankCode.trim();
   const businessName =
@@ -1740,9 +2036,15 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
     description: `EventPeepo owner payout destination (${owner.id})`,
   };
 
-  let paystackSubaccount = owner.wallet?.paystackSubaccount || undefined;
-  let paystackRecipientCode = (owner.wallet as any)?.paystackRecipientCode || undefined;
-  const walletCurrency = (input.currency || owner.wallet?.currency || 'NGN').toUpperCase();
+  const existingPaystackWallet = (owner.wallets || []).find((wallet: any) =>
+    wallet.isActive && normalizeWalletType(wallet.walletType) === 'paystack'
+  );
+  let paystackSubaccount =
+    existingPaystackWallet?.paystackSubaccount || owner.wallet?.paystackSubaccount || undefined;
+  let paystackRecipientCode =
+    existingPaystackWallet?.paystackRecipientCode || (owner.wallet as any)?.paystackRecipientCode || undefined;
+  const walletCurrency =
+    (input.currency || existingPaystackWallet?.currency || owner.wallet?.currency || 'NGN').toUpperCase();
 
   if (paystackSubaccount) {
     try {
@@ -1772,6 +2074,46 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
       throw error;
     }
   }
+
+  const payoutWallet = existingPaystackWallet
+    ? await (prisma as any).ownerPayoutWallet.update({
+        where: { id: existingPaystackWallet.id },
+        data: {
+          walletType: 'paystack',
+          currency: walletCurrency,
+          countryCode: ownerCountryCode,
+          isActive: true,
+          isVerified: true,
+          verifiedAt: new Date(),
+          paystackSubaccount,
+          paystackRecipientCode,
+          detailsJson: JSON.stringify({
+            bankCode,
+            bankName: resolvedAccount.bank_name || null,
+            accountName: resolvedAccount.account_name || null,
+            accountNumber: resolvedAccount.account_number || accountNumber,
+          }),
+        },
+      })
+    : await (prisma as any).ownerPayoutWallet.create({
+        data: {
+          ownerId,
+          walletType: 'paystack',
+          currency: walletCurrency,
+          countryCode: ownerCountryCode,
+          isActive: true,
+          isVerified: true,
+          verifiedAt: new Date(),
+          paystackSubaccount: paystackSubaccount || null,
+          paystackRecipientCode: paystackRecipientCode || null,
+          detailsJson: JSON.stringify({
+            bankCode,
+            bankName: resolvedAccount.bank_name || null,
+            accountName: resolvedAccount.account_name || null,
+            accountNumber: resolvedAccount.account_number || accountNumber,
+          }),
+        },
+      });
 
   const wallet = await (prisma as any).ownerWallet.upsert({
     where: { ownerId },
@@ -1810,24 +2152,35 @@ router.post('/wallet/paystack/connect', asyncHandler(async (req, res) => {
     },
   });
 
+  await prisma.owner.update({
+    where: { id: ownerId },
+    data: { countryCode: ownerCountryCode },
+  });
+
   await prisma.auditLog.create({
     data: {
       action: 'OWNER_PAYSTACK_CONNECTED',
       entityType: 'OWNER_WALLET',
-      entityId: wallet.id,
+      entityId: payoutWallet.id,
       details: JSON.stringify({
         ownerId,
         bankCode,
-        country: input.country || null,
-        currency: wallet.currency,
+        country: ownerCountryCode,
+        currency: payoutWallet.currency,
         paystackSubaccount,
         paystackRecipientCode,
       }),
     },
   });
 
+  const latestOwner = await prisma.owner.findUnique({
+    where: { id: ownerId },
+    include: { wallet: true, wallets: true },
+  });
+
   res.json({
-    wallet,
+    wallet: buildLegacyWallet(latestOwner?.wallet, latestOwner?.wallets || []),
+    payoutWallet,
     paystack: {
       subaccountCode: paystackSubaccount,
       recipientCode: paystackRecipientCode,
@@ -1885,10 +2238,9 @@ router.get('/payouts', asyncHandler(async (req, res) => {
           status: 'completed',
         },
       });
-      const payoutEligibleTransactions = transactions.filter((tx) => {
-        // Cash gifts paid with Paystack split are settled directly to owner subaccounts.
-        return !(tx.type === 'gift_cash' && (tx.paymentMethod || '').toLowerCase() === 'paystack');
-      });
+      const payoutEligibleTransactions = transactions.filter((tx) => (
+        (tx as any).payoutRouting !== 'OWNER_AUTOMATED'
+      ));
       const totalCurrency =
         payoutEligibleTransactions[0]?.currency || transactions[0]?.currency || 'USD';
 
@@ -1997,9 +2349,9 @@ router.post('/payouts', asyncHandler(async (req, res) => {
     },
   });
 
-  const payoutEligibleTransactions = transactions.filter((tx) => {
-    return !(tx.type === 'gift_cash' && (tx.paymentMethod || '').toLowerCase() === 'paystack');
-  });
+  const payoutEligibleTransactions = transactions.filter((tx) => (
+    (tx as any).payoutRouting !== 'OWNER_AUTOMATED'
+  ));
   const totalNet = payoutEligibleTransactions.reduce((sum, t) => sum + (t.netAmount || 0), 0);
   
   // Get existing payout requests for this event
