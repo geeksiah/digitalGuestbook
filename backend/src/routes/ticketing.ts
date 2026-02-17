@@ -132,13 +132,13 @@ router.put('/events/:eventId/fields/reorder', authenticateAdmin, asyncHandler(as
 
 const ticketTypeSchema = z.object({
   name: z.string().min(1).max(100),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   price: z.number().min(0),
   currency: z.string().default('USD'),
-  quantityTotal: z.number().min(0).default(0),
-  maxPerOrder: z.number().min(1).default(10),
-  saleStartDate: z.string().datetime().optional(),
-  saleEndDate: z.string().datetime().optional(),
+  quantityTotal: z.number().min(0).nullable().optional(),
+  maxPerOrder: z.number().min(1).nullable().optional(),
+  saleStartDate: z.string().datetime().nullable().optional(),
+  saleEndDate: z.string().datetime().nullable().optional(),
   sortOrder: z.number().default(0),
   isActive: z.boolean().default(true),
 });
@@ -185,6 +185,9 @@ router.post('/events/:eventId/tickets', authenticateAdmin, asyncHandler(async (r
     data: {
       eventId,
       ...data,
+      description: data.description ?? null,
+      quantityTotal: data.quantityTotal ?? 0,
+      maxPerOrder: data.maxPerOrder ?? 10,
       saleStartDate: data.saleStartDate ? new Date(data.saleStartDate) : null,
       saleEndDate: data.saleEndDate ? new Date(data.saleEndDate) : null,
     },
@@ -205,8 +208,19 @@ router.put('/events/:eventId/tickets/:ticketId', authenticateAdmin, asyncHandler
     where: { id: ticketId, eventId },
     data: {
       ...data,
-      saleStartDate: data.saleStartDate ? new Date(data.saleStartDate) : undefined,
-      saleEndDate: data.saleEndDate ? new Date(data.saleEndDate) : undefined,
+      saleStartDate: data.saleStartDate === undefined
+        ? undefined
+        : data.saleStartDate
+          ? new Date(data.saleStartDate)
+          : null,
+      saleEndDate: data.saleEndDate === undefined
+        ? undefined
+        : data.saleEndDate
+          ? new Date(data.saleEndDate)
+          : null,
+      description: data.description === undefined ? undefined : data.description,
+      quantityTotal: data.quantityTotal === undefined ? undefined : (data.quantityTotal ?? 0),
+      maxPerOrder: data.maxPerOrder === undefined ? undefined : (data.maxPerOrder ?? 10),
     },
   });
 

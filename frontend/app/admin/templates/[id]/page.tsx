@@ -27,7 +27,7 @@ interface TemplateFile {
 
 const typeLabels: Record<string, string> = {
   INVITATION: 'Invitation',
-  RSVP: 'RSVP Form',
+  RSVP: 'RSVP / Ticket Page',
   GUESTBOOK: 'Guestbook Menu',
   GUESTBOOK_VIDEO: 'Video Recording',
   GUESTBOOK_AUDIO: 'Audio Recording',

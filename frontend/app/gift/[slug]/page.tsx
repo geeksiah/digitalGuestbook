@@ -41,7 +41,7 @@ export default function GiftPage() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [accepted, setAccepted] = useState<boolean | null>(null);
+  const [activeCategory, setActiveCategory] = useState<'for-you' | 'indoor' | 'outdoor' | 'garden'>('for-you');
   const [eventName, setEventName] = useState('');
   const [packages, setPackages] = useState<GiftPackage[]>([]);
   const [paymentGateways, setPaymentGateways] = useState<PaymentGatewayOption[]>([]);
@@ -60,6 +60,14 @@ export default function GiftPage() {
     if (!path) return null;
     if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
     return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+  };
+
+  const adjustQuantity = (giftPackageId: string, delta: number) => {
+    setQuantities((prev) => {
+      const current = prev[giftPackageId] || 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, [giftPackageId]: next };
+    });
   };
 
   useEffect(() => {
@@ -188,133 +196,172 @@ export default function GiftPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 px-4 py-8">
-      <div className="max-w-md mx-auto space-y-4">
-        <div className="bg-white rounded-xl border border-surface-200 p-5">
-          <h1 className="text-xl font-bold text-brand-900">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-1">Would you like to gift the couple?</p>
-          {accepted === null && (
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <button className="btn-primary justify-center" onClick={() => setAccepted(true)}>Yes</button>
-              <button className="btn-outline justify-center" onClick={() => setAccepted(false)}>No</button>
-            </div>
-          )}
-          {accepted === false && (
-            <p className="text-sm text-surface-600 mt-3">No problem. You can close this page anytime.</p>
-          )}
-        </div>
-
-        {accepted && (
-          <>
-            <div className="bg-white rounded-xl border border-surface-200 p-4 space-y-3">
-              <h2 className="font-semibold text-brand-900">Cash Gift (MoMo)</h2>
-              <input
-                type="number"
-                min={0}
-                className="input"
-                placeholder="Amount"
-                value={cashGiftAmount}
-                onChange={(e) => setCashGiftAmount(Math.max(0, Number(e.target.value || 0)))}
-              />
-            </div>
-
-            <div className="bg-white rounded-xl border border-surface-200 p-4 space-y-3">
-              <h2 className="font-semibold text-brand-900">Gift Packages</h2>
-              {packages.map((pkg) => (
-                <div key={pkg.id} className="border border-surface-200 rounded-lg p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      {pkg.thumbnailPath ? (
-                        <img
-                          src={resolveGiftThumbnailUrl(pkg.thumbnailPath) || ''}
-                          alt={pkg.name}
-                          className="w-14 h-14 rounded-lg border border-surface-200 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-lg border border-surface-200 bg-surface-100 text-[10px] text-surface-400 font-medium flex items-center justify-center shrink-0">
-                          No image
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                      <p className="font-medium text-brand-900">{pkg.name}</p>
-                      {pkg.description && <p className="text-xs text-surface-600 mt-1">{pkg.description}</p>}
-                      <p className="text-sm text-surface-700 mt-1">{pkg.currency} {pkg.price.toFixed(2)}</p>
-                      </div>
-                    </div>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-20 input text-center"
-                      value={quantities[pkg.id] || 0}
-                      onChange={(e) => setQuantities((prev) => ({ ...prev, [pkg.id]: Math.max(0, Number(e.target.value || 0)) }))}
-                    />
-                  </div>
-                </div>
+    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-emerald-50 to-white pb-28">
+      <div className="mx-auto w-full max-w-[430px] px-3 py-5 space-y-4">
+        <div className="bg-white rounded-[30px] border border-emerald-100 shadow-[0_12px_40px_rgba(2,23,20,0.10)] overflow-hidden">
+          <div className="px-4 pt-4 pb-3 border-b border-surface-100">
+            <h1 className="text-lg font-bold text-brand-950">{eventName}</h1>
+            <p className="text-sm text-surface-600 mt-0.5">Pick gifts for this event</p>
+            <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+              {[
+                { id: 'for-you', label: 'For You' },
+                { id: 'indoor', label: 'Indoor' },
+                { id: 'outdoor', label: 'Outdoor' },
+                { id: 'garden', label: 'Garden' },
+              ].map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setActiveCategory(category.id as typeof activeCategory)}
+                  className={`px-3 py-2 rounded-xl border text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeCategory === category.id
+                      ? 'bg-brand-700 text-white border-brand-700'
+                      : 'bg-white text-surface-700 border-surface-200'
+                  }`}
+                >
+                  {category.label}
+                </button>
               ))}
             </div>
+          </div>
 
-            <div className="bg-white rounded-xl border border-surface-200 p-4 space-y-3">
-              <h2 className="font-semibold text-brand-900">Checkout</h2>
-              <input className="input" placeholder="Your name" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
-              <input className="input" placeholder="Email (optional)" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} />
-              <input className="input" placeholder="Phone (optional)" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
-              <input type="date" className="input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              <select
-                className="input"
-                value={selectedGateway?.id || ''}
-                onChange={(e) => setSelectedGatewayId(e.target.value)}
-                disabled={paymentGateways.length === 0}
-              >
-                {paymentGateways.length > 0 ? (
-                  paymentGateways.map((gateway) => (
-                    <option key={gateway.id} value={gateway.id}>
-                      {gateway.name} ({gateway.gateway.toUpperCase()} - {gateway.currency})
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No configured gateway</option>
-                )}
-              </select>
-              {paymentGateways.length === 0 ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  No payment gateway has been enabled for this event yet.
+          <div className="p-3 grid grid-cols-2 gap-3">
+            {packages.map((pkg) => (
+              <article key={pkg.id} className="rounded-2xl border border-emerald-100 bg-emerald-50/40 overflow-hidden">
+                <div className="h-28 bg-emerald-100/50 flex items-center justify-center">
+                  {pkg.thumbnailPath ? (
+                    <img
+                      src={resolveGiftThumbnailUrl(pkg.thumbnailPath) || ''}
+                      alt={pkg.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-xs font-medium text-surface-500">No image</span>
+                  )}
                 </div>
-              ) : null}
-              {selectedGateway?.splitConfig?.subaccount ? (
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                  Cash gifts are auto-split to the owner subaccount. Package purchases are settled to platform only.
+                <div className="p-3">
+                  <p className="text-sm font-semibold text-brand-900 truncate">{pkg.name}</p>
+                  <p className="text-xs text-surface-600 mt-0.5 line-clamp-1">{pkg.description || 'Gift package'}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <div className="inline-flex items-center rounded-full border border-surface-200 bg-white">
+                      <button
+                        type="button"
+                        className="h-7 w-7 text-sm font-semibold text-brand-900"
+                        onClick={() => adjustQuantity(pkg.id, -1)}
+                        aria-label={`Decrease ${pkg.name}`}
+                      >
+                        -
+                      </button>
+                      <span className="min-w-7 text-center text-xs font-semibold text-brand-900">{quantities[pkg.id] || 0}</span>
+                      <button
+                        type="button"
+                        className="h-7 w-7 text-sm font-semibold text-brand-900"
+                        onClick={() => adjustQuantity(pkg.id, 1)}
+                        aria-label={`Increase ${pkg.name}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="text-sm font-bold text-brand-900">{pkg.currency} {pkg.price.toFixed(0)}</p>
+                  </div>
                 </div>
-              ) : null}
-              {paystackMixedSelection ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  For secure split accounting, submit cash gift and package purchase separately on Paystack.
-                </div>
-              ) : null}
-              {settlementPolicy?.cashGift === 'platform_settlement' ? (
-                <div className="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-xs text-surface-700">
-                  Owner split account is not connected yet. Cash gifts will be handled via platform settlement.
-                </div>
-              ) : null}
-              {hasGatewayCurrencyMismatch ? (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-                  Selected gateway currency does not match selected package currency.
-                </div>
-              ) : null}
-              <input className="input" placeholder="Payment reference (optional)" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} />
-              <textarea className="input min-h-[88px]" placeholder="Notes (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-              <div className="rounded-lg bg-surface-50 border border-surface-200 px-3 py-2 text-sm text-surface-700">
-                Total: <span className="font-semibold text-brand-900">{(selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')} {totalAmount.toFixed(2)}</span>
+              </article>
+            ))}
+            {packages.length === 0 ? (
+              <div className="col-span-2 rounded-xl border border-dashed border-surface-300 bg-surface-50 px-4 py-6 text-center text-sm text-surface-600">
+                No gift packages available yet.
               </div>
-              <button
-                className="btn-primary w-full justify-center"
-                disabled={submitting || paystackMixedSelection || hasGatewayCurrencyMismatch}
-                onClick={submitCheckout}
-              >
-                {submitting ? 'Submitting...' : 'Complete Gift'}
-              </button>
+            ) : null}
+          </div>
+
+          <div className="px-4 pb-4">
+            <label className="label text-brand-900">Cash Gift</label>
+            <input
+              type="number"
+              min={0}
+              className="input"
+              placeholder="Amount"
+              value={cashGiftAmount}
+              onChange={(e) => setCashGiftAmount(Math.max(0, Number(e.target.value || 0)))}
+            />
+          </div>
+        </div>
+
+        <div id="gift-checkout" className="bg-white rounded-2xl border border-surface-200 p-4 space-y-3">
+          <h2 className="font-semibold text-brand-900">Checkout</h2>
+          <input className="input" placeholder="Your name" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
+          <input className="input" placeholder="Email (optional)" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} />
+          <input className="input" placeholder="Phone (optional)" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
+          <input type="date" className="input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+          <select
+            className="input"
+            value={selectedGateway?.id || ''}
+            onChange={(e) => setSelectedGatewayId(e.target.value)}
+            disabled={paymentGateways.length === 0}
+          >
+            {paymentGateways.length > 0 ? (
+              paymentGateways.map((gateway) => (
+                <option key={gateway.id} value={gateway.id}>
+                  {gateway.name} ({gateway.gateway.toUpperCase()} - {gateway.currency})
+                </option>
+              ))
+            ) : (
+              <option value="">No configured gateway</option>
+            )}
+          </select>
+          {paymentGateways.length === 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              No payment gateway has been enabled for this event yet.
             </div>
-          </>
-        )}
+          ) : null}
+          {selectedGateway?.splitConfig?.subaccount ? (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Cash gifts are auto-split to the owner subaccount. Package purchases are settled to platform only.
+            </div>
+          ) : null}
+          {paystackMixedSelection ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              For secure split accounting, submit cash gift and package purchase separately on Paystack.
+            </div>
+          ) : null}
+          {settlementPolicy?.cashGift === 'platform_settlement' ? (
+            <div className="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-xs text-surface-700">
+              Owner split account is not connected yet. Cash gifts will be handled via platform settlement.
+            </div>
+          ) : null}
+          {hasGatewayCurrencyMismatch ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+              Selected gateway currency does not match selected package currency.
+            </div>
+          ) : null}
+          <input className="input" placeholder="Payment reference (optional)" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} />
+          <textarea className="input min-h-[88px]" placeholder="Notes (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <button
+            className="btn-primary w-full justify-center"
+            disabled={submitting || paystackMixedSelection || hasGatewayCurrencyMismatch}
+            onClick={submitCheckout}
+          >
+            {submitting ? 'Submitting...' : 'Complete Gift'}
+          </button>
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 border-t border-surface-200 bg-white/95 backdrop-blur px-4 py-3">
+        <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-surface-500">Total</p>
+            <p className="text-sm font-semibold text-brand-900">
+              {(selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')} {totalAmount.toFixed(2)}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-primary px-5"
+            onClick={() => document.getElementById('gift-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          >
+            Checkout
+          </button>
+        </div>
       </div>
     </div>
   );

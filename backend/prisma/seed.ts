@@ -400,8 +400,8 @@ h1 {
     update: {},
     create: {
       id: 'default-rsvp',
-      name: 'Modern RSVP Form',
-      description: 'Clean, modern RSVP form',
+      name: 'Ticket Checkout Flow',
+      description: 'Mobile-first RSVP and ticket checkout layout',
       type: 'RSVP',
       isDefault: true,
       htmlContent: `<!DOCTYPE html>
@@ -409,88 +409,191 @@ h1 {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RSVP - {{event.name}}</title>
+  <title>Tickets - {{event.name}}</title>
 </head>
 <body>
-  <div class="rsvp-container">
-    <h1>RSVP</h1>
-    <h2>{{event.name}}</h2>
-    <form id="rsvpForm">
-      <input type="text" name="primaryName" placeholder="Your Name *" required>
-      <input type="email" name="email" placeholder="Email Address">
-      <select name="attendance" required>
-        <option value="">Will you attend? *</option>
-        <option value="YES">Yes, I'll be there!</option>
-        <option value="NO">Sorry, can't make it</option>
-        <option value="MAYBE">Maybe</option>
-      </select>
-      <input type="number" name="guestCount" placeholder="Number of guests" min="1" value="1">
-      <textarea name="note" placeholder="Message to the couple (optional)" rows="4"></textarea>
-      <button type="submit">Submit RSVP</button>
-    </form>
+  <div class="shell">
+    <header class="hero">
+      <p class="eyebrow">Event Tickets</p>
+      <h1>{{event.name}}</h1>
+      <p class="meta">{{event.formattedDate}}</p>
+    </header>
+
+    <section class="card">
+      <h2>Choose Tickets</h2>
+      <div class="ticket-row">
+        <div>
+          <p class="ticket-name">General Admission</p>
+          <p class="ticket-price">$100 / ticket</p>
+        </div>
+        <select class="qty" data-price="100"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </div>
+      <div class="ticket-row">
+        <div>
+          <p class="ticket-name">VIP</p>
+          <p class="ticket-price">$150 / ticket</p>
+        </div>
+        <select class="qty" data-price="150"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Contact Information</h2>
+      <div class="field"><label>First Name</label><input type="text" placeholder="Alex" /></div>
+      <div class="field"><label>Last Name</label><input type="text" placeholder="Hugo" /></div>
+      <div class="field"><label>Email Address</label><input type="email" placeholder="you@example.com" /></div>
+    </section>
+
+    <section class="card">
+      <div class="summary">
+        <div>
+          <p class="total-label">Total</p>
+          <p class="total-amount" id="totalAmount">$0.00</p>
+        </div>
+        <button class="cta" type="button">Continue</button>
+      </div>
+      <p class="hint">Assign another RSVP/Ticket template anytime from the event templates panel.</p>
+    </section>
   </div>
 </body>
 </html>`,
       cssContent: `
+* { box-sizing: border-box; }
 body {
-  font-family: -apple-system, sans-serif;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  margin: 0;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: linear-gradient(180deg, #ecf7f2 0%, #d9efe6 100%);
   min-height: 100vh;
+  padding: 20px 14px 28px;
+  color: #06362f;
+}
+.shell {
+  max-width: 430px;
+  margin: 0 auto;
+}
+.hero {
+  padding: 4px 6px 12px;
+}
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #2f7d67;
+  font-weight: 700;
+}
+.hero h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+.meta {
+  margin: 8px 0 0;
+  color: #437a69;
+  font-size: 13px;
+}
+.card {
+  background: #ffffff;
+  border: 1px solid #d6e8df;
+  border-radius: 22px;
+  padding: 16px;
+  margin-top: 12px;
+  box-shadow: 0 8px 20px rgba(6, 54, 47, 0.06);
+}
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+.ticket-row {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-center;
-  padding: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf4f0;
 }
-.rsvp-container {
-  background: white;
-  max-width: 500px;
-  width: 100%;
-  padding: 40px;
-  border-radius: 20px;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+.ticket-row:last-child {
+  border-bottom: none;
 }
-h1 {
-  color: #d4af37;
-  font-size: 1.5rem;
-  text-align: center;
+.ticket-name {
+  margin: 0;
+  font-weight: 700;
+}
+.ticket-price {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #5d7b71;
+}
+.qty {
+  min-width: 64px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #cde2d8;
+  background: #f9fdfb;
+}
+.field {
   margin-bottom: 10px;
 }
-h2 {
-  color: #1a1a2e;
-  font-size: 2rem;
-  text-align: center;
-  margin-bottom: 30px;
+.field:last-child {
+  margin-bottom: 0;
 }
-form {
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #578272;
+}
+input {
+  width: 100%;
+  border: 1px solid #cfe3d9;
+  border-radius: 12px;
+  padding: 11px 12px;
+}
+.summary {
   display: flex;
-  flex-direction: column;
-  gap: 15px;
+  align-items: center;
+  justify-content: space-between;
 }
-input, select, textarea {
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 1rem;
+.total-label {
+  margin: 0;
+  font-size: 12px;
+  color: #608478;
 }
-input:focus, select:focus, textarea:focus {
-  outline: none;
-  border-color: #d4af37;
+.total-amount {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: #0a5d4c;
 }
-button {
-  background: #d4af37;
-  color: #1a1a2e;
-  padding: 15px;
+.cta {
+  min-width: 132px;
+  background: #0d7a6a;
+  color: #fff;
+  padding: 12px 18px;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 999px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s;
 }
-button:hover {
-  background: #1a1a2e;
-  color: #d4af37;
+.hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #5d7b71;
 }
+      `,
+      jsContent: `
+const selects = Array.from(document.querySelectorAll('.qty'));
+const totalEl = document.getElementById('totalAmount');
+const format = (value) => '$' + value.toFixed(2);
+const recalc = () => {
+  const total = selects.reduce((sum, select) => {
+    const price = Number(select.dataset.price || 0);
+    const qty = Number(select.value || 0);
+    return sum + (price * qty);
+  }, 0);
+  if (totalEl) totalEl.textContent = format(total);
+};
+selects.forEach((select) => select.addEventListener('change', recalc));
+recalc();
       `,
     },
   });
@@ -575,6 +678,69 @@ h2 {
   });
   console.log(`✅ Created: ${thankYouTemplate.name}`);
 
+  // ============================================
+  // GIFTING TEMPLATE
+  // ============================================
+  const giftingTemplate = await prisma.template.upsert({
+    where: { id: 'default-gifting' },
+    update: {},
+    create: {
+      id: 'default-gifting',
+      name: 'Modern Gifting Catalog',
+      description: 'Card-based gifting storefront with EventPeepo palette',
+      type: 'GIFTING',
+      isDefault: true,
+      htmlContent: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gift {{event.name}}</title>
+</head>
+<body>
+  <main class="phone">
+    <header>
+      <p class="label">Category</p>
+      <div class="chips">
+        <button class="chip active">For You</button>
+        <button class="chip">Indoor</button>
+        <button class="chip">Outdoor</button>
+        <button class="chip">Garden</button>
+      </div>
+    </header>
+    <section class="grid">
+      <article class="card"><div class="thumb"></div><h3>Signature Bouquet</h3><p>Elegant celebration package</p><div class="row"><button>Add To Cart</button><strong>$29</strong></div></article>
+      <article class="card"><div class="thumb"></div><h3>Luxury Basket</h3><p>Curated premium surprise</p><div class="row"><button>Add To Cart</button><strong>$39</strong></div></article>
+    </section>
+    <footer class="bottom"><span>Total</span><strong>$68</strong><a href="{{urls.gifting}}">Checkout</a></footer>
+  </main>
+</body>
+</html>`,
+      cssContent: `
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; background: linear-gradient(180deg, #e8f6ef 0%, #d3ebdf 100%); color: #083a33; padding: 16px; }
+.phone { max-width: 410px; margin: 0 auto; background: #fff; border-radius: 30px; border: 1px solid #d8e9e1; box-shadow: 0 20px 44px rgba(8, 58, 51, 0.12); overflow: hidden; }
+header { padding: 16px; }
+.label { margin: 0; font-size: 20px; font-weight: 800; }
+.chips { margin-top: 12px; display: flex; gap: 8px; overflow-x: auto; }
+.chip { border: 1px solid #cfe4d9; background: #fff; border-radius: 12px; padding: 10px 14px; font-weight: 600; color: #567b6f; }
+.chip.active { background: #0d7a6a; color: #fff; border-color: #0d7a6a; }
+.grid { padding: 0 12px 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.card { border: 1px solid #d7e9e1; border-radius: 16px; background: #f6fcf9; padding: 10px; }
+.thumb { height: 100px; border-radius: 10px; background: linear-gradient(135deg, #d8eee4, #edf8f3); margin-bottom: 8px; }
+.card h3 { margin: 0; font-size: 15px; }
+.card p { margin: 4px 0 10px; color: #5f8378; font-size: 12px; }
+.row { display: flex; justify-content: space-between; align-items: center; }
+.row button { border: none; border-radius: 999px; padding: 8px 12px; background: #0d7a6a; color: #fff; font-size: 12px; font-weight: 700; }
+.row strong { font-size: 17px; color: #0a5d4c; }
+.bottom { border-top: 1px solid #e5f2eb; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+.bottom span { color: #5f8378; font-size: 13px; }
+.bottom strong { margin-right: auto; color: #0a5d4c; }
+.bottom a { text-decoration: none; border-radius: 999px; background: #06362f; color: #fff; padding: 10px 18px; font-weight: 700; }
+      `,
+    },
+  });
+  console.log(`✅ Created: ${giftingTemplate.name}`);
   console.log('');
   console.log('✨ Database seeded successfully!');
   console.log('');

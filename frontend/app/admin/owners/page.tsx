@@ -12,6 +12,7 @@ interface Owner {
   email: string;
   phone: string | null;
   company: string | null;
+  countryCode?: string | null;
   isActive: boolean;
   createdAt: string;
   eventCount?: number;
@@ -246,6 +247,9 @@ export default function OwnersPage() {
                             <span className="ml-1">{owner.company}</span>
                           </div>
                         )}
+                        {owner.countryCode ? (
+                          <div className="text-xs text-surface-500 mt-0.5">Country: {owner.countryCode}</div>
+                        ) : null}
                       </div>
                     </div>
                   </td>
@@ -350,6 +354,7 @@ function EditOwnerModal({
     email: owner.email,
     phone: owner.phone || '',
     company: owner.company || '',
+    countryCode: owner.countryCode || 'US',
     isActive: owner.isActive,
   });
   const [loading, setLoading] = useState(false);
@@ -363,6 +368,7 @@ function EditOwnerModal({
         ...formData,
         phone: formData.phone || undefined,
         company: formData.company || undefined,
+        countryCode: formData.countryCode || undefined,
       });
       toast.success('Owner updated');
       onSave();
@@ -415,6 +421,21 @@ function EditOwnerModal({
               value={formData.company}
               onChange={(e) => setFormData({ ...formData, company: e.target.value })}
             />
+          </div>
+          <div>
+            <label className="label">Country</label>
+            <select
+              className="input"
+              value={formData.countryCode}
+              onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+            >
+              <option value="US">United States (US)</option>
+              <option value="GB">United Kingdom (GB)</option>
+              <option value="GH">Ghana (GH)</option>
+              <option value="NG">Nigeria (NG)</option>
+              <option value="KE">Kenya (KE)</option>
+              <option value="ZA">South Africa (ZA)</option>
+            </select>
           </div>
           <div className="flex items-center">
             <input

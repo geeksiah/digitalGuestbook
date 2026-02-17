@@ -46,8 +46,8 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
     description: '',
     price: 0,
     currency: event.rsvpMode === 'paid' ? (event.ticketTypes?.[0]?.currency || eventDefaultCurrency) : eventDefaultCurrency,
-    quantityTotal: 0,
-    maxPerOrder: 10,
+    quantityTotal: '',
+    maxPerOrder: '',
     saleStartDate: '',
     saleEndDate: '',
     isActive: true,
@@ -98,8 +98,8 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
       description: ticket.description || '',
       price: ticket.price,
       currency: ticket.currency,
-      quantityTotal: ticket.quantityTotal,
-      maxPerOrder: ticket.maxPerOrder,
+      quantityTotal: ticket.quantityTotal.toString(),
+      maxPerOrder: ticket.maxPerOrder.toString(),
       saleStartDate: ticket.saleStartDate ? new Date(ticket.saleStartDate).toISOString().slice(0, 16) : '',
       saleEndDate: ticket.saleEndDate ? new Date(ticket.saleEndDate).toISOString().slice(0, 16) : '',
       isActive: ticket.isActive,
@@ -123,14 +123,27 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
     setSaving(true);
 
     try {
+      const parsedQuantityTotal =
+        formData.quantityTotal.trim() === '' ? 0 : parseInt(formData.quantityTotal, 10);
+      const parsedMaxPerOrder =
+        formData.maxPerOrder.trim() === '' ? 10 : parseInt(formData.maxPerOrder, 10);
+
+      if (!Number.isFinite(parsedQuantityTotal) || parsedQuantityTotal < 0) {
+        throw new Error('Total quantity must be 0 or greater');
+      }
+
+      if (!Number.isFinite(parsedMaxPerOrder) || parsedMaxPerOrder < 1) {
+        throw new Error('Max per order must be at least 1');
+      }
+
       const data = {
         ...formData,
         price: parseFloat(formData.price.toString()),
-        quantityTotal: parseInt(formData.quantityTotal.toString()) || 0,
-        maxPerOrder: parseInt(formData.maxPerOrder.toString()) || 10,
-        saleStartDate: formData.saleStartDate ? new Date(formData.saleStartDate).toISOString() : null,
-        saleEndDate: formData.saleEndDate ? new Date(formData.saleEndDate).toISOString() : null,
-        description: formData.description || null,
+        quantityTotal: parsedQuantityTotal,
+        maxPerOrder: parsedMaxPerOrder,
+        saleStartDate: formData.saleStartDate ? new Date(formData.saleStartDate).toISOString() : undefined,
+        saleEndDate: formData.saleEndDate ? new Date(formData.saleEndDate).toISOString() : undefined,
+        description: formData.description.trim() ? formData.description.trim() : undefined,
       };
 
       if (editingTicket) {
@@ -148,15 +161,15 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
         description: '',
         price: 0,
         currency: pickNewTicketCurrency(),
-        quantityTotal: 0,
-        maxPerOrder: 10,
+        quantityTotal: '',
+        maxPerOrder: '',
         saleStartDate: '',
         saleEndDate: '',
         isActive: true,
       });
       onRefresh();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to save ticket');
+      toast.error(error.response?.data?.error || error.message || 'Failed to save ticket');
     } finally {
       setSaving(false);
     }
@@ -187,8 +200,8 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 description: '',
                 price: 0,
                 currency: pickNewTicketCurrency(),
-                quantityTotal: 0,
-                maxPerOrder: 10,
+                quantityTotal: '',
+                maxPerOrder: '',
                 saleStartDate: '',
                 saleEndDate: '',
                 isActive: true,
@@ -273,7 +286,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 min="0"
                 className="input"
                 value={formData.quantityTotal}
-                onChange={(e) => setFormData({ ...formData, quantityTotal: parseInt(e.target.value) || 0 })}
+                onChange={(e) => setFormData({ ...formData, quantityTotal: e.target.value })}
                 placeholder="0 = unlimited"
               />
               <p className="text-xs text-surface-500 mt-1">Leave 0 for unlimited</p>
@@ -286,7 +299,8 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 min="1"
                 className="input"
                 value={formData.maxPerOrder}
-                onChange={(e) => setFormData({ ...formData, maxPerOrder: parseInt(e.target.value) || 10 })}
+                onChange={(e) => setFormData({ ...formData, maxPerOrder: e.target.value })}
+                placeholder="10"
               />
             </div>
           </div>
@@ -364,8 +378,8 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                   description: '',
                   price: 0,
                   currency: pickNewTicketCurrency(),
-                  quantityTotal: 0,
-                  maxPerOrder: 10,
+                  quantityTotal: '',
+                  maxPerOrder: '',
                   saleStartDate: '',
                   saleEndDate: '',
                   isActive: true,

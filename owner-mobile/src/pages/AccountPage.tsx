@@ -18,10 +18,20 @@ import {
 } from '@ionic/react';
 import { ownerAuthApi, ownerDashboardApi } from '../api/client';
 import { useSessionStore } from '../store/session';
-import type { PaystackBank, Wallet } from '../types/domain';
+import type { ManualSettlementSummary, OwnerPayoutWallet, PaystackBank, Wallet, WalletMode } from '../types/domain';
 import { getErrorMessage } from '../utils/error';
 
 type AccountTab = 'profile' | 'password' | 'wallet' | 'notifications' | 'support';
+type WalletType = 'manual' | 'offline' | 'stripe' | 'paypal' | 'paystack' | 'flutterwave';
+
+const WALLET_LABEL: Record<WalletType, string> = {
+  manual: 'Manual',
+  offline: 'Offline',
+  stripe: 'Stripe',
+  paypal: 'PayPal',
+  paystack: 'Paystack',
+  flutterwave: 'Flutterwave',
+};
 
 const AccountPage = () => {
   const router = useIonRouter();
@@ -35,6 +45,12 @@ const AccountPage = () => {
   const [paystackLoading, setPaystackLoading] = useState(false);
   const [paystackBanks, setPaystackBanks] = useState<PaystackBank[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [walletMode, setWalletMode] = useState<WalletMode>('MANUAL_FALLBACK');
+  const [availableWalletTypes, setAvailableWalletTypes] = useState<WalletType[]>(['manual', 'offline']);
+  const [ownerWallets, setOwnerWallets] = useState<OwnerPayoutWallet[]>([]);
+  const [manualSettlement, setManualSettlement] = useState<ManualSettlementSummary | null>(null);
+  const [selectedWalletType, setSelectedWalletType] = useState<WalletType>('manual');
+  const [selectedWalletId, setSelectedWalletId] = useState('');
   const [notificationPrefs, setNotificationPrefs] = useState({
     notificationsEnabled: true,
     marketingEnabled: true,
@@ -63,7 +79,8 @@ const AccountPage = () => {
     name: owner?.name || '',
     email: owner?.email || '',
     phone: owner?.phone || '',
-    company: owner?.company || ''
+    company: owner?.company || '',
+    countryCode: owner?.countryCode || 'US'
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -81,6 +98,8 @@ const AccountPage = () => {
     mobileProvider: '',
     mobileNumber: '',
     paypalEmail: '',
+    stripeAccountId: '',
+    paystackSubaccount: '',
     preferredMethod: 'bank' as Wallet['preferredMethod'],
     currency: 'USD',
     autoPayoutEnabled: false,
@@ -99,6 +118,15 @@ const AccountPage = () => {
     try {
       const response = await ownerDashboardApi.wallet();
       const nextWallet = response.data.wallet;
+      setWalletMode((response.data.walletMode || 'MANUAL_FALLBACK') as WalletMode);
+      const nextWalletTypes = ((response.data.availableWalletTypes || ['manual', 'offline']) as string[])
+        .map((type) => String(type).toLowerCase())
+        .filter((type): type is WalletType =>
+          ['manual', 'offline', 'stripe', 'paypal', 'paystack', 'flutterwave'].includes(type)
+        );
+      setAvailableWalletTypes(nextWalletTypes.length ? nextWalletTypes : ['manual', 'offline']);
+      setOwnerWallets((response.data.wallets || []) as OwnerPayoutWallet[]);
+      setManualSettlement((response.data.manualSettlement || null) as ManualSettlementSummary | null);
       setWallet(nextWallet || null);
       if (nextWallet) {
         setWalletData({
@@ -110,11 +138,25 @@ const AccountPage = () => {
           mobileProvider: nextWallet.mobileProvider || '',
           mobileNumber: nextWallet.mobileNumber || '',
           paypalEmail: nextWallet.paypalEmail || '',
+          stripeAccountId: nextWallet.stripeAccountId || '',
+          paystackSubaccount: nextWallet.paystackSubaccount || '',
           preferredMethod: nextWallet.preferredMethod || 'bank',
           currency: nextWallet.currency || 'USD',
           autoPayoutEnabled: Boolean(nextWallet.autoPayoutEnabled),
           autoPayoutThreshold: nextWallet.autoPayoutThreshold || 100
         });
+      }
+      const activeWallets = ((response.data.wallets || []) as OwnerPayoutWallet[]).filter((item) => item.isActive);
+      const preferredWallet =
+        activeWallets.find((item) => item.walletType === 'manual' || item.walletType === 'offline') ||
+        activeWallets[0] ||
+        null;
+      if (preferredWallet) {
+        setSelectedWalletType(preferredWallet.walletType);
+        setSelectedWalletId(preferredWallet.id);
+      } else {
+        setSelectedWalletType('manual');
+        setSelectedWalletId('');
       }
     } catch (error: unknown) {
       present({ message: getErrorMessage(error, 'Failed to load wallet'), duration: 2200, color: 'danger' });
@@ -142,7 +184,8 @@ const AccountPage = () => {
       name: owner?.name || '',
       email: owner?.email || '',
       phone: owner?.phone || '',
-      company: owner?.company || ''
+      company: owner?.company || '',
+      countryCode: owner?.countryCode || 'US'
     });
     void loadWallet();
     void loadPaystackBanks(paystackSetup.country, paystackSetup.currency);
@@ -172,7 +215,23 @@ const AccountPage = () => {
       .catch(() => null);
   });
 
-  const isPaystackMethod = useMemo(() => walletData.preferredMethod === 'paystack', [walletData.preferredMethod]);
+  const walletTypeOptions = useMemo(
+    () => Array.from(new Set<WalletType>([...availableWalletTypes, selectedWalletType])),
+    [availableWalletTypes, selectedWalletType]
+  );
+  const hasManualWallet = useMemo(
+    () => ownerWallets.some((walletItem) => walletItem.isActive && (walletItem.walletType === 'manual' || walletItem.walletType === 'offline')),
+    [ownerWallets]
+  );
+  const hasPaystackWallet = useMemo(
+    () => ownerWallets.some((walletItem) => walletItem.isActive && walletItem.walletType === 'paystack'),
+    [ownerWallets]
+  );
+  const disablePaystackConnect = hasManualWallet && !hasPaystackWallet;
+  const isPaystackMethod = useMemo(
+    () => selectedWalletType === 'paystack' || Boolean(wallet?.paystackSubaccount),
+    [selectedWalletType, wallet?.paystackSubaccount]
+  );
 
   const onSaveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -182,7 +241,8 @@ const AccountPage = () => {
         name: profileData.name || undefined,
         email: profileData.email || undefined,
         phone: profileData.phone || undefined,
-        company: profileData.company || undefined
+        company: profileData.company || undefined,
+        countryCode: profileData.countryCode || undefined,
       });
       setOwner(response.data.owner);
       present({ message: 'Profile updated', duration: 1800, color: 'success' });
@@ -220,20 +280,32 @@ const AccountPage = () => {
     event.preventDefault();
     setLoading(true);
     try {
-      const payload: Partial<Wallet> = {
-        bankName: walletData.bankName || undefined,
-        accountName: walletData.accountName || undefined,
-        accountNumber: walletData.accountNumber || undefined,
-        routingNumber: walletData.routingNumber || undefined,
-        swiftCode: walletData.swiftCode || undefined,
-        mobileProvider: walletData.mobileProvider || undefined,
-        mobileNumber: walletData.mobileNumber || undefined,
-        paypalEmail: walletData.paypalEmail || undefined,
-        preferredMethod: walletData.preferredMethod,
+      if (selectedWalletType === 'paystack' && !walletData.paystackSubaccount) {
+        throw new Error('Connect Paystack first before saving Paystack wallet.');
+      }
+      const payload: Record<string, unknown> = {
+        walletType: selectedWalletType,
+        walletId: selectedWalletId || undefined,
+        countryCode: profileData.countryCode || 'US',
         currency: walletData.currency,
-        autoPayoutEnabled: walletData.autoPayoutEnabled,
-        autoPayoutThreshold: walletData.autoPayoutThreshold
+        isActive: true,
       };
+      if (selectedWalletType === 'paystack') {
+        payload.paystackSubaccount = walletData.paystackSubaccount || undefined;
+      } else if (selectedWalletType === 'paypal') {
+        payload.paypalEmail = walletData.paypalEmail || undefined;
+      } else if (selectedWalletType === 'stripe') {
+        payload.stripeAccountId = walletData.stripeAccountId || undefined;
+      } else if (selectedWalletType === 'manual' || selectedWalletType === 'offline') {
+        payload.bankName = walletData.bankName || undefined;
+        payload.accountName = walletData.accountName || undefined;
+        payload.accountNumber = walletData.accountNumber || undefined;
+        payload.routingNumber = walletData.routingNumber || undefined;
+        payload.swiftCode = walletData.swiftCode || undefined;
+        payload.mobileProvider = walletData.mobileProvider || undefined;
+        payload.mobileNumber = walletData.mobileNumber || undefined;
+        payload.paypalEmail = walletData.paypalEmail || undefined;
+      }
       await ownerDashboardApi.updateWallet(payload);
       await loadWallet();
       present({ message: 'Wallet settings saved', duration: 1800, color: 'success' });
@@ -251,7 +323,7 @@ const AccountPage = () => {
     }
     setPaystackLoading(true);
     try {
-      await ownerDashboardApi.connectPaystack({
+      const response = await ownerDashboardApi.connectPaystack({
         bankCode: paystackSetup.bankCode,
         accountNumber: paystackSetup.accountNumber,
         businessName: paystackSetup.businessName || owner?.company || owner?.name || undefined,
@@ -259,6 +331,11 @@ const AccountPage = () => {
         currency: paystackSetup.currency,
         setAsPreferred: true
       });
+      const payoutWallet = response.data.payoutWallet;
+      if (payoutWallet?.id) {
+        setSelectedWalletType('paystack');
+        setSelectedWalletId(payoutWallet.id);
+      }
       await loadWallet();
       present({ message: 'Paystack connected', duration: 1800, color: 'success' });
     } catch (error: unknown) {
@@ -271,6 +348,23 @@ const AccountPage = () => {
   const onSignOut = () => {
     clearSession();
     router.push('/auth', 'root');
+  };
+
+  const onRemoveWallet = async (walletId: string) => {
+    try {
+      setLoading(true);
+      await ownerDashboardApi.removeWallet(walletId);
+      if (selectedWalletId === walletId) {
+        setSelectedWalletId('');
+        setSelectedWalletType('manual');
+      }
+      await loadWallet();
+      present({ message: 'Wallet removed', duration: 1800, color: 'success' });
+    } catch (error: unknown) {
+      present({ message: getErrorMessage(error, 'Failed to remove wallet'), duration: 2200, color: 'danger' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveNotificationPrefs = async () => {
@@ -361,6 +455,21 @@ const AccountPage = () => {
                     onChange={(event) => setProfileData((prev) => ({ ...prev, company: event.target.value }))}
                   />
                 </label>
+                <label className="field">
+                  <span>Country</span>
+                  <select
+                    className="native-select"
+                    value={profileData.countryCode}
+                    onChange={(event) => setProfileData((prev) => ({ ...prev, countryCode: event.target.value }))}
+                  >
+                    <option value="US">United States (US)</option>
+                    <option value="GB">United Kingdom (GB)</option>
+                    <option value="GH">Ghana (GH)</option>
+                    <option value="NG">Nigeria (NG)</option>
+                    <option value="KE">Kenya (KE)</option>
+                    <option value="ZA">South Africa (ZA)</option>
+                  </select>
+                </label>
                 <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
                   {loading ? 'Saving...' : 'Save profile'}
                 </IonButton>
@@ -414,29 +523,111 @@ const AccountPage = () => {
           {tab === 'wallet' ? (
             <>
               <section className="surface-card">
+                <h3>Wallet mode</h3>
+                <p className="muted-text">
+                  {walletMode === 'AUTOMATED' ? 'Automated owner routing is active.' : 'Manual settlement mode is active.'}
+                </p>
+                {manualSettlement ? (
+                  <div className="info-grid" style={{ marginTop: 12 }}>
+                    <div className="info-item">
+                      <span className="label">Received</span>
+                      <strong>{manualSettlement.amountReceived.toFixed(2)}</strong>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Owed</span>
+                      <strong>{manualSettlement.amountOwed.toFixed(2)}</strong>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Settled</span>
+                      <strong>{manualSettlement.amountSettled.toFixed(2)}</strong>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Outstanding</span>
+                      <strong>{manualSettlement.outstandingBalance.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="surface-card">
+                <h3>Configured wallets</h3>
+                {ownerWallets.length === 0 ? (
+                  <p className="muted-text">No wallet configured yet. System is in manual fallback mode.</p>
+                ) : (
+                  <div className="list-stack">
+                    {ownerWallets.map((walletItem) => (
+                      <div key={walletItem.id} className="list-row" style={{ justifyContent: 'space-between' }}>
+                        <button
+                          type="button"
+                          className="ghost-link"
+                          onClick={() => {
+                            setSelectedWalletType(walletItem.walletType);
+                            setSelectedWalletId(walletItem.id);
+                            setWalletData((prev) => ({
+                              ...prev,
+                              currency: walletItem.currency || prev.currency,
+                              paystackSubaccount: walletItem.paystackSubaccount || prev.paystackSubaccount,
+                            }));
+                          }}
+                        >
+                          {WALLET_LABEL[walletItem.walletType]} ({walletItem.currency}) {walletItem.isVerified ? 'Verified' : 'Pending'}
+                        </button>
+                        <IonButton
+                          fill="clear"
+                          size="small"
+                          color="danger"
+                          onClick={() => onRemoveWallet(walletItem.id)}
+                        >
+                          Remove
+                        </IonButton>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="surface-card">
                 <h3>Wallet settings</h3>
                 <form className="auth-form" onSubmit={onSaveWallet}>
                   <label className="field">
-                    <span>Preferred payout method</span>
+                    <span>Wallet type</span>
                     <select
                       className="native-select"
-                      value={walletData.preferredMethod}
+                      value={selectedWalletType}
                       onChange={(event) =>
-                        setWalletData((prev) => ({
-                          ...prev,
-                          preferredMethod: event.target.value as Wallet['preferredMethod']
-                        }))
+                        setSelectedWalletType(event.target.value as WalletType)
                       }
                     >
-                      <option value="bank">Bank transfer</option>
-                      <option value="mobile">Mobile money</option>
-                      <option value="paypal">PayPal</option>
-                      <option value="paystack">Paystack</option>
-                      <option value="stripe">Stripe</option>
+                      {walletTypeOptions.map((walletType) => (
+                        <option key={walletType} value={walletType}>
+                          {WALLET_LABEL[walletType]}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
-                  {walletData.preferredMethod === 'bank' ? (
+                  {selectedWalletType === 'manual' || selectedWalletType === 'offline' ? (
+                    <label className="field">
+                      <span>Manual destination type</span>
+                      <select
+                        className="native-select"
+                        value={walletData.preferredMethod}
+                        onChange={(event) =>
+                          setWalletData((prev) => ({
+                            ...prev,
+                            preferredMethod: event.target.value as Wallet['preferredMethod']
+                          }))
+                        }
+                      >
+                        <option value="bank">Bank transfer</option>
+                        <option value="mobile">Mobile money</option>
+                        <option value="paypal">PayPal</option>
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {selectedWalletType === 'manual' || selectedWalletType === 'offline' ? (
+                    walletData.preferredMethod === 'bank' ? (
                     <>
                       <label className="field">
                         <span>Bank name</span>
@@ -467,9 +658,11 @@ const AccountPage = () => {
                         />
                       </label>
                     </>
+                    ) : null
                   ) : null}
 
-                  {walletData.preferredMethod === 'mobile' ? (
+                  {selectedWalletType === 'manual' || selectedWalletType === 'offline' ? (
+                    walletData.preferredMethod === 'mobile' ? (
                     <>
                       <label className="field">
                         <span>Mobile provider</span>
@@ -498,9 +691,10 @@ const AccountPage = () => {
                         />
                       </label>
                     </>
+                    ) : null
                   ) : null}
 
-                  {walletData.preferredMethod === 'paypal' ? (
+                  {(selectedWalletType === 'paypal' || ((selectedWalletType === 'manual' || selectedWalletType === 'offline') && walletData.preferredMethod === 'paypal')) ? (
                     <label className="field">
                       <span>PayPal email</span>
                       <input
@@ -508,6 +702,18 @@ const AccountPage = () => {
                         type="email"
                         value={walletData.paypalEmail}
                         onChange={(event) => setWalletData((prev) => ({ ...prev, paypalEmail: event.target.value }))}
+                      />
+                    </label>
+                  ) : null}
+
+                  {selectedWalletType === 'stripe' ? (
+                    <label className="field">
+                      <span>Stripe account ID</span>
+                      <input
+                        className="native-input"
+                        value={walletData.stripeAccountId}
+                        onChange={(event) => setWalletData((prev) => ({ ...prev, stripeAccountId: event.target.value }))}
+                        placeholder="acct_..."
                       />
                     </label>
                   ) : null}
@@ -527,36 +733,8 @@ const AccountPage = () => {
                       <option value="KES">KES</option>
                     </select>
                   </label>
-                  <label className="checkbox-field">
-                    <input
-                      type="checkbox"
-                      checked={walletData.autoPayoutEnabled}
-                      onChange={(event) =>
-                        setWalletData((prev) => ({ ...prev, autoPayoutEnabled: event.target.checked }))
-                      }
-                    />
-                    <span>Enable auto payout</span>
-                  </label>
-                  {walletData.autoPayoutEnabled ? (
-                    <label className="field">
-                      <span>Auto payout threshold</span>
-                      <input
-                        className="native-input"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={walletData.autoPayoutThreshold}
-                        onChange={(event) =>
-                          setWalletData((prev) => ({
-                            ...prev,
-                            autoPayoutThreshold: Number(event.target.value || 0)
-                          }))
-                        }
-                      />
-                    </label>
-                  ) : null}
                   <IonButton className="solid-cta" type="submit" expand="block" disabled={loading}>
-                    {loading ? 'Saving...' : 'Save wallet'}
+                    {loading ? 'Saving...' : selectedWalletId ? 'Update wallet' : 'Add wallet'}
                   </IonButton>
                 </form>
               </section>
@@ -631,9 +809,12 @@ const AccountPage = () => {
                       onChange={(event) => setPaystackSetup((prev) => ({ ...prev, businessName: event.target.value }))}
                     />
                   </label>
-                  <IonButton className="solid-cta" expand="block" onClick={onConnectPaystack} disabled={paystackLoading}>
+                  <IonButton className="solid-cta" expand="block" onClick={onConnectPaystack} disabled={paystackLoading || disablePaystackConnect}>
                     {paystackLoading ? 'Connecting...' : isPaystackMethod ? 'Reconnect Paystack' : 'Connect Paystack'}
                   </IonButton>
+                  {disablePaystackConnect ? (
+                    <p className="muted-text">Manual/offline wallet is active. Disable it before Paystack automation.</p>
+                  ) : null}
                 </div>
               </section>
             </>

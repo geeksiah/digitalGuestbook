@@ -1635,7 +1635,7 @@ export default function EventDetailPage() {
               <div className="p-6 grid sm:grid-cols-2 gap-4">
                 {[
                   { t: 'INVITATION', l: 'Invitation Page', f: 'invitationTemplateId', e: event.invitationEnabled, icon: '🎫', desc: 'Digital invitation pass' },
-                  { t: 'RSVP', l: 'RSVP Form', f: 'rsvpTemplateId', e: event.rsvpEnabled, icon: '✋', desc: 'Guest response form' },
+                  { t: 'RSVP', l: 'RSVP / Ticket Page', f: 'rsvpTemplateId', e: event.rsvpEnabled, icon: '✋', desc: 'Guest response and paid ticket page' },
                   { t: 'GUESTBOOK', l: 'Guestbook Menu', f: 'guestbookTemplateId', e: event.guestbookEnabled, icon: '📖', desc: 'Guestbook landing page' },
                   { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true, icon: '🙏', desc: 'Post-submission page' },
                   { t: 'LIVE_LANDING', l: 'Live Landing Page', f: 'liveLandingTemplateId', e: true, icon: '🎉', desc: 'During live phase' },

@@ -14,6 +14,7 @@ export default function NewOwnerPage() {
     email: '',
     phone: '',
     company: '',
+    countryCode: 'US',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,6 +27,7 @@ export default function NewOwnerPage() {
         email: formData.email,
         phone: formData.phone || undefined,
         company: formData.company || undefined,
+        countryCode: formData.countryCode,
       });
       toast.success('Owner created successfully');
       router.push('/admin/owners');
@@ -112,6 +114,25 @@ export default function NewOwnerPage() {
               value={formData.company}
               onChange={(e) => setFormData({ ...formData, company: e.target.value })}
             />
+          </div>
+
+          <div>
+            <label htmlFor="countryCode" className="label">
+              Country
+            </label>
+            <select
+              id="countryCode"
+              className="input"
+              value={formData.countryCode}
+              onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+            >
+              <option value="US">United States (US)</option>
+              <option value="GB">United Kingdom (GB)</option>
+              <option value="GH">Ghana (GH)</option>
+              <option value="NG">Nigeria (NG)</option>
+              <option value="KE">Kenya (KE)</option>
+              <option value="ZA">South Africa (ZA)</option>
+            </select>
           </div>
 
           <div className="flex gap-3 pt-4">

@@ -73,6 +73,7 @@ interface Owner {
   email: string;
   phone?: string | null;
   company?: string | null;
+  countryCode?: string | null;
   isActive: boolean;
 }
 

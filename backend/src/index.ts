@@ -121,12 +121,33 @@ async function initializeDatabase() {
       await prisma.template.createMany({
         data: [
           { id: 'default-invitation', name: 'Elegant Invitation', type: 'INVITATION', isDefault: true, htmlContent: '<div>{{event.name}}</div>', cssContent: '' },
-          { id: 'default-rsvp', name: 'Classic RSVP', type: 'RSVP', isDefault: true, htmlContent: '<div>RSVP Form</div>', cssContent: '' },
+          { id: 'default-rsvp', name: 'Ticket Checkout Flow', type: 'RSVP', isDefault: true, htmlContent: '<div>RSVP / Ticket Page</div>', cssContent: '' },
           { id: 'default-guestbook', name: 'Modern Guestbook', type: 'GUESTBOOK', isDefault: true, htmlContent: '<div>Guestbook</div>', cssContent: '' },
           { id: 'default-thankyou', name: 'Thank You', type: 'THANK_YOU', isDefault: true, htmlContent: '<div>Thank You</div>', cssContent: '' },
+          { id: 'default-gifting', name: 'Modern Gifting Catalog', type: 'GIFTING', isDefault: true, htmlContent: '<div>Gifting Catalog</div>', cssContent: '' },
         ],
       });
       console.log('✅ Default templates created');
+    }
+    // Ensure core defaults exist on already-populated databases too.
+    const requiredDefaults = [
+      { id: 'default-rsvp', name: 'Ticket Checkout Flow', type: 'RSVP', htmlContent: '<div>RSVP / Ticket Page</div>' },
+      { id: 'default-gifting', name: 'Modern Gifting Catalog', type: 'GIFTING', htmlContent: '<div>Gifting Catalog</div>' },
+    ] as const;
+
+    for (const template of requiredDefaults) {
+      await prisma.template.upsert({
+        where: { id: template.id },
+        update: {},
+        create: {
+          id: template.id,
+          name: template.name,
+          type: template.type,
+          isDefault: true,
+          htmlContent: template.htmlContent,
+          cssContent: '',
+        },
+      });
     }
 
     // Create system settings if not exists

@@ -6,6 +6,7 @@ export interface Owner {
   email: string;
   phone?: string | null;
   company?: string | null;
+  countryCode?: string | null;
   isActive: boolean;
 }
 
@@ -183,6 +184,27 @@ export interface Wallet {
   currency?: string;
   autoPayoutEnabled?: boolean;
   autoPayoutThreshold?: number;
+}
+
+export type WalletMode = 'MANUAL_FALLBACK' | 'MANUAL_EXPLICIT' | 'AUTOMATED';
+
+export interface OwnerPayoutWallet {
+  id: string;
+  walletType: 'manual' | 'offline' | 'stripe' | 'paypal' | 'paystack' | 'flutterwave';
+  currency: string;
+  countryCode?: string | null;
+  isActive: boolean;
+  isVerified: boolean;
+  paystackSubaccount?: string | null;
+  paystackRecipientCode?: string | null;
+}
+
+export interface ManualSettlementSummary {
+  transactionCount: number;
+  amountReceived: number;
+  amountOwed: number;
+  amountSettled: number;
+  outstandingBalance: number;
 }
 
 export interface PaystackBank {

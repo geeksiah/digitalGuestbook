@@ -14,6 +14,46 @@ interface PaystackBank {
   country?: string;
 }
 
+type WalletMode = 'MANUAL_FALLBACK' | 'MANUAL_EXPLICIT' | 'AUTOMATED';
+type WalletType = 'manual' | 'offline' | 'stripe' | 'paypal' | 'paystack' | 'flutterwave';
+
+interface OwnerPayoutWallet {
+  id: string;
+  walletType: WalletType;
+  currency: string;
+  countryCode?: string | null;
+  isActive: boolean;
+  isVerified: boolean;
+  paystackSubaccount?: string | null;
+  paystackRecipientCode?: string | null;
+}
+
+interface ManualSettlementSummary {
+  transactionCount: number;
+  amountReceived: number;
+  amountOwed: number;
+  amountSettled: number;
+  outstandingBalance: number;
+}
+
+const WALLET_LABEL: Record<WalletType, string> = {
+  manual: 'Manual',
+  offline: 'Offline',
+  stripe: 'Stripe',
+  paypal: 'PayPal',
+  paystack: 'Paystack',
+  flutterwave: 'Flutterwave',
+};
+
+const COUNTRY_OPTIONS = [
+  { code: 'US', label: 'United States' },
+  { code: 'GB', label: 'United Kingdom' },
+  { code: 'GH', label: 'Ghana' },
+  { code: 'NG', label: 'Nigeria' },
+  { code: 'KE', label: 'Kenya' },
+  { code: 'ZA', label: 'South Africa' },
+];
+
 export default function OwnerAccountPage() {
   const { owner, setAuth } = useOwnerAuthStore();
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'wallet' | 'notifications' | 'support'>('profile');
@@ -30,6 +70,7 @@ export default function OwnerAccountPage() {
     email: owner?.email || '',
     phone: owner?.phone || '',
     company: owner?.company || '',
+    countryCode: owner?.countryCode || 'US',
   });
 
   // Password form
@@ -49,6 +90,7 @@ export default function OwnerAccountPage() {
     mobileProvider: '',
     mobileNumber: '',
     paypalEmail: '',
+    stripeAccountId: '',
     paystackSubaccount: '',
     preferredMethod: 'bank' as 'bank' | 'mobile' | 'paypal' | 'stripe' | 'paystack',
     currency: 'USD',
@@ -62,6 +104,12 @@ export default function OwnerAccountPage() {
     accountNumber: '',
     businessName: '',
   });
+  const [walletMode, setWalletMode] = useState<WalletMode>('MANUAL_FALLBACK');
+  const [availableWalletTypes, setAvailableWalletTypes] = useState<WalletType[]>(['manual', 'offline']);
+  const [ownerWallets, setOwnerWallets] = useState<OwnerPayoutWallet[]>([]);
+  const [manualSettlement, setManualSettlement] = useState<ManualSettlementSummary | null>(null);
+  const [selectedWalletType, setSelectedWalletType] = useState<WalletType>('manual');
+  const [selectedWalletId, setSelectedWalletId] = useState('');
   const [notificationPrefs, setNotificationPrefs] = useState({
     notificationsEnabled: true,
     marketingEnabled: true,
@@ -93,6 +141,7 @@ export default function OwnerAccountPage() {
         email: owner.email || '',
         phone: owner.phone || '',
         company: owner.company || '',
+        countryCode: owner.countryCode || 'US',
       });
     }
     fetchWallet();
@@ -109,6 +158,16 @@ export default function OwnerAccountPage() {
     try {
       setWalletLoading(true);
       const response = await ownerDashboardApi.getWallet();
+      setWalletMode((response.data.walletMode || 'MANUAL_FALLBACK') as WalletMode);
+      const nextWalletTypes = ((response.data.availableWalletTypes || ['manual', 'offline']) as string[])
+        .map((type) => String(type).toLowerCase())
+        .filter((type): type is WalletType =>
+          ['manual', 'offline', 'stripe', 'paypal', 'paystack', 'flutterwave'].includes(type)
+        );
+      setAvailableWalletTypes(nextWalletTypes.length ? nextWalletTypes : ['manual', 'offline']);
+      setOwnerWallets((response.data.wallets || []) as OwnerPayoutWallet[]);
+      setManualSettlement((response.data.manualSettlement || null) as ManualSettlementSummary | null);
+
       if (response.data.wallet) {
         setWalletData({
           bankName: response.data.wallet.bankName || '',
@@ -119,6 +178,7 @@ export default function OwnerAccountPage() {
           mobileProvider: response.data.wallet.mobileProvider || '',
           mobileNumber: response.data.wallet.mobileNumber || '',
           paypalEmail: response.data.wallet.paypalEmail || '',
+          stripeAccountId: response.data.wallet.stripeAccountId || '',
           paystackSubaccount: response.data.wallet.paystackSubaccount || '',
           preferredMethod: response.data.wallet.preferredMethod || 'bank',
           currency: response.data.wallet.currency || 'USD',
@@ -133,6 +193,18 @@ export default function OwnerAccountPage() {
             currency: response.data.wallet.currency || prev.currency,
           }));
         }
+      }
+      const activeWallets = ((response.data.wallets || []) as OwnerPayoutWallet[]).filter((wallet) => wallet.isActive);
+      const preferredWallet =
+        activeWallets.find((wallet) => wallet.walletType === 'manual' || wallet.walletType === 'offline') ||
+        activeWallets[0] ||
+        null;
+      if (preferredWallet) {
+        setSelectedWalletId(preferredWallet.id);
+        setSelectedWalletType(preferredWallet.walletType);
+      } else {
+        setSelectedWalletId('');
+        setSelectedWalletType('manual');
       }
     } catch (error: any) {
       // Wallet might not exist yet, that's okay
@@ -221,6 +293,7 @@ export default function OwnerAccountPage() {
       });
 
       const nextWallet = response.data.wallet;
+      const nextPayoutWallet = response.data.payoutWallet as OwnerPayoutWallet | undefined;
       setWalletData((prev) => ({
         ...prev,
         preferredMethod: 'paystack',
@@ -230,6 +303,10 @@ export default function OwnerAccountPage() {
         paystackSubaccount: nextWallet.paystackSubaccount || prev.paystackSubaccount,
         currency: nextWallet.currency || prev.currency,
       }));
+      if (nextPayoutWallet?.id) {
+        setSelectedWalletId(nextPayoutWallet.id);
+        setSelectedWalletType('paystack');
+      }
       toast.success('Paystack auto-payout connected');
       await fetchWallet();
     } catch (error: any) {
@@ -244,10 +321,57 @@ export default function OwnerAccountPage() {
     setLoading(true);
 
     try {
-      await ownerDashboardApi.updateWallet(walletData);
+      if (selectedWalletType === 'paystack' && !walletData.paystackSubaccount) {
+        throw new Error('Connect Paystack first before saving Paystack wallet.');
+      }
+
+      const payload: Record<string, any> = {
+        walletType: selectedWalletType,
+        walletId: selectedWalletId || undefined,
+        countryCode: profileData.countryCode || 'US',
+        currency: walletData.currency,
+        isActive: true,
+      };
+
+      if (selectedWalletType === 'paystack') {
+        payload.paystackSubaccount = walletData.paystackSubaccount || undefined;
+      } else if (selectedWalletType === 'paypal') {
+        payload.paypalEmail = walletData.paypalEmail || undefined;
+      } else if (selectedWalletType === 'stripe') {
+        payload.stripeAccountId = walletData.stripeAccountId || undefined;
+      } else if (selectedWalletType === 'manual' || selectedWalletType === 'offline') {
+        payload.bankName = walletData.bankName || undefined;
+        payload.accountName = walletData.accountName || undefined;
+        payload.accountNumber = walletData.accountNumber || undefined;
+        payload.routingNumber = walletData.routingNumber || undefined;
+        payload.swiftCode = walletData.swiftCode || undefined;
+        payload.mobileProvider = walletData.mobileProvider || undefined;
+        payload.mobileNumber = walletData.mobileNumber || undefined;
+        payload.paypalEmail = walletData.paypalEmail || undefined;
+      }
+
+      await ownerDashboardApi.updateWallet(payload);
       toast.success('Wallet settings updated successfully');
+      await fetchWallet();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update wallet settings');
+      toast.error(error.response?.data?.error || error.message || 'Failed to update wallet settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveWallet = async (walletId: string) => {
+    try {
+      setLoading(true);
+      await ownerDashboardApi.removeWallet(walletId);
+      toast.success('Wallet removed');
+      if (selectedWalletId === walletId) {
+        setSelectedWalletId('');
+        setSelectedWalletType('manual');
+      }
+      await fetchWallet();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to remove wallet');
     } finally {
       setLoading(false);
     }
@@ -264,6 +388,7 @@ export default function OwnerAccountPage() {
         email: profileData.email,
         phone: profileData.phone || undefined,
         company: profileData.company || undefined,
+        countryCode: profileData.countryCode || undefined,
       });
 
       // Update auth store with new owner data
@@ -320,6 +445,15 @@ export default function OwnerAccountPage() {
       setLoading(false);
     }
   };
+
+  const walletTypeOptions = Array.from(new Set<WalletType>([...availableWalletTypes, selectedWalletType]));
+  const hasManualWallet = ownerWallets.some(
+    (wallet) => wallet.isActive && (wallet.walletType === 'manual' || wallet.walletType === 'offline')
+  );
+  const hasPaystackWallet = ownerWallets.some(
+    (wallet) => wallet.isActive && wallet.walletType === 'paystack'
+  );
+  const disablePaystackConnect = hasManualWallet && !hasPaystackWallet;
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 sm:space-y-6">
@@ -410,6 +544,24 @@ export default function OwnerAccountPage() {
               />
             </div>
 
+            <div>
+              <label htmlFor="countryCode" className="label">
+                Country
+              </label>
+              <select
+                id="countryCode"
+                className="input"
+                value={profileData.countryCode}
+                onChange={(e) => setProfileData({ ...profileData, countryCode: e.target.value })}
+              >
+                {COUNTRY_OPTIONS.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.label} ({country.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={loading} className="btn-primary w-full sm:w-auto">
                 {loading ? 'Saving...' : 'Save Changes'}
@@ -481,22 +633,293 @@ export default function OwnerAccountPage() {
         <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-5 sm:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-brand-900 mb-5">Wallet & Payout Settings</h2>
           <p className="text-sm text-surface-600 mb-6">
-            Configure your payout method to receive payments from your events.
+            Wallet mode controls guest payment methods and payout routing.
           </p>
-          
+
           {walletLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
             </div>
           ) : (
-            <form onSubmit={handleWalletUpdate} className="space-y-6">
-              {/* Automated Paystack Setup */}
+            <div className="space-y-5">
+              <div className="rounded-xl border border-surface-200 p-4 sm:p-5 bg-surface-50">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-navy-900">Current Mode:</span>
+                  <span className={cn(
+                    'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold border',
+                    walletMode === 'AUTOMATED'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-amber-50 border-amber-200 text-amber-700'
+                  )}>
+                    {walletMode === 'AUTOMATED' ? 'Automated Wallet Routing' : 'Manual Settlement'}
+                  </span>
+                </div>
+                {manualSettlement ? (
+                  <div className="grid sm:grid-cols-4 gap-3 mt-4">
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500">Amount Received</p>
+                      <p className="text-sm font-semibold text-navy-900">
+                        {manualSettlement.amountReceived.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500">Amount Owed</p>
+                      <p className="text-sm font-semibold text-navy-900">
+                        {manualSettlement.amountOwed.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500">Settled</p>
+                      <p className="text-sm font-semibold text-navy-900">
+                        {manualSettlement.amountSettled.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-white p-3">
+                      <p className="text-xs text-surface-500">Outstanding</p>
+                      <p className="text-sm font-semibold text-amber-700">
+                        {manualSettlement.outstandingBalance.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-xl border border-surface-200 p-4 sm:p-5">
+                <h3 className="text-sm font-semibold text-navy-900 mb-3">Configured Wallets</h3>
+                {ownerWallets.length === 0 ? (
+                  <p className="text-sm text-surface-500">No wallet configured yet. System uses manual fallback.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {ownerWallets.map((wallet) => (
+                      <div key={wallet.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-surface-200 p-3">
+                        <button
+                          type="button"
+                          className="text-left"
+                          onClick={() => {
+                            setSelectedWalletId(wallet.id);
+                            setSelectedWalletType(wallet.walletType);
+                            setWalletData((prev) => ({
+                              ...prev,
+                              currency: wallet.currency || prev.currency,
+                              paystackSubaccount: wallet.paystackSubaccount || prev.paystackSubaccount,
+                            }));
+                          }}
+                        >
+                          <p className="text-sm font-semibold text-navy-900">
+                            {WALLET_LABEL[wallet.walletType]} {wallet.isVerified ? 'Verified' : 'Pending'}
+                          </p>
+                          <p className="text-xs text-surface-500">
+                            {wallet.currency} {wallet.countryCode ? `• ${wallet.countryCode}` : ''}
+                          </p>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border',
+                            wallet.id === selectedWalletId
+                              ? 'bg-brand-50 border-brand-200 text-brand-700'
+                              : 'bg-surface-100 border-surface-200 text-surface-600'
+                          )}>
+                            {wallet.id === selectedWalletId ? 'Selected' : 'Select'}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-rose-700 hover:text-rose-900"
+                            onClick={() => handleRemoveWallet(wallet.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleWalletUpdate} className="space-y-6">
+                <div>
+                  <label className="label">Wallet Type *</label>
+                  <select
+                    className="input"
+                    value={selectedWalletType}
+                    onChange={(e) => {
+                      setSelectedWalletType(e.target.value as WalletType);
+                      setSelectedWalletId('');
+                    }}
+                  >
+                    {walletTypeOptions.map((walletType) => (
+                      <option key={walletType} value={walletType}>
+                        {WALLET_LABEL[walletType]}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-surface-500 mt-1">
+                    Manual/Offline keeps guest checkout on admin rails with manual settlement.
+                  </p>
+                </div>
+
+                {(selectedWalletType === 'manual' || selectedWalletType === 'offline') && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="label">Manual Destination Type</label>
+                      <select
+                        className="input"
+                        value={walletData.preferredMethod}
+                        onChange={(e) => setWalletData({ ...walletData, preferredMethod: e.target.value as any })}
+                      >
+                        <option value="bank">Bank Transfer</option>
+                        <option value="mobile">Mobile Money</option>
+                        <option value="paypal">PayPal</option>
+                      </select>
+                    </div>
+
+                    {walletData.preferredMethod === 'bank' && (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="label">Bank Name</label>
+                          <input
+                            type="text"
+                            className="input"
+                            value={walletData.bankName}
+                            onChange={(e) => setWalletData({ ...walletData, bankName: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label">Account Name</label>
+                          <input
+                            type="text"
+                            className="input"
+                            value={walletData.accountName}
+                            onChange={(e) => setWalletData({ ...walletData, accountName: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label">Account Number</label>
+                          <input
+                            type="text"
+                            className="input"
+                            value={walletData.accountNumber}
+                            onChange={(e) => setWalletData({ ...walletData, accountNumber: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label">Routing / SWIFT</label>
+                          <input
+                            type="text"
+                            className="input"
+                            value={walletData.routingNumber || walletData.swiftCode}
+                            onChange={(e) => setWalletData({ ...walletData, routingNumber: e.target.value })}
+                            placeholder="Routing number or SWIFT code"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {walletData.preferredMethod === 'mobile' && (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="label">Mobile Provider</label>
+                          <select
+                            className="input"
+                            value={walletData.mobileProvider}
+                            onChange={(e) => setWalletData({ ...walletData, mobileProvider: e.target.value })}
+                          >
+                            <option value="">Select provider</option>
+                            <option value="mpesa">M-Pesa</option>
+                            <option value="mtn">MTN Mobile Money</option>
+                            <option value="airtel">Airtel Money</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="label">Mobile Number</label>
+                          <input
+                            type="tel"
+                            className="input"
+                            value={walletData.mobileNumber}
+                            onChange={(e) => setWalletData({ ...walletData, mobileNumber: e.target.value })}
+                            placeholder="+1234567890"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {walletData.preferredMethod === 'paypal' && (
+                      <div>
+                        <label className="label">PayPal Email</label>
+                        <input
+                          type="email"
+                          className="input"
+                          value={walletData.paypalEmail}
+                          onChange={(e) => setWalletData({ ...walletData, paypalEmail: e.target.value })}
+                          placeholder="your@paypal.com"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedWalletType === 'stripe' && (
+                  <div>
+                    <label className="label">Stripe Account ID</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={walletData.stripeAccountId}
+                      onChange={(e) => setWalletData({ ...walletData, stripeAccountId: e.target.value })}
+                      placeholder="acct_..."
+                    />
+                  </div>
+                )}
+
+                {selectedWalletType === 'paypal' && (
+                  <div>
+                    <label className="label">PayPal Email</label>
+                    <input
+                      type="email"
+                      className="input"
+                      value={walletData.paypalEmail}
+                      onChange={(e) => setWalletData({ ...walletData, paypalEmail: e.target.value })}
+                      placeholder="your@paypal.com"
+                    />
+                  </div>
+                )}
+
+                {selectedWalletType === 'paystack' && (
+                  <div className="rounded-lg border border-brand-100 bg-brand-50 p-3">
+                    <p className="text-sm text-brand-900">
+                      Use the Paystack automation section below to connect or reconnect subaccount routing.
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="label">Currency</label>
+                  <select
+                    className="input"
+                    value={walletData.currency}
+                    onChange={(e) => setWalletData({ ...walletData, currency: e.target.value })}
+                  >
+                    <option value="USD">USD - US Dollar</option>
+                    <option value="EUR">EUR - Euro</option>
+                    <option value="GBP">GBP - British Pound</option>
+                    <option value="GHS">GHS - Ghanaian Cedi</option>
+                    <option value="KES">KES - Kenyan Shilling</option>
+                    <option value="NGN">NGN - Nigerian Naira</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button type="submit" disabled={loading} className="btn-primary">
+                    {loading ? 'Saving...' : selectedWalletId ? 'Update Wallet' : 'Add Wallet'}
+                  </button>
+                </div>
+              </form>
+
               <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-brand-900">Automated Paystack Payout</h3>
                     <p className="text-sm text-brand-800/80 mt-1">
-                      Connect your bank account once. Ticket and gift payments can auto-route to your Paystack subaccount.
+                      Connect your bank account for direct owner routing when guests pay with Paystack.
                     </p>
                   </div>
                   {walletData.paystackSubaccount ? (
@@ -504,9 +927,7 @@ export default function OwnerAccountPage() {
                       Connected
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                      Not connected
-                    </span>
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Not connected</span>
                   )}
                 </div>
 
@@ -585,7 +1006,7 @@ export default function OwnerAccountPage() {
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={paystackLoading}
+                    disabled={paystackLoading || disablePaystackConnect}
                     onClick={handleConnectPaystack}
                   >
                     {paystackLoading ? 'Connecting...' : 'Connect Paystack'}
@@ -596,178 +1017,13 @@ export default function OwnerAccountPage() {
                     </span>
                   ) : null}
                 </div>
+                {disablePaystackConnect ? (
+                  <p className="text-xs text-amber-700 mt-3">
+                    Manual/offline wallet is active. Disable manual mode first to connect automated Paystack routing.
+                  </p>
+                ) : null}
               </div>
-
-              {/* Preferred Method */}
-              <div>
-                <label className="label">Preferred Payout Method *</label>
-                <select
-                  className="input"
-                  value={walletData.preferredMethod}
-                  onChange={(e) => setWalletData({ ...walletData, preferredMethod: e.target.value as any })}
-                  required
-                >
-                  <option value="bank">Bank Transfer</option>
-                  <option value="mobile">Mobile Money</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="paystack">Paystack</option>
-                  <option value="stripe">Stripe</option>
-                </select>
-              </div>
-
-              {/* Bank Details */}
-              {walletData.preferredMethod === 'bank' && (
-                <>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Bank Name</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={walletData.bankName}
-                        onChange={(e) => setWalletData({ ...walletData, bankName: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Account Name</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={walletData.accountName}
-                        onChange={(e) => setWalletData({ ...walletData, accountName: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Account Number</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={walletData.accountNumber}
-                        onChange={(e) => setWalletData({ ...walletData, accountNumber: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Routing Number (US) / SWIFT Code</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={walletData.routingNumber || walletData.swiftCode}
-                        onChange={(e) => {
-                          if (walletData.routingNumber) {
-                            setWalletData({ ...walletData, routingNumber: e.target.value });
-                          } else {
-                            setWalletData({ ...walletData, swiftCode: e.target.value });
-                          }
-                        }}
-                        placeholder="Routing number or SWIFT code"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Mobile Money */}
-              {walletData.preferredMethod === 'mobile' && (
-                <>
-                  <div>
-                    <label className="label">Mobile Provider</label>
-                    <select
-                      className="input"
-                      value={walletData.mobileProvider}
-                      onChange={(e) => setWalletData({ ...walletData, mobileProvider: e.target.value })}
-                    >
-                      <option value="">Select provider</option>
-                      <option value="mpesa">M-Pesa</option>
-                      <option value="mtn">MTN Mobile Money</option>
-                      <option value="airtel">Airtel Money</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Mobile Number</label>
-                    <input
-                      type="tel"
-                      className="input"
-                      value={walletData.mobileNumber}
-                      onChange={(e) => setWalletData({ ...walletData, mobileNumber: e.target.value })}
-                      placeholder="+1234567890"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* PayPal */}
-              {walletData.preferredMethod === 'paypal' && (
-                <div>
-                  <label className="label">PayPal Email</label>
-                  <input
-                    type="email"
-                    className="input"
-                    value={walletData.paypalEmail}
-                    onChange={(e) => setWalletData({ ...walletData, paypalEmail: e.target.value })}
-                    placeholder="your@paypal.com"
-                  />
-                </div>
-              )}
-
-              {/* Currency */}
-              <div>
-                <label className="label">Currency</label>
-                <select
-                  className="input"
-                  value={walletData.currency}
-                  onChange={(e) => setWalletData({ ...walletData, currency: e.target.value })}
-                >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                  <option value="GHS">GHS - Ghanaian Cedi</option>
-                  <option value="KES">KES - Kenyan Shilling</option>
-                  <option value="NGN">NGN - Nigerian Naira</option>
-                </select>
-              </div>
-
-              {/* Auto Payout Settings */}
-              <div className="border-t border-surface-200 pt-6">
-                <h3 className="text-md font-semibold text-navy-900 mb-4">Auto Payout Settings</h3>
-                <div className="flex items-center mb-4">
-                  <input
-                    type="checkbox"
-                    id="autoPayout"
-                    checked={walletData.autoPayoutEnabled}
-                    onChange={(e) => setWalletData({ ...walletData, autoPayoutEnabled: e.target.checked })}
-                    className="h-4 w-4 text-navy-600 focus:ring-navy-500 border-surface-300 rounded"
-                  />
-                  <label htmlFor="autoPayout" className="ml-2 block text-sm text-surface-900">
-                    Enable automatic payouts
-                  </label>
-                </div>
-                {walletData.autoPayoutEnabled && (
-                  <div>
-                    <label className="label">Auto Payout Threshold</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="input"
-                      value={walletData.autoPayoutThreshold}
-                      onChange={(e) => setWalletData({ ...walletData, autoPayoutThreshold: parseFloat(e.target.value) || 0 })}
-                      placeholder="100"
-                    />
-                    <p className="text-xs text-surface-500 mt-1">
-                      Automatically process payouts when balance reaches this amount
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button type="submit" disabled={loading} className="btn-primary">
-                  {loading ? 'Saving...' : 'Save Wallet Settings'}
-                </button>
-              </div>
-            </form>
+            </div>
           )}
         </div>
       )}
@@ -963,4 +1219,3 @@ export default function OwnerAccountPage() {
     </div>
   );
 }
-

@@ -9,12 +9,15 @@ import type {
   Owner,
   OwnerEvent,
   OwnerStats,
+  OwnerPayoutWallet,
   PaystackBank,
   PayoutResponse,
   RSVP,
   RsvpInvite,
   TicketType,
-  Wallet
+  Wallet,
+  WalletMode,
+  ManualSettlementSummary,
 } from '../types/domain';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -52,7 +55,7 @@ export const ownerAuthApi = {
   requestPasswordReset: (email: string, reason?: string) =>
     api.post<{ message: string }>('/owner-auth/request-password-reset', { email, reason }),
   me: () => api.get<{ owner: Owner }>('/owner-auth/me'),
-  updateProfile: (payload: { name?: string; email?: string; phone?: string; company?: string }) =>
+  updateProfile: (payload: { name?: string; email?: string; phone?: string; company?: string; countryCode?: string }) =>
     api.put<{ owner: Owner }>('/owner-auth/profile', payload),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post<{ message: string }>('/owner-auth/change-password', { currentPassword, newPassword })
@@ -156,8 +159,21 @@ export const ownerDashboardApi = {
   ) => api.post('/owner-dashboard/events/' + eventId + '/rsvp-invites/batch', payload),
   resendInvite: (eventId: string, inviteId: string) =>
     api.post('/owner-dashboard/events/' + eventId + '/rsvp-invites/' + inviteId + '/resend', {}),
-  wallet: () => api.get<{ wallet: Wallet | null; paystackAutomationReady: boolean }>('/owner-dashboard/wallet'),
-  updateWallet: (payload: Partial<Wallet>) => api.post<{ wallet: Wallet }>('/owner-dashboard/wallet', payload),
+  wallet: () =>
+    api.get<{
+      wallet: Wallet | null;
+      wallets?: OwnerPayoutWallet[];
+      walletMode?: WalletMode;
+      availableWalletTypes?: string[];
+      manualSettlement?: ManualSettlementSummary;
+      paystackAutomationReady: boolean;
+    }>('/owner-dashboard/wallet'),
+  updateWallet: (payload: Partial<Wallet> & Record<string, unknown>) =>
+    api.post<{ wallet: Wallet; wallets?: OwnerPayoutWallet[]; walletMode?: WalletMode }>('/owner-dashboard/wallet', payload),
+  removeWallet: (walletId: string) =>
+    api.delete<{ wallet: Wallet | null; wallets?: OwnerPayoutWallet[]; walletMode?: WalletMode }>(
+      '/owner-dashboard/wallet/' + walletId
+    ),
   paystackBanks: (country = 'ghana', currency?: string) =>
     api.get<{ banks: PaystackBank[] }>('/owner-dashboard/wallet/paystack/banks', {
       params: currency ? { country, currency } : { country }
@@ -170,7 +186,7 @@ export const ownerDashboardApi = {
     country?: string;
     setAsPreferred?: boolean;
     percentageCharge?: number;
-  }) => api.post<{ wallet: Wallet }>('/owner-dashboard/wallet/paystack/connect', payload),
+  }) => api.post<{ wallet: Wallet; payoutWallet?: OwnerPayoutWallet }>('/owner-dashboard/wallet/paystack/connect', payload),
   payouts: () => api.get<PayoutResponse>('/owner-dashboard/payouts'),
   notificationPreferences: () =>
     api.get<{

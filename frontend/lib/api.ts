@@ -437,6 +437,10 @@ export const ownerDashboardApi = {
     axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet`, data, {
       headers: ownerHeaders(),
     }),
+  removeWallet: (walletId: string) =>
+    axios.delete(`${API_BASE_URL}/api/owner-dashboard/wallet/${walletId}`, {
+      headers: ownerHeaders(),
+    }),
   getPaystackBanks: (params?: { country?: string; currency?: string }) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/wallet/paystack/banks`, {
       params,

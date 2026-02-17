@@ -39,6 +39,14 @@ interface EventTotal {
 interface WalletSummary {
   preferredMethod: string;
   currency: string;
+  walletMode?: 'MANUAL_FALLBACK' | 'MANUAL_EXPLICIT' | 'AUTOMATED';
+  manualSettlement?: {
+    transactionCount: number;
+    amountReceived: number;
+    amountOwed: number;
+    amountSettled: number;
+    outstandingBalance: number;
+  } | null;
 }
 
 interface OverallTotals {
@@ -95,6 +103,8 @@ export default function OwnerPayoutsPage() {
       setWalletSummary({
         preferredMethod: wallet.preferredMethod || 'bank',
         currency: wallet.currency || 'USD',
+        walletMode: response.data?.walletMode || 'MANUAL_FALLBACK',
+        manualSettlement: response.data?.manualSettlement || null,
       });
     } catch (error) {
       console.error('Failed to load wallet summary:', error);
@@ -236,6 +246,11 @@ export default function OwnerPayoutsPage() {
                     : 'Configured in Wallet settings'}
                 </div>
                 <p className="text-xs text-surface-500 mt-1">Locked to your wallet settings.</p>
+                {walletSummary?.walletMode && walletSummary.walletMode !== 'AUTOMATED' ? (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Manual settlement mode is active for this account.
+                  </p>
+                ) : null}
               </div>
 
               <div>
