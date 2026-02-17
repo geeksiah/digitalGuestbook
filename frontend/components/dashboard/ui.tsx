@@ -15,8 +15,8 @@ export function DashboardPageHeader({
   return (
     <div className={cn('flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-in', className)}>
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-surface-400">Control Center</p>
-        <h1 className="text-lg sm:text-2xl font-display font-bold text-brand-900 mt-0.5 tracking-tight">{title}</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-surface-400">Control Center</p>
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 mt-0.5 tracking-tight">{title}</h1>
         {subtitle ? <p className="text-sm text-surface-500 mt-1 leading-relaxed">{subtitle}</p> : null}
       </div>
       {action ? <div className="flex items-center gap-2 flex-shrink-0">{action}</div> : null}
@@ -78,8 +78,8 @@ export function DashboardKpiCard({
     <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4 sm:p-5 hover:border-brand-200 transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest text-surface-400 mb-1.5">{label}</p>
-          <p className="text-xl sm:text-2xl font-bold text-brand-900 leading-none tracking-tight">{value}</p>
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1.5">{label}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-brand-900 leading-none tracking-tight">{value}</p>
         </div>
         {icon ? (
           <div className={cn('w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0', toneClass)}>

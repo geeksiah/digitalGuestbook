@@ -111,14 +111,14 @@ export default function OwnerDashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
               <div key={currency} className="rounded-xl border border-surface-200 bg-surface-50/50 p-4">
-                <p className="text-[10px] uppercase tracking-widest font-semibold text-surface-400 mb-1.5">{currency}</p>
-                <p className="text-xl sm:text-2xl font-bold text-brand-900">
+                <p className="text-xs uppercase tracking-widest font-semibold text-surface-400 mb-1.5">{currency}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-brand-900">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: currency,
                   }).format(amounts.net)}
                 </p>
-                <p className="text-xs text-surface-500 mt-1">
+                <p className="text-sm text-surface-500 mt-1">
                   Gross: {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: currency,
@@ -146,8 +146,8 @@ export default function OwnerDashboardPage() {
             <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
               {Icons.events}
             </div>
-            <p className="text-sm font-medium text-surface-600">No events yet</p>
-            <p className="text-xs text-surface-400 mt-1">Events will appear here once created</p>
+            <p className="text-base font-medium text-surface-600">No events yet</p>
+            <p className="text-sm text-surface-400 mt-1">Events will appear here once created</p>
           </div>
         ) : (
           <div className="divide-y divide-surface-100">
@@ -155,25 +155,25 @@ export default function OwnerDashboardPage() {
               <Link
                 key={event.id}
                 href={`/owner/events/${event.id}`}
-                className="group flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-surface-50 active:bg-surface-100 transition-colors"
+                className="group flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-surface-50 active:bg-surface-100 transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <h3 className="text-sm font-semibold text-brand-900 truncate">{event.name}</h3>
+                    <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
                     <span
                       className={cn(
-                        'inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none',
+                        'inline-flex px-2 py-0.5 text-xs font-medium rounded border leading-none',
                         getPhaseStyle(event.currentPhase)
                       )}
                     >
                       {getPhaseLabel(event.currentPhase)}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-surface-500">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-sm text-surface-500">
                     <span>{formatDate(event.date)}</span>
                     {event.venue && <span>{event.venue}</span>}
                   </div>
-                  <div className="flex gap-3 mt-2 text-xs">
+                  <div className="flex gap-4 mt-2 text-sm">
                     <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
                     <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
                   </div>

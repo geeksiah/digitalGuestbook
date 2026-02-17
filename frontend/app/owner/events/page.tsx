@@ -187,7 +187,7 @@ export default function OwnerEventsPage() {
 
       {/* Filter + Count */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
+        <div className="flex flex-wrap gap-1 bg-surface-100 p-1.5 rounded-xl">
           {[
             { key: 'all', label: 'All' },
             { key: 'pre', label: 'Upcoming' },
@@ -198,7 +198,7 @@ export default function OwnerEventsPage() {
               key={option.key}
               onClick={() => setFilter(option.key as 'all' | 'pre' | 'live' | 'post')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+                'px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px]',
                 filter === option.key
                   ? 'bg-white text-brand-900 shadow-sm'
                   : 'text-surface-600 hover:text-brand-900'
@@ -208,7 +208,7 @@ export default function OwnerEventsPage() {
             </button>
           ))}
         </div>
-        <p className="text-xs text-surface-500 tabular-nums">
+        <p className="text-sm text-surface-500 tabular-nums">
           {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
         </p>
       </div>
@@ -217,11 +217,11 @@ export default function OwnerEventsPage() {
       <DashboardSection contentClassName="p-0">
         {filteredEvents.length === 0 ? (
           <div className="text-center py-12 px-4">
-            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-3">
               {Icons.calendar}
             </div>
-            <p className="text-sm font-medium text-surface-600">No events found</p>
-            <p className="text-xs text-surface-400 mt-1">
+            <p className="text-base font-medium text-surface-600">No events found</p>
+            <p className="text-sm text-surface-400 mt-1">
               {filter === 'all' ? 'Create your first event to get started' : `No ${filter === 'pre' ? 'upcoming' : filter === 'live' ? 'live' : 'past'} events`}
             </p>
           </div>
@@ -231,26 +231,26 @@ export default function OwnerEventsPage() {
               <Link
                 key={event.id}
                 href={`/owner/events/${event.id}`}
-                className="group flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-surface-50 active:bg-surface-100 transition-colors"
+                className="group flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-surface-50 active:bg-surface-100 transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <h3 className="text-sm font-semibold text-brand-900 truncate">{event.name}</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
                     <span
                       className={cn(
-                        'inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none',
+                        'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
                         getPhaseStyle(event.currentPhase)
                       )}
                     >
                       {getPhaseLabel(event.currentPhase)}
                     </span>
                     {event.approvalStatus && event.approvalStatus !== 'APPROVED' && (
-                      <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border bg-amber-50 text-amber-700 border-amber-200 leading-none">
+                      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded border bg-amber-50 text-amber-700 border-amber-200">
                         {event.approvalStatus.replace(/_/g, ' ')}
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-surface-500">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-sm text-surface-500">
                     <span className="flex items-center gap-1">
                       {Icons.calendar}
                       {formatDate(event.date)}
@@ -262,7 +262,7 @@ export default function OwnerEventsPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-3 mt-2 text-xs">
+                  <div className="flex gap-4 mt-2 text-sm">
                     <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
                     <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
                     <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.mediaAssets}</span> Media</span>

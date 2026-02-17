@@ -148,6 +148,73 @@ const Icons = {
   close: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
 };
 
+function RsvpActionMenu({
+  rsvpId,
+  status,
+  reviewing,
+  onReview,
+  onDetails,
+}: {
+  rsvpId: string;
+  status: string;
+  reviewing: boolean;
+  onReview: (id: string, status: 'PENDING' | 'APPROVED' | 'REJECTED') => void;
+  onDetails: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-600 bg-surface-50 border border-surface-200 rounded-lg hover:bg-surface-100 active:bg-surface-200 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+        Actions
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-50 w-48 rounded-xl border border-surface-200 bg-white shadow-lg py-1">
+            <button
+              onClick={() => { onDetails(); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-900 hover:bg-surface-50 transition-colors"
+            >
+              <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              View Details
+            </button>
+            <div className="h-px bg-surface-100 my-1" />
+            <button
+              onClick={() => { onReview(rsvpId, 'APPROVED'); setOpen(false); }}
+              disabled={reviewing || status === 'APPROVED'}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-40"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              Approve
+            </button>
+            <button
+              onClick={() => { onReview(rsvpId, 'PENDING'); setOpen(false); }}
+              disabled={reviewing || status === 'PENDING'}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-yellow-700 hover:bg-yellow-50 transition-colors disabled:opacity-40"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Set Pending
+            </button>
+            <button
+              onClick={() => { onReview(rsvpId, 'REJECTED'); setOpen(false); }}
+              disabled={reviewing || status === 'REJECTED'}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-700 hover:bg-rose-50 transition-colors disabled:opacity-40"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              Reject
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function OwnerEventDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -732,22 +799,22 @@ export default function OwnerEventDetailPage() {
     <div className="space-y-7">
       {/* Header */}
       <div className="rounded-xl border border-surface-200/80 bg-white shadow-soft px-4 sm:px-5 py-3.5 sm:py-4">
-        <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-xs sm:text-sm transition-colors">
+        <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
           {Icons.back}
           <span className="ml-1">Events</span>
         </Link>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-              <span className={cn('inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none', getPhaseStyle(event.currentPhase))}>
+              <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', getPhaseStyle(event.currentPhase))}>
                 {getPhaseLabel(event.currentPhase)}
               </span>
-              {event.invitationOnly && <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border bg-blue-50 text-blue-700 border-blue-200 leading-none">Invite Only</span>}
-              <span className="text-[10px] text-surface-400 font-mono">/{event.slug}</span>
+              {event.invitationOnly && <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded border bg-blue-50 text-blue-700 border-blue-200">Invite Only</span>}
+              <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
             </div>
           </div>
-          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline text-xs sm:text-sm flex-shrink-0 !px-3 !py-1.5">
+          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline text-sm flex-shrink-0">
             {Icons.external}
             <span className="ml-1.5 hidden sm:inline">View Page</span>
           </Link>
@@ -755,14 +822,14 @@ export default function OwnerEventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-2xl border border-surface-200 bg-white shadow-soft p-2">
-        <nav className="flex flex-wrap gap-1">
+      <div className="rounded-xl border border-surface-200/80 bg-white shadow-soft p-1.5 -mx-4 sm:mx-0">
+        <nav className="flex gap-1 overflow-x-auto scrollbar-hide px-2.5 sm:px-0.5">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-xl transition-all border whitespace-nowrap',
+                'px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium rounded-lg transition-all border whitespace-nowrap flex-shrink-0',
                 activeTab === tab.id
                   ? 'bg-brand-50 border-brand-100 text-brand-900 shadow-sm'
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
@@ -770,7 +837,7 @@ export default function OwnerEventDetailPage() {
             >
               {tab.label}
               {tab.count !== undefined && (
-                <span className={cn('ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>
+                <span className={cn('ml-1.5 px-1.5 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>
                   {tab.count}
                 </span>
               )}
@@ -786,20 +853,20 @@ export default function OwnerEventDetailPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">RSVPs</p>
-                <p className="text-xl sm:text-2xl font-bold text-brand-900">{event._count.rsvps}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">RSVPs</p>
+                <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.rsvps}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Check-Ins</p>
-                <p className="text-xl sm:text-2xl font-bold text-brand-900">{event._count.checkIns}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Check-Ins</p>
+                <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.checkIns}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Media</p>
-                <p className="text-xl sm:text-2xl font-bold text-brand-900">{event._count.mediaAssets}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Media</p>
+                <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.mediaAssets}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Date</p>
-                <p className="text-sm font-semibold text-brand-900 mt-0.5">{formatDate(event.date)}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Date</p>
+                <p className="text-sm font-semibold text-brand-900 mt-1">{formatDate(event.date)}</p>
               </div>
             </div>
 
@@ -950,50 +1017,29 @@ export default function OwnerEventDetailPage() {
                   {/* Mobile card view */}
                   <div className="divide-y divide-surface-200 md:hidden">
                     {rsvps.map(rsvp => (
-                      <div key={rsvp.id} className="p-4 space-y-3">
+                      <div key={rsvp.id} className="p-4 space-y-2.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-brand-900 truncate">{rsvp.primaryName}</p>
-                            <p className="text-xs text-surface-500 truncate">{rsvp.email || '-'}</p>
+                            <p className="text-base font-semibold text-brand-900 truncate">{rsvp.primaryName}</p>
+                            <p className="text-sm text-surface-500 truncate">{rsvp.email || '-'}</p>
                           </div>
                           <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded flex-shrink-0', getRsvpStatusStyle(rsvp.status))}>
                             {rsvp.status}
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-surface-600">
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-surface-600">
                           <span>{rsvp.attendance}</span>
                           <span>{rsvp.guestCount} guest(s)</span>
                           <span>{formatDate(rsvp.submittedAt)}</span>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => handleReviewRsvp(rsvp.id, 'PENDING')}
-                            disabled={reviewingRsvp === rsvp.id || rsvp.status === 'PENDING'}
-                            className="px-2.5 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium disabled:opacity-50"
-                          >
-                            Pending
-                          </button>
-                          <button
-                            onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
-                            disabled={reviewingRsvp === rsvp.id || rsvp.status === 'REJECTED'}
-                            className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
-                            disabled={reviewingRsvp === rsvp.id || rsvp.status === 'APPROVED'}
-                            className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => setViewingRsvpDetails(rsvp)}
-                            className="px-2.5 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                          >
-                            Details
-                          </button>
-                        </div>
+                        {/* Action dropdown */}
+                        <RsvpActionMenu
+                          rsvpId={rsvp.id}
+                          status={rsvp.status}
+                          reviewing={reviewingRsvp === rsvp.id}
+                          onReview={handleReviewRsvp}
+                          onDetails={() => setViewingRsvpDetails(rsvp)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -1025,36 +1071,14 @@ export default function OwnerEventDetailPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(rsvp.submittedAt)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                              <div className="inline-flex items-center gap-2">
-                                <button
-                                  onClick={() => handleReviewRsvp(rsvp.id, 'PENDING')}
-                                  disabled={reviewingRsvp === rsvp.id || rsvp.status === 'PENDING'}
-                                  className="px-2.5 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium disabled:opacity-50"
-                                >
-                                  Pending
-                                </button>
-                                <button
-                                  onClick={() => handleReviewRsvp(rsvp.id, 'REJECTED')}
-                                  disabled={reviewingRsvp === rsvp.id || rsvp.status === 'REJECTED'}
-                                  className="px-2.5 py-1.5 text-xs bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors font-medium disabled:opacity-50"
-                                >
-                                  Reject
-                                </button>
-                                <button
-                                  onClick={() => handleReviewRsvp(rsvp.id, 'APPROVED')}
-                                  disabled={reviewingRsvp === rsvp.id || rsvp.status === 'APPROVED'}
-                                  className="px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => setViewingRsvpDetails(rsvp)}
-                                  className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                                >
-                                  Details
-                                </button>
-                              </div>
+                            <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+                              <RsvpActionMenu
+                                rsvpId={rsvp.id}
+                                status={rsvp.status}
+                                reviewing={reviewingRsvp === rsvp.id}
+                                onReview={handleReviewRsvp}
+                                onDetails={() => setViewingRsvpDetails(rsvp)}
+                              />
                             </td>
                           </tr>
                         ))}

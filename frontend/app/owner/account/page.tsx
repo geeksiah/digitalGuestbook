@@ -309,7 +309,7 @@ export default function OwnerAccountPage() {
       <DashboardPageHeader title="Account" subtitle="Manage your profile, security, and preferences" />
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
+      <div className="flex gap-1 overflow-x-auto scrollbar-hide bg-surface-100 p-1.5 rounded-xl">
         {([
           { id: 'profile' as const, label: 'Profile' },
           { id: 'password' as const, label: 'Password' },
@@ -321,7 +321,7 @@ export default function OwnerAccountPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px] whitespace-nowrap flex-shrink-0',
               activeTab === tab.id
                 ? 'bg-white text-brand-900 shadow-sm'
                 : 'text-surface-600 hover:text-brand-900'
@@ -794,8 +794,8 @@ export default function OwnerAccountPage() {
                 ]).map((pref) => (
                   <label key={pref.key} htmlFor={pref.key} className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-navy-900">{pref.label}</p>
-                      <p className="text-xs text-surface-500 mt-0.5">{pref.description}</p>
+                      <p className="text-base font-medium text-navy-900">{pref.label}</p>
+                      <p className="text-sm text-surface-500 mt-0.5">{pref.description}</p>
                     </div>
                     <button
                       type="button"
@@ -855,8 +855,8 @@ export default function OwnerAccountPage() {
                         <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-navy-900">Email Support</p>
-                        <p className="text-xs text-surface-500 truncate">{supportContent.supportEmail}</p>
+                        <p className="text-base font-medium text-navy-900">Email Support</p>
+                        <p className="text-sm text-surface-500 truncate">{supportContent.supportEmail}</p>
                       </div>
                     </a>
                   )}
@@ -871,8 +871,8 @@ export default function OwnerAccountPage() {
                         <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-navy-900">WhatsApp Support</p>
-                        <p className="text-xs text-surface-500 truncate">{supportContent.supportWhatsAppNumber}</p>
+                        <p className="text-base font-medium text-navy-900">WhatsApp Support</p>
+                        <p className="text-sm text-surface-500 truncate">{supportContent.supportWhatsAppNumber}</p>
                       </div>
                     </a>
                   )}
@@ -892,7 +892,7 @@ export default function OwnerAccountPage() {
                     {supportContent.faq.map((item, index) => (
                       <details key={index} className="group">
                         <summary className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 cursor-pointer hover:bg-surface-50 transition-colors list-none">
-                          <span className="text-sm font-medium text-navy-900">{item.question}</span>
+                          <span className="text-base font-medium text-navy-900">{item.question}</span>
                           <svg className="w-4 h-4 text-surface-400 flex-shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                         </summary>
                         <div className="px-5 sm:px-6 pb-4 text-sm text-surface-600 leading-relaxed">

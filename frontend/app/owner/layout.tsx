@@ -332,7 +332,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 
         {/* Mobile bottom tab bar */}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200/60 bg-white/95 backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-4 px-1 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-4 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             {navigation.map((item) => {
               const isActive = isNavActive(item.href);
               return (
@@ -341,19 +341,24 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-medium tracking-tight transition-colors active:opacity-70',
-                    isActive ? 'text-brand-900' : 'text-surface-400'
+                    'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-70',
+                    isActive
+                      ? 'text-brand-900 bg-brand-50/60'
+                      : 'text-surface-500'
                   )}
                 >
-                  <span
-                    className={cn(
-                      'flex h-7 w-7 items-center justify-center rounded-lg transition-all',
-                      isActive ? 'bg-brand-900 text-white shadow-sm' : 'text-surface-400'
-                    )}
-                  >
+                  <span className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-xl transition-all [&>svg]:w-[22px] [&>svg]:h-[22px]',
+                    isActive ? 'text-brand-900' : 'text-surface-500'
+                  )}>
                     {item.icon}
                   </span>
-                  <span className={cn(isActive ? 'font-semibold' : '')}>{item.name}</span>
+                  <span className={cn(
+                    'text-[11px] font-medium leading-none',
+                    isActive ? 'font-semibold text-brand-900' : 'text-surface-500'
+                  )}>
+                    {item.name}
+                  </span>
                 </Link>
               );
             })}

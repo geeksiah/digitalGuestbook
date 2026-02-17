@@ -273,29 +273,29 @@ export default function OwnerPayoutsPage() {
       {/* Overall Totals */}
       {overallTotals && (
         <div className="bg-gradient-to-br from-brand-900 to-brand-800 rounded-xl p-4 sm:p-5 text-white">
-          <p className="text-[10px] uppercase tracking-widest font-semibold text-white/60 mb-3">Overall Summary</p>
+          <p className="text-xs uppercase tracking-widest font-semibold text-white/60 mb-3">Overall Summary</p>
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <p className="text-[10px] sm:text-xs text-white/70">Available</p>
-              <p className="text-lg sm:text-xl font-bold mt-0.5 break-all">
+              <p className="text-xs text-white/70">Available</p>
+              <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.availableBalance)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] sm:text-xs text-white/70">Fulfilled</p>
-              <p className="text-lg sm:text-xl font-bold mt-0.5 break-all">
+              <p className="text-xs text-white/70">Fulfilled</p>
+              <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.fulfilledAmount)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] sm:text-xs text-white/70">Pending</p>
-              <p className="text-lg sm:text-xl font-bold mt-0.5 break-all">
+              <p className="text-xs text-white/70">Pending</p>
+              <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.pendingAmount)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] sm:text-xs text-white/70">Total Payouts</p>
-              <p className="text-lg sm:text-xl font-bold mt-0.5">{overallTotals.totalPayoutCount}</p>
+              <p className="text-xs text-white/70">Total Payouts</p>
+              <p className="text-xl sm:text-2xl font-bold mt-0.5">{overallTotals.totalPayoutCount}</p>
             </div>
           </div>
         </div>
@@ -307,9 +307,9 @@ export default function OwnerPayoutsPage() {
           {/* Mobile card view */}
           <div className="divide-y divide-surface-100 md:hidden">
             {eventTotals.map((evt) => (
-              <div key={evt.eventId} className="px-4 py-3.5 space-y-2">
-                <p className="text-sm font-semibold text-brand-900">{evt.eventName}</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+              <div key={evt.eventId} className="px-4 py-4 space-y-2">
+                <p className="text-base font-semibold text-brand-900">{evt.eventName}</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <p className="text-surface-500">Net</p>
                     <p className="font-semibold text-brand-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.totalNet)}</p>
@@ -367,13 +367,13 @@ export default function OwnerPayoutsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-1 bg-surface-100 p-1 rounded-xl">
+      <div className="flex gap-1 overflow-x-auto scrollbar-hide bg-surface-100 p-1.5 rounded-xl">
         {(['all', 'PENDING', 'PROCESSING', 'FULFILLED', 'DELAYED', 'REJECTED'] as const).map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
             className={cn(
-              'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+              'px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px] whitespace-nowrap flex-shrink-0',
               filter === status
                 ? 'bg-white text-brand-900 shadow-sm'
                 : 'text-surface-600 hover:text-brand-900'
@@ -393,8 +393,8 @@ export default function OwnerPayoutsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-surface-600">No payouts found</p>
-            <p className="text-xs text-surface-400 mt-1">
+            <p className="text-base font-medium text-surface-600">No payouts found</p>
+            <p className="text-sm text-surface-400 mt-1">
               {filter === 'all'
                 ? 'Request your first payout to get started'
                 : `No ${statusLabels[filter].toLowerCase()} payouts`}
@@ -405,15 +405,15 @@ export default function OwnerPayoutsPage() {
             {/* Mobile card view */}
             <div className="divide-y divide-surface-100 md:hidden">
               {filteredPayouts.map((payout) => (
-                <div key={payout.id} className="px-4 py-3.5 space-y-2">
+                <div key={payout.id} className="px-4 py-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-brand-900 truncate">{payout.event.name}</p>
-                      <p className="text-xs text-surface-500">{formatDate(payout.createdAt)}</p>
+                      <p className="text-base font-semibold text-brand-900 truncate">{payout.event.name}</p>
+                      <p className="text-sm text-surface-500">{formatDate(payout.createdAt)}</p>
                     </div>
                     <span
                       className={cn(
-                        'inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none flex-shrink-0',
+                        'inline-flex px-2 py-0.5 text-xs font-medium rounded border leading-none flex-shrink-0',
                         statusColors[payout.status]
                       )}
                     >
@@ -424,10 +424,10 @@ export default function OwnerPayoutsPage() {
                     <p className="text-base font-bold text-brand-900">
                       {new Intl.NumberFormat('en-US', { style: 'currency', currency: payout.currency }).format(payout.requestedAmount)}
                     </p>
-                    <span className="text-xs text-surface-500 capitalize">{payout.payoutMethod.replace('_', ' ')}</span>
+                    <span className="text-sm text-surface-500 capitalize">{payout.payoutMethod.replace('_', ' ')}</span>
                   </div>
                   {(payout.transactionRef || payout.notes) && (
-                    <div className="text-xs text-surface-500">
+                    <div className="text-sm text-surface-500">
                       {payout.transactionRef && <p className="font-mono truncate">Ref: {payout.transactionRef}</p>}
                       {payout.notes && <p className="mt-0.5">{payout.notes}</p>}
                     </div>
