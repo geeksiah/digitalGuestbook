@@ -184,11 +184,11 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const currentSection = navigation.find((item) => isNavActive(item.href))?.name || 'Dashboard';
 
   return (
-    <div className="min-h-screen section-gradient">
+    <div className="min-h-screen bg-surface-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-brand-950/45 z-40 lg:hidden"
+          className="fixed inset-0 bg-brand-950/35 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -196,13 +196,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white/94 backdrop-blur-md border-r border-surface-200/80 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70 bg-gradient-to-r from-white to-surface-50/70">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
             <div className="flex items-center">
               <img 
                 src="/img/logo-dark.svg" 
@@ -244,7 +244,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'flex items-center px-3 py-2.5 text-sm font-medium rounded-xl border transition-all',
                     isActive
-                      ? 'bg-gradient-to-r from-brand-50 to-red-50 text-brand-900 border-brand-200 shadow-sm'
+                      ? 'bg-[#fff3f1] text-brand-900 border-[#ffd6d2] shadow-sm'
                       : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
                   )}
                 >
@@ -284,7 +284,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Main content */}
       <div className="lg:pl-[272px] min-h-screen flex flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/78 backdrop-blur-xl border-b border-surface-200/80">
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xl border-b border-surface-200">
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8 gap-3">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <button
@@ -331,7 +331,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </main>
 
         {/* Mobile bottom tab bar */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-emerald-100/55 bg-gradient-to-r from-brand-600 via-teal-600 to-emerald-500 shadow-[0_-10px_30px_rgba(10,77,69,0.22)] backdrop-blur-xl lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200 bg-white shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-4 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             {navigation.map((item) => {
               const isActive = isNavActive(item.href);
@@ -343,19 +343,19 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-80',
                     isActive
-                      ? 'text-white bg-white/15 ring-1 ring-white/25'
-                      : 'text-brand-100/80'
+                      ? 'text-[#ff3b30] bg-[#fff3f1] ring-1 ring-[#ffd6d2]'
+                      : 'text-surface-500'
                   )}
                 >
                   <span className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-xl transition-all [&>svg]:w-6 [&>svg]:h-6',
-                    isActive ? 'text-white' : 'text-brand-100/80'
+                    isActive ? 'text-[#ff3b30]' : 'text-surface-500'
                   )}>
                     {item.icon}
                   </span>
                   <span className={cn(
                     'text-[11px] font-medium leading-none',
-                    isActive ? 'font-semibold text-white' : 'text-brand-100/85'
+                    isActive ? 'font-semibold text-[#ff3b30]' : 'text-surface-500'
                   )}>
                     {item.name}
                   </span>

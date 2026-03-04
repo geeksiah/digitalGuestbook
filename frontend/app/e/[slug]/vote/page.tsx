@@ -99,16 +99,23 @@ export default function VotePage() {
     () => contests.find((contest) => contest.id === selectedContestId) || null,
     [contests, selectedContestId]
   );
+
   const selectedOption = useMemo(
     () => selectedContest?.options.find((option) => option.id === selectedOptionId) || null,
     [selectedContest, selectedOptionId]
   );
 
   const electionMode = (selectedContest?.mode || config?.mode || 'AWARDS') === 'ELECTION';
+
   const voteAmount = useMemo(() => {
     if (!config) return 0;
     return Number((voteCount * config.voteUnitPrice).toFixed(2));
   }, [config, voteCount]);
+
+  const topRankings = useMemo(() => {
+    const contest = leaderboard.find((item: any) => item.contestId === selectedContestId) || leaderboard[0];
+    return contest?.rankings?.slice(0, 3) || [];
+  }, [leaderboard, selectedContestId]);
 
   const fetchVoteData = async () => {
     if (!slug) return;
@@ -327,32 +334,41 @@ export default function VotePage() {
   }
 
   return (
-    <div className="min-h-screen section-gradient pb-16">
-      <div className="mx-auto w-full max-w-[520px] px-4 py-6 space-y-4">
-        <section className="hero-premium p-4">
-          <h1 className="text-2xl font-bold">{eventName}</h1>
-          <p className="text-sm text-surface-200 mt-1">Vote for nominees and track live standings in real time.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {config?.allowPublicNominations ? (
-              <Link
-                href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/30 text-white hover:bg-white/10 transition-colors text-xs font-semibold"
-              >
-                Nominate
-              </Link>
-            ) : null}
-            <Link
-              href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/30 text-white hover:bg-white/10 transition-colors text-xs font-semibold"
-            >
+    <div className="min-h-screen bg-surface-50 pb-16">
+      <div className="mx-auto w-full max-w-[540px] px-4 py-6 space-y-4">
+        <section className="card-premium p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">E-Voting</p>
+              <h1 className="text-2xl font-bold text-brand-900 mt-1">{eventName}</h1>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+              Active Vote
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-surface-100 p-1">
+            <span className="rounded-lg bg-white text-center py-2 text-xs font-semibold text-brand-900">Vote</span>
+            <Link href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`} className="rounded-lg text-center py-2 text-xs font-semibold text-surface-600 hover:text-brand-900">
               Nominees
             </Link>
-            <Link
-              href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/30 text-white hover:bg-white/10 transition-colors text-xs font-semibold"
-            >
-              Leaderboard
+            <Link href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`} className="rounded-lg text-center py-2 text-xs font-semibold text-surface-600 hover:text-brand-900">
+              Results
             </Link>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-red-200 bg-[#fff6f5] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Current Selection</p>
+            <p className="mt-1 text-base font-semibold text-brand-900">{selectedContest?.title || 'Select a contest'}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-surface-600">
+              <span>{selectedContest?.options.length || 0} contestants</span>
+              {config?.allowPaidVotes ? <span>{formatMoney(config.currency, config.voteUnitPrice)} / vote</span> : null}
+              {config?.allowPublicNominations ? (
+                <Link href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`} className="font-semibold text-red-700 hover:text-red-800">
+                  Nominate
+                </Link>
+              ) : null}
+            </div>
           </div>
         </section>
 
@@ -365,19 +381,21 @@ export default function VotePage() {
               value={otpPhone}
               onChange={(event) => setOtpPhone(event.target.value)}
             />
-            <div className="flex gap-2">
-              <button className="btn-outline flex-1" onClick={requestOtp} disabled={submitting}>
-                Request OTP
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
               <input
-                className="input flex-1"
+                className="input"
                 placeholder="OTP code"
                 value={otpCode}
                 onChange={(event) => setOtpCode(event.target.value)}
               />
-              <button className="btn-primary" onClick={verifyOtp} disabled={submitting}>
-                Verify
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button className="btn-outline" onClick={requestOtp} disabled={submitting}>
+                  Request
+                </button>
+                <button className="btn-primary" onClick={verifyOtp} disabled={submitting}>
+                  Verify
+                </button>
+              </div>
             </div>
             <p className="text-xs text-surface-600">
               Status: {otpVerified ? 'Verified' : 'Not verified'}
@@ -386,7 +404,7 @@ export default function VotePage() {
         ) : null}
 
         <section className="card-premium p-4 space-y-3">
-          <h2 className="text-base font-semibold text-brand-900">Select Contest</h2>
+          <h2 className="text-base font-semibold text-brand-900">Select Contest & Nominee</h2>
           <select
             className="input"
             value={selectedContestId}
@@ -405,22 +423,28 @@ export default function VotePage() {
             ))}
           </select>
 
-          <div className="grid grid-cols-1 gap-2">
-            {(selectedContest?.options || []).map((option) => (
-              <button
-                type="button"
-                key={option.id}
-                onClick={() => setSelectedOptionId(option.id)}
-                className={`rounded-xl border px-3 py-3 text-left ${
-                  selectedOptionId === option.id
-                    ? 'border-brand-900 bg-brand-50'
-                    : 'border-surface-200 bg-white'
-                }`}
-              >
-                <p className="text-sm font-semibold text-brand-900">{option.name}</p>
-                <p className="text-xs text-surface-600">{option.description || 'Nominee'}</p>
-              </button>
-            ))}
+          <div className="space-y-2">
+            {(selectedContest?.options || []).map((option) => {
+              const selected = selectedOptionId === option.id;
+              return (
+                <button
+                  type="button"
+                  key={option.id}
+                  onClick={() => setSelectedOptionId(option.id)}
+                  className={`w-full rounded-xl border px-3 py-3 text-left transition-all ${
+                    selected
+                      ? 'border-red-300 bg-red-50 shadow-sm'
+                      : 'border-surface-200 bg-white hover:border-surface-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-brand-900">{option.name}</p>
+                    <span className="text-xs text-surface-500">{option.totalVotes.toLocaleString()} votes</span>
+                  </div>
+                  <p className="text-xs text-surface-600 mt-1">{option.description || 'Nominee'}</p>
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -462,22 +486,34 @@ export default function VotePage() {
         </section>
 
         <section className="card-premium p-4 space-y-2">
-          <h2 className="text-base font-semibold text-brand-900">Leaderboard</h2>
-          {leaderboard.map((contest: any) => (
-            <div key={contest.contestId} className="rounded-xl border border-surface-200 p-3">
-              <p className="text-sm font-semibold text-brand-900">{contest.title}</p>
-              <div className="mt-2 space-y-1">
-                {(contest.rankings || []).slice(0, 5).map((entry: any) => (
-                  <div key={entry.optionId} className="flex items-center justify-between text-sm">
-                    <span className="text-surface-700">
-                      #{entry.rank} {entry.name}
-                    </span>
-                    <span className="font-semibold text-brand-900">{entry.totalVotes}</span>
+          <h2 className="text-base font-semibold text-brand-900">Top Nominees</h2>
+          {topRankings.length ? (
+            topRankings.map((entry: any) => (
+              <article key={entry.optionId} className="rounded-xl border border-surface-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
+                    <p className="font-semibold text-brand-900">{entry.name}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const contest = contests.find((item) => item.id === selectedContestId) || contests[0];
+                      if (contest) {
+                        setSelectedContestId(contest.id);
+                        setSelectedOptionId(entry.optionId);
+                      }
+                    }}
+                    className="btn-accent !min-h-[36px] !py-1.5 !text-xs"
+                  >
+                    Vote
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-surface-600">Leaderboard is still warming up.</p>
+          )}
         </section>
       </div>
     </div>

@@ -91,28 +91,28 @@ export default function NomineesPage() {
   }
 
   return (
-    <div className="min-h-screen section-gradient py-6 px-4">
+    <div className="min-h-screen bg-surface-50 py-6 px-4">
       <div className="mx-auto max-w-6xl space-y-4">
-        <section className="hero-premium p-6">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-orange-200 font-semibold">Nominees</p>
-          <h1 className="text-3xl font-bold mt-2">{eventName}</h1>
-          <p className="text-sm text-surface-200 mt-1">Explore categories and vote directly from each nominee card.</p>
+        <section className="card-premium p-6">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Nominees</p>
+          <h1 className="text-3xl font-bold mt-2 text-brand-900">{eventName}</h1>
+          <p className="text-sm text-surface-600 mt-1">Explore categories and vote directly from each nominee card.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href={`/e/${slug}/nominate${selectedCategory ? `?contestId=${encodeURIComponent(selectedCategory)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+              className="px-3 py-2 rounded-full border border-surface-300 text-xs font-semibold text-surface-700 hover:bg-surface-100"
             >
               Nominate
             </Link>
             <Link
               href={`/e/${slug}/vote${selectedCategory ? `?contestId=${encodeURIComponent(selectedCategory)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+              className="px-3 py-2 rounded-full border border-red-200 bg-red-50 text-xs font-semibold text-red-700 hover:bg-red-100"
             >
               Vote
             </Link>
             <Link
               href={`/e/${slug}/leaderboard${selectedCategory ? `?contestId=${encodeURIComponent(selectedCategory)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+              className="px-3 py-2 rounded-full border border-surface-300 text-xs font-semibold text-surface-700 hover:bg-surface-100"
             >
               Leaderboard
             </Link>
@@ -136,11 +136,11 @@ export default function NomineesPage() {
           ) : (
             <div className="space-y-5">
               {visibleCategories.map((category) => (
-                <div key={category.contestId} className="rounded-2xl border border-surface-200 bg-gradient-to-br from-white to-surface-50 p-4">
+                <div key={category.contestId} className="rounded-2xl border border-surface-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div>
                       <h3 className="font-semibold text-brand-900">{category.title}</h3>
-                      <p className="text-xs text-surface-600">{category.mode} • {category.totalVotes.toLocaleString()} total votes</p>
+                      <p className="text-xs text-surface-600">{category.mode} - {category.totalVotes.toLocaleString()} total votes</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

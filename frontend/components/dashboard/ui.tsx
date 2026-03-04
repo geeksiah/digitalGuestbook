@@ -13,7 +13,7 @@ export function DashboardPageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('shell-panel section-gradient px-4 py-4 sm:px-5 sm:py-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-in', className)}>
+    <div className={cn('card-premium px-4 py-4 sm:px-5 sm:py-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-in', className)}>
       <div className="min-w-0">
         <span className="chip-accent">Control Center</span>
         <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 mt-2 tracking-tight">{title}</h1>
@@ -42,7 +42,7 @@ export function DashboardSection({
   return (
     <section className={cn('card-premium overflow-hidden animate-in', className)}>
       {(title || subtitle || action) ? (
-        <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-surface-100/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-gradient-to-r from-surface-50 to-white">
+        <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-surface-100/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-surface-50/70">
           <div className="min-w-0">
             {title ? <h2 className="text-base sm:text-lg font-semibold text-brand-900">{title}</h2> : null}
             {subtitle ? <p className="text-xs sm:text-sm text-surface-600 mt-0.5 leading-relaxed">{subtitle}</p> : null}
@@ -75,7 +75,7 @@ export function DashboardKpiCard({
   }[tone];
 
   return (
-    <div className="card-premium p-4 sm:p-5 hover:border-brand-200 hover:shadow-elegant hover:-translate-y-0.5 transition-all">
+    <div className="card-premium p-4 sm:p-5 hover:border-red-200 hover:shadow-elegant hover:-translate-y-0.5 transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1.5">{label}</p>

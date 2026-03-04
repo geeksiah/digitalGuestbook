@@ -29,9 +29,9 @@
   body {
     @apply bg-surface-50 text-navy-900 antialiased;
     background-image:
-      radial-gradient(circle at 2% -6%, rgba(255, 59, 48, 0.1), transparent 34%),
-      radial-gradient(circle at 104% -2%, rgba(6, 57, 50, 0.12), transparent 30%),
-      radial-gradient(circle at 40% 110%, rgba(212, 175, 55, 0.08), transparent 42%);
+      radial-gradient(circle at 2% -6%, rgba(15, 23, 42, 0.04), transparent 34%),
+      radial-gradient(circle at 104% -2%, rgba(100, 116, 139, 0.06), transparent 30%),
+      linear-gradient(180deg, #fcfcfd 0%, #f7f8fa 100%);
     font-feature-settings: "rlig" 1, "calt" 1;
     letter-spacing: -0.01em;
   }
@@ -280,9 +280,9 @@
 
   .section-gradient {
     background:
-      radial-gradient(circle at 12% -4%, rgba(255, 59, 48, 0.09), transparent 36%),
-      radial-gradient(circle at 88% 102%, rgba(6, 57, 50, 0.09), transparent 44%),
-      linear-gradient(180deg, #ffffff 0%, #f8fafb 100%);
+      radial-gradient(circle at 12% -4%, rgba(15, 23, 42, 0.04), transparent 36%),
+      radial-gradient(circle at 88% 102%, rgba(148, 163, 184, 0.05), transparent 44%),
+      linear-gradient(180deg, #fcfcfd 0%, #f6f7f9 100%);
   }
 
   /* Focus visible for keyboard nav */

@@ -94,28 +94,28 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen section-gradient py-6 px-4">
+    <div className="min-h-screen bg-surface-50 py-6 px-4">
       <div className="mx-auto max-w-5xl space-y-4">
-        <section className="hero-premium p-6">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-orange-200 font-semibold">Leaderboard</p>
-          <h1 className="text-3xl font-bold mt-2">{eventName}</h1>
-          <p className="text-sm text-surface-200 mt-1">Live rankings by category with transparent vote totals.</p>
+        <section className="card-premium p-6">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Leaderboard</p>
+          <h1 className="text-3xl font-bold mt-2 text-brand-900">{eventName}</h1>
+          <p className="text-sm text-surface-600 mt-1">Live rankings by category with transparent vote totals.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+              className="px-3 py-2 rounded-full border border-surface-300 text-xs font-semibold text-surface-700 hover:bg-surface-100"
             >
               Nominate
             </Link>
             <Link
               href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+              className="px-3 py-2 rounded-full border border-surface-300 text-xs font-semibold text-surface-700 hover:bg-surface-100"
             >
               Nominees
             </Link>
             <Link
               href={`/e/${slug}/vote${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+              className="px-3 py-2 rounded-full border border-red-200 bg-red-50 text-xs font-semibold text-red-700 hover:bg-red-100"
             >
               Vote
             </Link>

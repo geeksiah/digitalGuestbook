@@ -147,7 +147,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const currentSection = navigation.find((item) => pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href)))?.name || 'Dashboard';
 
   return (
-    <div className="min-h-screen section-gradient">
+    <div className="min-h-screen bg-surface-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-brand-950/45 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -155,12 +155,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Sidebar */}
       <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 w-[272px] bg-white/94 backdrop-blur-md border-r border-surface-200/80 shadow-soft transform transition-transform duration-300 lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200 shadow-soft transform transition-transform duration-300 lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70 bg-gradient-to-r from-white to-surface-50/70">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
             <Link href="/admin" className="flex items-center space-x-3 min-w-0">
               <img 
                 src="/img/logo-dark.svg" 
@@ -202,7 +202,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 border',
                     isActive
-                      ? 'bg-gradient-to-r from-brand-50 to-red-50 text-brand-900 border-brand-200 shadow-sm'
+                      ? 'bg-[#fff3f1] text-brand-900 border-[#ffd6d2] shadow-sm'
                       : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
                   )}
                 >
@@ -242,7 +242,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main content */}
       <div className="lg:pl-[272px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/78 backdrop-blur-xl border-b border-surface-200/80">
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xl border-b border-surface-200">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
             {/* Mobile menu button */}
             <button
@@ -264,7 +264,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             {/* Quick actions */}
             <div className="flex items-center space-x-2">
-              <Link href="/admin/events/new" className="btn-primary">
+              <Link href="/admin/events/new" className="btn-accent">
                 <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>

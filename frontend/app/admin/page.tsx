@@ -81,25 +81,39 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       <DashboardPageHeader title="Dashboard" subtitle="Operational overview of events, guest engagement, and media activity" />
 
-      <section className="hero-premium p-5 sm:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="max-w-2xl">
-            <p className="chip-accent w-fit">Admin Intelligence</p>
-            <h2 className="text-2xl sm:text-3xl font-bold mt-2 tracking-tight">
-              Keep every event launch-ready with one command center.
-            </h2>
-            <p className="text-surface-200 text-sm mt-2">
-              Real-time event volume, RSVP momentum, and media capture health across your portfolio.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <section className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <div className="card-premium p-5 sm:p-6 overflow-hidden relative">
+          <div className="absolute -right-10 -top-14 h-48 w-48 rounded-full bg-red-100/60 blur-2xl" />
+          <p className="chip-accent w-fit relative z-[1]">Admin Intelligence</p>
+          <h2 className="relative z-[1] mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-brand-900">
+            Keep every event launch-ready with one command center.
+          </h2>
+          <p className="relative z-[1] mt-2 text-sm text-surface-600 max-w-2xl">
+            Real-time event volume, RSVP momentum, and media capture health across your portfolio.
+          </p>
+          <div className="relative z-[1] mt-5 flex flex-wrap gap-2">
             <Link href="/admin/events/new" className="btn-accent">
               {Icons.plus}
               <span className="ml-2">Create Event</span>
             </Link>
-            <Link href="/admin/events" className="btn-outline !border-white/25 !bg-white/10 !text-white hover:!bg-white/20">
+            <Link href="/admin/events" className="btn-outline">
               View Events
             </Link>
+          </div>
+        </div>
+
+        <div className="card-premium p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-surface-500">Quick Focus</p>
+          <p className="mt-2 text-lg font-semibold text-brand-900">Most active modules</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {['Events', 'E-Voting', 'Templates', 'Sales'].map((label) => (
+              <span
+                key={label}
+                className="inline-flex items-center rounded-full border border-surface-200 bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-700"
+              >
+                {label}
+              </span>
+            ))}
           </div>
         </div>
       </section>
