@@ -1,6 +1,11 @@
+const path = require('node:path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  turbopack: {
+    root: path.join(__dirname),
+  },
   
   // Enable static export for Netlify (optional - comment out if using SSR)
   // output: 'export',

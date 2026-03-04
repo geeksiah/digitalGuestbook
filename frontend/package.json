@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "verify:chunks": "node ../scripts/check-next-assets.mjs",
     "contract:audit": "node ../scripts/endpoint-contract-audit.mjs",
     "start": "next start",

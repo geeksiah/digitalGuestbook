@@ -6,7 +6,8 @@ export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     if (process.env.NODE_ENV !== "production") return;
-    const cleanupMarkerKey = "ep_sw_cleanup_done_v1";
+    const cleanupMarkerKey = "ep_sw_cleanup_done_v2";
+    const shouldRegister = process.env.NEXT_PUBLIC_ENABLE_SW === "1";
 
     const cleanupLegacyWorkersAndCaches = async () => {
       try {
@@ -31,11 +32,16 @@ export default function ServiceWorkerRegister() {
     };
 
     const registerWorker = async () => {
-      if (globalThis.localStorage.getItem(cleanupMarkerKey) === "1") {
+      if (globalThis.localStorage.getItem(cleanupMarkerKey) === "1" && !shouldRegister) {
         return;
       }
       await cleanupLegacyWorkersAndCaches();
       globalThis.localStorage.setItem(cleanupMarkerKey, "1");
+
+      if (!shouldRegister) {
+        return;
+      }
+
       try {
         await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       } catch (error) {
