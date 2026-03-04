@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+const normalizeOwnerEmail = (email: string) => email.trim().toLowerCase();
+
 // API Base URL - defaults to localhost:3001 for development
 export const API_BASE_URL = typeof window !== 'undefined' 
   ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
@@ -388,9 +390,12 @@ export const promoCodeApi = {
 // Owner auth / dashboard APIs (owner account area)
 export const ownerAuthApi = {
   login: (email: string, password: string) =>
-    axios.post(`${API_BASE_URL}/api/owner-auth/login`, { email, password }),
+    axios.post(`${API_BASE_URL}/api/owner-auth/login`, { email: normalizeOwnerEmail(email), password }),
   register: (data: any) =>
-    axios.post(`${API_BASE_URL}/api/owner-auth/register`, data),
+    axios.post(`${API_BASE_URL}/api/owner-auth/register`, {
+      ...data,
+      email: normalizeOwnerEmail(data.email),
+    }),
   me: (token: string) =>
     axios.get(`${API_BASE_URL}/api/owner-auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -402,7 +407,10 @@ export const ownerAuthApi = {
     });
   },
   setupPassword: (email: string, password: string) =>
-    axios.post(`${API_BASE_URL}/api/owner-auth/setup-password`, { email, password }),
+    axios.post(`${API_BASE_URL}/api/owner-auth/setup-password`, {
+      email: normalizeOwnerEmail(email),
+      password,
+    }),
   changePassword: (currentPassword: string, newPassword: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
     return axios.post(`${API_BASE_URL}/api/owner-auth/change-password`,
@@ -417,7 +425,10 @@ export const ownerAuthApi = {
     });
   },
   requestPasswordReset: (email: string, reason?: string) =>
-    axios.post(`${API_BASE_URL}/api/owner-auth/request-password-reset`, { email, reason }),
+    axios.post(`${API_BASE_URL}/api/owner-auth/request-password-reset`, {
+      email: normalizeOwnerEmail(email),
+      reason,
+    }),
 };
 
 const getOwnerToken = () =>
