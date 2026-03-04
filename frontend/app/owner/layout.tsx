@@ -184,7 +184,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const currentSection = navigation.find((item) => isNavActive(item.href))?.name || 'Dashboard';
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen soft-grid-bg">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -196,7 +196,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-[272px] shell-sidebar transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -241,12 +241,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   key={item.name}
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    'flex items-center px-3 py-2.5 text-sm font-medium rounded-xl border transition-all',
-                    isActive
-                      ? 'bg-[#fff3f1] text-brand-900 border-[#ffd6d2] shadow-sm'
-                      : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
-                  )}
+                  className={cn('nav-pill', isActive && 'nav-pill-active')}
                 >
                   <span className={cn('mr-3', isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
                   {item.name}
@@ -284,8 +279,8 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Main content */}
       <div className="lg:pl-[272px] min-h-screen flex flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xl border-b border-surface-200">
-          <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8 gap-3">
+        <header className="sticky top-0 z-30 px-4 pt-3 sm:px-6 lg:px-8">
+          <div className="shell-main-surface flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8 gap-3">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <button
                 onClick={() => setSidebarOpen(true)}
@@ -314,6 +309,16 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                     </option>
                   ))}
                 </select>
+                <div className="hidden lg:flex relative w-full max-w-[320px]">
+                  <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.8 5.8a7.5 7.5 0 0010.85 10.85z" />
+                  </svg>
+                  <input
+                    type="search"
+                    placeholder="Search owner workspace..."
+                    className="h-10 w-full rounded-full border border-surface-200 bg-surface-50 pl-9 pr-4 text-sm text-brand-900 placeholder:text-surface-400 focus:bg-white focus:border-red-300 focus:ring-2 focus:ring-red-100 focus:outline-none transition-colors"
+                  />
+                </div>
               </div>
             </div>
 

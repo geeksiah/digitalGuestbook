@@ -183,34 +183,32 @@ export default function NominatePage() {
 
   return (
     <div className="min-h-screen bg-surface-50 py-6 px-4">
-      <div className="mx-auto max-w-3xl space-y-4">
-        <section className="card-premium p-5">
+      <div className="mx-auto max-w-4xl space-y-4">
+        <section className="phone-stage p-5">
+          <div className="phone-notch mb-4" />
           <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Nomination Flow</p>
           <h1 className="text-2xl font-bold mt-2 text-brand-900">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-1">Submit nominees by category. Approved nominees appear in the public listing.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <p className="text-sm text-surface-600 mt-1">
+            Submit nominees by category. Approved nominees automatically appear on the public nominees page.
+          </p>
+          <div className="mt-4 segmented w-full max-w-md">
+            <span className="segmented-item segmented-item-active text-center">Nominate</span>
             <Link
               href={`/e/${slug}/nominees${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-surface-300 text-xs font-semibold text-surface-700 hover:bg-surface-100"
+              className="segmented-item text-center hover:text-brand-900"
             >
               Nominees
             </Link>
             <Link
-              href={`/e/${slug}/vote${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-red-200 bg-red-50 text-xs font-semibold text-red-700 hover:bg-red-100"
-            >
-              Vote
-            </Link>
-            <Link
               href={`/e/${slug}/leaderboard${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
-              className="px-3 py-2 rounded-full border border-surface-300 text-xs font-semibold text-surface-700 hover:bg-surface-100"
+              className="segmented-item text-center hover:text-brand-900"
             >
-              Leaderboard
+              Results
             </Link>
           </div>
         </section>
 
-        <section className="card-premium p-5 space-y-4">
+        <section className="dashboard-canvas p-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1 block">
               <span className="text-xs text-surface-600">Category</span>
@@ -230,7 +228,7 @@ export default function NominatePage() {
 
           <label className="space-y-1 block">
             <span className="text-xs text-surface-600">Nominee Description</span>
-            <textarea className="input min-h-[96px]" value={nomineeDescription} onChange={(event) => setNomineeDescription(event.target.value)} />
+            <textarea className="input min-h-[110px]" value={nomineeDescription} onChange={(event) => setNomineeDescription(event.target.value)} />
           </label>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -249,7 +247,7 @@ export default function NominatePage() {
           </div>
 
           {selectedContest?.nominationFormFields?.length ? (
-            <div className="space-y-2 pt-2 border-t border-surface-100">
+            <div className="space-y-2 pt-3 border-t border-surface-100">
               <p className="text-sm font-semibold text-brand-900">Custom Fields</p>
               {selectedContest.nominationFormFields.map((field) => (
                 <label key={field.id} className="space-y-1 block">
@@ -259,7 +257,7 @@ export default function NominatePage() {
                   </span>
                   {field.type === 'textarea' ? (
                     <textarea
-                      className="input min-h-[80px]"
+                      className="input min-h-[90px]"
                       value={customFields[field.id] || ''}
                       placeholder={field.placeholder || ''}
                       onChange={(event) => setCustomFields((current) => ({ ...current, [field.id]: event.target.value }))}
@@ -291,9 +289,17 @@ export default function NominatePage() {
             </div>
           ) : null}
 
-          <button className="btn-accent w-full" onClick={submitNomination} disabled={submitting}>
-            {submitting ? 'Submitting...' : 'Submit Nomination'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-accent flex-1" onClick={submitNomination} disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Submit Nomination'}
+            </button>
+            <Link
+              href={`/e/${slug}/vote${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
+              className="btn-outline flex-1 text-center"
+            >
+              Go To Voting
+            </Link>
+          </div>
         </section>
       </div>
     </div>

@@ -31,7 +31,8 @@ interface DashboardStats {
   totalMedia: number;
 }
 
-// Monochrome icons
+const focusAreas = ['Music', 'Awards', 'Corporate', 'Weddings', 'Tech', 'Community'];
+
 const Icons = {
   calendar: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   live: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" /></svg>,
@@ -55,14 +56,14 @@ export default function AdminDashboard() {
     try {
       const response = await eventsApi.list({ archived: false });
       setEvents(response.data.events);
-      
+
       const totalEvents = response.data.events.length;
       const activeEvents = response.data.events.filter((e: Event) => e.currentPhase === 'LIVE').length;
       const totalRsvps = response.data.events.reduce((sum: number, e: Event) => sum + e._count.rsvps, 0);
       const totalMedia = response.data.events.reduce((sum: number, e: Event) => sum + e._count.mediaAssets, 0);
 
       setStats({ totalEvents, activeEvents, totalRsvps, pendingRsvps: 0, totalMedia });
-    } catch (error) {
+    } catch {
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -81,17 +82,16 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       <DashboardPageHeader title="Dashboard" subtitle="Operational overview of events, guest engagement, and media activity" />
 
-      <section className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <div className="card-premium p-5 sm:p-6 overflow-hidden relative">
-          <div className="absolute -right-10 -top-14 h-48 w-48 rounded-full bg-red-100/60 blur-2xl" />
-          <p className="chip-accent w-fit relative z-[1]">Admin Intelligence</p>
-          <h2 className="relative z-[1] mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-brand-900">
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <div className="dashboard-canvas p-5 sm:p-6">
+          <p className="pill-accent w-fit">Admin Intelligence</p>
+          <h2 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-brand-900">
             Keep every event launch-ready with one command center.
           </h2>
-          <p className="relative z-[1] mt-2 text-sm text-surface-600 max-w-2xl">
+          <p className="mt-2 text-sm text-surface-600 max-w-2xl">
             Real-time event volume, RSVP momentum, and media capture health across your portfolio.
           </p>
-          <div className="relative z-[1] mt-5 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Link href="/admin/events/new" className="btn-accent">
               {Icons.plus}
               <span className="ml-2">Create Event</span>
@@ -100,13 +100,26 @@ export default function AdminDashboard() {
               View Events
             </Link>
           </div>
+
+          <div className="mt-5 grid sm:grid-cols-2 gap-3">
+            <article className="focus-card">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Campaign Focus</p>
+              <p className="text-lg font-bold mt-1 text-brand-900">Increase Vote Conversion</p>
+              <p className="text-xs mt-1 text-surface-600">Optimize voting page CTA and nominee card order.</p>
+            </article>
+            <article className="focus-card">
+              <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Limited Window</p>
+              <p className="text-lg font-bold mt-1 text-brand-900">Early Bird Events</p>
+              <p className="text-xs mt-1 text-surface-600">8 upcoming events still in pre-launch phase.</p>
+            </article>
+          </div>
         </div>
 
-        <div className="card-premium p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-surface-500">Quick Focus</p>
-          <p className="mt-2 text-lg font-semibold text-brand-900">Most active modules</p>
+        <div className="dashboard-canvas p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-surface-500">Categories</p>
+          <p className="mt-2 text-lg font-semibold text-brand-900">Platform focus lanes</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {['Events', 'E-Voting', 'Templates', 'Sales'].map((label) => (
+            {focusAreas.map((label) => (
               <span
                 key={label}
                 className="inline-flex items-center rounded-full border border-surface-200 bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-700"
@@ -115,10 +128,20 @@ export default function AdminDashboard() {
               </span>
             ))}
           </div>
+          <div className="mt-5 rounded-2xl border border-surface-200 bg-surface-50 p-4">
+            <p className="text-xs uppercase tracking-widest text-surface-500 font-semibold">Quick Focus</p>
+            <p className="text-sm text-brand-900 mt-1 font-semibold">Most active modules</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              {['Events', 'E-Voting', 'Templates', 'Sales'].map((module) => (
+                <span key={module} className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">
+                  {module}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardKpiCard label="Total Events" value={stats?.totalEvents || 0} icon={Icons.calendar} tone="blue" />
         <DashboardKpiCard label="Live Events" value={stats?.activeEvents || 0} icon={Icons.live} tone="emerald" />
@@ -126,7 +149,40 @@ export default function AdminDashboard() {
         <DashboardKpiCard label="Media Captured" value={stats?.totalMedia || 0} icon={Icons.media} tone="rose" />
       </div>
 
-      {/* Recent Events */}
+      <DashboardSection title="Featured Events" subtitle="Quick visual access to active events" contentClassName="p-4">
+        {events.length === 0 ? (
+          <p className="text-sm text-surface-600">No events available yet.</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-3">
+            {events.slice(0, 3).map((event, index) => (
+              <article key={event.id} className="rounded-2xl border border-surface-200 bg-white overflow-hidden">
+                <div className={cn(
+                  'h-24 px-4 py-3 flex flex-col justify-end border-b',
+                  index % 3 === 0
+                    ? 'bg-white border-red-200'
+                    : index % 3 === 1
+                      ? 'bg-surface-50 border-surface-200'
+                      : 'bg-[#fdf9ef] border-amber-200'
+                )}>
+                  <p className="text-xs text-surface-500">/{event.slug}</p>
+                  <p className="font-semibold text-sm truncate text-brand-900">{event.name}</p>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-xs text-surface-600">{formatDate(event.date, 'MMM d, yyyy')} {event.venue ? `- ${event.venue}` : ''}</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-surface-500">RSVPs</span>
+                    <span className="font-semibold text-brand-900">{event._count.rsvps}</span>
+                  </div>
+                  <Link href={`/admin/events/${event.id}`} className="btn-accent w-full !min-h-[36px] !py-1.5 !text-xs">
+                    Manage Event
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </DashboardSection>
+
       <DashboardSection
         title="Recent Events"
         subtitle="Latest active events with quick access to manage"
@@ -161,7 +217,7 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="divide-y divide-surface-100">
                 {events.slice(0, 5).map((event) => (
-                  <tr key={event.id} className="hover:bg-brand-50/30 transition-colors">
+                  <tr key={event.id} className="hover:bg-surface-50 transition-colors">
                     <td className="py-4 px-4">
                       <div>
                         <p className="font-semibold text-brand-900">{event.name}</p>
@@ -235,4 +291,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

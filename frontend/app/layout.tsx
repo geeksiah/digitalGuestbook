@@ -22,8 +22,8 @@ export const metadata: Metadata = {
     "Your event's digital layer, handled. We design bespoke invitation suites and ensure seamless on-site access. You host; we manage the tech.",
 
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 
   openGraph: {

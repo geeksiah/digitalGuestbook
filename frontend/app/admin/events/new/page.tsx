@@ -271,17 +271,17 @@ export default function NewEventPage() {
         platformFeeFixed: formData.platformFeeFixed,
         processingFeePercent: formData.processingFeePercent,
         processingFeeFixed: formData.processingFeeFixed,
-        invitationTemplateId: formData.invitationTemplateId || undefined,
-        rsvpTemplateId: formData.rsvpTemplateId || undefined,
-        guestbookTemplateId: formData.guestbookTemplateId || undefined,
-        guestbookVideoTemplateId: formData.guestbookVideoTemplateId || undefined,
-        guestbookAudioTemplateId: formData.guestbookAudioTemplateId || undefined,
-        guestbookPhotoTemplateId: formData.guestbookPhotoTemplateId || undefined,
+        invitationTemplateId: formData.invitationEnabled ? (formData.invitationTemplateId || undefined) : undefined,
+        rsvpTemplateId: formData.rsvpEnabled ? (formData.rsvpTemplateId || undefined) : undefined,
+        guestbookTemplateId: formData.guestbookEnabled ? (formData.guestbookTemplateId || undefined) : undefined,
+        guestbookVideoTemplateId: formData.guestbookEnabled ? (formData.guestbookVideoTemplateId || undefined) : undefined,
+        guestbookAudioTemplateId: formData.guestbookEnabled ? (formData.guestbookAudioTemplateId || undefined) : undefined,
+        guestbookPhotoTemplateId: formData.guestbookEnabled ? (formData.guestbookPhotoTemplateId || undefined) : undefined,
         thankYouTemplateId: formData.thankYouTemplateId || undefined,
         liveLandingTemplateId: formData.liveLandingTemplateId || undefined,
         eventEndedTemplateId: formData.eventEndedTemplateId || undefined,
-        itineraryPageTemplateId: formData.itineraryPageTemplateId || undefined,
-        giftingPageTemplateId: formData.giftingPageTemplateId || undefined,
+        itineraryPageTemplateId: formData.itineraryEnabled ? (formData.itineraryPageTemplateId || undefined) : undefined,
+        giftingPageTemplateId: formData.giftingEnabled ? (formData.giftingPageTemplateId || undefined) : undefined,
         votingPageTemplateId: formData.votingEnabled ? (formData.votingPageTemplateId || undefined) : undefined,
         nominationPageTemplateId: formData.votingEnabled ? (formData.nominationPageTemplateId || undefined) : undefined,
         nomineesPageTemplateId: formData.votingEnabled ? (formData.nomineesPageTemplateId || undefined) : undefined,
@@ -360,25 +360,35 @@ export default function NewEventPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="dashboard-canvas p-5 sm:p-6">
         <Link
           href="/admin/events"
-          className="inline-flex items-center text-surface-600 hover:text-navy-900 mb-4"
+          className="inline-flex items-center text-surface-600 hover:text-navy-900 mb-3 text-sm font-medium"
         >
           <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Events
         </Link>
-        <h1 className="text-2xl font-display font-bold text-navy-900">Create New Event</h1>
-        <p className="text-surface-600 mt-1">Set up a new event with all its details and templates</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <span className="pill-accent">Event Setup</span>
+            <h1 className="text-2xl font-display font-bold text-navy-900 mt-2">Create New Event</h1>
+            <p className="text-surface-600 mt-1">Set up event details, services, pricing, templates, and voting in one flow.</p>
+          </div>
+          <div className="segmented">
+            <span className="segmented-item segmented-item-active">Details</span>
+            <span className="segmented-item">Services</span>
+            <span className="segmented-item">Templates</span>
+          </div>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Basic Info */}
-        <div className="card">
+        <div className="dashboard-canvas">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Basic Information</h2>
           <div className="space-y-4">
             <div>
@@ -404,7 +414,7 @@ export default function NewEventPage() {
                   required
                   className="input"
                   placeholder="sarah-michael-wedding"
-                  pattern="^[a-z0-9-]+$"
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase() })}
                 />
@@ -481,7 +491,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Date & Location */}
-        <div className="card">
+        <div className="dashboard-canvas">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Date & Location</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
@@ -582,7 +592,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Event Owner */}
-        <div className="card">
+        <div className="dashboard-canvas">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Event Owner</h2>
           <div className="space-y-4">
             <div className="flex gap-3">
@@ -715,7 +725,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Services */}
-        <div className="card">
+        <div className="dashboard-canvas">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Services</h2>
           <div className="space-y-4">
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
@@ -838,7 +848,7 @@ export default function NewEventPage() {
         </div>
 
         {/* RSVP Pricing & Ticketing */}
-        <div className="card">
+        <div className="dashboard-canvas">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">RSVP Pricing & Ticketing</h2>
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
@@ -1001,7 +1011,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Template Selection */}
-        <div className="card">
+        <div className="dashboard-canvas">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-navy-900">Page Templates</h2>
@@ -1140,7 +1150,7 @@ export default function NewEventPage() {
 
         {/* Guestbook Settings */}
         {formData.guestbookEnabled && (
-          <div className="card">
+          <div className="dashboard-canvas">
             <h2 className="text-lg font-semibold text-navy-900 mb-4">Guestbook Settings</h2>
             <div className="grid sm:grid-cols-3 gap-4">
               <div>

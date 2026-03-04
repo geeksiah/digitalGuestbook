@@ -1105,7 +1105,7 @@ export default function OwnerEventDetailPage() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <div className="rounded-xl border border-surface-200/80 bg-white shadow-soft px-4 sm:px-5 py-3.5 sm:py-4">
+      <div className="dashboard-canvas px-4 sm:px-5 py-3.5 sm:py-4">
         <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
           {Icons.back}
           <span className="ml-1">Events</span>
@@ -1129,7 +1129,7 @@ export default function OwnerEventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-xl border border-surface-200/80 bg-white shadow-soft p-1.5 -mx-4 sm:mx-0">
+      <div className="dashboard-canvas p-1.5 -mx-4 sm:mx-0">
         <nav className="flex gap-1 overflow-x-auto scrollbar-hide px-2.5 sm:px-0.5">
           {tabs.map(tab => (
             <button
@@ -1138,7 +1138,7 @@ export default function OwnerEventDetailPage() {
               className={cn(
                 'px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium rounded-lg transition-all border whitespace-nowrap flex-shrink-0',
                 activeTab === tab.id
-                  ? 'bg-brand-50 border-brand-100 text-brand-900 shadow-sm'
+                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-red-100'
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
               )}
             >

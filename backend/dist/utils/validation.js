@@ -5,6 +5,21 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateOwnerSchema = exports.createOwnerSchema = exports.createBroadcastSchema = exports.mediaUploadSchema = exports.checkInSchema = exports.reviewRsvpSchema = exports.createRsvpSchema = exports.updateTemplateSchema = exports.createTemplateSchema = exports.updateEventSchema = exports.createEventSchema = exports.registerAdminSchema = exports.loginSchema = void 0;
 const zod_1 = require("zod");
+const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const optionalTemplateIdSchema = zod_1.z.preprocess((value) => {
+    if (typeof value !== 'string')
+        return value;
+    const normalized = value.trim();
+    return normalized.length ? normalized : undefined;
+}, zod_1.z.string().min(1).optional());
+const nullableTemplateIdSchema = zod_1.z.preprocess((value) => {
+    if (value === null)
+        return null;
+    if (typeof value !== 'string')
+        return value;
+    const normalized = value.trim();
+    return normalized.length ? normalized : undefined;
+}, zod_1.z.string().min(1).nullable().optional());
 // ============================================
 // AUTH SCHEMAS
 // ============================================
@@ -23,7 +38,10 @@ exports.registerAdminSchema = zod_1.z.object({
 // ============================================
 exports.createEventSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Event name must be at least 2 characters'),
-    slug: zod_1.z.string().min(2).regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
+    slug: zod_1.z
+        .string()
+        .min(2)
+        .regex(slugPattern, 'Slug must contain only lowercase letters, numbers, and hyphens'),
     description: zod_1.z.string().optional().nullable(),
     socialTitle: zod_1.z.string().max(120).optional().nullable(),
     socialDescription: zod_1.z.string().max(240).optional().nullable(),
@@ -58,28 +76,28 @@ exports.createEventSchema = zod_1.z.object({
     invitationOnly: zod_1.z.boolean().default(false),
     strictInviteOnly: zod_1.z.boolean().default(false),
     itineraryEnabled: zod_1.z.boolean().default(false),
-    itineraryTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    itineraryTemplateId: nullableTemplateIdSchema,
     giftingEnabled: zod_1.z.boolean().default(false),
-    itineraryPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    giftingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    votingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    nominationPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    nomineesPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    leaderboardPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    itineraryPageTemplateId: nullableTemplateIdSchema,
+    giftingPageTemplateId: nullableTemplateIdSchema,
+    votingPageTemplateId: nullableTemplateIdSchema,
+    nominationPageTemplateId: nullableTemplateIdSchema,
+    nomineesPageTemplateId: nullableTemplateIdSchema,
+    leaderboardPageTemplateId: nullableTemplateIdSchema,
     // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
-    invitationTemplateId: zod_1.z.string().uuid().optional(),
-    rsvpTemplateId: zod_1.z.string().uuid().optional(),
-    guestbookTemplateId: zod_1.z.string().uuid().optional(),
-    guestbookVideoTemplateId: zod_1.z.string().uuid().optional(),
-    guestbookAudioTemplateId: zod_1.z.string().uuid().optional(),
-    guestbookPhotoTemplateId: zod_1.z.string().uuid().optional(),
-    boothTemplateId: zod_1.z.string().uuid().optional(),
-    boothVideoTemplateId: zod_1.z.string().uuid().optional(),
-    boothAudioTemplateId: zod_1.z.string().uuid().optional(),
-    boothPhotoTemplateId: zod_1.z.string().uuid().optional(),
-    thankYouTemplateId: zod_1.z.string().uuid().optional(),
-    liveLandingTemplateId: zod_1.z.string().uuid().optional(), // ⭐ NEW
-    eventEndedTemplateId: zod_1.z.string().uuid().optional(), // ⭐ NEW
+    invitationTemplateId: optionalTemplateIdSchema,
+    rsvpTemplateId: optionalTemplateIdSchema,
+    guestbookTemplateId: optionalTemplateIdSchema,
+    guestbookVideoTemplateId: optionalTemplateIdSchema,
+    guestbookAudioTemplateId: optionalTemplateIdSchema,
+    guestbookPhotoTemplateId: optionalTemplateIdSchema,
+    boothTemplateId: optionalTemplateIdSchema,
+    boothVideoTemplateId: optionalTemplateIdSchema,
+    boothAudioTemplateId: optionalTemplateIdSchema,
+    boothPhotoTemplateId: optionalTemplateIdSchema,
+    thankYouTemplateId: optionalTemplateIdSchema,
+    liveLandingTemplateId: optionalTemplateIdSchema, // ⭐ NEW
+    eventEndedTemplateId: optionalTemplateIdSchema, // ⭐ NEW
     // Guestbook Settings
     maxRecordingDuration: zod_1.z.number().int().min(30).max(300).default(120),
     minRecordingDuration: zod_1.z.number().int().min(5).max(60).default(30),
@@ -105,7 +123,7 @@ exports.createEventSchema = zod_1.z.object({
 });
 exports.updateEventSchema = zod_1.z.object({
     name: zod_1.z.string().min(2).optional(),
-    slug: zod_1.z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
+    slug: zod_1.z.string().min(2).regex(slugPattern).optional(),
     description: zod_1.z.string().optional().nullable(),
     socialTitle: zod_1.z.string().max(120).optional().nullable(),
     socialDescription: zod_1.z.string().max(240).optional().nullable(),
@@ -140,28 +158,28 @@ exports.updateEventSchema = zod_1.z.object({
     invitationOnly: zod_1.z.boolean().optional(),
     strictInviteOnly: zod_1.z.boolean().optional(),
     itineraryEnabled: zod_1.z.boolean().optional(),
-    itineraryTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    itineraryTemplateId: nullableTemplateIdSchema,
     giftingEnabled: zod_1.z.boolean().optional(),
-    itineraryPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    giftingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    votingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    nominationPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    nomineesPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    leaderboardPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    itineraryPageTemplateId: nullableTemplateIdSchema,
+    giftingPageTemplateId: nullableTemplateIdSchema,
+    votingPageTemplateId: nullableTemplateIdSchema,
+    nominationPageTemplateId: nullableTemplateIdSchema,
+    nomineesPageTemplateId: nullableTemplateIdSchema,
+    leaderboardPageTemplateId: nullableTemplateIdSchema,
     // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
-    invitationTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    rsvpTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    guestbookTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    guestbookVideoTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    guestbookAudioTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    guestbookPhotoTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    boothTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    boothVideoTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    boothAudioTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    boothPhotoTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    thankYouTemplateId: zod_1.z.string().uuid().optional().nullable(),
-    liveLandingTemplateId: zod_1.z.string().uuid().optional().nullable(), // ⭐ NEW
-    eventEndedTemplateId: zod_1.z.string().uuid().optional().nullable(), // ⭐ NEW
+    invitationTemplateId: nullableTemplateIdSchema,
+    rsvpTemplateId: nullableTemplateIdSchema,
+    guestbookTemplateId: nullableTemplateIdSchema,
+    guestbookVideoTemplateId: nullableTemplateIdSchema,
+    guestbookAudioTemplateId: nullableTemplateIdSchema,
+    guestbookPhotoTemplateId: nullableTemplateIdSchema,
+    boothTemplateId: nullableTemplateIdSchema,
+    boothVideoTemplateId: nullableTemplateIdSchema,
+    boothAudioTemplateId: nullableTemplateIdSchema,
+    boothPhotoTemplateId: nullableTemplateIdSchema,
+    thankYouTemplateId: nullableTemplateIdSchema,
+    liveLandingTemplateId: nullableTemplateIdSchema, // ⭐ NEW
+    eventEndedTemplateId: nullableTemplateIdSchema, // ⭐ NEW
     // Guestbook Settings
     maxRecordingDuration: zod_1.z.number().int().min(30).max(300).optional(),
     minRecordingDuration: zod_1.z.number().int().min(5).max(60).optional(),

@@ -474,11 +474,17 @@ export default function OwnerVotingPage() {
             <Link href={`/e/${event.slug}/nominate`} className="btn-outline" target="_blank">
               Open Public Nomination Page
             </Link>
+            <Link href={`/e/${event.slug}/nominees`} className="btn-outline" target="_blank">
+              Open Public Nominees Page
+            </Link>
+            <Link href={`/e/${event.slug}/leaderboard`} className="btn-outline" target="_blank">
+              Open Public Leaderboard Page
+            </Link>
           </div>
         ) : null}
       </div>
 
-      <section className="bg-white border border-surface-200 rounded-xl p-4 space-y-4">
+      <section className="dashboard-canvas p-4 space-y-4">
         <h2 className="text-lg font-semibold text-brand-900">Voting Configuration</h2>
         {config ? (
           <>
@@ -597,7 +603,7 @@ export default function OwnerVotingPage() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-surface-200 rounded-xl p-4 space-y-3">
+        <div className="dashboard-canvas p-4 space-y-3">
           <h2 className="text-lg font-semibold text-brand-900">Contests</h2>
           <div className="grid grid-cols-1 md:grid-cols-[1fr,160px,auto] gap-2">
             <input
@@ -648,7 +654,7 @@ export default function OwnerVotingPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-surface-200 rounded-xl p-4 space-y-3">
+        <div className="dashboard-canvas p-4 space-y-3">
           <h2 className="text-lg font-semibold text-brand-900">Nominees</h2>
           <p className="text-xs text-surface-600">
             {selectedContest ? `Contest: ${selectedContest.title}` : 'Select a contest to manage nominees.'}
@@ -787,7 +793,7 @@ export default function OwnerVotingPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-surface-200 rounded-xl p-4 space-y-3">
+      <section className="dashboard-canvas p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-brand-900">Public Nominations</h2>
           <span className="text-xs text-surface-600">
@@ -853,7 +859,7 @@ export default function OwnerVotingPage() {
         )}
       </section>
 
-      <section className="bg-white border border-surface-200 rounded-xl p-4 space-y-4">
+      <section className="dashboard-canvas p-4 space-y-4">
         <h2 className="text-lg font-semibold text-brand-900">Voting Analytics</h2>
         {analytics ? (
           <>

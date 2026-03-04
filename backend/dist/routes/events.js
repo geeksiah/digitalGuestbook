@@ -110,6 +110,66 @@ const ensureDefaultVotingTemplateAssignments = async (eventId, currentTemplates)
     });
     return { ...currentTemplates, ...patch };
 };
+const TEMPLATE_RULES = [
+    { field: 'invitationTemplateId', templateType: 'INVITATION', serviceFlag: 'invitationEnabled', serviceLabel: 'invitation' },
+    { field: 'rsvpTemplateId', templateType: 'RSVP', serviceFlag: 'rsvpEnabled', serviceLabel: 'RSVP' },
+    { field: 'guestbookTemplateId', templateType: 'GUESTBOOK', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook' },
+    { field: 'guestbookVideoTemplateId', templateType: 'GUESTBOOK_VIDEO', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook' },
+    { field: 'guestbookAudioTemplateId', templateType: 'GUESTBOOK_AUDIO', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook' },
+    { field: 'guestbookPhotoTemplateId', templateType: 'GUESTBOOK_PHOTO', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook' },
+    { field: 'boothTemplateId', templateType: 'BOOTH', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook/booth' },
+    { field: 'boothVideoTemplateId', templateType: 'BOOTH_VIDEO', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook/booth' },
+    { field: 'boothAudioTemplateId', templateType: 'BOOTH_AUDIO', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook/booth' },
+    { field: 'boothPhotoTemplateId', templateType: 'BOOTH_PHOTO', serviceFlag: 'guestbookEnabled', serviceLabel: 'guestbook/booth' },
+    { field: 'thankYouTemplateId', templateType: 'THANK_YOU' },
+    { field: 'liveLandingTemplateId', templateType: 'LIVE_LANDING' },
+    { field: 'eventEndedTemplateId', templateType: 'EVENT_ENDED' },
+    { field: 'itineraryTemplateId', templateType: 'ITINERARY', serviceFlag: 'itineraryEnabled', serviceLabel: 'itinerary' },
+    { field: 'itineraryPageTemplateId', templateType: 'ITINERARY', serviceFlag: 'itineraryEnabled', serviceLabel: 'itinerary' },
+    { field: 'giftingPageTemplateId', templateType: 'GIFTING', serviceFlag: 'giftingEnabled', serviceLabel: 'gifting' },
+    { field: 'votingPageTemplateId', templateType: 'VOTING' },
+    { field: 'nominationPageTemplateId', templateType: 'VOTING_NOMINATION' },
+    { field: 'nomineesPageTemplateId', templateType: 'VOTING_NOMINEES' },
+    { field: 'leaderboardPageTemplateId', templateType: 'VOTING_LEADERBOARD' },
+];
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const normalizeTemplateReferenceValue = (value) => {
+    if (value === null)
+        return null;
+    if (typeof value !== 'string')
+        return undefined;
+    const normalized = value.trim();
+    return normalized.length ? normalized : undefined;
+};
+const validateEventTemplateReferences = async (payload, flags) => {
+    const normalizedAssignments = {};
+    for (const rule of TEMPLATE_RULES) {
+        if (!hasOwn(payload, rule.field))
+            continue;
+        const normalizedValue = normalizeTemplateReferenceValue(payload[rule.field]);
+        if (normalizedValue === undefined)
+            continue;
+        if (normalizedValue === null) {
+            normalizedAssignments[rule.field] = null;
+            continue;
+        }
+        if (rule.serviceFlag && !flags[rule.serviceFlag]) {
+            throw new errorHandler_js_1.AppError(`Cannot assign ${rule.templateType} template while ${rule.serviceLabel || rule.serviceFlag} is disabled`, 400);
+        }
+        const template = await prisma_js_1.default.template.findUnique({
+            where: { id: normalizedValue },
+            select: { id: true, type: true },
+        });
+        if (!template) {
+            throw new errorHandler_js_1.AppError(`Template not found for ${rule.field}`, 400);
+        }
+        if (template.type !== rule.templateType) {
+            throw new errorHandler_js_1.AppError(`Invalid ${rule.templateType} template. Expected type ${rule.templateType}, got ${template.type}`, 400);
+        }
+        normalizedAssignments[rule.field] = normalizedValue;
+    }
+    return normalizedAssignments;
+};
 // All routes require admin authentication
 router.use(auth_js_1.authenticateAdmin);
 /**
@@ -204,6 +264,14 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
  */
 router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const data = validation_js_1.createEventSchema.parse(req.body);
+    const normalizedTemplateAssignments = await validateEventTemplateReferences(data, {
+        invitationEnabled: data.invitationEnabled,
+        rsvpEnabled: data.rsvpEnabled,
+        guestbookEnabled: data.guestbookEnabled,
+        itineraryEnabled: data.itineraryEnabled,
+        giftingEnabled: data.giftingEnabled,
+    });
+    const votingEnabledRequested = Boolean(req.body?.votingEnabled);
     // Enforce logic: check-in disabled when invitation-only is false
     if (!data.invitationOnly && data.checkInEnabled) {
         data.checkInEnabled = false;
@@ -228,22 +296,47 @@ router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             ownerEmail: data.ownerEmail ?? null,
             ownerPhone: data.ownerPhone ?? null,
             organizationName: data.organizationName ?? null,
-            itineraryTemplateId: data.itineraryTemplateId ?? null,
-            itineraryPageTemplateId: data.itineraryPageTemplateId ?? null,
-            giftingPageTemplateId: data.giftingPageTemplateId ?? null,
-            votingPageTemplateId: data.votingPageTemplateId ?? null,
-            nominationPageTemplateId: data.nominationPageTemplateId ?? null,
-            nomineesPageTemplateId: data.nomineesPageTemplateId ?? null,
-            leaderboardPageTemplateId: data.leaderboardPageTemplateId ?? null,
+            itineraryTemplateId: normalizedTemplateAssignments.itineraryTemplateId ?? data.itineraryTemplateId ?? null,
+            itineraryPageTemplateId: normalizedTemplateAssignments.itineraryPageTemplateId ?? data.itineraryPageTemplateId ?? null,
+            giftingPageTemplateId: normalizedTemplateAssignments.giftingPageTemplateId ?? data.giftingPageTemplateId ?? null,
+            votingPageTemplateId: normalizedTemplateAssignments.votingPageTemplateId ?? data.votingPageTemplateId ?? null,
+            nominationPageTemplateId: normalizedTemplateAssignments.nominationPageTemplateId ?? data.nominationPageTemplateId ?? null,
+            nomineesPageTemplateId: normalizedTemplateAssignments.nomineesPageTemplateId ?? data.nomineesPageTemplateId ?? null,
+            leaderboardPageTemplateId: normalizedTemplateAssignments.leaderboardPageTemplateId ?? data.leaderboardPageTemplateId ?? null,
+            invitationTemplateId: normalizedTemplateAssignments.invitationTemplateId ?? data.invitationTemplateId ?? null,
+            rsvpTemplateId: normalizedTemplateAssignments.rsvpTemplateId ?? data.rsvpTemplateId ?? null,
+            guestbookTemplateId: normalizedTemplateAssignments.guestbookTemplateId ?? data.guestbookTemplateId ?? null,
+            guestbookVideoTemplateId: normalizedTemplateAssignments.guestbookVideoTemplateId ?? data.guestbookVideoTemplateId ?? null,
+            guestbookAudioTemplateId: normalizedTemplateAssignments.guestbookAudioTemplateId ?? data.guestbookAudioTemplateId ?? null,
+            guestbookPhotoTemplateId: normalizedTemplateAssignments.guestbookPhotoTemplateId ?? data.guestbookPhotoTemplateId ?? null,
+            boothTemplateId: normalizedTemplateAssignments.boothTemplateId ?? data.boothTemplateId ?? null,
+            boothVideoTemplateId: normalizedTemplateAssignments.boothVideoTemplateId ?? data.boothVideoTemplateId ?? null,
+            boothAudioTemplateId: normalizedTemplateAssignments.boothAudioTemplateId ?? data.boothAudioTemplateId ?? null,
+            boothPhotoTemplateId: normalizedTemplateAssignments.boothPhotoTemplateId ?? data.boothPhotoTemplateId ?? null,
+            thankYouTemplateId: normalizedTemplateAssignments.thankYouTemplateId ?? data.thankYouTemplateId ?? null,
+            liveLandingTemplateId: normalizedTemplateAssignments.liveLandingTemplateId ?? data.liveLandingTemplateId ?? null,
+            eventEndedTemplateId: normalizedTemplateAssignments.eventEndedTemplateId ?? data.eventEndedTemplateId ?? null,
             ownerAccessToken: (0, node_crypto_1.randomUUID)(),
         },
     });
-    const assignedTemplates = await ensureDefaultVotingTemplateAssignments(event.id, {
-        votingPageTemplateId: event.votingPageTemplateId,
-        nominationPageTemplateId: event.nominationPageTemplateId,
-        nomineesPageTemplateId: event.nomineesPageTemplateId,
-        leaderboardPageTemplateId: event.leaderboardPageTemplateId,
-    });
+    const shouldEnsureVotingDefaults = votingEnabledRequested ||
+        Boolean(event.votingPageTemplateId ||
+            event.nominationPageTemplateId ||
+            event.nomineesPageTemplateId ||
+            event.leaderboardPageTemplateId);
+    const assignedTemplates = shouldEnsureVotingDefaults
+        ? await ensureDefaultVotingTemplateAssignments(event.id, {
+            votingPageTemplateId: event.votingPageTemplateId,
+            nominationPageTemplateId: event.nominationPageTemplateId,
+            nomineesPageTemplateId: event.nomineesPageTemplateId,
+            leaderboardPageTemplateId: event.leaderboardPageTemplateId,
+        })
+        : {
+            votingPageTemplateId: event.votingPageTemplateId,
+            nominationPageTemplateId: event.nominationPageTemplateId,
+            nomineesPageTemplateId: event.nomineesPageTemplateId,
+            leaderboardPageTemplateId: event.leaderboardPageTemplateId,
+        };
     const createdEvent = { ...event, ...assignedTemplates };
     // Create audit log
     await prisma_js_1.default.auditLog.create({
@@ -302,6 +395,14 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             }
         }
     }
+    const nextServiceFlags = {
+        invitationEnabled: data.invitationEnabled ?? existing.invitationEnabled,
+        rsvpEnabled: data.rsvpEnabled ?? existing.rsvpEnabled,
+        guestbookEnabled: data.guestbookEnabled ?? existing.guestbookEnabled,
+        itineraryEnabled: data.itineraryEnabled ?? existing.itineraryEnabled,
+        giftingEnabled: data.giftingEnabled ?? existing.giftingEnabled,
+    };
+    const normalizedTemplateAssignments = await validateEventTemplateReferences(data, nextServiceFlags);
     // Enforce logic: check-in disabled when invitation-only is false
     if (data.invitationOnly === false && data.checkInEnabled !== undefined) {
         data.checkInEnabled = false;
@@ -320,13 +421,66 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         ownerEmail: data.ownerEmail,
         ownerPhone: data.ownerPhone,
         organizationName: data.organizationName,
-        itineraryTemplateId: data.itineraryTemplateId,
-        itineraryPageTemplateId: data.itineraryPageTemplateId,
-        giftingPageTemplateId: data.giftingPageTemplateId,
-        votingPageTemplateId: data.votingPageTemplateId,
-        nominationPageTemplateId: data.nominationPageTemplateId,
-        nomineesPageTemplateId: data.nomineesPageTemplateId,
-        leaderboardPageTemplateId: data.leaderboardPageTemplateId,
+        itineraryTemplateId: hasOwn(normalizedTemplateAssignments, 'itineraryTemplateId')
+            ? normalizedTemplateAssignments.itineraryTemplateId
+            : data.itineraryTemplateId,
+        itineraryPageTemplateId: hasOwn(normalizedTemplateAssignments, 'itineraryPageTemplateId')
+            ? normalizedTemplateAssignments.itineraryPageTemplateId
+            : data.itineraryPageTemplateId,
+        giftingPageTemplateId: hasOwn(normalizedTemplateAssignments, 'giftingPageTemplateId')
+            ? normalizedTemplateAssignments.giftingPageTemplateId
+            : data.giftingPageTemplateId,
+        votingPageTemplateId: hasOwn(normalizedTemplateAssignments, 'votingPageTemplateId')
+            ? normalizedTemplateAssignments.votingPageTemplateId
+            : data.votingPageTemplateId,
+        nominationPageTemplateId: hasOwn(normalizedTemplateAssignments, 'nominationPageTemplateId')
+            ? normalizedTemplateAssignments.nominationPageTemplateId
+            : data.nominationPageTemplateId,
+        nomineesPageTemplateId: hasOwn(normalizedTemplateAssignments, 'nomineesPageTemplateId')
+            ? normalizedTemplateAssignments.nomineesPageTemplateId
+            : data.nomineesPageTemplateId,
+        leaderboardPageTemplateId: hasOwn(normalizedTemplateAssignments, 'leaderboardPageTemplateId')
+            ? normalizedTemplateAssignments.leaderboardPageTemplateId
+            : data.leaderboardPageTemplateId,
+        invitationTemplateId: hasOwn(normalizedTemplateAssignments, 'invitationTemplateId')
+            ? normalizedTemplateAssignments.invitationTemplateId
+            : data.invitationTemplateId,
+        rsvpTemplateId: hasOwn(normalizedTemplateAssignments, 'rsvpTemplateId')
+            ? normalizedTemplateAssignments.rsvpTemplateId
+            : data.rsvpTemplateId,
+        guestbookTemplateId: hasOwn(normalizedTemplateAssignments, 'guestbookTemplateId')
+            ? normalizedTemplateAssignments.guestbookTemplateId
+            : data.guestbookTemplateId,
+        guestbookVideoTemplateId: hasOwn(normalizedTemplateAssignments, 'guestbookVideoTemplateId')
+            ? normalizedTemplateAssignments.guestbookVideoTemplateId
+            : data.guestbookVideoTemplateId,
+        guestbookAudioTemplateId: hasOwn(normalizedTemplateAssignments, 'guestbookAudioTemplateId')
+            ? normalizedTemplateAssignments.guestbookAudioTemplateId
+            : data.guestbookAudioTemplateId,
+        guestbookPhotoTemplateId: hasOwn(normalizedTemplateAssignments, 'guestbookPhotoTemplateId')
+            ? normalizedTemplateAssignments.guestbookPhotoTemplateId
+            : data.guestbookPhotoTemplateId,
+        boothTemplateId: hasOwn(normalizedTemplateAssignments, 'boothTemplateId')
+            ? normalizedTemplateAssignments.boothTemplateId
+            : data.boothTemplateId,
+        boothVideoTemplateId: hasOwn(normalizedTemplateAssignments, 'boothVideoTemplateId')
+            ? normalizedTemplateAssignments.boothVideoTemplateId
+            : data.boothVideoTemplateId,
+        boothAudioTemplateId: hasOwn(normalizedTemplateAssignments, 'boothAudioTemplateId')
+            ? normalizedTemplateAssignments.boothAudioTemplateId
+            : data.boothAudioTemplateId,
+        boothPhotoTemplateId: hasOwn(normalizedTemplateAssignments, 'boothPhotoTemplateId')
+            ? normalizedTemplateAssignments.boothPhotoTemplateId
+            : data.boothPhotoTemplateId,
+        thankYouTemplateId: hasOwn(normalizedTemplateAssignments, 'thankYouTemplateId')
+            ? normalizedTemplateAssignments.thankYouTemplateId
+            : data.thankYouTemplateId,
+        liveLandingTemplateId: hasOwn(normalizedTemplateAssignments, 'liveLandingTemplateId')
+            ? normalizedTemplateAssignments.liveLandingTemplateId
+            : data.liveLandingTemplateId,
+        eventEndedTemplateId: hasOwn(normalizedTemplateAssignments, 'eventEndedTemplateId')
+            ? normalizedTemplateAssignments.eventEndedTemplateId
+            : data.eventEndedTemplateId,
     };
     if (updateData.invitationOnly === false) {
         updateData.checkInEnabled = false;
@@ -336,10 +490,13 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         data: updateData,
     });
     let patchedEvent = event;
-    if (data.votingPageTemplateId !== null &&
-        data.nominationPageTemplateId !== null &&
-        data.nomineesPageTemplateId !== null &&
-        data.leaderboardPageTemplateId !== null) {
+    const votingEnabledRequested = Boolean(req.body?.votingEnabled);
+    const shouldEnsureVotingDefaults = votingEnabledRequested ||
+        Boolean(event.votingPageTemplateId ||
+            event.nominationPageTemplateId ||
+            event.nomineesPageTemplateId ||
+            event.leaderboardPageTemplateId);
+    if (shouldEnsureVotingDefaults) {
         const assignedTemplates = await ensureDefaultVotingTemplateAssignments(event.id, {
             votingPageTemplateId: event.votingPageTemplateId,
             nominationPageTemplateId: event.nominationPageTemplateId,

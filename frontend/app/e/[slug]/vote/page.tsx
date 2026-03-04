@@ -117,6 +117,18 @@ export default function VotePage() {
     return contest?.rankings?.slice(0, 3) || [];
   }, [leaderboard, selectedContestId]);
 
+  const rankedOptions = useMemo(() => {
+    const options = selectedContest?.options || [];
+    const total = options.reduce((sum, option) => sum + Number(option.totalVotes || 0), 0);
+    return [...options]
+      .sort((a, b) => Number(b.totalVotes || 0) - Number(a.totalVotes || 0))
+      .map((option, index) => ({
+        ...option,
+        rank: index + 1,
+        share: total > 0 ? (Number(option.totalVotes || 0) / total) * 100 : 0,
+      }));
+  }, [selectedContest]);
+
   const fetchVoteData = async () => {
     if (!slug) return;
     setLoading(true);
@@ -186,8 +198,15 @@ export default function VotePage() {
     }
   }, [selectedContest, selectedOptionId]);
 
-  const castFreeVote = async () => {
-    if (!selectedContest || !selectedOption) {
+  const castFreeVote = async (optionOverrideId?: string) => {
+    if (!selectedContest) {
+      toast.error('Select a contest and nominee');
+      return;
+    }
+    const targetOption = optionOverrideId
+      ? selectedContest.options.find((option) => option.id === optionOverrideId) || selectedOption
+      : selectedOption;
+    if (!targetOption) {
       toast.error('Select a contest and nominee');
       return;
     }
@@ -200,7 +219,7 @@ export default function VotePage() {
       const response = await votingApi.freeVote({
         slug,
         contestId: selectedContest.id,
-        optionId: selectedOption.id,
+        optionId: targetOption.id,
         sessionToken: sessionToken || undefined,
         embedToken: embedToken || undefined,
       });
@@ -218,8 +237,15 @@ export default function VotePage() {
     }
   };
 
-  const createPaidIntent = async () => {
-    if (!config || !selectedContest || !selectedOption) {
+  const createPaidIntent = async (optionOverrideId?: string) => {
+    if (!config || !selectedContest) {
+      toast.error('Select a contest and nominee');
+      return;
+    }
+    const targetOption = optionOverrideId
+      ? selectedContest.options.find((option) => option.id === optionOverrideId) || selectedOption
+      : selectedOption;
+    if (!targetOption) {
       toast.error('Select a contest and nominee');
       return;
     }
@@ -236,7 +262,7 @@ export default function VotePage() {
       const response = await votingApi.createPaymentIntent({
         slug,
         contestId: selectedContest.id,
-        optionId: selectedOption.id,
+        optionId: targetOption.id,
         voteCount,
         paymentGatewayId: selectedGatewayId,
         sessionToken: sessionToken || undefined,
@@ -258,6 +284,19 @@ export default function VotePage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const quickVoteForOption = async (optionId: string) => {
+    setSelectedOptionId(optionId);
+    if (config?.allowPaidVotes) {
+      await createPaidIntent(optionId);
+      return;
+    }
+    if (config?.allowFreeVotes) {
+      await castFreeVote(optionId);
+      return;
+    }
+    toast.error('Voting is currently unavailable');
   };
 
   const requestOtp = async () => {
@@ -334,61 +373,85 @@ export default function VotePage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 pb-16">
-      <div className="mx-auto w-full max-w-[540px] px-4 py-6 space-y-4">
-        <section className="card-premium p-5">
-          <div className="flex items-center justify-between gap-3">
+    <div className="min-h-screen bg-surface-50 pb-10">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 grid gap-5 xl:grid-cols-[430px_1fr]">
+        <section className="phone-stage p-4 xl:sticky xl:top-20 xl:self-start">
+          <div className="phone-notch mb-4" />
+          <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">E-Voting</p>
-              <h1 className="text-2xl font-bold text-brand-900 mt-1">{eventName}</h1>
+              <h1 className="text-xl font-bold text-brand-900 mt-1 leading-tight">{eventName}</h1>
             </div>
-            <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-              Active Vote
-            </span>
+            <span className="pill-accent">Active Vote</span>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-surface-100 p-1">
-            <span className="rounded-lg bg-white text-center py-2 text-xs font-semibold text-brand-900">Vote</span>
-            <Link href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`} className="rounded-lg text-center py-2 text-xs font-semibold text-surface-600 hover:text-brand-900">
+          <div className="mt-4 segmented w-full">
+            <span className="segmented-item segmented-item-active text-center">Vote</span>
+            <Link
+              href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+              className="segmented-item text-center hover:text-brand-900"
+            >
               Nominees
             </Link>
-            <Link href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`} className="rounded-lg text-center py-2 text-xs font-semibold text-surface-600 hover:text-brand-900">
+            <Link
+              href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+              className="segmented-item text-center hover:text-brand-900"
+            >
               Results
             </Link>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-red-200 bg-[#fff6f5] p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Current Selection</p>
-            <p className="mt-1 text-base font-semibold text-brand-900">{selectedContest?.title || 'Select a contest'}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-surface-600">
-              <span>{selectedContest?.options.length || 0} contestants</span>
-              {config?.allowPaidVotes ? <span>{formatMoney(config.currency, config.voteUnitPrice)} / vote</span> : null}
-              {config?.allowPublicNominations ? (
-                <Link href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`} className="font-semibold text-red-700 hover:text-red-800">
-                  Nominate
-                </Link>
-              ) : null}
+          <div className="mt-4 rounded-3xl border border-red-200 bg-[#fff7f5] p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-red-600">Featured Category</p>
+            <p className="mt-1 text-lg font-semibold text-brand-900">{selectedContest?.title || 'Select a contest'}</p>
+            <p className="text-xs text-surface-600 mt-1">
+              {(selectedContest?.options.length || 0).toLocaleString()} contestants
+              {config?.allowPaidVotes ? ` • ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
+                <p className="text-[11px] text-surface-500">Contestants</p>
+                <p className="text-base font-semibold text-brand-900">{selectedContest?.options.length || 0}</p>
+              </div>
+              <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
+                <p className="text-[11px] text-surface-500">Mode</p>
+                <p className="text-base font-semibold text-brand-900">{selectedContest?.mode || config?.mode || 'AWARDS'}</p>
+              </div>
+              <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
+                <p className="text-[11px] text-surface-500">OTP</p>
+                <p className="text-base font-semibold text-brand-900">{electionMode ? (otpVerified ? 'Verified' : 'Needed') : 'No'}</p>
+              </div>
             </div>
+            {config?.allowPublicNominations ? (
+              <div className="mt-3">
+                <Link
+                  href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+                  className="btn-accent w-full"
+                >
+                  Nominate A Person
+                </Link>
+              </div>
+            ) : null}
           </div>
         </section>
 
-        {config && electionMode ? (
-          <section className="card-premium p-4 space-y-3">
-            <h2 className="text-base font-semibold text-brand-900">Election Verification</h2>
-            <input
-              className="input"
-              placeholder="Phone number"
-              value={otpPhone}
-              onChange={(event) => setOtpPhone(event.target.value)}
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-              <input
-                className="input"
-                placeholder="OTP code"
-                value={otpCode}
-                onChange={(event) => setOtpCode(event.target.value)}
-              />
-              <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-4">
+          {config && electionMode ? (
+            <section className="dashboard-canvas p-4 space-y-3">
+              <h2 className="text-base font-semibold text-brand-900">Election Verification</h2>
+              <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto,auto] gap-2">
+                <input
+                  className="input"
+                  placeholder="Phone number"
+                  value={otpPhone}
+                  onChange={(event) => setOtpPhone(event.target.value)}
+                />
+                <input
+                  className="input"
+                  placeholder="OTP code"
+                  value={otpCode}
+                  onChange={(event) => setOtpCode(event.target.value)}
+                />
                 <button className="btn-outline" onClick={requestOtp} disabled={submitting}>
                   Request
                 </button>
@@ -396,125 +459,148 @@ export default function VotePage() {
                   Verify
                 </button>
               </div>
-            </div>
-            <p className="text-xs text-surface-600">
-              Status: {otpVerified ? 'Verified' : 'Not verified'}
-            </p>
-          </section>
-        ) : null}
-
-        <section className="card-premium p-4 space-y-3">
-          <h2 className="text-base font-semibold text-brand-900">Select Contest & Nominee</h2>
-          <select
-            className="input"
-            value={selectedContestId}
-            onChange={(event) => {
-              const nextContestId = event.target.value;
-              setSelectedContestId(nextContestId);
-              const contest = contests.find((item) => item.id === nextContestId);
-              const firstOption = contest?.options?.[0];
-              setSelectedOptionId(firstOption?.id || '');
-            }}
-          >
-            {contests.map((contest) => (
-              <option key={contest.id} value={contest.id}>
-                {contest.title} ({contest.mode})
-              </option>
-            ))}
-          </select>
-
-          <div className="space-y-2">
-            {(selectedContest?.options || []).map((option) => {
-              const selected = selectedOptionId === option.id;
-              return (
-                <button
-                  type="button"
-                  key={option.id}
-                  onClick={() => setSelectedOptionId(option.id)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition-all ${
-                    selected
-                      ? 'border-red-300 bg-red-50 shadow-sm'
-                      : 'border-surface-200 bg-white hover:border-surface-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-brand-900">{option.name}</p>
-                    <span className="text-xs text-surface-500">{option.totalVotes.toLocaleString()} votes</span>
-                  </div>
-                  <p className="text-xs text-surface-600 mt-1">{option.description || 'Nominee'}</p>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="card-premium p-4 space-y-3">
-          <h2 className="text-base font-semibold text-brand-900">Cast Vote</h2>
-          {config?.allowFreeVotes ? (
-            <button className="btn-outline w-full" onClick={castFreeVote} disabled={submitting}>
-              Cast Free Vote
-            </button>
+              <p className="text-xs text-surface-600">Status: {otpVerified ? 'Verified' : 'Not verified'}</p>
+            </section>
           ) : null}
 
-          {config?.allowPaidVotes ? (
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr,auto] gap-2 items-center">
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  max={config.maxVotesPerPurchase}
-                  value={voteCount}
-                  onChange={(event) => setVoteCount(Math.max(1, Number(event.target.value || 1)))}
-                />
-                <p className="text-sm font-semibold text-brand-900">
-                  {formatMoney(config.currency, voteAmount)}
-                </p>
-              </div>
-              <select className="input" value={selectedGatewayId} onChange={(event) => setSelectedGatewayId(event.target.value)}>
-                {paymentGateways.map((gateway) => (
-                  <option key={gateway.id} value={gateway.id}>
-                    {gateway.name} ({gateway.gateway.toUpperCase()} - {gateway.currency})
+          <section className="dashboard-canvas p-4 space-y-3">
+            <h2 className="text-base font-semibold text-brand-900">Contest & Vote Setup</h2>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr,130px,1fr,auto] gap-2">
+              <select
+                className="input"
+                value={selectedContestId}
+                onChange={(event) => {
+                  const nextContestId = event.target.value;
+                  setSelectedContestId(nextContestId);
+                  const contest = contests.find((item) => item.id === nextContestId);
+                  const firstOption = contest?.options?.[0];
+                  setSelectedOptionId(firstOption?.id || '');
+                }}
+              >
+                {contests.map((contest) => (
+                  <option key={contest.id} value={contest.id}>
+                    {contest.title} ({contest.mode})
                   </option>
                 ))}
               </select>
-              <button className="btn-accent w-full" onClick={createPaidIntent} disabled={submitting}>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={config?.maxVotesPerPurchase || 100}
+                value={voteCount}
+                onChange={(event) => setVoteCount(Math.max(1, Number(event.target.value || 1)))}
+              />
+              <select className="input" value={selectedGatewayId} onChange={(event) => setSelectedGatewayId(event.target.value)}>
+                {paymentGateways.map((gateway) => (
+                  <option key={gateway.id} value={gateway.id}>
+                    {gateway.name} ({gateway.currency})
+                  </option>
+                ))}
+              </select>
+              <button className="btn-accent" onClick={() => { void createPaidIntent(); }} disabled={submitting || !config?.allowPaidVotes}>
                 Pay & Vote
               </button>
             </div>
-          ) : null}
-        </section>
+            {config?.allowFreeVotes ? (
+              <button className="btn-outline w-full md:w-auto" onClick={() => { void castFreeVote(); }} disabled={submitting}>
+                Cast Free Vote
+              </button>
+            ) : null}
+          </section>
 
-        <section className="card-premium p-4 space-y-2">
-          <h2 className="text-base font-semibold text-brand-900">Top Nominees</h2>
-          {topRankings.length ? (
-            topRankings.map((entry: any) => (
-              <article key={entry.optionId} className="rounded-xl border border-surface-200 bg-white p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
-                    <p className="font-semibold text-brand-900">{entry.name}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const contest = contests.find((item) => item.id === selectedContestId) || contests[0];
-                      if (contest) {
-                        setSelectedContestId(contest.id);
-                        setSelectedOptionId(entry.optionId);
-                      }
-                    }}
-                    className="btn-accent !min-h-[36px] !py-1.5 !text-xs"
+          <section className="dashboard-canvas p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-brand-900">Nominees</h2>
+              <p className="text-sm font-semibold text-brand-900">
+                {config ? formatMoney(config.currency, voteAmount) : ''}
+              </p>
+            </div>
+            <div className="space-y-2">
+              {rankedOptions.map((option) => {
+                const initials = option.name
+                  .split(' ')
+                  .map((part) => part[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase();
+                const selected = selectedOptionId === option.id;
+                return (
+                  <article
+                    key={option.id}
+                    className={`rounded-2xl border px-3 py-3 transition-all ${
+                      selected ? 'border-red-300 bg-red-50/60' : 'border-surface-200 bg-white hover:border-red-200'
+                    }`}
                   >
-                    Vote
-                  </button>
-                </div>
-              </article>
-            ))
-          ) : (
-            <p className="text-sm text-surface-600">Leaderboard is still warming up.</p>
-          )}
-        </section>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-surface-100 border border-surface-200 flex items-center justify-center text-xs font-semibold text-brand-900">
+                        {initials}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-brand-900 truncate">{option.name}</p>
+                          <p className="text-xs text-surface-500">#{option.rank}</p>
+                        </div>
+                        <p className="text-xs text-surface-600 truncate">{option.description || 'Nominee profile'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => quickVoteForOption(option.id)}
+                        disabled={submitting}
+                        className="btn-accent !min-h-[36px] !px-3 !py-1.5 !text-xs !rounded-full"
+                      >
+                        {config?.allowPaidVotes ? `Vote ${formatMoney(config.currency, config.voteUnitPrice)}` : 'Vote'}
+                      </button>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-surface-100 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-[#ff3b30]" style={{ width: `${Math.min(100, Math.max(0, option.share))}%` }} />
+                    </div>
+                    <p className="mt-1.5 text-xs text-surface-500">{option.totalVotes.toLocaleString()} votes</p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="dashboard-canvas p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-brand-900">Top Nominees</h2>
+              <Link
+                href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+                className="text-xs font-semibold text-red-700 hover:text-red-800"
+              >
+                Full leaderboard
+              </Link>
+            </div>
+            {topRankings.length ? (
+              topRankings.map((entry: any) => (
+                <article key={entry.optionId} className="rounded-xl border border-surface-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
+                      <p className="font-semibold text-brand-900">{entry.name}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const contest = contests.find((item) => item.id === selectedContestId) || contests[0];
+                        if (contest) {
+                          setSelectedContestId(contest.id);
+                          setSelectedOptionId(entry.optionId);
+                        }
+                      }}
+                      className="btn-accent !min-h-[36px] !py-1.5 !text-xs !rounded-full"
+                    >
+                      Vote
+                    </button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-surface-600">Leaderboard is still warming up.</p>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

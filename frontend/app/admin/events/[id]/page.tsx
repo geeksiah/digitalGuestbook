@@ -1133,7 +1133,7 @@ export default function EventDetailPage() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <div className="rounded-2xl border border-surface-200 bg-white shadow-soft px-5 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="dashboard-canvas px-5 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="min-w-0">
           <Link href="/admin/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
             {Icons.back}
@@ -1157,7 +1157,7 @@ export default function EventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="overflow-x-auto rounded-2xl border border-surface-200 bg-white shadow-soft p-2">
+      <div className="overflow-x-auto dashboard-canvas p-2">
         <nav className="flex gap-1 min-w-max">
           {tabs.map(tab => (
             <button 
@@ -1166,7 +1166,7 @@ export default function EventDetailPage() {
               className={cn(
                 'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border',
                 activeTab === tab.id 
-                  ? 'bg-brand-50 border-brand-100 text-brand-900 shadow-sm' 
+                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-red-100' 
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
               )}
             >

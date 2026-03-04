@@ -4,6 +4,27 @@
 
 import { z } from 'zod';
 
+const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const optionalTemplateIdSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const normalized = value.trim();
+    return normalized.length ? normalized : undefined;
+  },
+  z.string().min(1).optional()
+);
+
+const nullableTemplateIdSchema = z.preprocess(
+  (value) => {
+    if (value === null) return null;
+    if (typeof value !== 'string') return value;
+    const normalized = value.trim();
+    return normalized.length ? normalized : undefined;
+  },
+  z.string().min(1).nullable().optional()
+);
+
 // ============================================
 // AUTH SCHEMAS
 // ============================================
@@ -26,7 +47,10 @@ export const registerAdminSchema = z.object({
 
 export const createEventSchema = z.object({
   name: z.string().min(2, 'Event name must be at least 2 characters'),
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
+  slug: z
+    .string()
+    .min(2)
+    .regex(slugPattern, 'Slug must contain only lowercase letters, numbers, and hyphens'),
   description: z.string().optional().nullable(),
   socialTitle: z.string().max(120).optional().nullable(),
   socialDescription: z.string().max(240).optional().nullable(),
@@ -65,29 +89,29 @@ export const createEventSchema = z.object({
   invitationOnly: z.boolean().default(false),
   strictInviteOnly: z.boolean().default(false),
   itineraryEnabled: z.boolean().default(false),
-  itineraryTemplateId: z.string().uuid().optional().nullable(),
+  itineraryTemplateId: nullableTemplateIdSchema,
   giftingEnabled: z.boolean().default(false),
-  itineraryPageTemplateId: z.string().uuid().optional().nullable(),
-  giftingPageTemplateId: z.string().uuid().optional().nullable(),
-  votingPageTemplateId: z.string().uuid().optional().nullable(),
-  nominationPageTemplateId: z.string().uuid().optional().nullable(),
-  nomineesPageTemplateId: z.string().uuid().optional().nullable(),
-  leaderboardPageTemplateId: z.string().uuid().optional().nullable(),
+  itineraryPageTemplateId: nullableTemplateIdSchema,
+  giftingPageTemplateId: nullableTemplateIdSchema,
+  votingPageTemplateId: nullableTemplateIdSchema,
+  nominationPageTemplateId: nullableTemplateIdSchema,
+  nomineesPageTemplateId: nullableTemplateIdSchema,
+  leaderboardPageTemplateId: nullableTemplateIdSchema,
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
-  invitationTemplateId: z.string().uuid().optional(),
-  rsvpTemplateId: z.string().uuid().optional(),
-  guestbookTemplateId: z.string().uuid().optional(),
-  guestbookVideoTemplateId: z.string().uuid().optional(),
-  guestbookAudioTemplateId: z.string().uuid().optional(),
-  guestbookPhotoTemplateId: z.string().uuid().optional(),
-  boothTemplateId: z.string().uuid().optional(),
-  boothVideoTemplateId: z.string().uuid().optional(),
-  boothAudioTemplateId: z.string().uuid().optional(),
-  boothPhotoTemplateId: z.string().uuid().optional(),
-  thankYouTemplateId: z.string().uuid().optional(),
-  liveLandingTemplateId: z.string().uuid().optional(),     // ⭐ NEW
-  eventEndedTemplateId: z.string().uuid().optional(),      // ⭐ NEW
+  invitationTemplateId: optionalTemplateIdSchema,
+  rsvpTemplateId: optionalTemplateIdSchema,
+  guestbookTemplateId: optionalTemplateIdSchema,
+  guestbookVideoTemplateId: optionalTemplateIdSchema,
+  guestbookAudioTemplateId: optionalTemplateIdSchema,
+  guestbookPhotoTemplateId: optionalTemplateIdSchema,
+  boothTemplateId: optionalTemplateIdSchema,
+  boothVideoTemplateId: optionalTemplateIdSchema,
+  boothAudioTemplateId: optionalTemplateIdSchema,
+  boothPhotoTemplateId: optionalTemplateIdSchema,
+  thankYouTemplateId: optionalTemplateIdSchema,
+  liveLandingTemplateId: optionalTemplateIdSchema,     // ⭐ NEW
+  eventEndedTemplateId: optionalTemplateIdSchema,      // ⭐ NEW
   
   // Guestbook Settings
   maxRecordingDuration: z.number().int().min(30).max(300).default(120),
@@ -117,7 +141,7 @@ export const createEventSchema = z.object({
 
 export const updateEventSchema = z.object({
   name: z.string().min(2).optional(),
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
+  slug: z.string().min(2).regex(slugPattern).optional(),
   description: z.string().optional().nullable(),
   socialTitle: z.string().max(120).optional().nullable(),
   socialDescription: z.string().max(240).optional().nullable(),
@@ -156,29 +180,29 @@ export const updateEventSchema = z.object({
   invitationOnly: z.boolean().optional(),
   strictInviteOnly: z.boolean().optional(),
   itineraryEnabled: z.boolean().optional(),
-  itineraryTemplateId: z.string().uuid().optional().nullable(),
+  itineraryTemplateId: nullableTemplateIdSchema,
   giftingEnabled: z.boolean().optional(),
-  itineraryPageTemplateId: z.string().uuid().optional().nullable(),
-  giftingPageTemplateId: z.string().uuid().optional().nullable(),
-  votingPageTemplateId: z.string().uuid().optional().nullable(),
-  nominationPageTemplateId: z.string().uuid().optional().nullable(),
-  nomineesPageTemplateId: z.string().uuid().optional().nullable(),
-  leaderboardPageTemplateId: z.string().uuid().optional().nullable(),
+  itineraryPageTemplateId: nullableTemplateIdSchema,
+  giftingPageTemplateId: nullableTemplateIdSchema,
+  votingPageTemplateId: nullableTemplateIdSchema,
+  nominationPageTemplateId: nullableTemplateIdSchema,
+  nomineesPageTemplateId: nullableTemplateIdSchema,
+  leaderboardPageTemplateId: nullableTemplateIdSchema,
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
-  invitationTemplateId: z.string().uuid().optional().nullable(),
-  rsvpTemplateId: z.string().uuid().optional().nullable(),
-  guestbookTemplateId: z.string().uuid().optional().nullable(),
-  guestbookVideoTemplateId: z.string().uuid().optional().nullable(),
-  guestbookAudioTemplateId: z.string().uuid().optional().nullable(),
-  guestbookPhotoTemplateId: z.string().uuid().optional().nullable(),
-  boothTemplateId: z.string().uuid().optional().nullable(),
-  boothVideoTemplateId: z.string().uuid().optional().nullable(),
-  boothAudioTemplateId: z.string().uuid().optional().nullable(),
-  boothPhotoTemplateId: z.string().uuid().optional().nullable(),
-  thankYouTemplateId: z.string().uuid().optional().nullable(),
-  liveLandingTemplateId: z.string().uuid().optional().nullable(),     // ⭐ NEW
-  eventEndedTemplateId: z.string().uuid().optional().nullable(),      // ⭐ NEW
+  invitationTemplateId: nullableTemplateIdSchema,
+  rsvpTemplateId: nullableTemplateIdSchema,
+  guestbookTemplateId: nullableTemplateIdSchema,
+  guestbookVideoTemplateId: nullableTemplateIdSchema,
+  guestbookAudioTemplateId: nullableTemplateIdSchema,
+  guestbookPhotoTemplateId: nullableTemplateIdSchema,
+  boothTemplateId: nullableTemplateIdSchema,
+  boothVideoTemplateId: nullableTemplateIdSchema,
+  boothAudioTemplateId: nullableTemplateIdSchema,
+  boothPhotoTemplateId: nullableTemplateIdSchema,
+  thankYouTemplateId: nullableTemplateIdSchema,
+  liveLandingTemplateId: nullableTemplateIdSchema,     // ⭐ NEW
+  eventEndedTemplateId: nullableTemplateIdSchema,      // ⭐ NEW
   
   // Guestbook Settings
   maxRecordingDuration: z.number().int().min(30).max(300).optional(),

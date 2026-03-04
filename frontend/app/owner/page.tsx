@@ -31,12 +31,13 @@ interface Stats {
   revenueByCurrency: Record<string, { gross: number; net: number }>;
 }
 
+const focusAreas = ['Weddings', 'Corporate', 'Awards', 'Concerts', 'Festivals', 'Private'];
+
 const Icons = {
   events: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   rsvps: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
   checkins: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   media: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  revenue: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   arrow: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
 };
 
@@ -58,7 +59,7 @@ export default function OwnerDashboardPage() {
       ]);
       setEvents(eventsResponse.data.events);
       setStats(statsResponse.data.stats);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -95,17 +96,16 @@ export default function OwnerDashboardPage() {
     <div className="space-y-5 sm:space-y-7">
       <DashboardPageHeader title="Dashboard" subtitle="Your event operations at a glance" />
 
-      <section className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <div className="card-premium p-5 sm:p-6 overflow-hidden relative">
-          <div className="absolute -right-10 -top-14 h-48 w-48 rounded-full bg-red-100/60 blur-2xl" />
-          <p className="chip-accent w-fit relative z-[1]">Owner Console</p>
-          <h2 className="relative z-[1] mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-brand-900">
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <div className="dashboard-canvas p-5 sm:p-6">
+          <p className="pill-accent w-fit">Owner Console</p>
+          <h2 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-brand-900">
             Run polished events with live insight into guests, media, and payouts.
           </h2>
-          <p className="relative z-[1] mt-2 text-sm text-surface-600 max-w-2xl">
+          <p className="mt-2 text-sm text-surface-600 max-w-2xl">
             Jump from overview to execution with fast navigation across events and voting.
           </p>
-          <div className="relative z-[1] mt-5 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Link href="/owner/events" className="btn-accent">
               {Icons.events}
               <span className="ml-2">Manage Events</span>
@@ -114,13 +114,26 @@ export default function OwnerDashboardPage() {
               Payouts
             </Link>
           </div>
+
+          <div className="mt-5 grid sm:grid-cols-2 gap-3">
+            <article className="focus-card">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Action Board</p>
+              <p className="text-lg font-bold mt-1 text-brand-900">Boost RSVP Completion</p>
+              <p className="text-xs mt-1 text-surface-600">Refine your RSVP prompts and timing windows.</p>
+            </article>
+            <article className="focus-card">
+              <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Snapshot</p>
+              <p className="text-lg font-bold mt-1 text-brand-900">Priority Events</p>
+              <p className="text-xs mt-1 text-surface-600">{events.filter((event) => event.currentPhase === 'LIVE').length} live events need active monitoring.</p>
+            </article>
+          </div>
         </div>
 
-        <div className="card-premium p-5 sm:p-6">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-surface-500">Workspace</p>
           <p className="mt-2 text-lg font-semibold text-brand-900">Today&rsquo;s priorities</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {['Check-ins', 'Guestbook', 'Voting', 'Payouts'].map((label) => (
+            {focusAreas.map((label) => (
               <span
                 key={label}
                 className="inline-flex items-center rounded-full border border-surface-200 bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-700"
@@ -129,10 +142,18 @@ export default function OwnerDashboardPage() {
               </span>
             ))}
           </div>
+          <div className="mt-5 rounded-2xl border border-surface-200 bg-surface-50 p-4">
+            <p className="text-xs uppercase tracking-widest text-surface-500 font-semibold">Momentum</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Guestbook</span>
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Voting</span>
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Check-ins</span>
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Payouts</span>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <DashboardKpiCard label="Events" value={stats.totalEvents} icon={Icons.events} tone="blue" />
@@ -142,7 +163,40 @@ export default function OwnerDashboardPage() {
         </div>
       )}
 
-      {/* Revenue Summary */}
+      <DashboardSection title="Featured Events" subtitle="App-like cards for quick access" contentClassName="p-4">
+        {events.length === 0 ? (
+          <p className="text-sm text-surface-600">No events available yet.</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-3">
+            {events.slice(0, 3).map((event, index) => (
+              <article key={event.id} className="rounded-2xl border border-surface-200 bg-white overflow-hidden">
+                <div className={cn(
+                  'h-24 px-4 py-3 flex flex-col justify-end border-b',
+                  index % 3 === 0
+                    ? 'bg-white border-red-200'
+                    : index % 3 === 1
+                      ? 'bg-surface-50 border-surface-200'
+                      : 'bg-[#fdf9ef] border-amber-200'
+                )}>
+                  <p className="text-xs text-surface-500">/{event.slug}</p>
+                  <p className="font-semibold text-sm truncate text-brand-900">{event.name}</p>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-xs text-surface-600">{formatDate(event.date)} {event.venue ? `- ${event.venue}` : ''}</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-surface-500">Check-ins</span>
+                    <span className="font-semibold text-brand-900">{event._count.checkIns}</span>
+                  </div>
+                  <Link href={`/owner/events/${event.id}`} className="btn-accent w-full !min-h-[36px] !py-1.5 !text-xs">
+                    Open Event
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </DashboardSection>
+
       {stats && Object.keys(stats.revenueByCurrency).length > 0 && (
         <DashboardSection title="Revenue" subtitle="Net and gross by currency">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -152,13 +206,13 @@ export default function OwnerDashboardPage() {
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
-                    currency: currency,
+                    currency,
                   }).format(amounts.net)}
                 </p>
                 <p className="text-sm text-surface-500 mt-1">
                   Gross: {new Intl.NumberFormat('en-US', {
                     style: 'currency',
-                    currency: currency,
+                    currency,
                   }).format(amounts.gross)}
                 </p>
               </div>
@@ -167,7 +221,6 @@ export default function OwnerDashboardPage() {
         </DashboardSection>
       )}
 
-      {/* Recent Events */}
       <DashboardSection
         title="Your Events"
         subtitle="Open an event to manage it"
@@ -226,5 +279,3 @@ export default function OwnerDashboardPage() {
     </div>
   );
 }
-
-
