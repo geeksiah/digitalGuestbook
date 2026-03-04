@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
 
@@ -21,10 +21,7 @@ interface EventData {
 
 export default function ThankYouPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const slug = params.slug as string;
-  const rsvpId = searchParams.get('rsvp');
   
   const [event, setEvent] = useState<EventData['event'] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,8 +49,8 @@ export default function ThankYouPage() {
   // This prevents the default UI from flashing before the template loads
   if (templateLoading || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      <div className="min-h-screen section-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-900" />
       </div>
     );
   }
@@ -65,13 +62,13 @@ export default function ThankYouPage() {
 
   if (error || !event) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
         <div className="text-center">
-          <h1 className="text-2xl font-display font-bold text-white mb-4">
+          <h1 className="text-2xl font-display font-bold text-brand-900 mb-4">
             Event Not Found
           </h1>
-          <p className="text-surface-400 mb-8">{error}</p>
-          <Link href="/" className="btn-primary">
+          <p className="text-surface-600 mb-8">{error}</p>
+          <Link href="/" className="btn-accent">
             Go Home
           </Link>
         </div>
@@ -80,24 +77,24 @@ export default function ThankYouPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900">
+    <div className="min-h-screen section-gradient">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] rounded-full bg-primary-500/10 blur-3xl" />
-        <div className="absolute -bottom-1/2 -left-1/4 w-[600px] h-[600px] rounded-full bg-primary-500/5 blur-3xl" />
+        <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] rounded-full bg-red-500/10 blur-3xl" />
+        <div className="absolute -bottom-1/2 -left-1/4 w-[600px] h-[600px] rounded-full bg-brand-700/10 blur-3xl" />
       </div>
 
       <div className="relative min-h-screen flex items-center justify-center p-4 py-12">
         <div className="w-full max-w-xl">
           {/* Thank You Card */}
-          <div className="bg-white rounded-2xl shadow-elegant overflow-hidden">
+          <div className="card-premium overflow-hidden">
             {/* Header accent */}
-            <div className="h-2 bg-gradient-to-r from-primary-400 via-primary-500 to-primary-400" />
+            <div className="h-2 bg-gradient-to-r from-red-400 via-red-500 to-red-400" />
 
             <div className="p-8 sm:p-12 text-center">
               {/* Success Icon */}
-              <div className="w-16 h-16 mx-auto rounded-full bg-primary-500/20 flex items-center justify-center mb-6">
-                <svg className="w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-6">
+                <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
@@ -119,7 +116,7 @@ export default function ThankYouPage() {
                 <div className="space-y-2 text-sm text-surface-600">
                   {event.venue && (
                     <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
@@ -146,17 +143,17 @@ export default function ThankYouPage() {
 
               {/* Actions */}
               <div className="space-y-3">
-                <Link
-                  href={`/e/${event.slug}`}
-                  className="btn-primary w-full sm:w-auto px-8 py-3 text-base"
-                >
-                  View Event Details
-                </Link>
-                <div>
                   <Link
-                    href="/"
-                    className="text-sm text-surface-500 hover:text-primary-500 transition-colors"
+                    href={`/e/${event.slug}`}
+                    className="btn-accent w-full sm:w-auto px-8 py-3 text-base"
                   >
+                    View Event Details
+                  </Link>
+                  <div>
+                    <Link
+                      href="/"
+                      className="text-sm text-surface-500 hover:text-brand-700 transition-colors"
+                    >
                     Return to Home
                   </Link>
                 </div>
@@ -175,7 +172,7 @@ export default function ThankYouPage() {
               Powered by EventPeepo
             </p>
             <p className="text-surface-400 text-xs">
-              © {new Date().getFullYear()} EventPeepo. All rights reserved.
+              (c) {new Date().getFullYear()} EventPeepo. All rights reserved.
             </p>
           </div>
         </div>
@@ -183,3 +180,4 @@ export default function ThankYouPage() {
     </div>
   );
 }
+

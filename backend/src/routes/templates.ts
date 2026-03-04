@@ -223,6 +223,9 @@ router.get('/', asyncHandler(async (req, res) => {
         eventsAsItineraryPage: true,
         eventsAsGiftingPage: true,
         eventsAsVotingPage: true,
+        eventsAsNominationPage: true,
+        eventsAsNomineesPage: true,
+        eventsAsLeaderboardPage: true,
       },
     },
   };
@@ -257,7 +260,10 @@ router.get('/', asyncHandler(async (req, res) => {
       t._count.eventsAsEventEnded +
       t._count.eventsAsItineraryPage +
       t._count.eventsAsGiftingPage +
-      t._count.eventsAsVotingPage,
+      t._count.eventsAsVotingPage +
+      t._count.eventsAsNominationPage +
+      t._count.eventsAsNomineesPage +
+      t._count.eventsAsLeaderboardPage,
   }));
 
   res.json({ templates: templatesWithUsage });
@@ -277,6 +283,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
       eventsAsItineraryPage: { select: { id: true, name: true, slug: true } },
       eventsAsGiftingPage: { select: { id: true, name: true, slug: true } },
       eventsAsVotingPage: { select: { id: true, name: true, slug: true } },
+      eventsAsNominationPage: { select: { id: true, name: true, slug: true } },
+      eventsAsNomineesPage: { select: { id: true, name: true, slug: true } },
+      eventsAsLeaderboardPage: { select: { id: true, name: true, slug: true } },
     },
   });
 
@@ -356,6 +365,9 @@ router.delete('/:id', asyncHandler(async (req, res) => {
           eventsAsItineraryPage: true,
           eventsAsGiftingPage: true,
           eventsAsVotingPage: true,
+          eventsAsNominationPage: true,
+          eventsAsNomineesPage: true,
+          eventsAsLeaderboardPage: true,
         },
       },
     },
@@ -379,7 +391,10 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     template._count.eventsAsEventEnded +
     template._count.eventsAsItineraryPage +
     template._count.eventsAsGiftingPage +
-    template._count.eventsAsVotingPage;
+    template._count.eventsAsVotingPage +
+    template._count.eventsAsNominationPage +
+    template._count.eventsAsNomineesPage +
+    template._count.eventsAsLeaderboardPage;
 
   if (totalUsage > 0) {
     throw new AppError(`Cannot delete template in use by ${totalUsage} event(s)`, 400);
@@ -457,6 +472,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     'INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO',
     'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO',
     'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED', 'ITINERARY', 'GIFTING', 'VOTING',
+    'VOTING_NOMINATION', 'VOTING_NOMINEES', 'VOTING_LEADERBOARD',
   ];
   if (!validTypes.includes(type)) {
     throw new AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);

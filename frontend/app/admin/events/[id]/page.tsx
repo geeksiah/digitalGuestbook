@@ -64,6 +64,9 @@ interface Event {
   itineraryPageTemplateId: string | null;
   giftingPageTemplateId: string | null;
   votingPageTemplateId?: string | null;
+  nominationPageTemplateId?: string | null;
+  nomineesPageTemplateId?: string | null;
+  leaderboardPageTemplateId?: string | null;
   // Event branding
   primaryColor?: string;
   secondaryColor?: string;
@@ -341,6 +344,9 @@ export default function EventDetailPage() {
     itineraryPageTemplateId: '',
     giftingPageTemplateId: '',
     votingPageTemplateId: '',
+    nominationPageTemplateId: '',
+    nomineesPageTemplateId: '',
+    leaderboardPageTemplateId: '',
   });
 
   const availableEventCurrencies = eventGatewayCurrencies.length > 0
@@ -404,6 +410,9 @@ export default function EventDetailPage() {
         itineraryPageTemplateId: (event as any).itineraryPageTemplateId || '',
         giftingPageTemplateId: (event as any).giftingPageTemplateId || '',
         votingPageTemplateId: (event as any).votingPageTemplateId || '',
+        nominationPageTemplateId: (event as any).nominationPageTemplateId || '',
+        nomineesPageTemplateId: (event as any).nomineesPageTemplateId || '',
+        leaderboardPageTemplateId: (event as any).leaderboardPageTemplateId || '',
       });
       const d = new Date(event.date);
       const ed = event.endDate ? new Date(event.endDate) : null;
@@ -1009,6 +1018,9 @@ export default function EventDetailPage() {
         itineraryPageTemplateId: selectedTemplates.itineraryPageTemplateId || null,
         giftingPageTemplateId: selectedTemplates.giftingPageTemplateId || null,
         votingPageTemplateId: selectedTemplates.votingPageTemplateId || null,
+        nominationPageTemplateId: (selectedTemplates as any).nominationPageTemplateId || null,
+        nomineesPageTemplateId: (selectedTemplates as any).nomineesPageTemplateId || null,
+        leaderboardPageTemplateId: (selectedTemplates as any).leaderboardPageTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -1209,6 +1221,56 @@ export default function EventDetailPage() {
                 ))}
               </div>
             </div>
+            <div className="card-premium p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-brand-900">Voting Console</h3>
+                  <p className="text-sm text-surface-600 mt-1">
+                    Manage categories, nominees, nominations, and live rankings.
+                  </p>
+                </div>
+                <span className="chip-accent text-xs">Voting</span>
+              </div>
+              <div className="mt-4">
+                <Link href={`/admin/events/${event.id}/voting`} className="btn-accent w-full justify-center">
+                  Open Admin Voting Console
+                </Link>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <a
+                  href={`/e/${event.slug}/nominate`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-outline text-xs justify-center"
+                >
+                  Nomination Page
+                </a>
+                <a
+                  href={`/e/${event.slug}/nominees`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-outline text-xs justify-center"
+                >
+                  Nominees Page
+                </a>
+                <a
+                  href={`/e/${event.slug}/vote`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-outline text-xs justify-center"
+                >
+                  Vote Page
+                </a>
+                <a
+                  href={`/e/${event.slug}/leaderboard`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-outline text-xs justify-center"
+                >
+                  Leaderboard
+                </a>
+              </div>
+            </div>
             <div className="bg-white rounded-xl border border-surface-200 p-5">
               <h3 className="font-semibold text-brand-900 mb-4">Quick Links</h3>
               <div className="space-y-1 text-sm">
@@ -1222,7 +1284,10 @@ export default function EventDetailPage() {
                   { l: 'Check-In', p: `/e/${event.slug}/checkin`, enabled: event.checkInEnabled },
                   { l: 'Itinerary', p: `/e/${event.slug}/itinerary`, enabled: event.itineraryEnabled },
                   { l: 'Gift Page', p: `/gift/${event.slug}`, enabled: event.giftingEnabled },
+                  { l: 'Nomination Page', p: `/e/${event.slug}/nominate`, enabled: true },
+                  { l: 'Nominees Page', p: `/e/${event.slug}/nominees`, enabled: true },
                   { l: 'Vote Page', p: `/e/${event.slug}/vote`, enabled: true },
+                  { l: 'Leaderboard Page', p: `/e/${event.slug}/leaderboard`, enabled: true },
                   { l: 'Thank You Page', p: `/e/${event.slug}/thanks`, enabled: true },
                   { l: 'Owner Token View', p: `/event-owner/${event.ownerAccessToken}`, enabled: true },
                   { l: 'Owner Dashboard Login', p: `/owner/login`, enabled: true },
@@ -1649,6 +1714,9 @@ export default function EventDetailPage() {
                   { t: 'ITINERARY', l: 'Itinerary Page', f: 'itineraryPageTemplateId', e: event.itineraryEnabled, icon: '🗓️', desc: 'Public itinerary tracking page' },
                   { t: 'GIFTING', l: 'Gifting Page', f: 'giftingPageTemplateId', e: event.giftingEnabled, icon: '🎁', desc: 'Guest gifting checkout page' },
                   { t: 'VOTING', l: 'Voting Page', f: 'votingPageTemplateId', e: true, icon: '🗳️', desc: 'Public voting page and embed flow' },
+                  { t: 'VOTING_NOMINATION', l: 'Nomination Page', f: 'nominationPageTemplateId', e: true, icon: '✍️', desc: 'Public nomination intake form' },
+                  { t: 'VOTING_NOMINEES', l: 'Nominees Page', f: 'nomineesPageTemplateId', e: true, icon: '🏆', desc: 'Category-based nominees listing with vote CTAs' },
+                  { t: 'VOTING_LEADERBOARD', l: 'Leaderboard Page', f: 'leaderboardPageTemplateId', e: true, icon: '📈', desc: 'Live ranking board by category' },
                 ].map(x => (
                   <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-brand-300 hover:shadow-md')}>
                     <div className="flex items-start gap-3">
@@ -2770,9 +2838,15 @@ export default function EventDetailPage() {
           <div className="bg-white rounded-xl border border-surface-200 p-6">
             <h3 className="text-lg font-semibold text-brand-900">Voting</h3>
             <p className="text-sm text-surface-600 mt-1">
-              Voting configuration, nominees, leaderboard, and analytics are managed in the owner voting dashboard.
+              Configure voting mode, contests, nominees, public nomination review, and analytics from the admin voting console.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href={`/admin/events/${event.id}/voting`}
+                className="btn-primary"
+              >
+                Open Admin Voting Console
+              </Link>
               {event.ownerId ? (
                 <Link
                   href={`/owner/events/${event.id}/voting`}
@@ -2780,11 +2854,11 @@ export default function EventDetailPage() {
                   className="btn-outline"
                 >
                   {Icons.external}
-                  <span className="ml-2">Open Owner Voting Dashboard</span>
+                  <span className="ml-2">Open Owner Voting Console</span>
                 </Link>
               ) : (
                 <span className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Assign an owner first to enable owner voting dashboard management.
+                  Assign an owner to enable owner-side voting console access.
                 </span>
               )}
               <Link href={`/e/${event.slug}/vote`} target="_blank" className="btn-outline">
@@ -2813,6 +2887,20 @@ export default function EventDetailPage() {
                 >
                   {Icons.copy}
                   <span className="text-sm font-medium text-brand-900 truncate">Copy Public Nomination URL</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/nominees`)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Nominees Listing URL</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/leaderboard`)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Leaderboard URL</span>
                 </button>
                 <button
                   onClick={() => handleCopyLink('/embed/vote.js')}

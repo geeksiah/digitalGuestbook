@@ -112,6 +112,9 @@ const copyTemplateAssetsForEvent = async (eventId, assignments) => {
     await copyAssets(assignments.itineraryPageTemplateId, 'itineraryPageTemplateId');
     await copyAssets(assignments.giftingPageTemplateId, 'giftingPageTemplateId');
     await copyAssets(assignments.votingPageTemplateId, 'votingPageTemplateId');
+    await copyAssets(assignments.nominationPageTemplateId, 'nominationPageTemplateId');
+    await copyAssets(assignments.nomineesPageTemplateId, 'nomineesPageTemplateId');
+    await copyAssets(assignments.leaderboardPageTemplateId, 'leaderboardPageTemplateId');
 };
 exports.copyTemplateAssetsForEvent = copyTemplateAssetsForEvent;
 /**

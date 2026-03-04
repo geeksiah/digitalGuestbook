@@ -15,6 +15,9 @@ interface TemplateAssignments {
     itineraryPageTemplateId?: string | null;
     giftingPageTemplateId?: string | null;
     votingPageTemplateId?: string | null;
+    nominationPageTemplateId?: string | null;
+    nomineesPageTemplateId?: string | null;
+    leaderboardPageTemplateId?: string | null;
 }
 /**
  * Copy template assets to event-specific directory for isolation

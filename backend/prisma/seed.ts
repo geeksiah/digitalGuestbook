@@ -3,6 +3,11 @@
 
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_VOTING_TEMPLATE } from '../src/utils/defaultVotingTemplate.js';
+import {
+  DEFAULT_VOTING_LEADERBOARD_TEMPLATE,
+  DEFAULT_VOTING_NOMINATION_TEMPLATE,
+  DEFAULT_VOTING_NOMINEES_TEMPLATE,
+} from '../src/utils/defaultVotingSplitTemplates.js';
 
 const prisma = new PrismaClient();
 
@@ -758,6 +763,28 @@ header { padding: 16px; }
     },
   });
   console.log(`✅ Created: ${votingTemplate.name} ⭐ VOTING STARTER`);
+
+  for (const template of [
+    DEFAULT_VOTING_NOMINATION_TEMPLATE,
+    DEFAULT_VOTING_NOMINEES_TEMPLATE,
+    DEFAULT_VOTING_LEADERBOARD_TEMPLATE,
+  ]) {
+    await prisma.template.upsert({
+      where: { id: template.id },
+      update: {},
+      create: {
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        type: template.type,
+        isDefault: template.isDefault,
+        htmlContent: template.htmlContent,
+        cssContent: template.cssContent,
+        jsContent: template.jsContent,
+      },
+    });
+    console.log(`✅ Created: ${template.name} ⭐ VOTING SPLIT`);
+  }
 
   console.log('');
   console.log('✨ Database seeded successfully!');

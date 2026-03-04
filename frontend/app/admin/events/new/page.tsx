@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, templatesApi, ownersApi, API_BASE_URL } from '@/lib/api';
+import { adminVotingApi, eventsApi, templatesApi, ownersApi, API_BASE_URL } from '@/lib/api';
 import { slugify, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -76,6 +76,7 @@ export default function NewEventPage() {
     strictInviteOnly: false,
     itineraryEnabled: false,
     giftingEnabled: false,
+    votingEnabled: false,
     rsvpMode: 'free' as 'free' | 'paid',
     ticketingEnabled: false,
     feeOverridesEnabled: false,
@@ -96,6 +97,10 @@ export default function NewEventPage() {
     eventEndedTemplateId: '',
     itineraryPageTemplateId: '',
     giftingPageTemplateId: '',
+    votingPageTemplateId: '',
+    nominationPageTemplateId: '',
+    nomineesPageTemplateId: '',
+    leaderboardPageTemplateId: '',
   });
 
   useEffect(() => {
@@ -172,6 +177,10 @@ export default function NewEventPage() {
           if (t.type === 'EVENT_ENDED') defaults.eventEndedTemplateId = t.id;
           if (t.type === 'ITINERARY') defaults.itineraryPageTemplateId = t.id;
           if (t.type === 'GIFTING') defaults.giftingPageTemplateId = t.id;
+          if (t.type === 'VOTING') defaults.votingPageTemplateId = t.id;
+          if (t.type === 'VOTING_NOMINATION') defaults.nominationPageTemplateId = t.id;
+          if (t.type === 'VOTING_NOMINEES') defaults.nomineesPageTemplateId = t.id;
+          if (t.type === 'VOTING_LEADERBOARD') defaults.leaderboardPageTemplateId = t.id;
         }
       });
       setFormData(prev => ({ ...prev, ...defaults }));
@@ -273,7 +282,20 @@ export default function NewEventPage() {
         eventEndedTemplateId: formData.eventEndedTemplateId || undefined,
         itineraryPageTemplateId: formData.itineraryPageTemplateId || undefined,
         giftingPageTemplateId: formData.giftingPageTemplateId || undefined,
+        votingPageTemplateId: formData.votingEnabled ? (formData.votingPageTemplateId || undefined) : undefined,
+        nominationPageTemplateId: formData.votingEnabled ? (formData.nominationPageTemplateId || undefined) : undefined,
+        nomineesPageTemplateId: formData.votingEnabled ? (formData.nomineesPageTemplateId || undefined) : undefined,
+        leaderboardPageTemplateId: formData.votingEnabled ? (formData.leaderboardPageTemplateId || undefined) : undefined,
       });
+
+      if (formData.votingEnabled) {
+        await adminVotingApi.updateVotingConfig(response.data.event.id, {
+          isEnabled: true,
+          allowFreeVotes: true,
+          allowPaidVotes: false,
+          allowPublicNominations: true,
+        });
+      }
 
       if (coverFile) {
         const coverData = new FormData();
@@ -799,6 +821,19 @@ export default function NewEventPage() {
                 onChange={(e) => setFormData({ ...formData, giftingEnabled: e.target.checked })}
               />
             </label>
+
+            <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
+              <div>
+                <p className="font-medium text-navy-900">Enable Voting</p>
+                <p className="text-sm text-surface-600">Create nomination, nominees, vote, and leaderboard pages for this event.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="w-5 h-5 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
+                checked={formData.votingEnabled}
+                onChange={(e) => setFormData({ ...formData, votingEnabled: e.target.checked })}
+              />
+            </label>
           </div>
         </div>
 
@@ -1066,6 +1101,38 @@ export default function NewEventPage() {
                 value={formData.giftingPageTemplateId}
                 onChange={(id) => setFormData({ ...formData, giftingPageTemplateId: id })}
                 disabled={!formData.giftingEnabled}
+              />
+
+              <TemplateSelect
+                type="VOTING"
+                label="Voting Page"
+                value={formData.votingPageTemplateId}
+                onChange={(id) => setFormData({ ...formData, votingPageTemplateId: id })}
+                disabled={!formData.votingEnabled}
+              />
+
+              <TemplateSelect
+                type="VOTING_NOMINATION"
+                label="Nomination Page"
+                value={formData.nominationPageTemplateId}
+                onChange={(id) => setFormData({ ...formData, nominationPageTemplateId: id })}
+                disabled={!formData.votingEnabled}
+              />
+
+              <TemplateSelect
+                type="VOTING_NOMINEES"
+                label="Nominees Page"
+                value={formData.nomineesPageTemplateId}
+                onChange={(id) => setFormData({ ...formData, nomineesPageTemplateId: id })}
+                disabled={!formData.votingEnabled}
+              />
+
+              <TemplateSelect
+                type="VOTING_LEADERBOARD"
+                label="Leaderboard Page"
+                value={formData.leaderboardPageTemplateId}
+                onChange={(id) => setFormData({ ...formData, leaderboardPageTemplateId: id })}
+                disabled={!formData.votingEnabled}
               />
             </div>
           )}

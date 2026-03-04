@@ -9,8 +9,13 @@ const auth_js_1 = require("../middleware/auth.js");
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const router = (0, express_1.Router)();
-router.use(auth_js_1.authenticateOwnerAccount);
-const DEFAULT_VOTING_TEMPLATE_ID = 'default-voting';
+router.use(auth_js_1.authenticateAdminOrOwnerAccount);
+const DEFAULT_VOTING_TEMPLATE_IDS = {
+    VOTING: 'default-voting',
+    VOTING_NOMINATION: 'default-voting-nomination',
+    VOTING_NOMINEES: 'default-voting-nominees',
+    VOTING_LEADERBOARD: 'default-voting-leaderboard',
+};
 const parseJson = (value, fallback) => {
     if (!value)
         return fallback;
@@ -29,50 +34,100 @@ const nominationFieldSchema = zod_1.z.object({
     placeholder: zod_1.z.string().max(200).optional().nullable(),
     options: zod_1.z.array(zod_1.z.string().max(120)).optional(),
 });
-const ensureOwnerEvent = async (eventId, ownerId) => {
-    const event = await prisma_js_1.default.event.findFirst({
-        where: { id: eventId, ownerId },
-        select: {
-            id: true,
-            name: true,
-            ownerId: true,
-            votingPageTemplateId: true,
-            votingConfig: true,
-        },
-    });
+const ensureManagedEvent = async (eventId, ownerId, adminId) => {
+    const event = adminId
+        ? await prisma_js_1.default.event.findUnique({
+            where: { id: eventId },
+            select: {
+                id: true,
+                name: true,
+                ownerId: true,
+                votingPageTemplateId: true,
+                nominationPageTemplateId: true,
+                nomineesPageTemplateId: true,
+                leaderboardPageTemplateId: true,
+                votingConfig: true,
+            },
+        })
+        : await prisma_js_1.default.event.findFirst({
+            where: { id: eventId, ownerId },
+            select: {
+                id: true,
+                name: true,
+                ownerId: true,
+                votingPageTemplateId: true,
+                nominationPageTemplateId: true,
+                nomineesPageTemplateId: true,
+                leaderboardPageTemplateId: true,
+                votingConfig: true,
+            },
+        });
     if (!event)
         throw new errorHandler_js_1.AppError('Event not found', 404);
     return event;
 };
-const assignDefaultVotingTemplateIfNeeded = async (eventId, currentVotingPageTemplateId) => {
-    if (currentVotingPageTemplateId)
-        return;
-    const hardDefault = await prisma_js_1.default.template.findFirst({
-        where: {
-            id: DEFAULT_VOTING_TEMPLATE_ID,
-            type: 'VOTING',
-        },
-        select: { id: true },
-    });
-    const defaultVotingTemplate = hardDefault ??
-        (await prisma_js_1.default.template.findFirst({
+const getActorIds = (req) => {
+    const ownerId = String(req.ownerId || '').trim();
+    const adminId = String(req.admin?.id || '').trim();
+    return {
+        ownerId: ownerId || null,
+        adminId: adminId || null,
+    };
+};
+const assignDefaultVotingTemplateIfNeeded = async (eventId, currentTemplates) => {
+    const resolveDefaultTemplateId = async (templateType) => {
+        const preferredId = DEFAULT_VOTING_TEMPLATE_IDS[templateType];
+        const hardDefault = await prisma_js_1.default.template.findFirst({
             where: {
-                type: 'VOTING',
+                id: preferredId,
+                type: templateType,
+            },
+            select: { id: true },
+        });
+        if (hardDefault?.id)
+            return hardDefault.id;
+        const fallback = await prisma_js_1.default.template.findFirst({
+            where: {
+                type: templateType,
                 isDefault: true,
             },
             orderBy: { createdAt: 'asc' },
             select: { id: true },
-        }));
-    if (!defaultVotingTemplate)
+        });
+        return fallback?.id || null;
+    };
+    const patch = {};
+    if (!currentTemplates.votingPageTemplateId) {
+        const id = await resolveDefaultTemplateId('VOTING');
+        if (id)
+            patch.votingPageTemplateId = id;
+    }
+    if (!currentTemplates.nominationPageTemplateId) {
+        const id = await resolveDefaultTemplateId('VOTING_NOMINATION');
+        if (id)
+            patch.nominationPageTemplateId = id;
+    }
+    if (!currentTemplates.nomineesPageTemplateId) {
+        const id = await resolveDefaultTemplateId('VOTING_NOMINEES');
+        if (id)
+            patch.nomineesPageTemplateId = id;
+    }
+    if (!currentTemplates.leaderboardPageTemplateId) {
+        const id = await resolveDefaultTemplateId('VOTING_LEADERBOARD');
+        if (id)
+            patch.leaderboardPageTemplateId = id;
+    }
+    if (!Object.keys(patch).length)
         return;
     await prisma_js_1.default.event.updateMany({
         where: {
             id: eventId,
-            votingPageTemplateId: null,
+            ...(patch.votingPageTemplateId ? { votingPageTemplateId: null } : {}),
+            ...(patch.nominationPageTemplateId ? { nominationPageTemplateId: null } : {}),
+            ...(patch.nomineesPageTemplateId ? { nomineesPageTemplateId: null } : {}),
+            ...(patch.leaderboardPageTemplateId ? { leaderboardPageTemplateId: null } : {}),
         },
-        data: {
-            votingPageTemplateId: defaultVotingTemplate.id,
-        },
+        data: patch,
     });
 };
 const configSchema = zod_1.z.object({
@@ -115,9 +170,9 @@ const nominationReviewSchema = zod_1.z.object({
     createNomineeOnApprove: zod_1.z.boolean().optional(),
 });
 router.get('/events/:eventId/voting/config', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId } = req.params;
-    const event = await ensureOwnerEvent(eventId, ownerId);
+    const event = await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     let config = event.votingConfig;
     if (!config) {
         config = await prisma_js_1.default.votingEventConfig.create({
@@ -127,14 +182,19 @@ router.get('/events/:eventId/voting/config', (0, errorHandler_js_1.asyncHandler)
         });
     }
     if (config.isEnabled) {
-        await assignDefaultVotingTemplateIfNeeded(eventId, event.votingPageTemplateId);
+        await assignDefaultVotingTemplateIfNeeded(eventId, {
+            votingPageTemplateId: event.votingPageTemplateId,
+            nominationPageTemplateId: event.nominationPageTemplateId,
+            nomineesPageTemplateId: event.nomineesPageTemplateId,
+            leaderboardPageTemplateId: event.leaderboardPageTemplateId,
+        });
     }
     res.json({ config });
 }));
 router.put('/events/:eventId/voting/config', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = configSchema.parse(req.body || {});
     const config = await prisma_js_1.default.votingEventConfig.upsert({
         where: { eventId },
@@ -173,14 +233,19 @@ router.put('/events/:eventId/voting/config', (0, errorHandler_js_1.asyncHandler)
         },
     });
     if (config.isEnabled) {
-        await assignDefaultVotingTemplateIfNeeded(eventId, null);
+        await assignDefaultVotingTemplateIfNeeded(eventId, {
+            votingPageTemplateId: null,
+            nominationPageTemplateId: null,
+            nomineesPageTemplateId: null,
+            leaderboardPageTemplateId: null,
+        });
     }
     res.json({ config });
 }));
 router.get('/events/:eventId/voting/contests', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId } = req.params;
-    const event = await ensureOwnerEvent(eventId, ownerId);
+    const event = await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const contests = await prisma_js_1.default.votingContest.findMany({
         where: { eventId: event.id },
         include: {
@@ -212,9 +277,9 @@ router.get('/events/:eventId/voting/contests', (0, errorHandler_js_1.asyncHandle
     });
 }));
 router.post('/events/:eventId/voting/contests', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = contestSchema.parse(req.body || {});
     const created = await prisma_js_1.default.votingContest.create({
         data: {
@@ -234,9 +299,9 @@ router.post('/events/:eventId/voting/contests', (0, errorHandler_js_1.asyncHandl
     res.status(201).json({ contest: created });
 }));
 router.patch('/events/:eventId/voting/contests/:contestId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, contestId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = contestSchema.partial().parse(req.body || {});
     const contest = await prisma_js_1.default.votingContest.findFirst({
         where: { id: contestId, eventId },
@@ -270,9 +335,9 @@ router.patch('/events/:eventId/voting/contests/:contestId', (0, errorHandler_js_
     res.json({ contest: updated });
 }));
 router.delete('/events/:eventId/voting/contests/:contestId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, contestId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const contest = await prisma_js_1.default.votingContest.findFirst({
         where: { id: contestId, eventId },
         select: { id: true },
@@ -283,9 +348,9 @@ router.delete('/events/:eventId/voting/contests/:contestId', (0, errorHandler_js
     res.json({ message: 'Contest deleted' });
 }));
 router.get('/events/:eventId/voting/contests/:contestId/options', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, contestId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const contest = await prisma_js_1.default.votingContest.findFirst({
         where: { id: contestId, eventId },
         select: { id: true, title: true },
@@ -299,9 +364,9 @@ router.get('/events/:eventId/voting/contests/:contestId/options', (0, errorHandl
     res.json({ contest, options });
 }));
 router.post('/events/:eventId/voting/contests/:contestId/options', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, contestId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = optionSchema.parse(req.body || {});
     const contest = await prisma_js_1.default.votingContest.findFirst({
         where: { id: contestId, eventId },
@@ -324,9 +389,9 @@ router.post('/events/:eventId/voting/contests/:contestId/options', (0, errorHand
     res.status(201).json({ option });
 }));
 router.patch('/events/:eventId/voting/options/:optionId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, optionId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = optionSchema.partial().parse(req.body || {});
     const option = await prisma_js_1.default.votingOption.findFirst({
         where: { id: optionId, eventId },
@@ -352,9 +417,9 @@ router.patch('/events/:eventId/voting/options/:optionId', (0, errorHandler_js_1.
     res.json({ option: updated });
 }));
 router.delete('/events/:eventId/voting/options/:optionId', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, optionId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const option = await prisma_js_1.default.votingOption.findFirst({
         where: { id: optionId, eventId },
         select: { id: true },
@@ -365,9 +430,9 @@ router.delete('/events/:eventId/voting/options/:optionId', (0, errorHandler_js_1
     res.json({ message: 'Nominee deleted' });
 }));
 router.get('/events/:eventId/voting/nominations', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const status = String(req.query.status || '').trim().toUpperCase();
     const contestId = String(req.query.contestId || '').trim();
     const limit = Math.min(200, Math.max(1, Number(req.query.limit || 100)));
@@ -400,9 +465,9 @@ router.get('/events/:eventId/voting/nominations', (0, errorHandler_js_1.asyncHan
     res.json({ nominations });
 }));
 router.patch('/events/:eventId/voting/nominations/:nominationId/review', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId, nominationId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = nominationReviewSchema.parse(req.body || {});
     const nomination = await prisma_js_1.default.votingNomination.findFirst({
         where: { id: nominationId, eventId },
@@ -437,7 +502,7 @@ router.patch('/events/:eventId/voting/nominations/:nominationId/review', (0, err
             data: {
                 status: input.status,
                 reviewedAt: new Date(),
-                reviewedByOwnerId: ownerId,
+                reviewedByOwnerId: ownerId || null,
                 reviewNotes: input.reviewNotes === undefined ? null : input.reviewNotes,
                 approvedOptionId,
             },
@@ -454,9 +519,9 @@ router.patch('/events/:eventId/voting/nominations/:nominationId/review', (0, err
     res.json({ nomination: reviewed });
 }));
 router.get('/events/:eventId/voting/analytics', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const ownerId = String(req.ownerId || '');
+    const { ownerId, adminId } = getActorIds(req);
     const { eventId } = req.params;
-    await ensureOwnerEvent(eventId, ownerId);
+    await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const [records, contests, options, voteRevenue, paidIntentsCount, nominationStats] = await Promise.all([
         prisma_js_1.default.voteRecord.findMany({
             where: { eventId },

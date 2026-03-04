@@ -257,28 +257,28 @@ export default function CheckInPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-navy-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      <div className="min-h-screen section-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-900" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
         <div className="text-center">
-          <h1 className="text-2xl font-display font-bold text-white mb-4">{error}</h1>
+          <h1 className="text-2xl font-display font-bold text-brand-900 mb-4">{error}</h1>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-navy-900 flex flex-col touch-manipulation">
+    <div className="min-h-screen section-gradient flex flex-col touch-manipulation">
       {/* Header - Compact for tablet/mobile */}
-      <header className="p-4 sm:p-6 text-center border-b border-white/10 safe-area-top">
-        <h1 className="text-xl sm:text-2xl font-display font-bold text-white truncate">{eventName}</h1>
-        <p className="text-primary-500 text-sm sm:text-base">Guest Check-In</p>
+      <header className="p-4 sm:p-6 text-center border-b border-surface-200 safe-area-top">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 truncate">{eventName}</h1>
+        <p className="text-red-500 text-sm sm:text-base">Guest Check-In</p>
       </header>
 
       {/* Main Content - Fills available space */}
@@ -291,14 +291,14 @@ export default function CheckInPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-display font-bold text-white mb-2">Welcome!</h2>
-            <p className="text-xl sm:text-2xl text-primary-500 mb-2">{guestInfo.name}</p>
+            <h2 className="text-3xl sm:text-4xl font-display font-bold text-brand-900 mb-2">Welcome!</h2>
+            <p className="text-xl sm:text-2xl text-red-500 mb-2">{guestInfo.name}</p>
             {guestInfo.guestCount > 1 && (
               <p className="text-surface-400">Party of {guestInfo.guestCount}</p>
             )}
             <button 
               onClick={reset} 
-              className="btn-primary mt-6 sm:mt-8 px-10 sm:px-12 py-3 text-base sm:text-lg active:scale-95 transition-transform"
+              className="btn-accent mt-6 sm:mt-8 px-10 sm:px-12 py-3 text-base sm:text-lg active:scale-95 transition-transform"
             >
               Next Guest
             </button>
@@ -311,11 +311,11 @@ export default function CheckInPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-display font-bold text-white mb-2">Check-In Failed</h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-bold text-brand-900 mb-2">Check-In Failed</h2>
             <p className="text-red-400 mb-6 sm:mb-8 text-sm sm:text-base">{errorMessage}</p>
             <button 
               onClick={reset} 
-              className="btn-primary px-10 sm:px-12 py-3 text-base sm:text-lg active:scale-95 transition-transform"
+              className="btn-accent px-10 sm:px-12 py-3 text-base sm:text-lg active:scale-95 transition-transform"
             >
               Try Again
             </button>
@@ -324,26 +324,26 @@ export default function CheckInPage() {
           /* Checking State */
           <div className="text-center">
             <div className="w-16 h-16 mx-auto mb-4">
-              <svg className="animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin text-red-500" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             </div>
-            <p className="text-white text-lg">Verifying...</p>
+            <p className="text-brand-900 text-lg">Verifying...</p>
           </div>
         ) : (
           /* Input State */
-          <div className="w-full max-w-lg">
+          <div className="w-full max-w-lg card-premium p-4 sm:p-6">
             {/* Mode Toggle */}
             {hasCamera && (
-              <div className="flex bg-white/10 rounded-xl p-1 mb-6">
+              <div className="flex bg-surface-100 rounded-xl p-1 mb-6">
                 <button
                   onClick={() => setInputMode('scan')}
                   className={cn(
                     'flex-1 py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2',
                     inputMode === 'scan'
-                      ? 'bg-primary-500 text-navy-900'
-                      : 'text-white hover:bg-white/10'
+                      ? 'bg-red-500 text-white'
+                      : 'text-surface-700 hover:bg-white'
                   )}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -357,8 +357,8 @@ export default function CheckInPage() {
                   className={cn(
                     'flex-1 py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2',
                     inputMode === 'manual'
-                      ? 'bg-primary-500 text-navy-900'
-                      : 'text-white hover:bg-white/10'
+                      ? 'bg-red-500 text-white'
+                      : 'text-surface-700 hover:bg-white'
                   )}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -384,18 +384,18 @@ export default function CheckInPage() {
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-48 h-48 sm:w-64 sm:h-64 relative">
                       {/* Corner markers */}
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary-500 rounded-tl-lg" />
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary-500 rounded-tr-lg" />
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary-500 rounded-bl-lg" />
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary-500 rounded-br-lg" />
+                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-red-500 rounded-tl-lg" />
+                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-red-500 rounded-tr-lg" />
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-red-500 rounded-bl-lg" />
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-red-500 rounded-br-lg" />
                       {/* Scanning line animation */}
                       {scannerActive && (
-                        <div className="absolute left-2 right-2 h-0.5 bg-primary-500 animate-scan" />
+                        <div className="absolute left-2 right-2 h-0.5 bg-red-500 animate-scan" />
                       )}
                     </div>
                   </div>
                 </div>
-                <p className="text-center text-surface-400 text-sm sm:text-base">
+                <p className="text-center text-surface-600 text-sm sm:text-base">
                   Position the QR code within the frame
                 </p>
               </div>
@@ -404,8 +404,8 @@ export default function CheckInPage() {
             {/* Manual Code Entry Mode */}
             {inputMode === 'manual' && (
               <div className="text-center">
-                <h2 className="text-xl sm:text-2xl font-display font-bold text-white mb-2">Enter Access Code</h2>
-                <p className="text-surface-400 mb-6 sm:mb-8 text-sm sm:text-base">Enter your 6-digit invitation code</p>
+                <h2 className="text-xl sm:text-2xl font-display font-bold text-brand-900 mb-2">Enter Access Code</h2>
+                <p className="text-surface-600 mb-6 sm:mb-8 text-sm sm:text-base">Enter your 6-digit invitation code</p>
 
                 <div className="flex justify-center gap-2 sm:gap-3 mb-6" onPaste={handleCodePaste}>
                   {accessCode.map((digit, index) => (
@@ -421,8 +421,8 @@ export default function CheckInPage() {
                       onKeyDown={(e) => handleKeyDown(index, e)}
                       onPaste={handleCodePaste}
                       className={cn(
-                        'w-11 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-bold rounded-xl border-2 bg-white/10 text-white',
-                        'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
+                        'w-11 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-bold rounded-xl border-2 bg-white text-brand-900',
+                        'focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20',
                         'transition-all'
                       )}
                       autoFocus={index === 0}
@@ -436,16 +436,16 @@ export default function CheckInPage() {
       </main>
 
       {/* Footer - Safe area for mobile */}
-      <footer className="p-4 text-center border-t border-white/10 safe-area-bottom space-y-2">
+      <footer className="p-4 text-center border-t border-surface-200 safe-area-bottom space-y-2">
         <img 
           src="/img/logo-light.svg" 
           alt="EventPeepo" 
           className="h-6 w-auto mx-auto opacity-80"
         />
-        <p className="text-surface-400 text-xs">
-          © {new Date().getFullYear()} EventPeepo. All rights reserved.
+        <p className="text-surface-500 text-xs">
+          (c) {new Date().getFullYear()} EventPeepo. All rights reserved.
         </p>
-        <p className="text-surface-500 text-xs sm:text-sm">
+        <p className="text-surface-600 text-xs sm:text-sm">
           {inputMode === 'scan' ? 'Scan QR code from invitation' : 'Enter 6-digit code from invitation'}
         </p>
       </footer>
@@ -469,3 +469,4 @@ export default function CheckInPage() {
     </div>
   );
 }
+

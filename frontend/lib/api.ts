@@ -767,6 +767,10 @@ export const votingApi = {
     axios.get(`${API_BASE_URL}/api/voting/public/${slug}/leaderboard`, {
       params: contestId ? { contestId } : undefined,
     }),
+  nominees: (slug: string, contestId?: string) =>
+    axios.get(`${API_BASE_URL}/api/voting/public/${slug}/nominees`, {
+      params: contestId ? { contestId } : undefined,
+    }),
   createEmbedToken: (slug: string) =>
     axios.post(`${API_BASE_URL}/api/voting/embed/token`, { slug }),
   getNominationForm: (slug: string) =>
@@ -785,6 +789,39 @@ export const votingApi = {
       embedToken?: string;
     }
   ) => axios.post(`${API_BASE_URL}/api/voting/public/${slug}/nominations`, data),
+};
+
+export const adminVotingApi = {
+  getVotingContests: (eventId: string) =>
+    api.get(`/owner-dashboard/events/${eventId}/voting/contests`),
+  getVotingConfig: (eventId: string) =>
+    api.get(`/owner-dashboard/events/${eventId}/voting/config`),
+  updateVotingConfig: (eventId: string, data: any) =>
+    api.put(`/owner-dashboard/events/${eventId}/voting/config`, data),
+  createVotingContest: (eventId: string, data: any) =>
+    api.post(`/owner-dashboard/events/${eventId}/voting/contests`, data),
+  updateVotingContest: (eventId: string, contestId: string, data: any) =>
+    api.patch(`/owner-dashboard/events/${eventId}/voting/contests/${contestId}`, data),
+  deleteVotingContest: (eventId: string, contestId: string) =>
+    api.delete(`/owner-dashboard/events/${eventId}/voting/contests/${contestId}`),
+  getVotingOptions: (eventId: string, contestId: string) =>
+    api.get(`/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`),
+  createVotingOption: (eventId: string, contestId: string, data: any) =>
+    api.post(`/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, data),
+  updateVotingOption: (eventId: string, optionId: string, data: any) =>
+    api.patch(`/owner-dashboard/events/${eventId}/voting/options/${optionId}`, data),
+  deleteVotingOption: (eventId: string, optionId: string) =>
+    api.delete(`/owner-dashboard/events/${eventId}/voting/options/${optionId}`),
+  getVotingAnalytics: (eventId: string) =>
+    api.get(`/owner-dashboard/events/${eventId}/voting/analytics`),
+  getVotingNominations: (eventId: string, params?: { status?: string; contestId?: string; limit?: number }) =>
+    api.get(`/owner-dashboard/events/${eventId}/voting/nominations`, { params }),
+  reviewVotingNomination: (
+    eventId: string,
+    nominationId: string,
+    data: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; createNomineeOnApprove?: boolean }
+  ) =>
+    api.patch(`/owner-dashboard/events/${eventId}/voting/nominations/${nominationId}/review`, data),
 };
 
 

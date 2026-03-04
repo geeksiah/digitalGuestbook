@@ -9,6 +9,11 @@ import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import prisma from './utils/prisma.js';
 import { DEFAULT_VOTING_TEMPLATE } from './utils/defaultVotingTemplate.js';
+import {
+  DEFAULT_VOTING_LEADERBOARD_TEMPLATE,
+  DEFAULT_VOTING_NOMINATION_TEMPLATE,
+  DEFAULT_VOTING_NOMINEES_TEMPLATE,
+} from './utils/defaultVotingSplitTemplates.js';
 
 // Load environment variables
 dotenv.config();
@@ -165,6 +170,27 @@ async function initializeDatabase() {
         jsContent: DEFAULT_VOTING_TEMPLATE.jsContent,
       },
     });
+
+    for (const template of [
+      DEFAULT_VOTING_NOMINATION_TEMPLATE,
+      DEFAULT_VOTING_NOMINEES_TEMPLATE,
+      DEFAULT_VOTING_LEADERBOARD_TEMPLATE,
+    ]) {
+      await prisma.template.upsert({
+        where: { id: template.id },
+        update: {},
+        create: {
+          id: template.id,
+          name: template.name,
+          description: template.description,
+          type: template.type,
+          isDefault: template.isDefault,
+          htmlContent: template.htmlContent,
+          cssContent: template.cssContent,
+          jsContent: template.jsContent,
+        },
+      });
+    }
 
     // Create system settings if not exists
     const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });

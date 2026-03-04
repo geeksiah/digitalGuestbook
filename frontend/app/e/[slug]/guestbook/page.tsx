@@ -37,20 +37,19 @@ export default function GuestbookPage() {
   const urlToken = searchParams.get('token');
 
   // Backend template check (render backend HTML if assigned)
- const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'guestbook');
-// Show loading spinner while checking for backend template
-if (templateLoading) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
-    </div>
-  );
-}
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'guestbook');
+  if (templateLoading) {
+    return (
+      <div className="min-h-screen section-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
 
-// If backend template is available, render it instead of default UI
-if (hasTemplate) {
-  return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
-}
+  // If backend template is available, render it instead of default UI
+  if (hasTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
+  }
 
   
 
@@ -606,28 +605,18 @@ if (hasTemplate) {
   };
 
   // ==================== RENDER STATES ====================
-if (templateLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
-      </div>
-    );
-  }
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
-  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      <div className="min-h-screen section-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-900" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-4">
             <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -635,7 +624,7 @@ if (templateLoading) {
             </svg>
           </div>
           <h1 className="text-xl font-display font-bold text-white mb-2">{error}</h1>
-          <Link href={`/e/${slug}`} className="btn-primary mt-4 inline-block">Back to Event</Link>
+          <Link href={`/e/${slug}`} className="btn-accent mt-4 inline-block">Back to Event</Link>
         </div>
       </div>
     );
@@ -644,7 +633,7 @@ if (templateLoading) {
   // Access code entry
   if (needsAuth) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
             <Link href={`/e/${slug}`} className="inline-flex items-center text-surface-400 hover:text-white mb-4 transition-colors">
@@ -673,7 +662,7 @@ if (templateLoading) {
                   disabled={verifying}
                   className={cn(
                     'w-11 h-14 sm:w-12 sm:h-16 text-center text-2xl font-bold rounded-xl border-2 bg-surface-50',
-                    'focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20',
+                    'focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/20',
                     'disabled:opacity-50 transition-all'
                   )}
                   autoFocus={index === 0}
@@ -703,7 +692,7 @@ if (templateLoading) {
   // Permission denied screen
   if (permissionState === 'denied' && (viewState === 'video' || viewState === 'audio')) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-20 h-20 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-6">
             <svg className="w-10 h-10 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -726,7 +715,7 @@ if (templateLoading) {
 
           <div className="flex gap-3">
             <button onClick={backToMenu} className="btn-outline flex-1">Go Back</button>
-            <button onClick={() => window.location.reload()} className="btn-primary flex-1">Refresh Page</button>
+            <button onClick={() => globalThis.window.location.reload()} className="btn-accent flex-1">Refresh Page</button>
           </div>
         </div>
       </div>
@@ -736,7 +725,7 @@ if (templateLoading) {
   // Success screen
   if (viewState === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-24 h-24 mx-auto rounded-full bg-green-100 flex items-center justify-center mb-6 animate-in zoom-in duration-300">
             <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -746,7 +735,7 @@ if (templateLoading) {
           <h1 className="text-3xl font-display font-bold text-navy-900 mb-3">Thank You!</h1>
           <p className="text-surface-600 mb-8">Your message has been saved. The couple will love it!</p>
           <div className="space-y-3">
-            <button onClick={recordAnother} className="btn-primary w-full py-3">
+            <button onClick={recordAnother} className="btn-accent w-full py-3">
               Leave Another Message
             </button>
             <Link href={`/e/${slug}`} className="btn-outline w-full py-3 block text-center">
@@ -760,12 +749,12 @@ if (templateLoading) {
 
   // Main guestbook interface
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex flex-col">
+    <div className="min-h-screen section-gradient flex flex-col">
       {/* Header */}
       <header className="p-4 sm:p-6 flex-shrink-0">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           {viewState === 'menu' ? (
-            <Link href={`/e/${slug}`} className="inline-flex items-center text-surface-400 hover:text-white transition-colors">
+            <Link href={`/e/${slug}`} className="inline-flex items-center text-surface-600 hover:text-brand-900 transition-colors">
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
@@ -773,7 +762,7 @@ if (templateLoading) {
               <span className="sm:hidden">Back</span>
             </Link>
           ) : (
-            <button onClick={backToMenu} className="inline-flex items-center text-surface-400 hover:text-white transition-colors">
+            <button onClick={backToMenu} className="inline-flex items-center text-surface-600 hover:text-brand-900 transition-colors">
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -781,8 +770,8 @@ if (templateLoading) {
             </button>
           )}
           <div className="text-right">
-            <p className="text-white font-display font-semibold text-sm sm:text-base truncate max-w-[150px] sm:max-w-none">{eventName}</p>
-            <p className="text-primary-500 text-xs sm:text-sm">Digital Guestbook</p>
+            <p className="text-brand-900 font-display font-semibold text-sm sm:text-base truncate max-w-[150px] sm:max-w-none">{eventName}</p>
+            <p className="text-red-500 text-xs sm:text-sm">Digital Guestbook</p>
           </div>
         </div>
       </header>
@@ -792,7 +781,7 @@ if (templateLoading) {
         <div className="w-full max-w-lg">
           {/* MENU VIEW */}
           {viewState === 'menu' && (
-            <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 animate-in fade-in duration-300">
+            <div className="card-premium p-6 sm:p-8 animate-in fade-in duration-300">
               <div className="text-center mb-8">
                 <h1 className="text-2xl sm:text-3xl font-display font-bold text-navy-900 mb-2">Leave a Message</h1>
                 <p className="text-surface-600">Record a special message for the couple</p>
@@ -802,7 +791,7 @@ if (templateLoading) {
                 <label className="block text-sm font-medium text-navy-900 mb-2">Your Name</label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 border-2 border-surface-200 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all"
+                  className="w-full px-4 py-3 border-2 border-surface-200 rounded-xl focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/20 transition-all"
                   placeholder="Enter your name"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
@@ -832,10 +821,10 @@ if (templateLoading) {
                 {/* Audio Option */}
                 <button
                   onClick={initializeAudio}
-                  className="w-full p-5 rounded-2xl border-2 border-surface-200 hover:border-purple-300 hover:bg-purple-50 transition-all flex items-center gap-4 group active:scale-[0.98]"
+                  className="w-full p-5 rounded-2xl border-2 border-surface-200 hover:border-brand-300 hover:bg-brand-50 transition-all flex items-center gap-4 group active:scale-[0.98]"
                 >
-                  <div className="w-16 h-16 rounded-2xl bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center flex-shrink-0 transition-colors">
-                    <svg className="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-16 h-16 rounded-2xl bg-brand-100 group-hover:bg-brand-200 flex items-center justify-center flex-shrink-0 transition-colors">
+                    <svg className="w-8 h-8 text-brand-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     </svg>
                   </div>
@@ -843,7 +832,7 @@ if (templateLoading) {
                     <p className="font-semibold text-navy-900 text-lg">Audio Message</p>
                     <p className="text-surface-500 text-sm">Record up to {config?.maxRecordingDuration || 120} seconds</p>
                   </div>
-                  <svg className="w-5 h-5 text-surface-400 group-hover:text-purple-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-surface-400 group-hover:text-brand-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -978,14 +967,14 @@ if (templateLoading) {
               <h2 className="text-xl font-display font-bold text-navy-900 text-center mb-6">Audio Message</h2>
 
               {/* Waveform Visualizer */}
-              <div className="bg-navy-900 rounded-2xl p-6 mb-6">
+              <div className="bg-brand-900 rounded-2xl p-6 mb-6">
                 <div className="flex items-end justify-center gap-1 h-24">
                   {audioWaveform.map((value, index) => (
                     <div
                       key={index}
                       className={cn(
                         'w-2 rounded-full transition-all duration-75',
-                        recordingState === 'recording' ? 'bg-primary-500' : 'bg-surface-600'
+                        recordingState === 'recording' ? 'bg-red-400' : 'bg-surface-500'
                       )}
                       style={{
                         height: `${Math.max(8, value * 100)}%`,
@@ -1019,7 +1008,7 @@ if (templateLoading) {
                 {recordingState === 'ready' && (
                   <button
                     onClick={startAudioRecording}
-                    className="w-20 h-20 rounded-full bg-purple-500 hover:bg-purple-600 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
+                    className="w-20 h-20 rounded-full bg-brand-700 hover:bg-brand-800 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
                   >
                     <div className="w-8 h-8 rounded-full bg-white" />
                   </button>
@@ -1028,7 +1017,7 @@ if (templateLoading) {
                 {recordingState === 'recording' && (
                   <button
                     onClick={stopAudioRecording}
-                    className="w-20 h-20 rounded-full bg-purple-500 hover:bg-purple-600 flex items-center justify-center transition-all active:scale-95 shadow-lg animate-pulse"
+                    className="w-20 h-20 rounded-full bg-brand-700 hover:bg-brand-800 flex items-center justify-center transition-all active:scale-95 shadow-lg animate-pulse"
                   >
                     <div className="w-8 h-8 rounded bg-white" />
                   </button>
@@ -1041,8 +1030,8 @@ if (templateLoading) {
                       className={cn(
                         'w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg',
                         isPlayingPreview
-                          ? 'bg-purple-600 hover:bg-purple-700'
-                          : 'bg-purple-500 hover:bg-purple-600'
+                          ? 'bg-brand-800 hover:bg-brand-900'
+                          : 'bg-brand-700 hover:bg-brand-800'
                       )}
                     >
                       {isPlayingPreview ? (
@@ -1062,7 +1051,7 @@ if (templateLoading) {
                       <button onClick={retake} className="btn-outline flex-1 py-3">
                         Retake
                       </button>
-                      <button onClick={() => uploadMedia('AUDIO')} className="btn-primary flex-1 py-3">
+                      <button onClick={() => uploadMedia('AUDIO')} className="btn-accent flex-1 py-3">
                         Submit
                       </button>
                     </div>
@@ -1142,7 +1131,7 @@ if (templateLoading) {
 
                 {/* Add more button */}
                 {selectedPhotos.length < (config?.maxPhotosPerGuest || 5) && recordingState !== 'uploading' && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-surface-300 hover:border-primary-500 hover:bg-primary-50 cursor-pointer flex flex-col items-center justify-center transition-colors">
+                  <label className="aspect-square rounded-xl border-2 border-dashed border-surface-300 hover:border-red-500 hover:bg-red-50 cursor-pointer flex flex-col items-center justify-center transition-colors">
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1161,7 +1150,7 @@ if (templateLoading) {
 
               {/* Empty state */}
               {selectedPhotos.length === 0 && (
-                <label className="block border-2 border-dashed border-surface-300 hover:border-primary-500 rounded-2xl p-8 text-center cursor-pointer transition-colors mb-6">
+                <label className="block border-2 border-dashed border-surface-300 hover:border-red-500 rounded-2xl p-8 text-center cursor-pointer transition-colors mb-6">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1185,7 +1174,7 @@ if (templateLoading) {
                 <button
                   onClick={uploadPhotos}
                   disabled={recordingState === 'uploading'}
-                  className="btn-primary w-full py-3 disabled:opacity-50"
+                  className="btn-accent w-full py-3 disabled:opacity-50"
                 >
                   {recordingState === 'uploading' ? (
                     <span className="flex items-center justify-center gap-2">

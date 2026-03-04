@@ -648,6 +648,59 @@ router.post('/otp/verify', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
         verified: true,
     });
 }));
+router.get('/public/:slug/nominees', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { slug } = req.params;
+    const contestId = String(req.query.contestId || '').trim() || null;
+    const event = await ensureVotingContext(slug);
+    const contests = await prisma_js_1.default.votingContest.findMany({
+        where: {
+            eventId: event.id,
+            isActive: true,
+            ...(contestId ? { id: contestId } : {}),
+        },
+        include: {
+            options: {
+                where: { isActive: true },
+                orderBy: [{ totalVotes: 'desc' }, { name: 'asc' }],
+                include: {
+                    approvedNominations: {
+                        where: { status: 'APPROVED' },
+                        select: { id: true },
+                    },
+                },
+            },
+        },
+        orderBy: { sortOrder: 'asc' },
+    });
+    const categories = contests.map((contest) => {
+        const totalVotes = contest.options.reduce((sum, option) => sum + option.totalVotes, 0);
+        return {
+            contestId: contest.id,
+            title: contest.title,
+            mode: contest.mode,
+            totalVotes,
+            nominees: contest.options.map((option) => ({
+                optionId: option.id,
+                name: option.name,
+                description: option.description,
+                imagePath: option.imagePath,
+                totalVotes: option.totalVotes,
+                freeVotes: option.freeVotes,
+                paidVotes: option.paidVotes,
+                voteSharePercent: totalVotes > 0 ? Number(((option.totalVotes / totalVotes) * 100).toFixed(2)) : 0,
+                approvalStatus: option.approvedNominations.length > 0 ? 'APPROVED' : 'ADMIN_ADDED',
+            })),
+        };
+    });
+    res.json({
+        event: {
+            id: event.id,
+            slug: event.slug,
+            name: event.name,
+        },
+        categories,
+    });
+}));
 router.get('/public/:slug/leaderboard', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { slug } = req.params;
     const contestId = String(req.query.contestId || '').trim() || null;

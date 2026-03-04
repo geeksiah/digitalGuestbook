@@ -81,6 +81,29 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       <DashboardPageHeader title="Dashboard" subtitle="Operational overview of events, guest engagement, and media activity" />
 
+      <section className="hero-premium p-5 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="chip-accent w-fit">Admin Intelligence</p>
+            <h2 className="text-2xl sm:text-3xl font-bold mt-2 tracking-tight">
+              Keep every event launch-ready with one command center.
+            </h2>
+            <p className="text-surface-200 text-sm mt-2">
+              Real-time event volume, RSVP momentum, and media capture health across your portfolio.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/events/new" className="btn-accent">
+              {Icons.plus}
+              <span className="ml-2">Create Event</span>
+            </Link>
+            <Link href="/admin/events" className="btn-outline !border-white/25 !bg-white/10 !text-white hover:!bg-white/20">
+              View Events
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardKpiCard label="Total Events" value={stats?.totalEvents || 0} icon={Icons.calendar} tone="blue" />

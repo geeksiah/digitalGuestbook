@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
@@ -72,6 +73,8 @@ export default function VotePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = String(params.slug || '');
+  const contestQuery = String(searchParams.get('contestId') || '');
+  const optionQuery = String(searchParams.get('optionId') || '');
   const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'voting-page');
   const embedToken = String(searchParams.get('token') || searchParams.get('embedToken') || '');
   const storageKey = `${SESSION_STORAGE_KEY_PREFIX}${slug}`;
@@ -130,9 +133,19 @@ export default function VotePage() {
       }
 
       if (payload.contests.length > 0) {
-        setSelectedContestId((current) => current || payload.contests[0].id);
-        const firstOption = payload.contests[0]?.options?.[0];
-        if (firstOption) setSelectedOptionId((current) => current || firstOption.id);
+        const queriedContest = contestQuery
+          ? payload.contests.find((contest) => contest.id === contestQuery)
+          : null;
+        const rememberedContest = payload.contests.find((contest) => contest.id === selectedContestId);
+        const contest = queriedContest || rememberedContest || payload.contests[0];
+        setSelectedContestId(contest.id);
+
+        const queriedOption = optionQuery
+          ? contest.options?.find((option) => option.id === optionQuery)
+          : null;
+        const rememberedOption = contest.options?.find((option) => option.id === selectedOptionId);
+        const nextOption = queriedOption || rememberedOption || contest.options?.[0];
+        setSelectedOptionId(nextOption?.id || '');
       }
 
       setOtpVerified(Boolean(payload.voterSession?.otpVerified));
@@ -154,7 +167,17 @@ export default function VotePage() {
     if (!slug || templateLoading || hasTemplate) return;
     void fetchVoteData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, embedToken, templateLoading, hasTemplate]);
+  }, [slug, embedToken, contestQuery, optionQuery, templateLoading, hasTemplate]);
+
+  useEffect(() => {
+    if (!selectedContest) {
+      setSelectedOptionId('');
+      return;
+    }
+    if (!selectedContest.options.some((option) => option.id === selectedOptionId)) {
+      setSelectedOptionId(selectedContest.options[0]?.id || '');
+    }
+  }, [selectedContest, selectedOptionId]);
 
   const castFreeVote = async () => {
     if (!selectedContest || !selectedOption) {
@@ -219,7 +242,7 @@ export default function VotePage() {
       }
       const nextAction = response.data?.nextAction;
       if (nextAction?.type === 'REDIRECT' && nextAction?.url) {
-        window.location.href = String(nextAction.url);
+        globalThis.window.location.href = String(nextAction.url);
         return;
       }
       toast.success('Payment intent created. Complete payment in your gateway.');
@@ -304,25 +327,37 @@ export default function VotePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-white to-emerald-50 pb-16">
+    <div className="min-h-screen section-gradient pb-16">
       <div className="mx-auto w-full max-w-[520px] px-4 py-6 space-y-4">
-        <section className="rounded-2xl border border-emerald-100 bg-white p-4">
-          <h1 className="text-2xl font-bold text-brand-950">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-1">Vote for your nominee and track the leaderboard live.</p>
-          {config?.allowPublicNominations ? (
-            <div className="mt-3">
-              <a
-                href={`/e/${slug}/nominate`}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
+        <section className="hero-premium p-4">
+          <h1 className="text-2xl font-bold">{eventName}</h1>
+          <p className="text-sm text-surface-200 mt-1">Vote for nominees and track live standings in real time.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {config?.allowPublicNominations ? (
+              <Link
+                href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/30 text-white hover:bg-white/10 transition-colors text-xs font-semibold"
               >
-                Nominate Someone
-              </a>
-            </div>
-          ) : null}
+                Nominate
+              </Link>
+            ) : null}
+            <Link
+              href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/30 text-white hover:bg-white/10 transition-colors text-xs font-semibold"
+            >
+              Nominees
+            </Link>
+            <Link
+              href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/30 text-white hover:bg-white/10 transition-colors text-xs font-semibold"
+            >
+              Leaderboard
+            </Link>
+          </div>
         </section>
 
         {config && electionMode ? (
-          <section className="rounded-2xl border border-surface-200 bg-white p-4 space-y-3">
+          <section className="card-premium p-4 space-y-3">
             <h2 className="text-base font-semibold text-brand-900">Election Verification</h2>
             <input
               className="input"
@@ -350,7 +385,7 @@ export default function VotePage() {
           </section>
         ) : null}
 
-        <section className="rounded-2xl border border-surface-200 bg-white p-4 space-y-3">
+        <section className="card-premium p-4 space-y-3">
           <h2 className="text-base font-semibold text-brand-900">Select Contest</h2>
           <select
             className="input"
@@ -389,7 +424,7 @@ export default function VotePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-surface-200 bg-white p-4 space-y-3">
+        <section className="card-premium p-4 space-y-3">
           <h2 className="text-base font-semibold text-brand-900">Cast Vote</h2>
           {config?.allowFreeVotes ? (
             <button className="btn-outline w-full" onClick={castFreeVote} disabled={submitting}>
@@ -419,14 +454,14 @@ export default function VotePage() {
                   </option>
                 ))}
               </select>
-              <button className="btn-primary w-full" onClick={createPaidIntent} disabled={submitting}>
+              <button className="btn-accent w-full" onClick={createPaidIntent} disabled={submitting}>
                 Pay & Vote
               </button>
             </div>
           ) : null}
         </section>
 
-        <section className="rounded-2xl border border-surface-200 bg-white p-4 space-y-2">
+        <section className="card-premium p-4 space-y-2">
           <h2 className="text-base font-semibold text-brand-900">Leaderboard</h2>
           {leaderboard.map((contest: any) => (
             <div key={contest.contestId} className="rounded-xl border border-surface-200 p-3">

@@ -70,6 +70,9 @@ export const createEventSchema = z.object({
   itineraryPageTemplateId: z.string().uuid().optional().nullable(),
   giftingPageTemplateId: z.string().uuid().optional().nullable(),
   votingPageTemplateId: z.string().uuid().optional().nullable(),
+  nominationPageTemplateId: z.string().uuid().optional().nullable(),
+  nomineesPageTemplateId: z.string().uuid().optional().nullable(),
+  leaderboardPageTemplateId: z.string().uuid().optional().nullable(),
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
   invitationTemplateId: z.string().uuid().optional(),
@@ -158,6 +161,9 @@ export const updateEventSchema = z.object({
   itineraryPageTemplateId: z.string().uuid().optional().nullable(),
   giftingPageTemplateId: z.string().uuid().optional().nullable(),
   votingPageTemplateId: z.string().uuid().optional().nullable(),
+  nominationPageTemplateId: z.string().uuid().optional().nullable(),
+  nomineesPageTemplateId: z.string().uuid().optional().nullable(),
+  leaderboardPageTemplateId: z.string().uuid().optional().nullable(),
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
   invitationTemplateId: z.string().uuid().optional().nullable(),
@@ -228,6 +234,9 @@ export const createTemplateSchema = z.object({
     'ITINERARY',
     'GIFTING',
     'VOTING',
+    'VOTING_NOMINATION',
+    'VOTING_NOMINEES',
+    'VOTING_LEADERBOARD',
   ]),
   htmlContent: z.string().min(1, 'HTML content is required'),
   cssContent: z.string().optional(),

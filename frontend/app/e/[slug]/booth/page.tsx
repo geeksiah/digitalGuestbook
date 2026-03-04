@@ -42,7 +42,7 @@ export default function BoothPage() {
   const slug = params.slug as string;
 
   // Backend template check (render backend HTML if assigned)
- const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'booth');
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'booth');
 
   
 
@@ -52,8 +52,8 @@ export default function BoothPage() {
   const [eventName, setEventName] = useState('');
   const [eventId, setEventId] = useState<string | null>(null);
   const [config, setConfig] = useState<BoothConfig | null>(null);
-  const [primaryColor, setPrimaryColor] = useState('#6366f1');
-  const [secondaryColor, setSecondaryColor] = useState('#e0e7ff');
+  const [primaryColor, setPrimaryColor] = useState('#ff3b30');
+  const [secondaryColor, setSecondaryColor] = useState('#063932');
 
   // UI state
   const [viewState, setViewState] = useState<ViewState>('welcome');
@@ -614,11 +614,10 @@ export default function BoothPage() {
   const canTakeMorePhotos = capturedPhotos.length < maxPhotosPerSession;
 
   // ==================== RENDER STATES ====================
-
-if (templateLoading) {
+  if (templateLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      <div className="min-h-screen section-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
       </div>
     );
   }
@@ -628,7 +627,7 @@ if (templateLoading) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="fixed inset-0 bg-gradient-to-br from-navy-900 via-brand-900 to-navy-950 flex items-center justify-center">
         <div className="text-center">
           <div className="w-20 h-20 mx-auto border-4 border-white/20 border-t-white rounded-full animate-spin mb-6" />
           <p className="text-white/70 text-xl">Loading Booth...</p>
@@ -639,7 +638,7 @@ if (templateLoading) {
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
+      <div className="fixed inset-0 bg-gradient-to-br from-navy-900 via-brand-900 to-navy-950 flex items-center justify-center p-8">
         <div className="text-center max-w-lg">
           <div className="w-24 h-24 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-6">
             <svg className="w-12 h-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -656,7 +655,7 @@ if (templateLoading) {
   // Permission denied
   if (permissionState === 'denied' && (viewState === 'video' || viewState === 'audio' || viewState === 'photo')) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
+      <div className="fixed inset-0 bg-gradient-to-br from-navy-900 via-brand-900 to-navy-950 flex items-center justify-center p-8">
         <div className="text-center max-w-lg">
           <div className="w-24 h-24 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center mb-6">
             <svg className="w-12 h-12 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -699,7 +698,7 @@ if (templateLoading) {
         className="fixed inset-0 flex flex-col items-center justify-center p-8 touch-none select-none"
         style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${secondaryColor}40, ${primaryColor}20)` }}
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/90 via-purple-900/80 to-slate-900/90" />
+        <div className="absolute inset-0 bg-gradient-to-br from-navy-900/90 via-brand-900/80 to-navy-950/90" />
         
         <div className="relative z-10 text-center max-w-2xl">
           <div className="w-32 h-32 mx-auto rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center mb-8 animate-pulse">
@@ -741,7 +740,7 @@ if (templateLoading) {
   // Menu Screen
   if (viewState === 'menu') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col p-8">
+      <div className="fixed inset-0 bg-gradient-to-br from-navy-900 via-brand-900 to-navy-950 flex flex-col p-8">
         {/* Cancel Button */}
         <div className="absolute top-6 left-6 z-20">
           <button
@@ -789,10 +788,10 @@ if (templateLoading) {
             {/* Audio */}
             <button
               onClick={initializeAudio}
-              className="group p-10 bg-white/10 hover:bg-blue-500/20 rounded-3xl transition-all hover:scale-105 active:scale-95 border border-white/10 hover:border-blue-400/50"
+              className="group p-10 bg-white/10 hover:bg-brand-700/25 rounded-3xl transition-all hover:scale-105 active:scale-95 border border-white/10 hover:border-brand-300/50"
             >
-              <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center mb-6 group-hover:bg-blue-500/30 transition-colors">
-                <svg className="w-10 h-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-20 h-20 mx-auto rounded-full bg-brand-700/20 flex items-center justify-center mb-6 group-hover:bg-brand-700/30 transition-colors">
+                <svg className="w-10 h-10 text-brand-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </div>
@@ -929,7 +928,7 @@ if (templateLoading) {
   // Audio Recording Screen
   if (viewState === 'audio') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex flex-col">
+      <div className="fixed inset-0 bg-gradient-to-br from-navy-900 via-brand-900 to-navy-950 flex flex-col">
         {/* Cancel Button */}
         <div className="absolute top-6 left-6 z-20">
           <button
@@ -961,7 +960,7 @@ if (templateLoading) {
               {audioWaveform.map((value, i) => (
                 <div
                   key={i}
-                  className="w-2 md:w-3 bg-blue-400 rounded-full transition-all duration-75"
+                  className="w-2 md:w-3 bg-red-400 rounded-full transition-all duration-75"
                   style={{ 
                     height: `${Math.max(8, value * 250)}px`,
                     opacity: recordingState === 'recording' ? 0.8 + value * 0.2 : 0.3
@@ -985,7 +984,7 @@ if (templateLoading) {
             {recordingState === 'ready' && (
               <button
                 onClick={startAudioRecording}
-                className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors active:scale-95 shadow-2xl"
+                className="w-24 h-24 bg-brand-700 rounded-full flex items-center justify-center hover:bg-brand-800 transition-colors active:scale-95 shadow-2xl"
               >
                 <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -996,7 +995,7 @@ if (templateLoading) {
             {recordingState === 'recording' && (
               <button
                 onClick={stopAudioRecording}
-                className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors active:scale-95 shadow-2xl animate-pulse"
+                className="w-24 h-24 bg-brand-700 rounded-full flex items-center justify-center hover:bg-brand-800 transition-colors active:scale-95 shadow-2xl animate-pulse"
               >
                 <div className="w-10 h-10 bg-white rounded-md" />
               </button>

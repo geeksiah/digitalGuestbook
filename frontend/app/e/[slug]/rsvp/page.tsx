@@ -360,7 +360,7 @@ export default function EventRsvpPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+      <div className="min-h-screen section-gradient flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
       </div>
     );
@@ -368,11 +368,11 @@ export default function EventRsvpPage() {
 
   if (error || !eventData) {
     return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
-        <div className="max-w-md rounded-2xl border border-surface-200 bg-white p-6 text-center shadow-soft">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
+        <div className="card-premium max-w-md p-6 text-center">
           <h1 className="text-2xl font-bold text-brand-900">RSVP Unavailable</h1>
           <p className="mt-2 text-surface-600">{error || 'This RSVP page could not be loaded.'}</p>
-          <Link href={`/e/${slug}`} className="btn-primary mt-5 inline-flex">Back to event</Link>
+          <Link href={`/e/${slug}`} className="btn-accent mt-5 inline-flex">Back to event</Link>
         </div>
       </div>
     );
@@ -380,11 +380,11 @@ export default function EventRsvpPage() {
 
   if (!eventData.event.capabilities.canSubmitRsvp) {
     return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
-        <div className="max-w-md rounded-2xl border border-surface-200 bg-white p-6 text-center shadow-soft">
+      <div className="min-h-screen section-gradient flex items-center justify-center p-4">
+        <div className="card-premium max-w-md p-6 text-center">
           <h1 className="text-2xl font-bold text-brand-900">RSVP Closed</h1>
           <p className="mt-2 text-surface-600">RSVP is not available in this event phase.</p>
-          <Link href={`/e/${slug}`} className="btn-primary mt-5 inline-flex">Back to event</Link>
+          <Link href={`/e/${slug}`} className="btn-accent mt-5 inline-flex">Back to event</Link>
         </div>
       </div>
     );
@@ -393,20 +393,20 @@ export default function EventRsvpPage() {
   const defaultCurrency = selectedTickets[0]?.ticket.currency || selectedGateway?.currency || 'USD';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-emerald-50 to-white pb-32">
+    <div className="min-h-screen section-gradient pb-32">
       <div className="mx-auto w-full max-w-[440px] space-y-4 px-3 py-5">
-        <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)]">
-          <h1 className="text-xl font-bold tracking-tight text-brand-950">{eventData.event.name}</h1>
-          <p className="mt-1 text-sm text-surface-600">
+        <section className="hero-premium p-4">
+          <h1 className="text-xl font-bold tracking-tight text-white">{eventData.event.name}</h1>
+          <p className="mt-1 text-sm text-surface-200">
             {formatDate(eventData.event.date)}{eventData.event.venue ? ` - ${eventData.event.venue}` : ''}
           </p>
-          <p className="mt-2 text-sm text-surface-600">
+          <p className="mt-2 text-sm text-surface-200">
             {isPaidMode ? 'Select tickets, add contact details, then complete payment.' : 'Complete your RSVP details below.'}
           </p>
         </section>
 
         {isPaidMode ? (
-          <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)]">
+          <section className="card-premium p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-brand-900">Ticket Selection</h2>
               <span className="badge badge-info">{totalTicketQty} selected</span>
@@ -438,7 +438,7 @@ export default function EventRsvpPage() {
                       </button>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-amber-700">Available: {ticket.available} · Max/order: {ticket.maxPerOrder}</p>
+                  <p className="mt-2 text-xs text-amber-700">Available: {ticket.available} - Max/order: {ticket.maxPerOrder}</p>
                 </article>
               ))}
               {(!ticketingForm?.tickets || ticketingForm.tickets.length === 0) ? (
@@ -457,7 +457,7 @@ export default function EventRsvpPage() {
           </section>
         ) : null}
 
-        <section className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-[0_12px_40px_rgba(2,23,20,0.10)] space-y-3">
+        <section className="card-premium p-4 space-y-3">
           <h2 className="text-base font-semibold text-brand-900">Contact Information</h2>
           <input className="input" placeholder="Primary name" value={primaryName} onChange={(event) => setPrimaryName(event.target.value)} />
           <input className="input" placeholder="Secondary name (optional)" value={secondaryName} onChange={(event) => setSecondaryName(event.target.value)} />
@@ -521,7 +521,7 @@ export default function EventRsvpPage() {
         </section>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 border-t border-emerald-100 bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-surface-200 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[440px] items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs text-surface-500">{isPaidMode ? 'Order total' : 'RSVP status'}</p>
@@ -530,7 +530,7 @@ export default function EventRsvpPage() {
             </p>
           </div>
           <button
-            className="btn-primary px-5"
+            className="btn-accent px-5"
             disabled={submitDisabled}
             onClick={onSubmit}
           >

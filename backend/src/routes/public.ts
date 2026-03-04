@@ -144,6 +144,9 @@ const EVENT_PUBLIC_SELECT = {
   itineraryPageTemplateId: true,
   giftingPageTemplateId: true,
   votingPageTemplateId: true,
+  nominationPageTemplateId: true,
+  nomineesPageTemplateId: true,
+  leaderboardPageTemplateId: true,
 };
 
 // ─── Helper: standard template data ────────────────────────────────────────────
@@ -200,8 +203,11 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
       boothPhoto: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth/photo` : null,
       itinerary: event.itineraryEnabled ? `${frontendUrl}/e/${event.slug}/itinerary` : null,
       gifting: event.giftingEnabled ? `${frontendUrl}/gift/${event.slug}` : null,
+      vote: `${frontendUrl}/e/${event.slug}/vote`,
       voting: `${frontendUrl}/e/${event.slug}/vote`,
       nominate: `${frontendUrl}/e/${event.slug}/nominate`,
+      nominees: `${frontendUrl}/e/${event.slug}/nominees`,
+      leaderboard: `${frontendUrl}/e/${event.slug}/leaderboard`,
     },
     api: {
       baseUrl: apiBaseUrl,
@@ -588,6 +594,11 @@ router.get('/event/:slug', asyncHandler(async (req, res) => {
       booth: event.guestbookEnabled ? `/e/${event.slug}/booth` : null,
       itinerary: event.itineraryEnabled ? `/e/${event.slug}/itinerary` : null,
       gifting: event.giftingEnabled ? `/gift/${event.slug}` : null,
+      vote: `/e/${event.slug}/vote`,
+      voting: `/e/${event.slug}/vote`,
+      nominate: `/e/${event.slug}/nominate`,
+      nominees: `/e/${event.slug}/nominees`,
+      leaderboard: `/e/${event.slug}/leaderboard`,
       thankYou: `/e/${event.slug}/thanks`,
     },
   });
@@ -911,13 +922,10 @@ router.get('/event/:slug/gifting', asyncHandler(async (req, res) => {
   await renderEventTemplate(event, 'GIFTING', (event as any).giftingPageTemplateId, templateData, res);
 }));
 
-/**
- * GET /api/public/event/:slug/voting-page
- * Render voting page template (if assigned)
- */
-router.get('/event/:slug/voting-page', asyncHandler(async (req, res) => {
-  const event = await fetchPublicEvent(req.params.slug);
-
+const buildVotingTemplateData = async (
+  event: any,
+  selectedContestId?: string | null
+) => {
   const votingConfig = await prisma.votingEventConfig.findUnique({
     where: { eventId: event.id },
     select: {
@@ -925,6 +933,7 @@ router.get('/event/:slug/voting-page', asyncHandler(async (req, res) => {
       isEnabled: true,
       allowFreeVotes: true,
       allowPaidVotes: true,
+      allowPublicNominations: true,
       requireOtpForElection: true,
       voteUnitPrice: true,
       currency: true,
@@ -939,7 +948,11 @@ router.get('/event/:slug/voting-page', asyncHandler(async (req, res) => {
   }
 
   const contests = await prisma.votingContest.findMany({
-    where: { eventId: event.id, isActive: true },
+    where: {
+      eventId: event.id,
+      isActive: true,
+      ...(selectedContestId ? { id: selectedContestId } : {}),
+    },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     select: {
       id: true,
@@ -953,7 +966,7 @@ router.get('/event/:slug/voting-page', asyncHandler(async (req, res) => {
       endsAt: true,
       options: {
         where: { isActive: true },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ totalVotes: 'desc' }, { name: 'asc' }],
         select: {
           id: true,
           name: true,
@@ -970,35 +983,105 @@ router.get('/event/:slug/voting-page', asyncHandler(async (req, res) => {
 
   const currentPhase = calculateEventPhase(event);
   const capabilities = getPhaseCapabilities(currentPhase);
-  const templateData = {
+  const contestPayload = contests.map((contest) => ({
+    ...contest,
+    startsAtIso: contest.startsAt ? contest.startsAt.toISOString() : null,
+    endsAtIso: contest.endsAt ? contest.endsAt.toISOString() : null,
+    nominationFormFields: parseJson<any[]>(contest.nominationFormFieldsJson, []),
+  }));
+
+  const nomineesByCategory = contestPayload.map((contest) => {
+    const totalVotes = contest.options.reduce((sum, option) => sum + Number(option.totalVotes || 0), 0) || 1;
+    return {
+      contestId: contest.id,
+      title: contest.title,
+      mode: contest.mode,
+      totalVotes: contest.options.reduce((sum, option) => sum + Number(option.totalVotes || 0), 0),
+      nominees: contest.options.map((option) => ({
+        optionId: option.id,
+        contestId: contest.id,
+        ...option,
+        voteSharePercent: Number(((Number(option.totalVotes || 0) / totalVotes) * 100).toFixed(2)),
+      })),
+    };
+  });
+
+  const leaderboard = contestPayload.map((contest) => ({
+    contestId: contest.id,
+    title: contest.title,
+    mode: contest.mode,
+    totalVotes: contest.options.reduce((sum, option) => sum + Number(option.totalVotes || 0), 0),
+      rankings: contest.options.map((option, index) => ({
+        rank: index + 1,
+        contestId: contest.id,
+        optionId: option.id,
+        name: option.name,
+        totalVotes: option.totalVotes,
+      freeVotes: option.freeVotes,
+      paidVotes: option.paidVotes,
+      trendDelta: 0,
+    })),
+  }));
+
+  return {
     ...buildTemplateData(event, currentPhase, capabilities),
     voting: {
       config: votingConfig,
-      contests: contests.map((contest) => ({
-        ...contest,
-        startsAtIso: contest.startsAt ? contest.startsAt.toISOString() : null,
-        endsAtIso: contest.endsAt ? contest.endsAt.toISOString() : null,
-        nominationFormFields: parseJson<any[]>(contest.nominationFormFieldsJson, []),
-      })),
-      leaderboard: contests.map((contest) => ({
-        contestId: contest.id,
+      contests: contestPayload,
+      categories: contestPayload.map((contest) => ({
+        id: contest.id,
         title: contest.title,
-        totalVotes: contest.options.reduce((acc, option) => acc + (option.totalVotes || 0), 0),
-        options: [...contest.options]
-          .sort((a, b) => b.totalVotes - a.totalVotes)
-          .map((option, index) => ({
-            rank: index + 1,
-            optionId: option.id,
-            name: option.name,
-            totalVotes: option.totalVotes,
-            freeVotes: option.freeVotes,
-            paidVotes: option.paidVotes,
-          })),
+        mode: contest.mode,
       })),
+      nomineesByCategory,
+      selectedCategory: selectedContestId || contestPayload[0]?.id || null,
+      leaderboard,
     },
   };
+};
 
+/**
+ * GET /api/public/event/:slug/voting-page
+ * Render vote page template (if assigned)
+ */
+router.get('/event/:slug/voting-page', asyncHandler(async (req, res) => {
+  const event = await fetchPublicEvent(req.params.slug);
+  const selectedContestId = String(req.query.contestId || '').trim() || null;
+  const templateData = await buildVotingTemplateData(event, selectedContestId);
   await renderEventTemplate(event, 'VOTING', (event as any).votingPageTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/nomination-page
+ * Render nomination page template (if assigned)
+ */
+router.get('/event/:slug/nomination-page', asyncHandler(async (req, res) => {
+  const event = await fetchPublicEvent(req.params.slug);
+  const selectedContestId = String(req.query.contestId || '').trim() || null;
+  const templateData = await buildVotingTemplateData(event, selectedContestId);
+  await renderEventTemplate(event, 'VOTING_NOMINATION', (event as any).nominationPageTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/nominees-page
+ * Render nominees listing template (if assigned)
+ */
+router.get('/event/:slug/nominees-page', asyncHandler(async (req, res) => {
+  const event = await fetchPublicEvent(req.params.slug);
+  const selectedContestId = String(req.query.contestId || '').trim() || null;
+  const templateData = await buildVotingTemplateData(event, selectedContestId);
+  await renderEventTemplate(event, 'VOTING_NOMINEES', (event as any).nomineesPageTemplateId, templateData, res);
+}));
+
+/**
+ * GET /api/public/event/:slug/leaderboard-page
+ * Render leaderboard page template (if assigned)
+ */
+router.get('/event/:slug/leaderboard-page', asyncHandler(async (req, res) => {
+  const event = await fetchPublicEvent(req.params.slug);
+  const selectedContestId = String(req.query.contestId || '').trim() || null;
+  const templateData = await buildVotingTemplateData(event, selectedContestId);
+  await renderEventTemplate(event, 'VOTING_LEADERBOARD', (event as any).leaderboardPageTemplateId, templateData, res);
 }));
 
 // ─── Invitation ────────────────────────────────────────────────────────────────

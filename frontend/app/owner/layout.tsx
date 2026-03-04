@@ -184,7 +184,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const currentSection = navigation.find((item) => isNavActive(item.href))?.name || 'Dashboard';
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen section-gradient">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -196,13 +196,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200/80 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white/94 backdrop-blur-md border-r border-surface-200/80 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70 bg-gradient-to-r from-white to-surface-50/70">
             <div className="flex items-center">
               <img 
                 src="/img/logo-dark.svg" 
@@ -244,7 +244,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'flex items-center px-3 py-2.5 text-sm font-medium rounded-xl border transition-all',
                     isActive
-                      ? 'bg-brand-50 text-brand-900 border-brand-100 shadow-sm'
+                      ? 'bg-gradient-to-r from-brand-50 to-red-50 text-brand-900 border-brand-200 shadow-sm'
                       : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
                   )}
                 >
@@ -284,7 +284,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Main content */}
       <div className="lg:pl-[272px] min-h-screen flex flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-surface-200/80">
+        <header className="sticky top-0 z-30 bg-white/78 backdrop-blur-xl border-b border-surface-200/80">
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8 gap-3">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <button
@@ -318,7 +318,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             </div>
 
             <div className="hidden sm:flex items-center gap-2 text-sm flex-shrink-0">
-              <span className="text-surface-400 text-xs font-medium">Workspace</span>
+              <span className="chip-brand">Workspace</span>
               <span className="text-surface-300">/</span>
               <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
             </div>

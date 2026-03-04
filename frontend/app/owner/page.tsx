@@ -95,6 +95,29 @@ export default function OwnerDashboardPage() {
     <div className="space-y-5 sm:space-y-7">
       <DashboardPageHeader title="Dashboard" subtitle="Your event operations at a glance" />
 
+      <section className="hero-premium p-5 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="chip-accent w-fit">Owner Console</p>
+            <h2 className="text-2xl sm:text-3xl font-bold mt-2 tracking-tight">
+              Run polished events with live insight into guests, media, and payouts.
+            </h2>
+            <p className="text-surface-200 text-sm mt-2">
+              Jump from overview to execution with fast navigation across events and voting.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/owner/events" className="btn-accent">
+              {Icons.events}
+              <span className="ml-2">Manage Events</span>
+            </Link>
+            <Link href="/owner/payouts" className="btn-outline !border-white/25 !bg-white/10 !text-white hover:!bg-white/20">
+              Payouts
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

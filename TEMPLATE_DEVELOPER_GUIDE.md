@@ -33,6 +33,9 @@ The platform supports the following template types:
 14. **ITINERARY** - Public guest itinerary page (`/e/:slug/itinerary`)
 15. **GIFTING** - Public gifting page (`/gift/:slug`)
 16. **VOTING** - Public voting page (`/e/:slug/vote`)
+17. **VOTING_NOMINATION** - Public nomination page (`/e/:slug/nominate`)
+18. **VOTING_NOMINEES** - Public nominees listing page (`/e/:slug/nominees`)
+19. **VOTING_LEADERBOARD** - Public leaderboard page (`/e/:slug/leaderboard`)
 
 ## Template Structure
 
@@ -94,8 +97,11 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{urls.live}}` - Live landing page URL
 - `{{urls.itinerary}}` - Guest itinerary page URL
 - `{{urls.gifting}}` - Gifting page URL
-- `{{urls.voting}}` - Voting page URL
+- `{{urls.vote}}` - Voting page URL
+- `{{urls.voting}}` - Voting page URL (alias of `urls.vote`, retained for backward compatibility)
 - `{{urls.nominate}}` - Public nomination page URL
+- `{{urls.nominees}}` - Public nominees listing page URL
+- `{{urls.leaderboard}}` - Public leaderboard page URL
 
 #### API Variables
 - `{{api.baseUrl}}` - Backend base URL for API calls from templates
@@ -120,6 +126,9 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{voting.config}}` - Voting configuration object (for VOTING templates)
 - `{{voting.contests}}` - Contests and nominees array (for VOTING templates)
 - `{{voting.leaderboard}}` - Ranked nominees per contest (for VOTING templates)
+- `{{voting.categories}}` - Contest/category summaries (id, title, mode)
+- `{{voting.nomineesByCategory}}` - Category-grouped nominees list with vote share
+- `{{voting.selectedCategory}}` - Active category id (from `contestId` query param when provided)
   - `voting.contests[].allowPublicNominations` and `voting.contests[].nominationFormFields` are available when public nominations are configured.
 
 ## Creating a Template
@@ -277,32 +286,117 @@ Templates are isolated per event:
   live: string (full URL),
   itinerary: string (full URL),
   gifting: string (full URL),
-  voting: string (full URL)
+  vote: string (full URL),
+  voting: string (full URL, alias of vote),
+  nominate: string (full URL),
+  nominees: string (full URL),
+  leaderboard: string (full URL)
 }
 ```
 
 ## Voting Template Rules
 
-When building **VOTING** templates:
+Use split voting template types for clean IA:
 
-1. Use `{{urls.voting}}` as the canonical voting route.
-2. Do not hardcode `/e/.../vote` paths.
-3. Render contest and nominee lists from `{{voting.contests}}`.
-4. Render rank cards from `{{voting.leaderboard}}` (already sorted by totals).
-5. Keep OTP-related UI optional because only election mode requires OTP verification.
-6. Use `{{api.baseUrl}}/api/voting/...` for backend calls to avoid cross-domain failures on hosted embeds/custom domains.
-7. Use `{{urls.nominate}}` when linking users to public nomination intake.
+1. `VOTING_NOMINATION` -> `/e/:slug/nominate`
+2. `VOTING_NOMINEES` -> `/e/:slug/nominees`
+3. `VOTING` -> `/e/:slug/vote`
+4. `VOTING_LEADERBOARD` -> `/e/:slug/leaderboard`
+
+Routing and URL contract:
+
+1. Use `{{urls.vote}}` as canonical vote route.
+2. `{{urls.voting}}` is an alias retained for backward compatibility.
+3. Do not hardcode `/e/...` paths.
+4. Use `{{urls.nominate}}`, `{{urls.nominees}}`, and `{{urls.leaderboard}}` for cross-page CTAs.
+
+Data contract:
+
+1. Render category tabs/chips from `{{voting.categories}}`.
+2. Render grouped nominee listings from `{{voting.nomineesByCategory}}`.
+3. Render rankings from `{{voting.leaderboard}}`.
+4. Use `{{voting.selectedCategory}}` for active/default category state.
+5. Keep OTP UI conditional (`{{voting.config.requireOtpForElection}}` and contest mode checks).
+
+### Nominees By Category Example
+
+```html
+{{#each voting.nomineesByCategory}}
+  <section class="category">
+    <h3>{{title}}</h3>
+    <p>{{mode}} · {{totalVotes}} total votes</p>
+    <ul>
+      {{#each nominees}}
+        <li>
+          <strong>{{name}}</strong>
+          <span>{{totalVotes}} votes</span>
+          <a href="{{@root.urls.vote}}?contestId={{contestId}}&optionId={{optionId}}">Vote</a>
+        </li>
+      {{/each}}
+    </ul>
+  </section>
+{{/each}}
+```
+
+### Vote CTA Pattern (Required)
+
+For every nominee list item, attach a Vote CTA to:
+
+`{{urls.vote}}?contestId=<contestId>&optionId=<optionId>`
+
+This lets public users jump directly into a preselected vote flow.
+
+### Nomination Custom Fields Example
+
+Use contest-defined custom fields (`voting.contests[].nominationFormFields`) when rendering nomination pages:
+
+```html
+{{#each voting.contests}}
+  {{#if nominationFormFields}}
+    <section data-contest-id="{{id}}">
+      <h4>{{title}} nomination form</h4>
+      {{#each nominationFormFields}}
+        <label>
+          {{label}}
+          {{#if required}}*{{/if}}
+          <input name="{{id}}" type="text" placeholder="{{placeholder}}" />
+        </label>
+      {{/each}}
+    </section>
+  {{/if}}
+{{/each}}
+```
+
+Use `type` and `options` from each field object in your JS to upgrade this base markup to `textarea`, `select`, `email`, `phone`, or `number` controls.
+
+### Leaderboard Example
+
+```html
+{{#each voting.leaderboard}}
+  <article>
+    <h3>{{title}}</h3>
+    <ol>
+      {{#each rankings}}
+        <li>
+          #{{rank}} {{name}} - {{totalVotes}} votes
+          <a href="{{@root.urls.vote}}?contestId={{contestId}}&optionId={{optionId}}">Vote</a>
+        </li>
+      {{/each}}
+    </ol>
+  </article>
+{{/each}}
+```
 
 ### Default Voting Starter Coverage
 
-The default `VOTING` starter template (`default-voting`) is designed to cover all critical voting flows:
+The platform seeds four default voting starters:
 
-1. Contest and nominee selection.
-2. Awards mode free vote submission.
-3. Election mode OTP request + OTP verification.
-4. Paid vote intent creation with gateway selection and redirect handling.
-5. Session token persistence and reuse.
-6. Public leaderboard rendering and refresh.
+1. `default-voting` (`VOTING`)
+2. `default-voting-nomination` (`VOTING_NOMINATION`)
+3. `default-voting-nominees` (`VOTING_NOMINEES`)
+4. `default-voting-leaderboard` (`VOTING_LEADERBOARD`)
+
+When voting is enabled on an event and any voting template assignment is empty, these defaults are auto-assigned without overriding explicit custom selections.
 
 ## Live Landing CTA Rules
 
@@ -506,7 +600,8 @@ For template development support:
 
 
 ### Recent Updates (2026-03-04)
-- Added `VOTING` template type for `/e/:slug/vote`.
-- Added `{{urls.voting}}`, `{{voting.config}}`, `{{voting.contests}}`, and `{{voting.leaderboard}}` template data.
-- Added admin template assignment support for voting page templates.
+- Added split voting template types: `VOTING_NOMINATION`, `VOTING_NOMINEES`, `VOTING`, and `VOTING_LEADERBOARD`.
+- Added split voting URL variables: `{{urls.nominate}}`, `{{urls.nominees}}`, `{{urls.vote}}`, `{{urls.voting}}` alias, and `{{urls.leaderboard}}`.
+- Added voting template data for category-based nominee rendering: `{{voting.categories}}`, `{{voting.nomineesByCategory}}`, and `{{voting.selectedCategory}}`.
+- Added admin template assignment support for split voting pages.
 

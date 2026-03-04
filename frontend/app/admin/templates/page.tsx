@@ -29,17 +29,19 @@ const typeLabels: Record<string, string> = {
   GUESTBOOK_AUDIO: 'Audio Recording',
   GUESTBOOK_PHOTO: 'Photo Upload',
   THANK_YOU: 'Thank You',
-  BOOTH: 'Booth Menu',                       // Add this if missing
-  BOOTH_VIDEO: 'Booth Video',                // Add this if missing
-  BOOTH_AUDIO: 'Booth Audio',                // Add this if missing
-  BOOTH_PHOTO: 'Booth Photo',                // Add this if missing
-  LIVE_LANDING: 'Live Landing Page',         // ⭐ ADD THIS
-  EVENT_ENDED: 'Event Ended Page',           // ⭐ ADD THIS
+  BOOTH: 'Booth Menu',
+  BOOTH_VIDEO: 'Booth Video',
+  BOOTH_AUDIO: 'Booth Audio',
+  BOOTH_PHOTO: 'Booth Photo',
+  LIVE_LANDING: 'Live Landing Page',
+  EVENT_ENDED: 'Event Ended Page',
   ITINERARY: 'Itinerary Page',
   GIFTING: 'Gifting Page',
   VOTING: 'Voting Page',
+  VOTING_NOMINATION: 'Voting Nomination',
+  VOTING_NOMINEES: 'Voting Nominees',
+  VOTING_LEADERBOARD: 'Voting Leaderboard',
 };
-
 const typeColors: Record<string, string> = {
   INVITATION: 'bg-blue-100 text-blue-700 border-blue-200',
   RSVP: 'bg-green-100 text-green-700 border-green-200',
@@ -48,17 +50,19 @@ const typeColors: Record<string, string> = {
   GUESTBOOK_AUDIO: 'bg-amber-100 text-amber-700 border-amber-200',
   GUESTBOOK_PHOTO: 'bg-teal-100 text-teal-700 border-teal-200',
   THANK_YOU: 'bg-orange-100 text-orange-700 border-orange-200',
-  BOOTH: 'bg-indigo-100 text-indigo-700 border-indigo-200',   
-  BOOTH_VIDEO: 'bg-pink-100 text-pink-700 border-pink-200', 
-  BOOTH_AUDIO: 'bg-cyan-100 text-cyan-700 border-cyan-200',  
-  BOOTH_PHOTO: 'bg-lime-100 text-lime-700 border-lime-200',  
-  LIVE_LANDING: 'bg-violet-100 text-violet-700 border-violet-200',  
+  BOOTH: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  BOOTH_VIDEO: 'bg-pink-100 text-pink-700 border-pink-200',
+  BOOTH_AUDIO: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  BOOTH_PHOTO: 'bg-lime-100 text-lime-700 border-lime-200',
+  LIVE_LANDING: 'bg-violet-100 text-violet-700 border-violet-200',
   EVENT_ENDED: 'bg-rose-100 text-rose-700 border-rose-200',
   ITINERARY: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   GIFTING: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
   VOTING: 'bg-sky-100 text-sky-700 border-sky-200',
+  VOTING_NOMINATION: 'bg-orange-100 text-orange-700 border-orange-200',
+  VOTING_NOMINEES: 'bg-red-100 text-red-700 border-red-200',
+  VOTING_LEADERBOARD: 'bg-amber-100 text-amber-700 border-amber-200',
 };
-
 const typeIconColors: Record<string, string> = {
   INVITATION: 'bg-blue-500',
   RSVP: 'bg-green-500',
@@ -66,18 +70,20 @@ const typeIconColors: Record<string, string> = {
   GUESTBOOK_VIDEO: 'bg-red-500',
   GUESTBOOK_AUDIO: 'bg-amber-500',
   GUESTBOOK_PHOTO: 'bg-teal-500',
-  BOOTH: 'bg-indigo-500',           // Add if missing
-  BOOTH_VIDEO: 'bg-pink-500',       // Add if missing
-  BOOTH_AUDIO: 'bg-cyan-500',       // Add if missing
-  BOOTH_PHOTO: 'bg-lime-500',       // Add if missing
+  BOOTH: 'bg-indigo-500',
+  BOOTH_VIDEO: 'bg-pink-500',
+  BOOTH_AUDIO: 'bg-cyan-500',
+  BOOTH_PHOTO: 'bg-lime-500',
   THANK_YOU: 'bg-orange-500',
-  LIVE_LANDING: 'bg-violet-500',    // ⭐ ADD THIS
-  EVENT_ENDED: 'bg-rose-500',       // ⭐ ADD THIS
+  LIVE_LANDING: 'bg-violet-500',
+  EVENT_ENDED: 'bg-rose-500',
   ITINERARY: 'bg-emerald-500',
   GIFTING: 'bg-fuchsia-500',
   VOTING: 'bg-sky-500',
+  VOTING_NOMINATION: 'bg-orange-500',
+  VOTING_NOMINEES: 'bg-red-500',
+  VOTING_LEADERBOARD: 'bg-amber-500',
 };
-
 type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'type' | 'created' | 'updated' | 'usage';
 
@@ -244,7 +250,10 @@ export default function TemplatesPage() {
     thankYou: templates.filter(t => t.type === 'THANK_YOU').length,
     itinerary: templates.filter(t => t.type === 'ITINERARY').length,
     gifting: templates.filter(t => t.type === 'GIFTING').length,
-    voting: templates.filter(t => t.type === 'VOTING').length,
+    votingVote: templates.filter(t => t.type === 'VOTING').length,
+    votingNomination: templates.filter(t => t.type === 'VOTING_NOMINATION').length,
+    votingNominees: templates.filter(t => t.type === 'VOTING_NOMINEES').length,
+    votingLeaderboard: templates.filter(t => t.type === 'VOTING_LEADERBOARD').length,
   };
 
   return (
@@ -266,7 +275,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
         <button
           onClick={() => setFilter('all')}
           className={cn(
@@ -287,7 +296,10 @@ export default function TemplatesPage() {
           { type: 'THANK_YOU', count: stats.thankYou },
           { type: 'ITINERARY', count: stats.itinerary },
           { type: 'GIFTING', count: stats.gifting },
-          { type: 'VOTING', count: stats.voting },
+          { type: 'VOTING', count: stats.votingVote },
+          { type: 'VOTING_NOMINATION', count: stats.votingNomination },
+          { type: 'VOTING_NOMINEES', count: stats.votingNominees },
+          { type: 'VOTING_LEADERBOARD', count: stats.votingLeaderboard },
         ].map(({ type, count }) => (
           <button
             key={type}
@@ -615,3 +627,4 @@ export default function TemplatesPage() {
     </div>
   );
 }
+

@@ -47,38 +47,68 @@ const resolveCoverUrl = (coverImagePath) => {
         }
     }
 };
-const DEFAULT_VOTING_TEMPLATE_ID = 'default-voting';
-const ensureDefaultVotingTemplateAssignment = async (eventId, currentVotingPageTemplateId) => {
-    if (currentVotingPageTemplateId)
-        return currentVotingPageTemplateId;
+const DEFAULT_VOTING_TEMPLATE_IDS = {
+    VOTING: 'default-voting',
+    VOTING_NOMINATION: 'default-voting-nomination',
+    VOTING_NOMINEES: 'default-voting-nominees',
+    VOTING_LEADERBOARD: 'default-voting-leaderboard',
+};
+const resolveDefaultTemplateId = async (templateType) => {
+    const preferredId = DEFAULT_VOTING_TEMPLATE_IDS[templateType];
     const hardDefault = await prisma_js_1.default.template.findFirst({
         where: {
-            id: DEFAULT_VOTING_TEMPLATE_ID,
-            type: 'VOTING',
+            id: preferredId,
+            type: templateType,
         },
         select: { id: true },
     });
-    const defaultVotingTemplate = hardDefault ??
-        (await prisma_js_1.default.template.findFirst({
-            where: {
-                type: 'VOTING',
-                isDefault: true,
-            },
-            orderBy: { createdAt: 'asc' },
-            select: { id: true },
-        }));
-    if (!defaultVotingTemplate)
-        return null;
+    if (hardDefault?.id)
+        return hardDefault.id;
+    const fallback = await prisma_js_1.default.template.findFirst({
+        where: {
+            type: templateType,
+            isDefault: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+    });
+    return fallback?.id || null;
+};
+const ensureDefaultVotingTemplateAssignments = async (eventId, currentTemplates) => {
+    const patch = {};
+    if (!currentTemplates.votingPageTemplateId) {
+        const defaultId = await resolveDefaultTemplateId('VOTING');
+        if (defaultId)
+            patch.votingPageTemplateId = defaultId;
+    }
+    if (!currentTemplates.nominationPageTemplateId) {
+        const defaultId = await resolveDefaultTemplateId('VOTING_NOMINATION');
+        if (defaultId)
+            patch.nominationPageTemplateId = defaultId;
+    }
+    if (!currentTemplates.nomineesPageTemplateId) {
+        const defaultId = await resolveDefaultTemplateId('VOTING_NOMINEES');
+        if (defaultId)
+            patch.nomineesPageTemplateId = defaultId;
+    }
+    if (!currentTemplates.leaderboardPageTemplateId) {
+        const defaultId = await resolveDefaultTemplateId('VOTING_LEADERBOARD');
+        if (defaultId)
+            patch.leaderboardPageTemplateId = defaultId;
+    }
+    if (!Object.keys(patch).length)
+        return currentTemplates;
     await prisma_js_1.default.event.updateMany({
         where: {
             id: eventId,
-            votingPageTemplateId: null,
+            ...(patch.votingPageTemplateId ? { votingPageTemplateId: null } : {}),
+            ...(patch.nominationPageTemplateId ? { nominationPageTemplateId: null } : {}),
+            ...(patch.nomineesPageTemplateId ? { nomineesPageTemplateId: null } : {}),
+            ...(patch.leaderboardPageTemplateId ? { leaderboardPageTemplateId: null } : {}),
         },
-        data: {
-            votingPageTemplateId: defaultVotingTemplate.id,
-        },
+        data: patch,
     });
-    return defaultVotingTemplate.id;
+    return { ...currentTemplates, ...patch };
 };
 // All routes require admin authentication
 router.use(auth_js_1.authenticateAdmin);
@@ -141,6 +171,9 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             itineraryPageTemplate: true,
             giftingPageTemplate: true,
             votingPageTemplate: true,
+            nominationPageTemplate: true,
+            nomineesPageTemplate: true,
+            leaderboardPageTemplate: true,
             domains: {
                 orderBy: { createdAt: 'asc' },
             },
@@ -199,13 +232,19 @@ router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             itineraryPageTemplateId: data.itineraryPageTemplateId ?? null,
             giftingPageTemplateId: data.giftingPageTemplateId ?? null,
             votingPageTemplateId: data.votingPageTemplateId ?? null,
+            nominationPageTemplateId: data.nominationPageTemplateId ?? null,
+            nomineesPageTemplateId: data.nomineesPageTemplateId ?? null,
+            leaderboardPageTemplateId: data.leaderboardPageTemplateId ?? null,
             ownerAccessToken: (0, node_crypto_1.randomUUID)(),
         },
     });
-    const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(event.id, event.votingPageTemplateId);
-    const createdEvent = assignedVotingTemplateId && assignedVotingTemplateId !== event.votingPageTemplateId
-        ? { ...event, votingPageTemplateId: assignedVotingTemplateId }
-        : event;
+    const assignedTemplates = await ensureDefaultVotingTemplateAssignments(event.id, {
+        votingPageTemplateId: event.votingPageTemplateId,
+        nominationPageTemplateId: event.nominationPageTemplateId,
+        nomineesPageTemplateId: event.nomineesPageTemplateId,
+        leaderboardPageTemplateId: event.leaderboardPageTemplateId,
+    });
+    const createdEvent = { ...event, ...assignedTemplates };
     // Create audit log
     await prisma_js_1.default.auditLog.create({
         data: {
@@ -285,6 +324,9 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         itineraryPageTemplateId: data.itineraryPageTemplateId,
         giftingPageTemplateId: data.giftingPageTemplateId,
         votingPageTemplateId: data.votingPageTemplateId,
+        nominationPageTemplateId: data.nominationPageTemplateId,
+        nomineesPageTemplateId: data.nomineesPageTemplateId,
+        leaderboardPageTemplateId: data.leaderboardPageTemplateId,
     };
     if (updateData.invitationOnly === false) {
         updateData.checkInEnabled = false;
@@ -294,14 +336,20 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         data: updateData,
     });
     let patchedEvent = event;
-    if (data.votingPageTemplateId !== null) {
-        const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(event.id, event.votingPageTemplateId);
-        if (assignedVotingTemplateId && assignedVotingTemplateId !== event.votingPageTemplateId) {
-            patchedEvent = {
-                ...event,
-                votingPageTemplateId: assignedVotingTemplateId,
-            };
-        }
+    if (data.votingPageTemplateId !== null &&
+        data.nominationPageTemplateId !== null &&
+        data.nomineesPageTemplateId !== null &&
+        data.leaderboardPageTemplateId !== null) {
+        const assignedTemplates = await ensureDefaultVotingTemplateAssignments(event.id, {
+            votingPageTemplateId: event.votingPageTemplateId,
+            nominationPageTemplateId: event.nominationPageTemplateId,
+            nomineesPageTemplateId: event.nomineesPageTemplateId,
+            leaderboardPageTemplateId: event.leaderboardPageTemplateId,
+        });
+        patchedEvent = {
+            ...event,
+            ...assignedTemplates,
+        };
     }
     // Create audit log for phase change
     if (data.phase && data.phase !== existing.phase) {
@@ -795,10 +843,13 @@ router.post('/:id/duplicate', (0, errorHandler_js_1.asyncHandler)(async (req, re
             isArchived: false, // Reset archived status
         },
     });
-    const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(duplicatedEvent.id, duplicatedEvent.votingPageTemplateId);
-    const finalDuplicatedEvent = assignedVotingTemplateId && assignedVotingTemplateId !== duplicatedEvent.votingPageTemplateId
-        ? { ...duplicatedEvent, votingPageTemplateId: assignedVotingTemplateId }
-        : duplicatedEvent;
+    const assignedTemplates = await ensureDefaultVotingTemplateAssignments(duplicatedEvent.id, {
+        votingPageTemplateId: duplicatedEvent.votingPageTemplateId,
+        nominationPageTemplateId: duplicatedEvent.nominationPageTemplateId,
+        nomineesPageTemplateId: duplicatedEvent.nomineesPageTemplateId,
+        leaderboardPageTemplateId: duplicatedEvent.leaderboardPageTemplateId,
+    });
+    const finalDuplicatedEvent = { ...duplicatedEvent, ...assignedTemplates };
     // Copy form fields
     if (originalEvent.formFields.length > 0) {
         await prisma_js_1.default.eventFormField.createMany({
@@ -887,7 +938,7 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
  */
 router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id: eventId } = req.params;
-    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, liveLandingTemplateId, eventEndedTemplateId, itineraryPageTemplateId, giftingPageTemplateId, votingPageTemplateId, } = req.body;
+    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, liveLandingTemplateId, eventEndedTemplateId, itineraryPageTemplateId, giftingPageTemplateId, votingPageTemplateId, nominationPageTemplateId, nomineesPageTemplateId, leaderboardPageTemplateId, } = req.body;
     const event = await prisma_js_1.default.event.findUnique({
         where: { id: eventId },
     });
@@ -939,6 +990,9 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
     await validateAndAdd(itineraryPageTemplateId, 'itineraryPageTemplateId', 'ITINERARY', { enabled: event.itineraryEnabled, name: 'itinerary' });
     await validateAndAdd(giftingPageTemplateId, 'giftingPageTemplateId', 'GIFTING', { enabled: event.giftingEnabled, name: 'gifting' });
     await validateAndAdd(votingPageTemplateId, 'votingPageTemplateId', 'VOTING');
+    await validateAndAdd(nominationPageTemplateId, 'nominationPageTemplateId', 'VOTING_NOMINATION');
+    await validateAndAdd(nomineesPageTemplateId, 'nomineesPageTemplateId', 'VOTING_NOMINEES');
+    await validateAndAdd(leaderboardPageTemplateId, 'leaderboardPageTemplateId', 'VOTING_LEADERBOARD');
     // Debug: log validated template assignments before copying/updating
     console.info(`[Events] Validated template assignments for event=${eventId}: ${JSON.stringify(templateAssignments)}`);
     // Copy template assets to event-specific directory for isolation
@@ -960,6 +1014,9 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
         itineraryPageTemplateId,
         giftingPageTemplateId,
         votingPageTemplateId,
+        nominationPageTemplateId,
+        nomineesPageTemplateId,
+        leaderboardPageTemplateId,
     });
     const updatedEvent = await prisma_js_1.default.event.update({
         where: { id: eventId },
@@ -981,6 +1038,9 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
             itineraryPageTemplate: true,
             giftingPageTemplate: true,
             votingPageTemplate: true,
+            nominationPageTemplate: true,
+            nomineesPageTemplate: true,
+            leaderboardPageTemplate: true,
         },
     });
     console.info(`[Events] Updated event ${eventId} templates: ${JSON.stringify({
@@ -993,6 +1053,9 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
         itineraryPageTemplateId: updatedEvent.itineraryPageTemplateId,
         giftingPageTemplateId: updatedEvent.giftingPageTemplateId,
         votingPageTemplateId: updatedEvent.votingPageTemplateId,
+        nominationPageTemplateId: updatedEvent.nominationPageTemplateId,
+        nomineesPageTemplateId: updatedEvent.nomineesPageTemplateId,
+        leaderboardPageTemplateId: updatedEvent.leaderboardPageTemplateId,
     })}`);
     // Create audit log
     await prisma_js_1.default.auditLog.create({

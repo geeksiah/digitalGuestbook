@@ -38,7 +38,7 @@ export const metadata: Metadata = {
         url: "/og-app-eventpeepo.png",
         width: 1200,
         height: 630,
-        alt: "EventPeepo — Bespoke Digital Experiences",
+        alt: "EventPeepo - Bespoke Digital Experiences",
       },
     ],
   },
@@ -57,21 +57,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`}>
       <body className="font-sans">
-        <ServiceWorkerRegister /> {/* ✅ ADD THIS */}
+        <ServiceWorkerRegister />
         {children}
         <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#1a1a2e',
-              color: '#fff',
-              borderRadius: '8px',
+              background: '#121b28',
+              color: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.15)',
+              boxShadow: '0 14px 34px rgba(5, 15, 32, 0.35)',
             },
             success: {
               iconTheme: {
-                primary: '#d4af37',
-                secondary: '#1a1a2e',
+                primary: '#ff3b30',
+                secondary: '#121b28',
               },
             },
           }}
@@ -80,3 +82,5 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+
+

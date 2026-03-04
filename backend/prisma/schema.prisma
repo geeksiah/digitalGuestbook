@@ -348,6 +348,9 @@ model Event {
   itineraryPageTemplateId String?
   giftingPageTemplateId   String?
   votingPageTemplateId    String?
+  nominationPageTemplateId String?
+  nomineesPageTemplateId   String?
+  leaderboardPageTemplateId String?
 
   // Template Assignments
   invitationTemplateId     String?
@@ -425,6 +428,9 @@ model Event {
   itineraryPageTemplate   Template?          @relation("ItineraryPageTemplate", fields: [itineraryPageTemplateId], references: [id])
   giftingPageTemplate     Template?          @relation("GiftingPageTemplate", fields: [giftingPageTemplateId], references: [id])
   votingPageTemplate      Template?          @relation("VotingPageTemplate", fields: [votingPageTemplateId], references: [id])
+  nominationPageTemplate  Template?          @relation("NominationPageTemplate", fields: [nominationPageTemplateId], references: [id])
+  nomineesPageTemplate    Template?          @relation("NomineesPageTemplate", fields: [nomineesPageTemplateId], references: [id])
+  leaderboardPageTemplate Template?          @relation("LeaderboardPageTemplate", fields: [leaderboardPageTemplateId], references: [id])
   itineraryTemplate       ItineraryTemplate? @relation("EventSelectedItineraryTemplate", fields: [itineraryTemplateId], references: [id])
 
   rsvps                RSVP[]
@@ -777,6 +783,9 @@ model Template {
   eventsAsItineraryPage  Event[] @relation("ItineraryPageTemplate")
   eventsAsGiftingPage    Event[] @relation("GiftingPageTemplate")
   eventsAsVotingPage     Event[] @relation("VotingPageTemplate")
+  eventsAsNominationPage Event[] @relation("NominationPageTemplate")
+  eventsAsNomineesPage   Event[] @relation("NomineesPageTemplate")
+  eventsAsLeaderboardPage Event[] @relation("LeaderboardPageTemplate")
 }
 
 // ============================================

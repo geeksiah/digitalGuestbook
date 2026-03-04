@@ -20,6 +20,9 @@ interface TemplateAssignments {
   itineraryPageTemplateId?: string | null;
   giftingPageTemplateId?: string | null;
   votingPageTemplateId?: string | null;
+  nominationPageTemplateId?: string | null;
+  nomineesPageTemplateId?: string | null;
+  leaderboardPageTemplateId?: string | null;
 }
 
 /**
@@ -141,6 +144,9 @@ export const copyTemplateAssetsForEvent = async (
   await copyAssets(assignments.itineraryPageTemplateId, 'itineraryPageTemplateId');
   await copyAssets(assignments.giftingPageTemplateId, 'giftingPageTemplateId');
   await copyAssets(assignments.votingPageTemplateId, 'votingPageTemplateId');
+  await copyAssets(assignments.nominationPageTemplateId, 'nominationPageTemplateId');
+  await copyAssets(assignments.nomineesPageTemplateId, 'nomineesPageTemplateId');
+  await copyAssets(assignments.leaderboardPageTemplateId, 'leaderboardPageTemplateId');
 };
 
 /**

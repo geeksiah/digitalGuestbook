@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 
 type NominationField = {
   id: string;
@@ -38,8 +39,10 @@ export default function NominatePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = String(params.slug || '');
+  const contestQuery = String(searchParams.get('contestId') || '');
   const embedToken = String(searchParams.get('token') || searchParams.get('embedToken') || '');
   const storageKey = `${SESSION_STORAGE_KEY_PREFIX}${slug}`;
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'nomination-page');
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +72,9 @@ export default function NominatePage() {
       setEnabled(Boolean(payload.enabled));
       setEventName(payload.event?.name || '');
       setContests(payload.contests || []);
-      setContestId((current) => current || payload.contests?.[0]?.id || '');
+      const firstContest = payload.contests?.[0]?.id || '';
+      const requested = contestQuery && payload.contests.some((contest) => contest.id === contestQuery) ? contestQuery : '';
+      setContestId((current) => current || requested || firstContest);
       const persisted = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
       if (persisted) {
         setSessionToken(persisted);
@@ -82,9 +87,10 @@ export default function NominatePage() {
   };
 
   useEffect(() => {
+    if (!slug || templateLoading || hasTemplate) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  }, [slug, templateLoading, hasTemplate]);
 
   useEffect(() => {
     if (!selectedContest) return;
@@ -141,6 +147,18 @@ export default function NominatePage() {
     }
   };
 
+  if (templateLoading) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
+
+  if (hasTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="nomination-page" refreshIntervalMs={15000} revalidateOnFocus forceFresh />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
@@ -151,8 +169,8 @@ export default function NominatePage() {
 
   if (!enabled) {
     return (
-      <div className="min-h-screen bg-surface-50 p-6">
-        <div className="mx-auto max-w-xl bg-white rounded-2xl border border-surface-200 p-6 space-y-3">
+      <div className="min-h-screen section-gradient p-6">
+        <div className="mx-auto max-w-xl card-premium p-6 space-y-3">
           <h1 className="text-xl font-semibold text-brand-900">Public Nominations Closed</h1>
           <p className="text-sm text-surface-600">Nominations are currently disabled for this event.</p>
           <Link className="btn-outline inline-flex" href={`/e/${slug}/vote`}>
@@ -164,44 +182,62 @@ export default function NominatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-white to-emerald-50 py-6 px-4">
-      <div className="mx-auto max-w-xl space-y-4">
-        <section className="rounded-2xl border border-emerald-100 bg-white p-4">
-          <h1 className="text-2xl font-bold text-brand-950">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-1">Nominate people for voting categories.</p>
-          <Link className="inline-flex mt-3 text-sm text-brand-700 hover:text-brand-900" href={`/e/${slug}/vote`}>
-            Back to voting
-          </Link>
+    <div className="min-h-screen section-gradient py-6 px-4">
+      <div className="mx-auto max-w-3xl space-y-4">
+        <section className="hero-premium p-5">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-orange-200 font-semibold">Nomination Flow</p>
+          <h1 className="text-2xl font-bold mt-2">{eventName}</h1>
+          <p className="text-sm text-surface-200 mt-1">Submit nominees by category. Approved nominees appear in the public listing.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href={`/e/${slug}/nominees${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
+              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+            >
+              Nominees
+            </Link>
+            <Link
+              href={`/e/${slug}/vote${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
+              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+            >
+              Vote
+            </Link>
+            <Link
+              href={`/e/${slug}/leaderboard${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
+              className="px-3 py-2 rounded-full border border-white/25 text-xs font-semibold hover:bg-white/10"
+            >
+              Leaderboard
+            </Link>
+          </div>
         </section>
 
-        <section className="rounded-2xl border border-surface-200 bg-white p-4 space-y-3">
-          <label className="space-y-1 block">
-            <span className="text-xs text-surface-600">Category</span>
-            <select className="input" value={contestId} onChange={(event) => setContestId(event.target.value)}>
-              {contests.map((contest) => (
-                <option key={contest.id} value={contest.id}>
-                  {contest.title} ({contest.mode})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-1 block">
-            <span className="text-xs text-surface-600">Nominee Name *</span>
-            <input className="input" value={nomineeName} onChange={(event) => setNomineeName(event.target.value)} />
-          </label>
+        <section className="card-premium p-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="space-y-1 block">
+              <span className="text-xs text-surface-600">Category</span>
+              <select className="input" value={contestId} onChange={(event) => setContestId(event.target.value)}>
+                {contests.map((contest) => (
+                  <option key={contest.id} value={contest.id}>
+                    {contest.title} ({contest.mode})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-xs text-surface-600">Nominee Name *</span>
+              <input className="input" value={nomineeName} onChange={(event) => setNomineeName(event.target.value)} />
+            </label>
+          </div>
 
           <label className="space-y-1 block">
             <span className="text-xs text-surface-600">Nominee Description</span>
             <textarea className="input min-h-[96px]" value={nomineeDescription} onChange={(event) => setNomineeDescription(event.target.value)} />
           </label>
 
-          <label className="space-y-1 block">
-            <span className="text-xs text-surface-600">Your Name *</span>
-            <input className="input" value={submitterName} onChange={(event) => setSubmitterName(event.target.value)} />
-          </label>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="space-y-1 block">
+              <span className="text-xs text-surface-600">Your Name *</span>
+              <input className="input" value={submitterName} onChange={(event) => setSubmitterName(event.target.value)} />
+            </label>
             <label className="space-y-1 block">
               <span className="text-xs text-surface-600">Your Email</span>
               <input className="input" type="email" value={submitterEmail} onChange={(event) => setSubmitterEmail(event.target.value)} />
@@ -214,7 +250,7 @@ export default function NominatePage() {
 
           {selectedContest?.nominationFormFields?.length ? (
             <div className="space-y-2 pt-2 border-t border-surface-100">
-              <p className="text-sm font-medium text-brand-900">Custom Fields</p>
+              <p className="text-sm font-semibold text-brand-900">Custom Fields</p>
               {selectedContest.nominationFormFields.map((field) => (
                 <label key={field.id} className="space-y-1 block">
                   <span className="text-xs text-surface-600">
@@ -255,7 +291,7 @@ export default function NominatePage() {
             </div>
           ) : null}
 
-          <button className="btn-primary w-full" onClick={submitNomination} disabled={submitting}>
+          <button className="btn-accent w-full" onClick={submitNomination} disabled={submitting}>
             {submitting ? 'Submitting...' : 'Submit Nomination'}
           </button>
         </section>
@@ -263,4 +299,3 @@ export default function NominatePage() {
     </div>
   );
 }
-

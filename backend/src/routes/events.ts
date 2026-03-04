@@ -46,46 +46,81 @@ const resolveCoverUrl = (coverImagePath: string | null | undefined) => {
   }
 };
 
-const DEFAULT_VOTING_TEMPLATE_ID = 'default-voting';
+const DEFAULT_VOTING_TEMPLATE_IDS = {
+  VOTING: 'default-voting',
+  VOTING_NOMINATION: 'default-voting-nomination',
+  VOTING_NOMINEES: 'default-voting-nominees',
+  VOTING_LEADERBOARD: 'default-voting-leaderboard',
+} as const;
 
-const ensureDefaultVotingTemplateAssignment = async (
-  eventId: string,
-  currentVotingPageTemplateId: string | null | undefined
+type EventVotingTemplateState = {
+  votingPageTemplateId?: string | null;
+  nominationPageTemplateId?: string | null;
+  nomineesPageTemplateId?: string | null;
+  leaderboardPageTemplateId?: string | null;
+};
+
+const resolveDefaultTemplateId = async (
+  templateType: keyof typeof DEFAULT_VOTING_TEMPLATE_IDS
 ) => {
-  if (currentVotingPageTemplateId) return currentVotingPageTemplateId;
-
+  const preferredId = DEFAULT_VOTING_TEMPLATE_IDS[templateType];
   const hardDefault = await prisma.template.findFirst({
     where: {
-      id: DEFAULT_VOTING_TEMPLATE_ID,
-      type: 'VOTING',
+      id: preferredId,
+      type: templateType,
     },
     select: { id: true },
   });
+  if (hardDefault?.id) return hardDefault.id;
 
-  const defaultVotingTemplate =
-    hardDefault ??
-    (await prisma.template.findFirst({
-      where: {
-        type: 'VOTING',
-        isDefault: true,
-      },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    }));
+  const fallback = await prisma.template.findFirst({
+    where: {
+      type: templateType,
+      isDefault: true,
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  return fallback?.id || null;
+};
 
-  if (!defaultVotingTemplate) return null;
+const ensureDefaultVotingTemplateAssignments = async (
+  eventId: string,
+  currentTemplates: EventVotingTemplateState
+) => {
+  const patch: Record<string, string> = {};
+
+  if (!currentTemplates.votingPageTemplateId) {
+    const defaultId = await resolveDefaultTemplateId('VOTING');
+    if (defaultId) patch.votingPageTemplateId = defaultId;
+  }
+  if (!currentTemplates.nominationPageTemplateId) {
+    const defaultId = await resolveDefaultTemplateId('VOTING_NOMINATION');
+    if (defaultId) patch.nominationPageTemplateId = defaultId;
+  }
+  if (!currentTemplates.nomineesPageTemplateId) {
+    const defaultId = await resolveDefaultTemplateId('VOTING_NOMINEES');
+    if (defaultId) patch.nomineesPageTemplateId = defaultId;
+  }
+  if (!currentTemplates.leaderboardPageTemplateId) {
+    const defaultId = await resolveDefaultTemplateId('VOTING_LEADERBOARD');
+    if (defaultId) patch.leaderboardPageTemplateId = defaultId;
+  }
+
+  if (!Object.keys(patch).length) return currentTemplates;
 
   await prisma.event.updateMany({
     where: {
       id: eventId,
-      votingPageTemplateId: null,
+      ...(patch.votingPageTemplateId ? { votingPageTemplateId: null } : {}),
+      ...(patch.nominationPageTemplateId ? { nominationPageTemplateId: null } : {}),
+      ...(patch.nomineesPageTemplateId ? { nomineesPageTemplateId: null } : {}),
+      ...(patch.leaderboardPageTemplateId ? { leaderboardPageTemplateId: null } : {}),
     },
-    data: {
-      votingPageTemplateId: defaultVotingTemplate.id,
-    },
+    data: patch,
   });
 
-  return defaultVotingTemplate.id;
+  return { ...currentTemplates, ...patch };
 };
 
 // All routes require admin authentication
@@ -156,6 +191,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
       itineraryPageTemplate: true,
       giftingPageTemplate: true,
       votingPageTemplate: true,
+      nominationPageTemplate: true,
+      nomineesPageTemplate: true,
+      leaderboardPageTemplate: true,
       domains: {
         orderBy: { createdAt: 'asc' },
       },
@@ -221,18 +259,23 @@ router.post('/', asyncHandler(async (req, res) => {
       itineraryPageTemplateId: data.itineraryPageTemplateId ?? null,
       giftingPageTemplateId: data.giftingPageTemplateId ?? null,
       votingPageTemplateId: data.votingPageTemplateId ?? null,
+      nominationPageTemplateId: data.nominationPageTemplateId ?? null,
+      nomineesPageTemplateId: data.nomineesPageTemplateId ?? null,
+      leaderboardPageTemplateId: data.leaderboardPageTemplateId ?? null,
       ownerAccessToken: randomUUID(),
     },
   });
 
-  const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(
+  const assignedTemplates = await ensureDefaultVotingTemplateAssignments(
     event.id,
-    event.votingPageTemplateId
+    {
+      votingPageTemplateId: event.votingPageTemplateId,
+      nominationPageTemplateId: event.nominationPageTemplateId,
+      nomineesPageTemplateId: event.nomineesPageTemplateId,
+      leaderboardPageTemplateId: event.leaderboardPageTemplateId,
+    }
   );
-  const createdEvent =
-    assignedVotingTemplateId && assignedVotingTemplateId !== event.votingPageTemplateId
-      ? { ...event, votingPageTemplateId: assignedVotingTemplateId }
-      : event;
+  const createdEvent = { ...event, ...assignedTemplates };
 
   // Create audit log
   await prisma.auditLog.create({
@@ -321,6 +364,9 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     itineraryPageTemplateId: data.itineraryPageTemplateId,
     giftingPageTemplateId: data.giftingPageTemplateId,
     votingPageTemplateId: data.votingPageTemplateId,
+    nominationPageTemplateId: data.nominationPageTemplateId,
+    nomineesPageTemplateId: data.nomineesPageTemplateId,
+    leaderboardPageTemplateId: data.leaderboardPageTemplateId,
   };
   
   if (updateData.invitationOnly === false) {
@@ -333,17 +379,22 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   });
 
   let patchedEvent = event;
-  if (data.votingPageTemplateId !== null) {
-    const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(
-      event.id,
-      event.votingPageTemplateId
-    );
-    if (assignedVotingTemplateId && assignedVotingTemplateId !== event.votingPageTemplateId) {
-      patchedEvent = {
-        ...event,
-        votingPageTemplateId: assignedVotingTemplateId,
-      };
-    }
+  if (
+    data.votingPageTemplateId !== null &&
+    data.nominationPageTemplateId !== null &&
+    data.nomineesPageTemplateId !== null &&
+    data.leaderboardPageTemplateId !== null
+  ) {
+    const assignedTemplates = await ensureDefaultVotingTemplateAssignments(event.id, {
+      votingPageTemplateId: event.votingPageTemplateId,
+      nominationPageTemplateId: (event as any).nominationPageTemplateId,
+      nomineesPageTemplateId: (event as any).nomineesPageTemplateId,
+      leaderboardPageTemplateId: (event as any).leaderboardPageTemplateId,
+    });
+    patchedEvent = {
+      ...event,
+      ...assignedTemplates,
+    };
   }
 
   // Create audit log for phase change
@@ -922,14 +973,13 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
     },
   });
 
-  const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(
-    duplicatedEvent.id,
-    duplicatedEvent.votingPageTemplateId
-  );
-  const finalDuplicatedEvent =
-    assignedVotingTemplateId && assignedVotingTemplateId !== duplicatedEvent.votingPageTemplateId
-      ? { ...duplicatedEvent, votingPageTemplateId: assignedVotingTemplateId }
-      : duplicatedEvent;
+  const assignedTemplates = await ensureDefaultVotingTemplateAssignments(duplicatedEvent.id, {
+    votingPageTemplateId: duplicatedEvent.votingPageTemplateId,
+    nominationPageTemplateId: (duplicatedEvent as any).nominationPageTemplateId,
+    nomineesPageTemplateId: (duplicatedEvent as any).nomineesPageTemplateId,
+    leaderboardPageTemplateId: (duplicatedEvent as any).leaderboardPageTemplateId,
+  });
+  const finalDuplicatedEvent = { ...duplicatedEvent, ...assignedTemplates };
 
   // Copy form fields
   if (originalEvent.formFields.length > 0) {
@@ -1047,6 +1097,9 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     itineraryPageTemplateId,
     giftingPageTemplateId,
     votingPageTemplateId,
+    nominationPageTemplateId,
+    nomineesPageTemplateId,
+    leaderboardPageTemplateId,
   } = req.body;
 
   const event = await prisma.event.findUnique({
@@ -1123,6 +1176,9 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
   await validateAndAdd(giftingPageTemplateId, 'giftingPageTemplateId', 'GIFTING',
     { enabled: event.giftingEnabled, name: 'gifting' });
   await validateAndAdd(votingPageTemplateId, 'votingPageTemplateId', 'VOTING');
+  await validateAndAdd(nominationPageTemplateId, 'nominationPageTemplateId', 'VOTING_NOMINATION');
+  await validateAndAdd(nomineesPageTemplateId, 'nomineesPageTemplateId', 'VOTING_NOMINEES');
+  await validateAndAdd(leaderboardPageTemplateId, 'leaderboardPageTemplateId', 'VOTING_LEADERBOARD');
 
   // Debug: log validated template assignments before copying/updating
   console.info(`[Events] Validated template assignments for event=${eventId}: ${JSON.stringify(templateAssignments)}`);
@@ -1146,6 +1202,9 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     itineraryPageTemplateId,
     giftingPageTemplateId,
     votingPageTemplateId,
+    nominationPageTemplateId,
+    nomineesPageTemplateId,
+    leaderboardPageTemplateId,
   });
 
   const updatedEvent = await prisma.event.update({
@@ -1168,6 +1227,9 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
       itineraryPageTemplate: true,
       giftingPageTemplate: true,
       votingPageTemplate: true,
+      nominationPageTemplate: true,
+      nomineesPageTemplate: true,
+      leaderboardPageTemplate: true,
     },
   });
 
@@ -1181,6 +1243,9 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     itineraryPageTemplateId: updatedEvent.itineraryPageTemplateId,
     giftingPageTemplateId: updatedEvent.giftingPageTemplateId,
     votingPageTemplateId: updatedEvent.votingPageTemplateId,
+    nominationPageTemplateId: (updatedEvent as any).nominationPageTemplateId,
+    nomineesPageTemplateId: (updatedEvent as any).nomineesPageTemplateId,
+    leaderboardPageTemplateId: (updatedEvent as any).leaderboardPageTemplateId,
   })}`);
 
   // Create audit log
