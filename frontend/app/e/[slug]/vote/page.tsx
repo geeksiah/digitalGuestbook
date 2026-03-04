@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 
 type VotingConfig = {
   mode: 'AWARDS' | 'ELECTION';
   allowFreeVotes: boolean;
   allowPaidVotes: boolean;
+  allowPublicNominations?: boolean;
   requireOtpForElection: boolean;
   voteUnitPrice: number;
   currency: string;
@@ -30,6 +32,7 @@ type VotingContest = {
   title: string;
   description: string | null;
   mode: 'AWARDS' | 'ELECTION';
+  allowPublicNominations?: boolean;
   options: VotingOption[];
 };
 
@@ -69,6 +72,7 @@ export default function VotePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = String(params.slug || '');
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'voting-page');
   const embedToken = String(searchParams.get('token') || searchParams.get('embedToken') || '');
   const storageKey = `${SESSION_STORAGE_KEY_PREFIX}${slug}`;
 
@@ -147,9 +151,10 @@ export default function VotePage() {
   };
 
   useEffect(() => {
+    if (!slug || templateLoading || hasTemplate) return;
     void fetchVoteData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, embedToken]);
+  }, [slug, embedToken, templateLoading, hasTemplate]);
 
   const castFreeVote = async () => {
     if (!selectedContest || !selectedOption) {
@@ -278,6 +283,18 @@ export default function VotePage() {
     }
   };
 
+  if (templateLoading) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
+
+  if (hasTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="voting-page" refreshIntervalMs={15000} revalidateOnFocus forceFresh />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
@@ -292,6 +309,16 @@ export default function VotePage() {
         <section className="rounded-2xl border border-emerald-100 bg-white p-4">
           <h1 className="text-2xl font-bold text-brand-950">{eventName}</h1>
           <p className="text-sm text-surface-600 mt-1">Vote for your nominee and track the leaderboard live.</p>
+          {config?.allowPublicNominations ? (
+            <div className="mt-3">
+              <a
+                href={`/e/${slug}/nominate`}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
+              >
+                Nominate Someone
+              </a>
+            </div>
+          ) : null}
         </section>
 
         {config && electionMode ? (

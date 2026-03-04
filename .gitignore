@@ -9,3 +9,4 @@ backend/node_modules/
 .vercel/
 *.db
 *.db-journal
+backend/prisma/migrations/20260304120000_unified_payments_voting/migration.sql

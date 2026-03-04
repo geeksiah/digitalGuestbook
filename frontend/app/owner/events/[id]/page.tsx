@@ -139,7 +139,7 @@ interface EventApproval {
   updatedAt?: string | null;
 }
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'tickets' | 'itinerary' | 'invites' | 'domains' | 'gifts';
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'tickets' | 'itinerary' | 'invites' | 'domains' | 'voting' | 'gifts';
 
 const Icons = {
   back: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
@@ -1098,6 +1098,7 @@ export default function OwnerEventDetailPage() {
     { id: 'itinerary', label: 'Itinerary', count: itineraryItems.length || undefined },
     { id: 'invites', label: 'Invites', count: invites.length },
     { id: 'domains', label: 'Domains', count: domains.length },
+    { id: 'voting', label: 'Voting' },
     { id: 'gifts', label: 'Gifts', count: event._count.giftOrders || 0 },
   ];
 
@@ -2229,6 +2230,63 @@ export default function OwnerEventDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Voting Tab */}
+        {activeTab === 'voting' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg border border-surface-200 p-6">
+              <h3 className="text-lg font-semibold text-brand-900">Voting Setup</h3>
+              <p className="text-sm text-surface-600 mt-1">
+                Configure contests/nominees, review leaderboard, and monitor paid/free vote analytics from the voting dashboard.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href={`/owner/events/${event.id}/voting`}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
+                >
+                  Open Voting Dashboard
+                </Link>
+                <Link
+                  href={`/e/${event.slug}/vote`}
+                  target="_blank"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-surface-200 text-surface-700 hover:bg-surface-50 transition-colors text-sm font-medium"
+                >
+                  Open Public Vote Page
+                </Link>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-surface-200 p-6">
+              <h4 className="text-base font-semibold text-brand-900">Embed & Link Sharing</h4>
+              <p className="text-sm text-surface-600 mt-1">
+                Use `/e/{event.slug}/vote` for hosted voting and `/embed/vote.js` for website embeds.
+              </p>
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/vote`)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Hosted Voting URL</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/nominate`)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Public Nomination URL</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink('/embed/vote.js')}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Embed Script URL</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -47,6 +47,39 @@ const resolveCoverUrl = (coverImagePath) => {
         }
     }
 };
+const DEFAULT_VOTING_TEMPLATE_ID = 'default-voting';
+const ensureDefaultVotingTemplateAssignment = async (eventId, currentVotingPageTemplateId) => {
+    if (currentVotingPageTemplateId)
+        return currentVotingPageTemplateId;
+    const hardDefault = await prisma_js_1.default.template.findFirst({
+        where: {
+            id: DEFAULT_VOTING_TEMPLATE_ID,
+            type: 'VOTING',
+        },
+        select: { id: true },
+    });
+    const defaultVotingTemplate = hardDefault ??
+        (await prisma_js_1.default.template.findFirst({
+            where: {
+                type: 'VOTING',
+                isDefault: true,
+            },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+        }));
+    if (!defaultVotingTemplate)
+        return null;
+    await prisma_js_1.default.event.updateMany({
+        where: {
+            id: eventId,
+            votingPageTemplateId: null,
+        },
+        data: {
+            votingPageTemplateId: defaultVotingTemplate.id,
+        },
+    });
+    return defaultVotingTemplate.id;
+};
 // All routes require admin authentication
 router.use(auth_js_1.authenticateAdmin);
 /**
@@ -107,6 +140,7 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             eventEndedTemplate: true,
             itineraryPageTemplate: true,
             giftingPageTemplate: true,
+            votingPageTemplate: true,
             domains: {
                 orderBy: { createdAt: 'asc' },
             },
@@ -164,25 +198,30 @@ router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             itineraryTemplateId: data.itineraryTemplateId ?? null,
             itineraryPageTemplateId: data.itineraryPageTemplateId ?? null,
             giftingPageTemplateId: data.giftingPageTemplateId ?? null,
+            votingPageTemplateId: data.votingPageTemplateId ?? null,
             ownerAccessToken: (0, node_crypto_1.randomUUID)(),
         },
     });
+    const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(event.id, event.votingPageTemplateId);
+    const createdEvent = assignedVotingTemplateId && assignedVotingTemplateId !== event.votingPageTemplateId
+        ? { ...event, votingPageTemplateId: assignedVotingTemplateId }
+        : event;
     // Create audit log
     await prisma_js_1.default.auditLog.create({
         data: {
-            eventId: event.id,
+            eventId: createdEvent.id,
             adminId: req.admin.id,
             action: 'EVENT_CREATED',
             entityType: 'EVENT',
-            entityId: event.id,
-            details: JSON.stringify({ name: event.name, slug: event.slug }),
+            entityId: createdEvent.id,
+            details: JSON.stringify({ name: createdEvent.name, slug: createdEvent.slug }),
         },
     });
     res.status(201).json({
         event: {
-            ...event,
-            currentPhase: (0, phase_js_1.calculateEventPhase)(event),
-            coverImageUrl: resolveCoverUrl(event.coverImagePath),
+            ...createdEvent,
+            currentPhase: (0, phase_js_1.calculateEventPhase)(createdEvent),
+            coverImageUrl: resolveCoverUrl(createdEvent.coverImagePath),
         },
     });
 }));
@@ -245,6 +284,7 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         itineraryTemplateId: data.itineraryTemplateId,
         itineraryPageTemplateId: data.itineraryPageTemplateId,
         giftingPageTemplateId: data.giftingPageTemplateId,
+        votingPageTemplateId: data.votingPageTemplateId,
     };
     if (updateData.invitationOnly === false) {
         updateData.checkInEnabled = false;
@@ -253,15 +293,25 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         where: { id: req.params.id },
         data: updateData,
     });
+    let patchedEvent = event;
+    if (data.votingPageTemplateId !== null) {
+        const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(event.id, event.votingPageTemplateId);
+        if (assignedVotingTemplateId && assignedVotingTemplateId !== event.votingPageTemplateId) {
+            patchedEvent = {
+                ...event,
+                votingPageTemplateId: assignedVotingTemplateId,
+            };
+        }
+    }
     // Create audit log for phase change
     if (data.phase && data.phase !== existing.phase) {
         await prisma_js_1.default.auditLog.create({
             data: {
-                eventId: event.id,
+                eventId: patchedEvent.id,
                 adminId: req.admin.id,
                 action: 'PHASE_CHANGED',
                 entityType: 'EVENT',
-                entityId: event.id,
+                entityId: patchedEvent.id,
                 details: JSON.stringify({
                     from: existing.phase,
                     to: data.phase,
@@ -272,9 +322,9 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     }
     res.json({
         event: {
-            ...event,
-            currentPhase: (0, phase_js_1.calculateEventPhase)(event),
-            coverImageUrl: resolveCoverUrl(event.coverImagePath),
+            ...patchedEvent,
+            currentPhase: (0, phase_js_1.calculateEventPhase)(patchedEvent),
+            coverImageUrl: resolveCoverUrl(patchedEvent.coverImagePath),
         },
     });
 }));
@@ -745,11 +795,15 @@ router.post('/:id/duplicate', (0, errorHandler_js_1.asyncHandler)(async (req, re
             isArchived: false, // Reset archived status
         },
     });
+    const assignedVotingTemplateId = await ensureDefaultVotingTemplateAssignment(duplicatedEvent.id, duplicatedEvent.votingPageTemplateId);
+    const finalDuplicatedEvent = assignedVotingTemplateId && assignedVotingTemplateId !== duplicatedEvent.votingPageTemplateId
+        ? { ...duplicatedEvent, votingPageTemplateId: assignedVotingTemplateId }
+        : duplicatedEvent;
     // Copy form fields
     if (originalEvent.formFields.length > 0) {
         await prisma_js_1.default.eventFormField.createMany({
             data: originalEvent.formFields.map(field => ({
-                eventId: duplicatedEvent.id,
+                eventId: finalDuplicatedEvent.id,
                 fieldName: field.fieldName,
                 label: field.label,
                 type: field.type,
@@ -763,7 +817,7 @@ router.post('/:id/duplicate', (0, errorHandler_js_1.asyncHandler)(async (req, re
     if (originalEvent.ticketTypes.length > 0) {
         await prisma_js_1.default.ticketType.createMany({
             data: originalEvent.ticketTypes.map(ticket => ({
-                eventId: duplicatedEvent.id,
+                eventId: finalDuplicatedEvent.id,
                 name: ticket.name,
                 description: ticket.description,
                 price: ticket.price,
@@ -781,16 +835,16 @@ router.post('/:id/duplicate', (0, errorHandler_js_1.asyncHandler)(async (req, re
             adminId: req.admin.id,
             action: 'EVENT_DUPLICATED',
             entityType: 'EVENT',
-            entityId: duplicatedEvent.id,
+            entityId: finalDuplicatedEvent.id,
             details: JSON.stringify({
                 originalEventId: id,
-                newEventId: duplicatedEvent.id,
+                newEventId: finalDuplicatedEvent.id,
                 newSlug: newSlug,
             }),
         },
     });
     res.status(201).json({
-        event: duplicatedEvent,
+        event: finalDuplicatedEvent,
         message: 'Event duplicated successfully',
     });
 }));
@@ -833,7 +887,7 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
  */
 router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id: eventId } = req.params;
-    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, liveLandingTemplateId, eventEndedTemplateId, itineraryPageTemplateId, giftingPageTemplateId, } = req.body;
+    const { invitationTemplateId, rsvpTemplateId, guestbookTemplateId, guestbookVideoTemplateId, guestbookAudioTemplateId, guestbookPhotoTemplateId, boothTemplateId, boothVideoTemplateId, boothAudioTemplateId, boothPhotoTemplateId, thankYouTemplateId, liveLandingTemplateId, eventEndedTemplateId, itineraryPageTemplateId, giftingPageTemplateId, votingPageTemplateId, } = req.body;
     const event = await prisma_js_1.default.event.findUnique({
         where: { id: eventId },
     });
@@ -884,6 +938,7 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
     await validateAndAdd(eventEndedTemplateId, 'eventEndedTemplateId', 'EVENT_ENDED');
     await validateAndAdd(itineraryPageTemplateId, 'itineraryPageTemplateId', 'ITINERARY', { enabled: event.itineraryEnabled, name: 'itinerary' });
     await validateAndAdd(giftingPageTemplateId, 'giftingPageTemplateId', 'GIFTING', { enabled: event.giftingEnabled, name: 'gifting' });
+    await validateAndAdd(votingPageTemplateId, 'votingPageTemplateId', 'VOTING');
     // Debug: log validated template assignments before copying/updating
     console.info(`[Events] Validated template assignments for event=${eventId}: ${JSON.stringify(templateAssignments)}`);
     // Copy template assets to event-specific directory for isolation
@@ -904,6 +959,7 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
         eventEndedTemplateId,
         itineraryPageTemplateId,
         giftingPageTemplateId,
+        votingPageTemplateId,
     });
     const updatedEvent = await prisma_js_1.default.event.update({
         where: { id: eventId },
@@ -924,6 +980,7 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
             eventEndedTemplate: true,
             itineraryPageTemplate: true,
             giftingPageTemplate: true,
+            votingPageTemplate: true,
         },
     });
     console.info(`[Events] Updated event ${eventId} templates: ${JSON.stringify({
@@ -935,6 +992,7 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
         eventEndedTemplateId: updatedEvent.eventEndedTemplateId,
         itineraryPageTemplateId: updatedEvent.itineraryPageTemplateId,
         giftingPageTemplateId: updatedEvent.giftingPageTemplateId,
+        votingPageTemplateId: updatedEvent.votingPageTemplateId,
     })}`);
     // Create audit log
     await prisma_js_1.default.auditLog.create({

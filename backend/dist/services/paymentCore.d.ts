@@ -39,10 +39,10 @@ export declare const finalizePaymentIntent: (params: FinalizeParams) => Promise<
         currency: string;
         eventId: string;
         amount: number;
+        metadataJson: string | null;
         platformFeeAmount: number;
         organizerAmount: number;
         purpose: import(".prisma/client").$Enums.PaymentIntentPurpose;
-        metadataJson: string | null;
         gatewayReference: string | null;
         idempotencyKey: string;
     };
@@ -58,10 +58,10 @@ export declare const finalizePaymentIntent: (params: FinalizeParams) => Promise<
         currency: string;
         eventId: string;
         amount: number;
+        metadataJson: string | null;
         platformFeeAmount: number;
         organizerAmount: number;
         purpose: import(".prisma/client").$Enums.PaymentIntentPurpose;
-        metadataJson: string | null;
         gatewayReference: string | null;
         idempotencyKey: string;
     };

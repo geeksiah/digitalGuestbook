@@ -23,6 +23,7 @@ const typeLabels: Record<string, string> = {
   EVENT_ENDED: 'Event Ended Page',        // ⭐ NEW
   ITINERARY: 'Itinerary Page',
   GIFTING: 'Gifting Page',
+  VOTING: 'Voting Page',
 };
 
 export default function NewTemplatePage() {

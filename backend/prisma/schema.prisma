@@ -50,6 +50,12 @@ enum VoteType {
   PAID
 }
 
+enum VotingNominationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum TicketInventoryHoldStatus {
   ACTIVE
   RELEASED
@@ -341,6 +347,7 @@ model Event {
   giftingEnabled          Boolean @default(false)
   itineraryPageTemplateId String?
   giftingPageTemplateId   String?
+  votingPageTemplateId    String?
 
   // Template Assignments
   invitationTemplateId     String?
@@ -417,6 +424,7 @@ model Event {
   eventEndedTemplate      Template?          @relation("EventEndedTemplate", fields: [eventEndedTemplateId], references: [id])
   itineraryPageTemplate   Template?          @relation("ItineraryPageTemplate", fields: [itineraryPageTemplateId], references: [id])
   giftingPageTemplate     Template?          @relation("GiftingPageTemplate", fields: [giftingPageTemplateId], references: [id])
+  votingPageTemplate      Template?          @relation("VotingPageTemplate", fields: [votingPageTemplateId], references: [id])
   itineraryTemplate       ItineraryTemplate? @relation("EventSelectedItineraryTemplate", fields: [itineraryTemplateId], references: [id])
 
   rsvps                RSVP[]
@@ -438,6 +446,7 @@ model Event {
   votingConfig         VotingEventConfig?
   votingContests       VotingContest[]
   votingOptions        VotingOption[]
+  votingNominations    VotingNomination[]
   voteRecords          VoteRecord[]
   voterSessions        VoterSession[]
   voteGrants           VoteGrant[]
@@ -767,6 +776,7 @@ model Template {
   eventsAsEventEnded     Event[] @relation("EventEndedTemplate")
   eventsAsItineraryPage  Event[] @relation("ItineraryPageTemplate")
   eventsAsGiftingPage    Event[] @relation("GiftingPageTemplate")
+  eventsAsVotingPage     Event[] @relation("VotingPageTemplate")
 }
 
 // ============================================
@@ -1475,6 +1485,7 @@ model VotingEventConfig {
   isEnabled         Boolean  @default(true)
   allowFreeVotes    Boolean  @default(true)
   allowPaidVotes    Boolean  @default(false)
+  allowPublicNominations Boolean @default(false)
   requireOtpForElection Boolean @default(true)
   voteUnitPrice     Float    @default(1)
   currency          String   @default("USD")
@@ -1495,6 +1506,8 @@ model VotingContest {
   description String?
   mode        VoteMode @default(AWARDS)
   isActive    Boolean  @default(true)
+  allowPublicNominations Boolean @default(false)
+  nominationFormFieldsJson String?
   startsAt    DateTime?
   endsAt      DateTime?
   sortOrder   Int      @default(0)
@@ -1506,6 +1519,7 @@ model VotingContest {
   options    VotingOption[]
   voteRecords VoteRecord[]
   voteGrants  VoteGrant[]
+  nominations VotingNomination[]
 
   @@index([eventId, isActive, sortOrder])
 }
@@ -1529,6 +1543,7 @@ model VotingOption {
   event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
   contest    VotingContest @relation(fields: [contestId], references: [id], onDelete: Cascade)
   voteRecords VoteRecord[]
+  approvedNominations VotingNomination[] @relation("NominationApprovedOption")
 
   @@index([eventId, contestId, sortOrder])
 }
@@ -1596,6 +1611,34 @@ model VoteRecord {
 
   @@index([eventId, contestId, optionId, createdAt])
   @@unique([eventId, contestId, voterKey, voteType])
+}
+
+model VotingNomination {
+  id                 String                 @id @default(uuid())
+  eventId            String
+  contestId          String
+  status             VotingNominationStatus @default(PENDING)
+  nomineeName        String
+  nomineeDescription String?
+  submitterName      String
+  submitterEmail     String?
+  submitterPhone     String?
+  customFieldsJson   String?
+  ipHash             String?
+  userAgentHash      String?
+  reviewNotes        String?
+  reviewedAt         DateTime?
+  reviewedByOwnerId  String?
+  approvedOptionId   String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contest        VotingContest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  approvedOption VotingOption? @relation("NominationApprovedOption", fields: [approvedOptionId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, contestId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model GiftOrderItem {

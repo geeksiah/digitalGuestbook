@@ -8,6 +8,15 @@ import { ownerDashboardApi } from '@/lib/api';
 
 type VoteMode = 'AWARDS' | 'ELECTION';
 
+type NominationField = {
+  id: string;
+  label: string;
+  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select';
+  required?: boolean;
+  placeholder?: string | null;
+  options?: string[];
+};
+
 type EventLite = {
   id: string;
   name: string;
@@ -19,6 +28,7 @@ type VotingConfig = {
   isEnabled: boolean;
   allowFreeVotes: boolean;
   allowPaidVotes: boolean;
+  allowPublicNominations?: boolean;
   requireOtpForElection: boolean;
   voteUnitPrice: number;
   currency: string;
@@ -44,7 +54,27 @@ type VotingContest = {
   mode: VoteMode;
   description?: string | null;
   isActive: boolean;
+  allowPublicNominations?: boolean;
+  nominationFormFields?: NominationField[];
   options: VotingOption[];
+};
+
+type VotingNomination = {
+  id: string;
+  eventId: string;
+  contestId: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  nomineeName: string;
+  nomineeDescription?: string | null;
+  submitterName: string;
+  submitterEmail?: string | null;
+  submitterPhone?: string | null;
+  customFieldsJson?: string | null;
+  reviewNotes?: string | null;
+  reviewedAt?: string | null;
+  approvedOption?: { id: string; name: string } | null;
+  contest?: { id: string; title: string; mode: VoteMode } | null;
+  createdAt: string;
 };
 
 type VotingAnalytics = {
@@ -56,6 +86,12 @@ type VotingAnalytics = {
     paidRevenue: number;
     conversionRate: number;
     paidIntentConversionRate: number;
+    nominations?: {
+      total: number;
+      pending: number;
+      approved: number;
+      rejected: number;
+    };
   };
   perContest: Array<{
     contestId: string;
@@ -98,11 +134,14 @@ export default function OwnerVotingPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingContest, setSavingContest] = useState(false);
   const [savingOption, setSavingOption] = useState(false);
+  const [savingNominationRule, setSavingNominationRule] = useState(false);
+  const [reviewingNominationId, setReviewingNominationId] = useState('');
 
   const [event, setEvent] = useState<EventLite | null>(null);
   const [config, setConfig] = useState<VotingConfig | null>(null);
   const [contests, setContests] = useState<VotingContest[]>([]);
   const [options, setOptions] = useState<VotingOption[]>([]);
+  const [nominations, setNominations] = useState<VotingNomination[]>([]);
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
   const [selectedContestId, setSelectedContestId] = useState('');
 
@@ -110,10 +149,22 @@ export default function OwnerVotingPage() {
   const [newContestMode, setNewContestMode] = useState<VoteMode>('AWARDS');
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionDescription, setNewOptionDescription] = useState('');
+  const [newFieldLabel, setNewFieldLabel] = useState('');
+  const [newFieldType, setNewFieldType] = useState<NominationField['type']>('text');
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
+  const [newFieldOptions, setNewFieldOptions] = useState('');
 
   const selectedContest = useMemo(
     () => contests.find((contest) => contest.id === selectedContestId) || null,
     [contests, selectedContestId]
+  );
+  const selectedNominationFields = useMemo(
+    () => selectedContest?.nominationFormFields || [],
+    [selectedContest]
+  );
+  const pendingNominations = useMemo(
+    () => nominations.filter((nomination) => nomination.status === 'PENDING'),
+    [nominations]
   );
 
   const loadVotingConfig = async () => {
@@ -133,6 +184,11 @@ export default function OwnerVotingPage() {
     setAnalytics(response.data as VotingAnalytics);
   };
 
+  const loadNominations = async () => {
+    const response = await ownerDashboardApi.getVotingNominations(eventId, { limit: 200 });
+    setNominations((response.data?.nominations || []) as VotingNomination[]);
+  };
+
   const loadOptions = async (contestId: string) => {
     if (!contestId) {
       setOptions([]);
@@ -150,7 +206,7 @@ export default function OwnerVotingPage() {
       const eventPayload = eventResponse.data?.event || null;
       setEvent(eventPayload ? { id: eventPayload.id, name: eventPayload.name, slug: eventPayload.slug } : null);
 
-      await Promise.all([loadVotingConfig(), loadContests(), loadAnalytics()]);
+      await Promise.all([loadVotingConfig(), loadContests(), loadAnalytics(), loadNominations()]);
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to load voting dashboard');
     } finally {
@@ -310,6 +366,86 @@ export default function OwnerVotingPage() {
     }
   };
 
+  const updateSelectedContestNominationRules = async (patch: Partial<VotingContest>) => {
+    if (!selectedContest) return;
+    setSavingNominationRule(true);
+    try {
+      await ownerDashboardApi.updateVotingContest(eventId, selectedContest.id, patch);
+      await loadContests();
+      await loadNominations();
+      toast.success('Nomination settings updated');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to update nomination settings');
+    } finally {
+      setSavingNominationRule(false);
+    }
+  };
+
+  const addNominationField = async () => {
+    if (!selectedContest) return;
+    if (!newFieldLabel.trim()) {
+      toast.error('Enter field label');
+      return;
+    }
+    const normalizedId = newFieldLabel
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    if (!normalizedId) {
+      toast.error('Field label must include letters or numbers');
+      return;
+    }
+    if (selectedNominationFields.some((field) => field.id === normalizedId)) {
+      toast.error('Field already exists');
+      return;
+    }
+    const nextField: NominationField = {
+      id: normalizedId,
+      label: newFieldLabel.trim(),
+      type: newFieldType,
+      required: newFieldRequired,
+      ...(newFieldType === 'select'
+        ? {
+            options: newFieldOptions
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          }
+        : {}),
+    };
+    await updateSelectedContestNominationRules({
+      nominationFormFields: [...selectedNominationFields, nextField],
+    });
+    setNewFieldLabel('');
+    setNewFieldType('text');
+    setNewFieldRequired(false);
+    setNewFieldOptions('');
+  };
+
+  const removeNominationField = async (fieldId: string) => {
+    if (!selectedContest) return;
+    await updateSelectedContestNominationRules({
+      nominationFormFields: selectedNominationFields.filter((field) => field.id !== fieldId),
+    });
+  };
+
+  const reviewNomination = async (nominationId: string, status: 'APPROVED' | 'REJECTED') => {
+    setReviewingNominationId(nominationId);
+    try {
+      await ownerDashboardApi.reviewVotingNomination(eventId, nominationId, {
+        status,
+        createNomineeOnApprove: true,
+      });
+      await Promise.all([loadNominations(), loadOptions(selectedContestId), loadContests(), loadAnalytics()]);
+      toast.success(`Nomination ${status.toLowerCase()}`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to review nomination');
+    } finally {
+      setReviewingNominationId('');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
@@ -331,9 +467,14 @@ export default function OwnerVotingPage() {
           </p>
         </div>
         {event?.slug ? (
-          <Link href={`/e/${event.slug}/vote`} className="btn-outline" target="_blank">
-            Open Public Voting Page
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/e/${event.slug}/vote`} className="btn-outline" target="_blank">
+              Open Public Voting Page
+            </Link>
+            <Link href={`/e/${event.slug}/nominate`} className="btn-outline" target="_blank">
+              Open Public Nomination Page
+            </Link>
+          </div>
         ) : null}
       </div>
 
@@ -397,7 +538,7 @@ export default function OwnerVotingPage() {
                 />
               </label>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
               <button
                 type="button"
                 className={`btn-outline ${config.isEnabled ? 'border-emerald-300 text-emerald-700' : ''}`}
@@ -433,6 +574,17 @@ export default function OwnerVotingPage() {
                 }
               >
                 OTP: {config.requireOtpForElection ? 'Required' : 'Optional'}
+              </button>
+              <button
+                type="button"
+                className={`btn-outline ${config.allowPublicNominations ? 'border-emerald-300 text-emerald-700' : ''}`}
+                onClick={() =>
+                  setConfig((current) =>
+                    current ? { ...current, allowPublicNominations: !current.allowPublicNominations } : current
+                  )
+                }
+              >
+                Nominations: {config.allowPublicNominations ? 'On' : 'Off'}
               </button>
               <button className="btn-primary" onClick={saveConfig} disabled={savingConfig}>
                 {savingConfig ? 'Saving...' : 'Save Config'}
@@ -520,6 +672,93 @@ export default function OwnerVotingPage() {
               Add Nominee
             </button>
           </div>
+          <div className="rounded-lg border border-surface-200 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-brand-900">Public Nomination Rules</p>
+              <button
+                className="btn-outline text-xs"
+                disabled={!selectedContest || savingNominationRule}
+                onClick={() =>
+                  selectedContest &&
+                  updateSelectedContestNominationRules({
+                    allowPublicNominations: !Boolean(selectedContest.allowPublicNominations),
+                  })
+                }
+              >
+                {selectedContest?.allowPublicNominations ? 'Disable Public Nominations' : 'Enable Public Nominations'}
+              </button>
+            </div>
+            <p className="text-xs text-surface-600">
+              Category-level toggle for public nominee submissions. Global toggle is in Voting Configuration.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input
+                className="input"
+                placeholder="Custom field label"
+                value={newFieldLabel}
+                onChange={(event) => setNewFieldLabel(event.target.value)}
+                disabled={!selectedContest}
+              />
+              <select
+                className="input"
+                value={newFieldType}
+                onChange={(event) => setNewFieldType(event.target.value as NominationField['type'])}
+                disabled={!selectedContest}
+              >
+                <option value="text">text</option>
+                <option value="textarea">textarea</option>
+                <option value="email">email</option>
+                <option value="phone">phone</option>
+                <option value="number">number</option>
+                <option value="select">select</option>
+              </select>
+            </div>
+            {newFieldType === 'select' ? (
+              <input
+                className="input"
+                placeholder="Select options (comma separated)"
+                value={newFieldOptions}
+                onChange={(event) => setNewFieldOptions(event.target.value)}
+                disabled={!selectedContest}
+              />
+            ) : null}
+            <div className="flex items-center justify-between">
+              <label className="inline-flex items-center gap-2 text-xs text-surface-700">
+                <input
+                  type="checkbox"
+                  checked={newFieldRequired}
+                  onChange={(event) => setNewFieldRequired(event.target.checked)}
+                  disabled={!selectedContest}
+                />
+                Required
+              </label>
+              <button className="btn-outline text-xs" onClick={addNominationField} disabled={!selectedContest || savingNominationRule}>
+                Add Custom Field
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              {selectedNominationFields.length === 0 ? (
+                <p className="text-xs text-surface-500">No custom fields configured.</p>
+              ) : (
+                selectedNominationFields.map((field) => (
+                  <div key={field.id} className="flex items-center justify-between rounded border border-surface-200 px-2 py-1.5 text-xs">
+                    <span>
+                      {field.label} ({field.type}){field.required ? ' *' : ''}
+                    </span>
+                    <button
+                      className="text-rose-700 hover:text-rose-800"
+                      onClick={() => removeNominationField(field.id)}
+                      disabled={savingNominationRule}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
           <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
             {options.length === 0 ? (
               <p className="text-sm text-surface-500">No nominees in this contest.</p>
@@ -548,11 +787,77 @@ export default function OwnerVotingPage() {
         </div>
       </section>
 
+      <section className="bg-white border border-surface-200 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-brand-900">Public Nominations</h2>
+          <span className="text-xs text-surface-600">
+            {pendingNominations.length} pending
+          </span>
+        </div>
+        {nominations.length === 0 ? (
+          <p className="text-sm text-surface-500">No nominations yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+            {nominations.map((nomination) => (
+              <div key={nomination.id} className="rounded-lg border border-surface-200 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-brand-900">{nomination.nomineeName}</p>
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs border ${
+                      nomination.status === 'PENDING'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : nomination.status === 'APPROVED'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {nomination.status}
+                  </span>
+                </div>
+                <p className="text-xs text-surface-600 mt-1">
+                  Category: {nomination.contest?.title || nomination.contestId} • Submitted by {nomination.submitterName}
+                </p>
+                {nomination.nomineeDescription ? (
+                  <p className="text-xs text-surface-600 mt-1">{nomination.nomineeDescription}</p>
+                ) : null}
+                {nomination.customFieldsJson ? (
+                  <pre className="mt-2 text-[11px] bg-surface-50 border border-surface-100 rounded p-2 overflow-x-auto text-surface-700">
+                    {nomination.customFieldsJson}
+                  </pre>
+                ) : null}
+                {nomination.status === 'PENDING' ? (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      className="btn-outline text-xs border-emerald-200 text-emerald-700"
+                      onClick={() => reviewNomination(nomination.id, 'APPROVED')}
+                      disabled={reviewingNominationId === nomination.id}
+                    >
+                      Approve + Add Nominee
+                    </button>
+                    <button
+                      className="btn-outline text-xs border-rose-200 text-rose-700"
+                      onClick={() => reviewNomination(nomination.id, 'REJECTED')}
+                      disabled={reviewingNominationId === nomination.id}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                ) : nomination.approvedOption ? (
+                  <p className="text-xs text-emerald-700 mt-2">
+                    Added nominee: {nomination.approvedOption.name}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="bg-white border border-surface-200 rounded-xl p-4 space-y-4">
         <h2 className="text-lg font-semibold text-brand-900">Voting Analytics</h2>
         {analytics ? (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
               <div className="rounded-lg bg-surface-50 p-3">
                 <p className="text-xs text-surface-500">Total Votes</p>
                 <p className="text-lg font-semibold text-brand-900">{analytics.totals.totalVotes}</p>
@@ -582,6 +887,15 @@ export default function OwnerVotingPage() {
               <div className="rounded-lg bg-surface-50 p-3">
                 <p className="text-xs text-surface-500">Intent Conversion</p>
                 <p className="text-lg font-semibold text-brand-900">{analytics.totals.paidIntentConversionRate}%</p>
+              </div>
+              <div className="rounded-lg bg-surface-50 p-3">
+                <p className="text-xs text-surface-500">Nominations</p>
+                <p className="text-lg font-semibold text-brand-900">
+                  {analytics.totals.nominations?.total || 0}
+                </p>
+                <p className="text-[11px] text-surface-600">
+                  Pending {analytics.totals.nominations?.pending || 0}
+                </p>
               </div>
             </div>
 
@@ -639,4 +953,3 @@ export default function OwnerVotingPage() {
     </div>
   );
 }
-

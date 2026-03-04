@@ -57,6 +57,7 @@ export declare const createEventSchema: z.ZodObject<{
     giftingEnabled: z.ZodDefault<z.ZodBoolean>;
     itineraryPageTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     giftingPageTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    votingPageTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     invitationTemplateId: z.ZodOptional<z.ZodString>;
     rsvpTemplateId: z.ZodOptional<z.ZodString>;
     guestbookTemplateId: z.ZodOptional<z.ZodString>;
@@ -136,6 +137,7 @@ export declare const createEventSchema: z.ZodObject<{
     itineraryTemplateId?: string | null | undefined;
     itineraryPageTemplateId?: string | null | undefined;
     giftingPageTemplateId?: string | null | undefined;
+    votingPageTemplateId?: string | null | undefined;
     invitationTemplateId?: string | undefined;
     rsvpTemplateId?: string | undefined;
     guestbookTemplateId?: string | undefined;
@@ -182,6 +184,7 @@ export declare const createEventSchema: z.ZodObject<{
     giftingEnabled?: boolean | undefined;
     itineraryPageTemplateId?: string | null | undefined;
     giftingPageTemplateId?: string | null | undefined;
+    votingPageTemplateId?: string | null | undefined;
     invitationTemplateId?: string | undefined;
     rsvpTemplateId?: string | undefined;
     guestbookTemplateId?: string | undefined;
@@ -247,6 +250,7 @@ export declare const updateEventSchema: z.ZodObject<{
     giftingEnabled: z.ZodOptional<z.ZodBoolean>;
     itineraryPageTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     giftingPageTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    votingPageTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     invitationTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     rsvpTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     guestbookTemplateId: z.ZodNullable<z.ZodOptional<z.ZodString>>;
@@ -314,6 +318,7 @@ export declare const updateEventSchema: z.ZodObject<{
     giftingEnabled?: boolean | undefined;
     itineraryPageTemplateId?: string | null | undefined;
     giftingPageTemplateId?: string | null | undefined;
+    votingPageTemplateId?: string | null | undefined;
     invitationTemplateId?: string | null | undefined;
     rsvpTemplateId?: string | null | undefined;
     guestbookTemplateId?: string | null | undefined;
@@ -380,6 +385,7 @@ export declare const updateEventSchema: z.ZodObject<{
     giftingEnabled?: boolean | undefined;
     itineraryPageTemplateId?: string | null | undefined;
     giftingPageTemplateId?: string | null | undefined;
+    votingPageTemplateId?: string | null | undefined;
     invitationTemplateId?: string | null | undefined;
     rsvpTemplateId?: string | null | undefined;
     guestbookTemplateId?: string | null | undefined;
@@ -417,7 +423,7 @@ export declare const updateEventSchema: z.ZodObject<{
 export declare const createTemplateSchema: z.ZodObject<{
     name: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
-    type: z.ZodEnum<["INVITATION", "RSVP", "GUESTBOOK", "GUESTBOOK_VIDEO", "GUESTBOOK_AUDIO", "GUESTBOOK_PHOTO", "BOOTH", "BOOTH_VIDEO", "BOOTH_AUDIO", "BOOTH_PHOTO", "THANK_YOU", "LIVE_LANDING", "EVENT_ENDED", "ITINERARY", "GIFTING"]>;
+    type: z.ZodEnum<["INVITATION", "RSVP", "GUESTBOOK", "GUESTBOOK_VIDEO", "GUESTBOOK_AUDIO", "GUESTBOOK_PHOTO", "BOOTH", "BOOTH_VIDEO", "BOOTH_AUDIO", "BOOTH_PHOTO", "THANK_YOU", "LIVE_LANDING", "EVENT_ENDED", "ITINERARY", "GIFTING", "VOTING"]>;
     htmlContent: z.ZodString;
     cssContent: z.ZodOptional<z.ZodString>;
     jsContent: z.ZodOptional<z.ZodString>;
@@ -425,7 +431,7 @@ export declare const createTemplateSchema: z.ZodObject<{
     isDefault: z.ZodDefault<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     name: string;
-    type: "RSVP" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING";
+    type: "RSVP" | "VOTING" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING";
     htmlContent: string;
     isDefault: boolean;
     description?: string | undefined;
@@ -434,7 +440,7 @@ export declare const createTemplateSchema: z.ZodObject<{
     variables?: string | undefined;
 }, {
     name: string;
-    type: "RSVP" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING";
+    type: "RSVP" | "VOTING" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING";
     htmlContent: string;
     description?: string | undefined;
     cssContent?: string | undefined;
@@ -445,7 +451,7 @@ export declare const createTemplateSchema: z.ZodObject<{
 export declare const updateTemplateSchema: z.ZodObject<{
     name: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodOptional<z.ZodString>>;
-    type: z.ZodOptional<z.ZodEnum<["INVITATION", "RSVP", "GUESTBOOK", "GUESTBOOK_VIDEO", "GUESTBOOK_AUDIO", "GUESTBOOK_PHOTO", "BOOTH", "BOOTH_VIDEO", "BOOTH_AUDIO", "BOOTH_PHOTO", "THANK_YOU", "LIVE_LANDING", "EVENT_ENDED", "ITINERARY", "GIFTING"]>>;
+    type: z.ZodOptional<z.ZodEnum<["INVITATION", "RSVP", "GUESTBOOK", "GUESTBOOK_VIDEO", "GUESTBOOK_AUDIO", "GUESTBOOK_PHOTO", "BOOTH", "BOOTH_VIDEO", "BOOTH_AUDIO", "BOOTH_PHOTO", "THANK_YOU", "LIVE_LANDING", "EVENT_ENDED", "ITINERARY", "GIFTING", "VOTING"]>>;
     htmlContent: z.ZodOptional<z.ZodString>;
     cssContent: z.ZodOptional<z.ZodOptional<z.ZodString>>;
     jsContent: z.ZodOptional<z.ZodOptional<z.ZodString>>;
@@ -454,7 +460,7 @@ export declare const updateTemplateSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     name?: string | undefined;
     description?: string | undefined;
-    type?: "RSVP" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING" | undefined;
+    type?: "RSVP" | "VOTING" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING" | undefined;
     htmlContent?: string | undefined;
     cssContent?: string | undefined;
     jsContent?: string | undefined;
@@ -463,7 +469,7 @@ export declare const updateTemplateSchema: z.ZodObject<{
 }, {
     name?: string | undefined;
     description?: string | undefined;
-    type?: "RSVP" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING" | undefined;
+    type?: "RSVP" | "VOTING" | "INVITATION" | "GUESTBOOK" | "GUESTBOOK_VIDEO" | "GUESTBOOK_AUDIO" | "GUESTBOOK_PHOTO" | "BOOTH" | "BOOTH_VIDEO" | "BOOTH_AUDIO" | "BOOTH_PHOTO" | "THANK_YOU" | "LIVE_LANDING" | "EVENT_ENDED" | "ITINERARY" | "GIFTING" | undefined;
     htmlContent?: string | undefined;
     cssContent?: string | undefined;
     jsContent?: string | undefined;

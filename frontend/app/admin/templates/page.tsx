@@ -37,6 +37,7 @@ const typeLabels: Record<string, string> = {
   EVENT_ENDED: 'Event Ended Page',           // ⭐ ADD THIS
   ITINERARY: 'Itinerary Page',
   GIFTING: 'Gifting Page',
+  VOTING: 'Voting Page',
 };
 
 const typeColors: Record<string, string> = {
@@ -55,6 +56,7 @@ const typeColors: Record<string, string> = {
   EVENT_ENDED: 'bg-rose-100 text-rose-700 border-rose-200',
   ITINERARY: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   GIFTING: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
+  VOTING: 'bg-sky-100 text-sky-700 border-sky-200',
 };
 
 const typeIconColors: Record<string, string> = {
@@ -73,6 +75,7 @@ const typeIconColors: Record<string, string> = {
   EVENT_ENDED: 'bg-rose-500',       // ⭐ ADD THIS
   ITINERARY: 'bg-emerald-500',
   GIFTING: 'bg-fuchsia-500',
+  VOTING: 'bg-sky-500',
 };
 
 type ViewMode = 'grid' | 'list';
@@ -241,6 +244,7 @@ export default function TemplatesPage() {
     thankYou: templates.filter(t => t.type === 'THANK_YOU').length,
     itinerary: templates.filter(t => t.type === 'ITINERARY').length,
     gifting: templates.filter(t => t.type === 'GIFTING').length,
+    voting: templates.filter(t => t.type === 'VOTING').length,
   };
 
   return (
@@ -283,6 +287,7 @@ export default function TemplatesPage() {
           { type: 'THANK_YOU', count: stats.thankYou },
           { type: 'ITINERARY', count: stats.itinerary },
           { type: 'GIFTING', count: stats.gifting },
+          { type: 'VOTING', count: stats.voting },
         ].map(({ type, count }) => (
           <button
             key={type}

@@ -201,6 +201,7 @@ router.get('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
                 eventsAsEventEnded: true,
                 eventsAsItineraryPage: true,
                 eventsAsGiftingPage: true,
+                eventsAsVotingPage: true,
             },
         },
     };
@@ -230,7 +231,8 @@ router.get('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             t._count.eventsAsLiveLanding +
             t._count.eventsAsEventEnded +
             t._count.eventsAsItineraryPage +
-            t._count.eventsAsGiftingPage,
+            t._count.eventsAsGiftingPage +
+            t._count.eventsAsVotingPage,
     }));
     res.json({ templates: templatesWithUsage });
 }));
@@ -247,6 +249,7 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             eventsAsThankYou: { select: { id: true, name: true, slug: true } },
             eventsAsItineraryPage: { select: { id: true, name: true, slug: true } },
             eventsAsGiftingPage: { select: { id: true, name: true, slug: true } },
+            eventsAsVotingPage: { select: { id: true, name: true, slug: true } },
         },
     });
     if (!template)
@@ -317,6 +320,7 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
                     eventsAsEventEnded: true,
                     eventsAsItineraryPage: true,
                     eventsAsGiftingPage: true,
+                    eventsAsVotingPage: true,
                 },
             },
         },
@@ -337,7 +341,8 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         template._count.eventsAsLiveLanding +
         template._count.eventsAsEventEnded +
         template._count.eventsAsItineraryPage +
-        template._count.eventsAsGiftingPage;
+        template._count.eventsAsGiftingPage +
+        template._count.eventsAsVotingPage;
     if (totalUsage > 0) {
         throw new errorHandler_js_1.AppError(`Cannot delete template in use by ${totalUsage} event(s)`, 400);
     }
@@ -408,7 +413,7 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
     const validTypes = [
         'INVITATION', 'RSVP', 'GUESTBOOK', 'GUESTBOOK_VIDEO', 'GUESTBOOK_AUDIO',
         'GUESTBOOK_PHOTO', 'BOOTH', 'BOOTH_VIDEO', 'BOOTH_AUDIO', 'BOOTH_PHOTO',
-        'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED', 'ITINERARY', 'GIFTING',
+        'THANK_YOU', 'LIVE_LANDING', 'EVENT_ENDED', 'ITINERARY', 'GIFTING', 'VOTING',
     ];
     if (!validTypes.includes(type)) {
         throw new errorHandler_js_1.AppError(`Invalid template type. Must be one of: ${validTypes.join(', ')}`, 400);

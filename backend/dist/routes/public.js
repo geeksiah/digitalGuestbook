@@ -42,6 +42,16 @@ const compareSemver = (a, b) => {
     }
     return 0;
 };
+const parseJson = (value, fallback) => {
+    if (!value)
+        return fallback;
+    try {
+        return JSON.parse(value);
+    }
+    catch {
+        return fallback;
+    }
+};
 /**
  * GET /api/public/mobile-version-check
  */
@@ -129,6 +139,7 @@ const EVENT_PUBLIC_SELECT = {
     eventEndedTemplateId: true,
     itineraryPageTemplateId: true,
     giftingPageTemplateId: true,
+    votingPageTemplateId: true,
 };
 // ─── Helper: standard template data ────────────────────────────────────────────
 function buildTemplateData(event, currentPhase, capabilities) {
@@ -136,6 +147,10 @@ function buildTemplateData(event, currentPhase, capabilities) {
         process.env.SITE_URL ||
         process.env.APP_URL ||
         '').replace(/\/+$/, '');
+    const apiBaseUrl = (process.env.API_URL ||
+        process.env.BACKEND_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        frontendUrl).replace(/\/+$/, '');
     return {
         event: {
             name: event.name,
@@ -175,6 +190,11 @@ function buildTemplateData(event, currentPhase, capabilities) {
             boothPhoto: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth/photo` : null,
             itinerary: event.itineraryEnabled ? `${frontendUrl}/e/${event.slug}/itinerary` : null,
             gifting: event.giftingEnabled ? `${frontendUrl}/gift/${event.slug}` : null,
+            voting: `${frontendUrl}/e/${event.slug}/vote`,
+            nominate: `${frontendUrl}/e/${event.slug}/nominate`,
+        },
+        api: {
+            baseUrl: apiBaseUrl,
         },
     };
 }
@@ -792,6 +812,90 @@ router.get('/event/:slug/gifting', (0, errorHandler_js_1.asyncHandler)(async (re
     const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
     const templateData = buildTemplateData(event, currentPhase, capabilities);
     await renderEventTemplate(event, 'GIFTING', event.giftingPageTemplateId, templateData, res);
+}));
+/**
+ * GET /api/public/event/:slug/voting-page
+ * Render voting page template (if assigned)
+ */
+router.get('/event/:slug/voting-page', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const event = await fetchPublicEvent(req.params.slug);
+    const votingConfig = await prisma_js_1.default.votingEventConfig.findUnique({
+        where: { eventId: event.id },
+        select: {
+            mode: true,
+            isEnabled: true,
+            allowFreeVotes: true,
+            allowPaidVotes: true,
+            requireOtpForElection: true,
+            voteUnitPrice: true,
+            currency: true,
+            maxVotesPerPurchase: true,
+            freeVoteLabel: true,
+            paidVoteLabel: true,
+        },
+    });
+    if (!votingConfig?.isEnabled) {
+        throw new errorHandler_js_1.AppError('Voting is not enabled for this event', 404);
+    }
+    const contests = await prisma_js_1.default.votingContest.findMany({
+        where: { eventId: event.id, isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: {
+            id: true,
+            title: true,
+            description: true,
+            mode: true,
+            allowPublicNominations: true,
+            nominationFormFieldsJson: true,
+            sortOrder: true,
+            startsAt: true,
+            endsAt: true,
+            options: {
+                where: { isActive: true },
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+                select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    imagePath: true,
+                    totalVotes: true,
+                    freeVotes: true,
+                    paidVotes: true,
+                    sortOrder: true,
+                },
+            },
+        },
+    });
+    const currentPhase = (0, phase_js_1.calculateEventPhase)(event);
+    const capabilities = (0, phase_js_1.getPhaseCapabilities)(currentPhase);
+    const templateData = {
+        ...buildTemplateData(event, currentPhase, capabilities),
+        voting: {
+            config: votingConfig,
+            contests: contests.map((contest) => ({
+                ...contest,
+                startsAtIso: contest.startsAt ? contest.startsAt.toISOString() : null,
+                endsAtIso: contest.endsAt ? contest.endsAt.toISOString() : null,
+                nominationFormFields: parseJson(contest.nominationFormFieldsJson, []),
+            })),
+            leaderboard: contests.map((contest) => ({
+                contestId: contest.id,
+                title: contest.title,
+                totalVotes: contest.options.reduce((acc, option) => acc + (option.totalVotes || 0), 0),
+                options: [...contest.options]
+                    .sort((a, b) => b.totalVotes - a.totalVotes)
+                    .map((option, index) => ({
+                    rank: index + 1,
+                    optionId: option.id,
+                    name: option.name,
+                    totalVotes: option.totalVotes,
+                    freeVotes: option.freeVotes,
+                    paidVotes: option.paidVotes,
+                })),
+            })),
+        },
+    };
+    await renderEventTemplate(event, 'VOTING', event.votingPageTemplateId, templateData, res);
 }));
 // ─── Invitation ────────────────────────────────────────────────────────────────
 router.get('/event/:slug/invitation', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {

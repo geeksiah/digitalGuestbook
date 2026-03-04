@@ -63,6 +63,7 @@ interface Event {
   eventEndedTemplateId: string | null;
   itineraryPageTemplateId: string | null;
   giftingPageTemplateId: string | null;
+  votingPageTemplateId?: string | null;
   // Event branding
   primaryColor?: string;
   secondaryColor?: string;
@@ -168,7 +169,7 @@ interface GiftOrder {
   createdAt: string;
 }
 
-type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'itinerary' | 'formFields' | 'sales' | 'gifts' | 'settings';
+type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'itinerary' | 'formFields' | 'sales' | 'gifts' | 'voting' | 'settings';
 
 // SVG Icons
 const Icons = {
@@ -339,6 +340,7 @@ export default function EventDetailPage() {
     eventEndedTemplateId: '',
     itineraryPageTemplateId: '',
     giftingPageTemplateId: '',
+    votingPageTemplateId: '',
   });
 
   const availableEventCurrencies = eventGatewayCurrencies.length > 0
@@ -401,6 +403,7 @@ export default function EventDetailPage() {
         eventEndedTemplateId: event.eventEndedTemplateId || '',
         itineraryPageTemplateId: (event as any).itineraryPageTemplateId || '',
         giftingPageTemplateId: (event as any).giftingPageTemplateId || '',
+        votingPageTemplateId: (event as any).votingPageTemplateId || '',
       });
       const d = new Date(event.date);
       const ed = event.endDate ? new Date(event.endDate) : null;
@@ -1005,6 +1008,7 @@ export default function EventDetailPage() {
         eventEndedTemplateId: selectedTemplates.eventEndedTemplateId || null,
         itineraryPageTemplateId: selectedTemplates.itineraryPageTemplateId || null,
         giftingPageTemplateId: selectedTemplates.giftingPageTemplateId || null,
+        votingPageTemplateId: selectedTemplates.votingPageTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
@@ -1095,6 +1099,7 @@ export default function EventDetailPage() {
     { id: 'itinerary', label: 'Itinerary', count: itineraryItems.length || undefined },
     { id: 'formFields', label: 'Form Fields', count: formFields.length },
     { id: 'gifts', label: 'Gifts', count: event._count.giftOrders || undefined },
+    { id: 'voting', label: 'Voting' },
     { id: 'settings', label: 'Settings' },
   ];
 
@@ -1217,6 +1222,7 @@ export default function EventDetailPage() {
                   { l: 'Check-In', p: `/e/${event.slug}/checkin`, enabled: event.checkInEnabled },
                   { l: 'Itinerary', p: `/e/${event.slug}/itinerary`, enabled: event.itineraryEnabled },
                   { l: 'Gift Page', p: `/gift/${event.slug}`, enabled: event.giftingEnabled },
+                  { l: 'Vote Page', p: `/e/${event.slug}/vote`, enabled: true },
                   { l: 'Thank You Page', p: `/e/${event.slug}/thanks`, enabled: true },
                   { l: 'Owner Token View', p: `/event-owner/${event.ownerAccessToken}`, enabled: true },
                   { l: 'Owner Dashboard Login', p: `/owner/login`, enabled: true },
@@ -1642,6 +1648,7 @@ export default function EventDetailPage() {
                   { t: 'EVENT_ENDED', l: 'Event Ended Page', f: 'eventEndedTemplateId', e: true, icon: '🏁', desc: 'After event ends' },
                   { t: 'ITINERARY', l: 'Itinerary Page', f: 'itineraryPageTemplateId', e: event.itineraryEnabled, icon: '🗓️', desc: 'Public itinerary tracking page' },
                   { t: 'GIFTING', l: 'Gifting Page', f: 'giftingPageTemplateId', e: event.giftingEnabled, icon: '🎁', desc: 'Guest gifting checkout page' },
+                  { t: 'VOTING', l: 'Voting Page', f: 'votingPageTemplateId', e: true, icon: '🗳️', desc: 'Public voting page and embed flow' },
                 ].map(x => (
                   <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-brand-300 hover:shadow-md')}>
                     <div className="flex items-start gap-3">
@@ -2754,6 +2761,68 @@ export default function EventDetailPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Voting */}
+      {activeTab === 'voting' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-surface-200 p-6">
+            <h3 className="text-lg font-semibold text-brand-900">Voting</h3>
+            <p className="text-sm text-surface-600 mt-1">
+              Voting configuration, nominees, leaderboard, and analytics are managed in the owner voting dashboard.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {event.ownerId ? (
+                <Link
+                  href={`/owner/events/${event.id}/voting`}
+                  target="_blank"
+                  className="btn-outline"
+                >
+                  {Icons.external}
+                  <span className="ml-2">Open Owner Voting Dashboard</span>
+                </Link>
+              ) : (
+                <span className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Assign an owner first to enable owner voting dashboard management.
+                </span>
+              )}
+              <Link href={`/e/${event.slug}/vote`} target="_blank" className="btn-outline">
+                {Icons.external}
+                <span className="ml-2">Open Public Vote Page</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-surface-200 p-6">
+            <h4 className="text-base font-semibold text-brand-900">Embed Setup</h4>
+            <p className="text-sm text-surface-600 mt-1">
+              Hosted route: `/e/{event.slug}/vote`. Embed script: `/embed/vote.js` with short-lived token issuance.
+            </p>
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/vote`)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Hosted Voting URL</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink(`/e/${event.slug}/nominate`)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                  <span className="text-sm font-medium text-brand-900 truncate">Copy Public Nomination URL</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink('/embed/vote.js')}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
+                >
+                  {Icons.copy}
+                <span className="text-sm font-medium text-brand-900 truncate">Copy Embed Script URL</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

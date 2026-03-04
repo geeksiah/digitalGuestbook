@@ -2,6 +2,7 @@
 // ⭐ SECURED: No automatic admin creation, create manually in Supabase
 
 import { PrismaClient } from '@prisma/client';
+import { DEFAULT_VOTING_TEMPLATE } from '../src/utils/defaultVotingTemplate.js';
 
 const prisma = new PrismaClient();
 
@@ -741,6 +742,23 @@ header { padding: 16px; }
     },
   });
   console.log(`✅ Created: ${giftingTemplate.name}`);
+
+  const votingTemplate = await prisma.template.upsert({
+    where: { id: DEFAULT_VOTING_TEMPLATE.id },
+    update: {},
+    create: {
+      id: DEFAULT_VOTING_TEMPLATE.id,
+      name: DEFAULT_VOTING_TEMPLATE.name,
+      description: DEFAULT_VOTING_TEMPLATE.description,
+      type: DEFAULT_VOTING_TEMPLATE.type,
+      isDefault: DEFAULT_VOTING_TEMPLATE.isDefault,
+      htmlContent: DEFAULT_VOTING_TEMPLATE.htmlContent,
+      cssContent: DEFAULT_VOTING_TEMPLATE.cssContent,
+      jsContent: DEFAULT_VOTING_TEMPLATE.jsContent,
+    },
+  });
+  console.log(`✅ Created: ${votingTemplate.name} ⭐ VOTING STARTER`);
+
   console.log('');
   console.log('✨ Database seeded successfully!');
   console.log('');

@@ -8,6 +8,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import prisma from './utils/prisma.js';
+import { DEFAULT_VOTING_TEMPLATE } from './utils/defaultVotingTemplate.js';
 
 // Load environment variables
 dotenv.config();
@@ -149,6 +150,21 @@ async function initializeDatabase() {
         },
       });
     }
+
+    await prisma.template.upsert({
+      where: { id: DEFAULT_VOTING_TEMPLATE.id },
+      update: {},
+      create: {
+        id: DEFAULT_VOTING_TEMPLATE.id,
+        name: DEFAULT_VOTING_TEMPLATE.name,
+        description: DEFAULT_VOTING_TEMPLATE.description,
+        type: DEFAULT_VOTING_TEMPLATE.type,
+        isDefault: DEFAULT_VOTING_TEMPLATE.isDefault,
+        htmlContent: DEFAULT_VOTING_TEMPLATE.htmlContent,
+        cssContent: DEFAULT_VOTING_TEMPLATE.cssContent,
+        jsContent: DEFAULT_VOTING_TEMPLATE.jsContent,
+      },
+    });
 
     // Create system settings if not exists
     const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });

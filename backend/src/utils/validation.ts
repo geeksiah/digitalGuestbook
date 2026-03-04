@@ -69,6 +69,7 @@ export const createEventSchema = z.object({
   giftingEnabled: z.boolean().default(false),
   itineraryPageTemplateId: z.string().uuid().optional().nullable(),
   giftingPageTemplateId: z.string().uuid().optional().nullable(),
+  votingPageTemplateId: z.string().uuid().optional().nullable(),
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
   invitationTemplateId: z.string().uuid().optional(),
@@ -156,6 +157,7 @@ export const updateEventSchema = z.object({
   giftingEnabled: z.boolean().optional(),
   itineraryPageTemplateId: z.string().uuid().optional().nullable(),
   giftingPageTemplateId: z.string().uuid().optional().nullable(),
+  votingPageTemplateId: z.string().uuid().optional().nullable(),
   
   // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
   invitationTemplateId: z.string().uuid().optional().nullable(),
@@ -225,6 +227,7 @@ export const createTemplateSchema = z.object({
     'EVENT_ENDED',       // ⭐ NEW
     'ITINERARY',
     'GIFTING',
+    'VOTING',
   ]),
   htmlContent: z.string().min(1, 'HTML content is required'),
   cssContent: z.string().optional(),
@@ -334,3 +337,5 @@ export type MediaUploadInput = z.infer<typeof mediaUploadSchema>;
 export type CreateBroadcastInput = z.infer<typeof createBroadcastSchema>;
 export type CreateOwnerInput = z.infer<typeof createOwnerSchema>;
 export type UpdateOwnerInput = z.infer<typeof updateOwnerSchema>;
+
+

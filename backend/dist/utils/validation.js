@@ -62,6 +62,7 @@ exports.createEventSchema = zod_1.z.object({
     giftingEnabled: zod_1.z.boolean().default(false),
     itineraryPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
     giftingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    votingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
     // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
     invitationTemplateId: zod_1.z.string().uuid().optional(),
     rsvpTemplateId: zod_1.z.string().uuid().optional(),
@@ -140,6 +141,7 @@ exports.updateEventSchema = zod_1.z.object({
     giftingEnabled: zod_1.z.boolean().optional(),
     itineraryPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
     giftingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
+    votingPageTemplateId: zod_1.z.string().uuid().optional().nullable(),
     // Template Assignments - ⭐ INCLUDES NEW TEMPLATE TYPES
     invitationTemplateId: zod_1.z.string().uuid().optional().nullable(),
     rsvpTemplateId: zod_1.z.string().uuid().optional().nullable(),
@@ -203,6 +205,7 @@ exports.createTemplateSchema = zod_1.z.object({
         'EVENT_ENDED', // ⭐ NEW
         'ITINERARY',
         'GIFTING',
+        'VOTING',
     ]),
     htmlContent: zod_1.z.string().min(1, 'HTML content is required'),
     cssContent: zod_1.z.string().optional(),

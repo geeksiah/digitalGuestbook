@@ -32,6 +32,7 @@ The platform supports the following template types:
 13. **EVENT_ENDED** - Event ended page (shown in POST_EVENT phase)
 14. **ITINERARY** - Public guest itinerary page (`/e/:slug/itinerary`)
 15. **GIFTING** - Public gifting page (`/gift/:slug`)
+16. **VOTING** - Public voting page (`/e/:slug/vote`)
 
 ## Template Structure
 
@@ -93,6 +94,11 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{urls.live}}` - Live landing page URL
 - `{{urls.itinerary}}` - Guest itinerary page URL
 - `{{urls.gifting}}` - Gifting page URL
+- `{{urls.voting}}` - Voting page URL
+- `{{urls.nominate}}` - Public nomination page URL
+
+#### API Variables
+- `{{api.baseUrl}}` - Backend base URL for API calls from templates
 
 #### Owner Variables
 - `{{owner.name}}` - Owner name
@@ -111,6 +117,10 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{attendance}}` - Attendance response: YES, NO, MAYBE (for RSVP pages)
 - `{{mealPreference}}` - Meal preference (for RSVP pages)
 - `{{dietaryNotes}}` - Dietary restrictions/notes (for RSVP pages)
+- `{{voting.config}}` - Voting configuration object (for VOTING templates)
+- `{{voting.contests}}` - Contests and nominees array (for VOTING templates)
+- `{{voting.leaderboard}}` - Ranked nominees per contest (for VOTING templates)
+  - `voting.contests[].allowPublicNominations` and `voting.contests[].nominationFormFields` are available when public nominations are configured.
 
 ## Creating a Template
 
@@ -266,9 +276,33 @@ Templates are isolated per event:
   checkIn: string (full URL),
   live: string (full URL),
   itinerary: string (full URL),
-  gifting: string (full URL)
+  gifting: string (full URL),
+  voting: string (full URL)
 }
 ```
+
+## Voting Template Rules
+
+When building **VOTING** templates:
+
+1. Use `{{urls.voting}}` as the canonical voting route.
+2. Do not hardcode `/e/.../vote` paths.
+3. Render contest and nominee lists from `{{voting.contests}}`.
+4. Render rank cards from `{{voting.leaderboard}}` (already sorted by totals).
+5. Keep OTP-related UI optional because only election mode requires OTP verification.
+6. Use `{{api.baseUrl}}/api/voting/...` for backend calls to avoid cross-domain failures on hosted embeds/custom domains.
+7. Use `{{urls.nominate}}` when linking users to public nomination intake.
+
+### Default Voting Starter Coverage
+
+The default `VOTING` starter template (`default-voting`) is designed to cover all critical voting flows:
+
+1. Contest and nominee selection.
+2. Awards mode free vote submission.
+3. Election mode OTP request + OTP verification.
+4. Paid vote intent creation with gateway selection and redirect handling.
+5. Session token persistence and reuse.
+6. Public leaderboard rendering and refresh.
 
 ## Live Landing CTA Rules
 
@@ -469,4 +503,10 @@ For template development support:
 - ✅ Updated branding to EventPeepo
 - ✅ Added booth photo download system with QR codes
 - ✅ Improved camera UX with mirror mode and fullscreen controls
+
+
+### Recent Updates (2026-03-04)
+- Added `VOTING` template type for `/e/:slug/vote`.
+- Added `{{urls.voting}}`, `{{voting.config}}`, `{{voting.contests}}`, and `{{voting.leaderboard}}` template data.
+- Added admin template assignment support for voting page templates.
 

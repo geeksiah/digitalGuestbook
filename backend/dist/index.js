@@ -13,6 +13,7 @@ const node_path_1 = __importDefault(require("node:path"));
 const node_fs_1 = __importDefault(require("node:fs"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_js_1 = __importDefault(require("./utils/prisma.js"));
+const defaultVotingTemplate_js_1 = require("./utils/defaultVotingTemplate.js");
 // Load environment variables
 dotenv_1.default.config();
 // Validate required environment variables
@@ -140,6 +141,20 @@ async function initializeDatabase() {
                 },
             });
         }
+        await prisma_js_1.default.template.upsert({
+            where: { id: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.id },
+            update: {},
+            create: {
+                id: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.id,
+                name: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.name,
+                description: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.description,
+                type: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.type,
+                isDefault: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.isDefault,
+                htmlContent: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.htmlContent,
+                cssContent: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.cssContent,
+                jsContent: defaultVotingTemplate_js_1.DEFAULT_VOTING_TEMPLATE.jsContent,
+            },
+        });
         // Create system settings if not exists
         const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
         if (!settings) {

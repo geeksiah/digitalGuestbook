@@ -26,6 +26,28 @@ const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
   }
 };
 
+type NominationFieldDefinition = {
+  id: string;
+  label: string;
+  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select';
+  required?: boolean;
+  placeholder?: string | null;
+  options?: string[];
+};
+
+const parseNominationFields = (value: string | null | undefined) =>
+  parseJson<NominationFieldDefinition[]>(value, [])
+    .filter((field) => field && typeof field.id === 'string' && typeof field.label === 'string')
+    .map((field) => ({
+      ...field,
+      id: String(field.id).trim(),
+      label: String(field.label).trim(),
+      type: (field.type || 'text') as NominationFieldDefinition['type'],
+      required: Boolean(field.required),
+      placeholder: field.placeholder || null,
+      options: Array.isArray(field.options) ? field.options.map((option) => String(option)) : undefined,
+    }));
+
 const base64UrlEncode = (value: string) =>
   Buffer.from(value, 'utf8').toString('base64url');
 
@@ -208,6 +230,13 @@ const ensureVotingContext = async (slug: string) => {
       votingContests: {
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          title: true,
+          mode: true,
+          allowPublicNominations: true,
+          nominationFormFieldsJson: true,
+        },
       },
     },
   });
@@ -255,6 +284,11 @@ router.get('/public/:slug', asyncHandler(async (req, res) => {
     orderBy: { sortOrder: 'asc' },
   });
 
+  const contests = contestsWithOptions.map((contest) => ({
+    ...contest,
+    nominationFormFields: parseNominationFields(contest.nominationFormFieldsJson),
+  }));
+
   res.json({
     event: {
       id: event.id,
@@ -262,7 +296,7 @@ router.get('/public/:slug', asyncHandler(async (req, res) => {
       name: event.name,
     },
     config: event.votingConfig,
-    contests: contestsWithOptions,
+    contests,
     paymentGateways: visibleGateways.map((gateway: any) => ({
       id: gateway.paymentGateway.id,
       name: gateway.paymentGateway.name,
@@ -275,6 +309,138 @@ router.get('/public/:slug', asyncHandler(async (req, res) => {
       token,
       otpVerified: Boolean(session.otpVerifiedAt),
     },
+  });
+}));
+
+router.get('/public/:slug/nomination-form', asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const event = await ensureVotingContext(slug);
+
+  const nominationEnabled = Boolean(event.votingConfig.allowPublicNominations);
+  const contests = event.votingContests
+    .filter((contest: any) => contest.allowPublicNominations)
+    .map((contest: any) => ({
+      id: contest.id,
+      title: contest.title,
+      mode: contest.mode,
+      nominationFormFields: parseNominationFields(contest.nominationFormFieldsJson),
+    }));
+
+  res.json({
+    event: {
+      id: event.id,
+      slug: event.slug,
+      name: event.name,
+    },
+    enabled: nominationEnabled,
+    contests,
+  });
+}));
+
+const submitNominationSchema = z.object({
+  contestId: z.string().uuid(),
+  nomineeName: z.string().min(2).max(160),
+  nomineeDescription: z.string().max(2000).optional().nullable(),
+  submitterName: z.string().min(2).max(160),
+  submitterEmail: z.string().email().optional().nullable(),
+  submitterPhone: z.string().max(40).optional().nullable(),
+  customFields: z.record(z.unknown()).optional(),
+  sessionToken: z.string().optional(),
+  embedToken: z.string().optional(),
+});
+
+router.post('/public/:slug/nominations', asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const input = submitNominationSchema.parse(req.body || {});
+  const event = await ensureVotingContext(slug);
+  const embedPayload = validateEmbedTokenForEvent(event, resolveEmbedToken(req, input.embedToken || null));
+
+  if (!event.votingConfig.allowPublicNominations) {
+    throw new AppError('Public nominations are disabled for this event', 400);
+  }
+
+  const contest = await prisma.votingContest.findFirst({
+    where: {
+      id: input.contestId,
+      eventId: event.id,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      title: true,
+      allowPublicNominations: true,
+      nominationFormFieldsJson: true,
+    },
+  });
+  if (!contest) throw new AppError('Voting contest not found', 404);
+  if (!contest.allowPublicNominations) {
+    throw new AppError('Public nominations are disabled for this contest', 400);
+  }
+
+  const { session, token } = await getOrCreateVoterSession(
+    event.id,
+    req,
+    input.sessionToken,
+    embedPayload?.originHost || null
+  );
+
+  const definitionList = parseNominationFields(contest.nominationFormFieldsJson);
+  const customFields = input.customFields || {};
+  const normalizedFields: Record<string, unknown> = {};
+
+  for (const definition of definitionList) {
+    const key = definition.id;
+    const rawValue = customFields[key];
+    const value = rawValue === undefined || rawValue === null ? '' : String(rawValue).trim();
+
+    if (definition.required && !value) {
+      throw new AppError(`Custom field "${definition.label}" is required`, 400);
+    }
+    if (!value) continue;
+
+    if (definition.type === 'email') {
+      const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      if (!isValid) throw new AppError(`"${definition.label}" must be a valid email`, 400);
+      normalizedFields[key] = value.toLowerCase();
+      continue;
+    }
+    if (definition.type === 'number') {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) throw new AppError(`"${definition.label}" must be numeric`, 400);
+      normalizedFields[key] = parsed;
+      continue;
+    }
+    if (definition.type === 'select' && Array.isArray(definition.options) && definition.options.length > 0) {
+      if (!definition.options.includes(value)) {
+        throw new AppError(`"${definition.label}" has an invalid value`, 400);
+      }
+      normalizedFields[key] = value;
+      continue;
+    }
+    normalizedFields[key] = value;
+  }
+
+  const nomination = await prisma.votingNomination.create({
+    data: {
+      eventId: event.id,
+      contestId: contest.id,
+      nomineeName: input.nomineeName.trim(),
+      nomineeDescription: input.nomineeDescription?.trim() || null,
+      submitterName: input.submitterName.trim(),
+      submitterEmail: input.submitterEmail?.trim().toLowerCase() || null,
+      submitterPhone: input.submitterPhone ? normalizePhone(input.submitterPhone) : null,
+      customFieldsJson: Object.keys(normalizedFields).length ? JSON.stringify(normalizedFields) : null,
+      ipHash: session.ipHash,
+      userAgentHash: session.userAgentHash,
+    },
+  });
+
+  res.status(201).json({
+    success: true,
+    nominationId: nomination.id,
+    status: nomination.status,
+    voterSessionToken: token,
+    message: 'Nomination submitted successfully and is pending review',
   });
 }));
 

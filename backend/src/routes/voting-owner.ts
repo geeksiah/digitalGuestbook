@@ -6,6 +6,25 @@ import prisma from '../utils/prisma.js';
 
 const router = Router();
 router.use(authenticateOwnerAccount);
+const DEFAULT_VOTING_TEMPLATE_ID = 'default-voting';
+
+const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const nominationFieldSchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string().min(1).max(120),
+  type: z.enum(['text', 'textarea', 'email', 'phone', 'number', 'select']),
+  required: z.boolean().optional(),
+  placeholder: z.string().max(200).optional().nullable(),
+  options: z.array(z.string().max(120)).optional(),
+});
 
 const ensureOwnerEvent = async (eventId: string, ownerId: string) => {
   const event = await prisma.event.findFirst({
@@ -14,6 +33,7 @@ const ensureOwnerEvent = async (eventId: string, ownerId: string) => {
       id: true,
       name: true,
       ownerId: true,
+      votingPageTemplateId: true,
       votingConfig: true,
     },
   });
@@ -21,11 +41,50 @@ const ensureOwnerEvent = async (eventId: string, ownerId: string) => {
   return event;
 };
 
+const assignDefaultVotingTemplateIfNeeded = async (
+  eventId: string,
+  currentVotingPageTemplateId: string | null | undefined
+) => {
+  if (currentVotingPageTemplateId) return;
+
+  const hardDefault = await prisma.template.findFirst({
+    where: {
+      id: DEFAULT_VOTING_TEMPLATE_ID,
+      type: 'VOTING',
+    },
+    select: { id: true },
+  });
+
+  const defaultVotingTemplate =
+    hardDefault ??
+    (await prisma.template.findFirst({
+      where: {
+        type: 'VOTING',
+        isDefault: true,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    }));
+
+  if (!defaultVotingTemplate) return;
+
+  await prisma.event.updateMany({
+    where: {
+      id: eventId,
+      votingPageTemplateId: null,
+    },
+    data: {
+      votingPageTemplateId: defaultVotingTemplate.id,
+    },
+  });
+};
+
 const configSchema = z.object({
   mode: z.enum(['AWARDS', 'ELECTION']).optional(),
   isEnabled: z.boolean().optional(),
   allowFreeVotes: z.boolean().optional(),
   allowPaidVotes: z.boolean().optional(),
+  allowPublicNominations: z.boolean().optional(),
   requireOtpForElection: z.boolean().optional(),
   voteUnitPrice: z.number().nonnegative().optional(),
   currency: z.string().min(3).max(3).optional(),
@@ -40,6 +99,8 @@ const contestSchema = z.object({
   description: z.string().max(2000).optional().nullable(),
   mode: z.enum(['AWARDS', 'ELECTION']).optional(),
   isActive: z.boolean().optional(),
+  allowPublicNominations: z.boolean().optional(),
+  nominationFormFields: z.array(nominationFieldSchema).optional(),
   startsAt: z.string().datetime().optional().nullable(),
   endsAt: z.string().datetime().optional().nullable(),
   sortOrder: z.number().int().optional(),
@@ -55,6 +116,12 @@ const optionSchema = z.object({
   metadataJson: z.record(z.unknown()).optional(),
 });
 
+const nominationReviewSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
+  reviewNotes: z.string().max(1000).optional().nullable(),
+  createNomineeOnApprove: z.boolean().optional(),
+});
+
 router.get('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
   const ownerId = String((req as any).ownerId || '');
   const { eventId } = req.params;
@@ -67,6 +134,10 @@ router.get('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
         eventId,
       },
     });
+  }
+
+  if (config.isEnabled) {
+    await assignDefaultVotingTemplateIfNeeded(eventId, event.votingPageTemplateId);
   }
 
   res.json({ config });
@@ -85,6 +156,7 @@ router.put('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
       isEnabled: input.isEnabled ?? undefined,
       allowFreeVotes: input.allowFreeVotes ?? undefined,
       allowPaidVotes: input.allowPaidVotes ?? undefined,
+      allowPublicNominations: input.allowPublicNominations ?? undefined,
       requireOtpForElection: input.requireOtpForElection ?? undefined,
       voteUnitPrice: input.voteUnitPrice ?? undefined,
       currency: input.currency?.toUpperCase() ?? undefined,
@@ -104,6 +176,7 @@ router.put('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
       isEnabled: input.isEnabled ?? true,
       allowFreeVotes: input.allowFreeVotes ?? true,
       allowPaidVotes: input.allowPaidVotes ?? false,
+      allowPublicNominations: input.allowPublicNominations ?? false,
       requireOtpForElection: input.requireOtpForElection ?? true,
       voteUnitPrice: input.voteUnitPrice ?? 1,
       currency: input.currency?.toUpperCase() || 'USD',
@@ -113,6 +186,10 @@ router.put('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
       settingsJson: input.settingsJson ? JSON.stringify(input.settingsJson) : null,
     },
   });
+
+  if (config.isEnabled) {
+    await assignDefaultVotingTemplateIfNeeded(eventId, null);
+  }
 
   res.json({ config });
 }));
@@ -133,11 +210,17 @@ router.get('/events/:eventId/voting/contests', asyncHandler(async (req, res) => 
         select: {
           voteRecords: true,
           voteGrants: true,
+          nominations: true,
         },
       },
     },
     orderBy: { sortOrder: 'asc' },
   });
+
+  const contestsWithParsedFields = contests.map((contest) => ({
+    ...contest,
+    nominationFormFields: parseJson<any[]>(contest.nominationFormFieldsJson, []),
+  }));
 
   res.json({
     event: {
@@ -145,7 +228,7 @@ router.get('/events/:eventId/voting/contests', asyncHandler(async (req, res) => 
       name: event.name,
     },
     config: event.votingConfig,
-    contests,
+    contests: contestsWithParsedFields,
   });
 }));
 
@@ -162,6 +245,8 @@ router.post('/events/:eventId/voting/contests', asyncHandler(async (req, res) =>
       description: input.description ?? null,
       mode: input.mode || 'AWARDS',
       isActive: input.isActive ?? true,
+      allowPublicNominations: input.allowPublicNominations ?? false,
+      nominationFormFieldsJson: input.nominationFormFields ? JSON.stringify(input.nominationFormFields) : null,
       startsAt: input.startsAt ? new Date(input.startsAt) : null,
       endsAt: input.endsAt ? new Date(input.endsAt) : null,
       sortOrder: input.sortOrder ?? 0,
@@ -191,6 +276,13 @@ router.patch('/events/:eventId/voting/contests/:contestId', asyncHandler(async (
       description: input.description === undefined ? undefined : input.description,
       mode: input.mode ?? undefined,
       isActive: input.isActive ?? undefined,
+      allowPublicNominations: input.allowPublicNominations ?? undefined,
+      nominationFormFieldsJson:
+        input.nominationFormFields === undefined
+          ? undefined
+          : input.nominationFormFields
+          ? JSON.stringify(input.nominationFormFields)
+          : null,
       startsAt: input.startsAt === undefined ? undefined : input.startsAt ? new Date(input.startsAt) : null,
       endsAt: input.endsAt === undefined ? undefined : input.endsAt ? new Date(input.endsAt) : null,
       sortOrder: input.sortOrder ?? undefined,
@@ -314,12 +406,109 @@ router.delete('/events/:eventId/voting/options/:optionId', asyncHandler(async (r
   res.json({ message: 'Nominee deleted' });
 }));
 
+router.get('/events/:eventId/voting/nominations', asyncHandler(async (req, res) => {
+  const ownerId = String((req as any).ownerId || '');
+  const { eventId } = req.params;
+  await ensureOwnerEvent(eventId, ownerId);
+
+  const status = String(req.query.status || '').trim().toUpperCase();
+  const contestId = String(req.query.contestId || '').trim();
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit || 100)));
+
+  const nominations = await prisma.votingNomination.findMany({
+    where: {
+      eventId,
+      ...(contestId ? { contestId } : {}),
+      ...(status && ['PENDING', 'APPROVED', 'REJECTED'].includes(status)
+        ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' }
+        : {}),
+    },
+    include: {
+      contest: {
+        select: {
+          id: true,
+          title: true,
+          mode: true,
+        },
+      },
+      approvedOption: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+
+  res.json({ nominations });
+}));
+
+router.patch('/events/:eventId/voting/nominations/:nominationId/review', asyncHandler(async (req, res) => {
+  const ownerId = String((req as any).ownerId || '');
+  const { eventId, nominationId } = req.params;
+  await ensureOwnerEvent(eventId, ownerId);
+  const input = nominationReviewSchema.parse(req.body || {});
+
+  const nomination = await prisma.votingNomination.findFirst({
+    where: { id: nominationId, eventId },
+  });
+  if (!nomination) throw new AppError('Nomination not found', 404);
+  if (nomination.status !== 'PENDING') {
+    throw new AppError('Only pending nominations can be reviewed', 409);
+  }
+
+  const reviewed = await prisma.$transaction(async (tx) => {
+    let approvedOptionId: string | null = null;
+    if (input.status === 'APPROVED' && input.createNomineeOnApprove !== false) {
+      const createdOption = await tx.votingOption.create({
+        data: {
+          eventId,
+          contestId: nomination.contestId,
+          name: nomination.nomineeName,
+          description: nomination.nomineeDescription || undefined,
+          isActive: true,
+          metadataJson: JSON.stringify({
+            source: 'PUBLIC_NOMINATION',
+            nominationId: nomination.id,
+            submitterName: nomination.submitterName,
+            submitterEmail: nomination.submitterEmail,
+          }),
+        },
+      });
+      approvedOptionId = createdOption.id;
+    }
+
+    return tx.votingNomination.update({
+      where: { id: nomination.id },
+      data: {
+        status: input.status,
+        reviewedAt: new Date(),
+        reviewedByOwnerId: ownerId,
+        reviewNotes: input.reviewNotes === undefined ? null : input.reviewNotes,
+        approvedOptionId,
+      },
+      include: {
+        approvedOption: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+  });
+
+  res.json({ nomination: reviewed });
+}));
+
 router.get('/events/:eventId/voting/analytics', asyncHandler(async (req, res) => {
   const ownerId = String((req as any).ownerId || '');
   const { eventId } = req.params;
   await ensureOwnerEvent(eventId, ownerId);
 
-  const [records, contests, options, voteRevenue, paidIntentsCount] = await Promise.all([
+  const [records, contests, options, voteRevenue, paidIntentsCount, nominationStats] = await Promise.all([
     prisma.voteRecord.findMany({
       where: { eventId },
       select: {
@@ -366,6 +555,11 @@ router.get('/events/:eventId/voting/analytics', asyncHandler(async (req, res) =>
         purpose: 'VOTE',
       },
     }),
+    prisma.votingNomination.groupBy({
+      by: ['status'],
+      where: { eventId },
+      _count: { _all: true },
+    }),
   ]);
 
   const totalVotes = records.reduce((sum, record) => sum + record.voteCount, 0);
@@ -382,6 +576,17 @@ router.get('/events/:eventId/voting/analytics', asyncHandler(async (req, res) =>
   const conversionRate = uniqueVoters > 0 ? Number(((paidPurchaseCount / uniqueVoters) * 100).toFixed(2)) : 0;
   const paidIntentConversionRate =
     paidIntentsCount > 0 ? Number(((paidPurchaseCount / paidIntentsCount) * 100).toFixed(2)) : 0;
+  const nominationTotals = nominationStats.reduce(
+    (acc, item) => {
+      const count = item._count._all || 0;
+      if (item.status === 'PENDING') acc.pending += count;
+      if (item.status === 'APPROVED') acc.approved += count;
+      if (item.status === 'REJECTED') acc.rejected += count;
+      acc.total += count;
+      return acc;
+    },
+    { total: 0, pending: 0, approved: 0, rejected: 0 }
+  );
 
   const perContestMetrics = contests.map((contest) => {
     const contestRecords = records.filter((record) => record.contestId === contest.id);
@@ -466,6 +671,7 @@ router.get('/events/:eventId/voting/analytics', asyncHandler(async (req, res) =>
       paidPurchaseCount,
       conversionRate,
       paidIntentConversionRate,
+      nominations: nominationTotals,
     },
     perContest: perContestMetrics,
     perNominee: perNomineeMetrics,

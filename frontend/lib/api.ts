@@ -669,6 +669,21 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/analytics`, {
       headers: ownerHeaders(),
     }),
+  getVotingNominations: (eventId: string, params?: { status?: string; contestId?: string; limit?: number }) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/nominations`, {
+      params,
+      headers: ownerHeaders(),
+    }),
+  reviewVotingNomination: (
+    eventId: string,
+    nominationId: string,
+    data: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; createNomineeOnApprove?: boolean }
+  ) =>
+    axios.patch(
+      `${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/nominations/${nominationId}/review`,
+      data,
+      { headers: ownerHeaders() }
+    ),
 };
 
 export const itineraryApi = {
@@ -754,6 +769,22 @@ export const votingApi = {
     }),
   createEmbedToken: (slug: string) =>
     axios.post(`${API_BASE_URL}/api/voting/embed/token`, { slug }),
+  getNominationForm: (slug: string) =>
+    axios.get(`${API_BASE_URL}/api/voting/public/${slug}/nomination-form`),
+  submitNomination: (
+    slug: string,
+    data: {
+      contestId: string;
+      nomineeName: string;
+      nomineeDescription?: string;
+      submitterName: string;
+      submitterEmail?: string;
+      submitterPhone?: string;
+      customFields?: Record<string, unknown>;
+      sessionToken?: string;
+      embedToken?: string;
+    }
+  ) => axios.post(`${API_BASE_URL}/api/voting/public/${slug}/nominations`, data),
 };
 
 
