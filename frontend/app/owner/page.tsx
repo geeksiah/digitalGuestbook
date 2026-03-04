@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { API_BASE_URL, ownerDashboardApi } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
-import { DashboardKpiCard, DashboardSection } from '@/components/dashboard/ui';
+import { ownerDashboardApi } from '@/lib/api';
+import { formatDate, cn } from '@/lib/utils';
+import { DashboardKpiCard, DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -14,8 +14,6 @@ interface Event {
   date: string;
   venue: string | null;
   currentPhase: string;
-  coverImagePath?: string | null;
-  coverImageUrl?: string | null;
   _count: {
     rsvps: number;
     invitations: number;
@@ -33,47 +31,15 @@ interface Stats {
   revenueByCurrency: Record<string, { gross: number; net: number }>;
 }
 
+const focusAreas = ['Weddings', 'Corporate', 'Awards', 'Concerts', 'Festivals', 'Private'];
+
 const Icons = {
-  events: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  rsvps: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5V9H2v11h5m10 0v-6a3 3 0 10-6 0v6m6 0H7" /></svg>,
-  checkins: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  media: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  events: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  rsvps: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  checkins: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  media: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  arrow: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
 };
-
-const getPhaseLabel = (phase: string) => {
-  if (phase === 'LIVE') return 'Live';
-  if (phase === 'PRE_EVENT') return 'Upcoming';
-  if (phase === 'POST_EVENT') return 'Past';
-  return phase;
-};
-
-const getPhaseClass = (phase: string) => {
-  if (phase === 'LIVE') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (phase === 'PRE_EVENT') return 'border-sky-200 bg-sky-50 text-sky-700';
-  return 'border-surface-200 bg-surface-100 text-surface-600';
-};
-
-const toAbsoluteMediaUrl = (value: string | null | undefined) => {
-  if (!value) return null;
-  const raw = value.trim();
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
-  if (
-    raw.startsWith('/storage/v1/object/public/')
-    || raw.startsWith('/uploads/')
-    || raw.startsWith('/api/')
-    || raw.startsWith('/media/')
-    || raw.startsWith('/generated/')
-  ) {
-    return `${API_BASE_URL}${raw}`;
-  }
-  return null;
-};
-
-const resolveEventCover = (event: Event) =>
-  toAbsoluteMediaUrl(event.coverImageUrl)
-  || toAbsoluteMediaUrl(event.coverImagePath)
-  || '/og-app-eventpeepo.png';
 
 export default function OwnerDashboardPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -91,8 +57,8 @@ export default function OwnerDashboardPage() {
         ownerDashboardApi.getEvents(),
         ownerDashboardApi.getStats(),
       ]);
-      setEvents(eventsResponse.data.events || []);
-      setStats(statsResponse.data.stats || null);
+      setEvents(eventsResponse.data.events);
+      setStats(statsResponse.data.stats);
     } catch {
       toast.error('Failed to load dashboard data');
     } finally {
@@ -100,127 +66,128 @@ export default function OwnerDashboardPage() {
     }
   };
 
-  const heroEvent = useMemo(() => events[0] || null, [events]);
+  const getPhaseStyle = (phase: string) => {
+    switch (phase) {
+      case 'LIVE': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'PRE_EVENT': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'POST_EVENT': return 'bg-surface-50 text-surface-700 border-surface-200';
+      default: return 'bg-surface-50 text-surface-700 border-surface-200';
+    }
+  };
+
+  const getPhaseLabel = (phase: string) => {
+    switch (phase) {
+      case 'LIVE': return 'Live';
+      case 'PRE_EVENT': return 'Upcoming';
+      case 'POST_EVENT': return 'Past';
+      default: return phase;
+    }
+  };
 
   if (loading) {
     return (
-      <div className="py-12 text-center">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-brand-900" />
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 sm:space-y-7">
-      <section className="dashboard-canvas p-5 sm:p-6">
-        <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="flex flex-col justify-center">
-            <p className="pill-accent w-fit">Owner Dashboard</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
-              Simple control over your events.
-            </h1>
-            <p className="mt-2 max-w-xl text-sm text-surface-600">
-              Track attendance, media, and payout performance in one clean workspace.
-            </p>
+    <div className="space-y-5 sm:space-y-7">
+      <DashboardPageHeader title="Dashboard" subtitle="Your event operations at a glance" />
 
-            <div className="mt-5 flex flex-wrap gap-2.5">
-              <Link href="/owner/events" className="btn-accent">Manage Events</Link>
-              <Link href="/owner/payouts" className="btn-outline">Payouts</Link>
-            </div>
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <div className="dashboard-canvas p-5 sm:p-6">
+          <p className="pill-accent w-fit">Owner Console</p>
+          <h2 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-brand-900">
+            Run polished events with live insight into guests, media, and payouts.
+          </h2>
+          <p className="mt-2 text-sm text-surface-600 max-w-2xl">
+            Jump from overview to execution with fast navigation across events and voting.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href="/owner/events" className="btn-accent">
+              {Icons.events}
+              <span className="ml-2">Manage Events</span>
+            </Link>
+            <Link href="/owner/payouts" className="btn-outline">
+              Payouts
+            </Link>
           </div>
 
-          <article className="relative overflow-hidden rounded-2xl border border-surface-200">
-            <img
-              src={heroEvent ? resolveEventCover(heroEvent) : '/og-app-eventpeepo.png'}
-              alt={heroEvent ? heroEvent.name : 'Event cover'}
-              className="h-64 w-full object-cover"
-              onError={(e) => {
-                e.currentTarget.src = '/og-app-eventpeepo.png';
-              }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
-            <div className="absolute bottom-4 left-4 right-4 text-white">
-              {heroEvent ? (
-                <>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Featured event</p>
-                  <h2 className="mt-1 text-xl font-semibold">{heroEvent.name}</h2>
-                  <p className="mt-1 text-xs text-white/85">
-                    {formatDate(heroEvent.date, 'MMM d, yyyy')}
-                    {heroEvent.venue ? ` • ${heroEvent.venue}` : ''}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Workspace ready</p>
-                  <h2 className="mt-1 text-xl font-semibold">Create your first event</h2>
-                  <p className="mt-1 text-xs text-white/85">New events appear here automatically.</p>
-                </>
-              )}
+          <div className="mt-5 grid sm:grid-cols-2 gap-3">
+            <article className="focus-card">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Action Board</p>
+              <p className="text-lg font-bold mt-1 text-brand-900">Boost RSVP Completion</p>
+              <p className="text-xs mt-1 text-surface-600">Refine your RSVP prompts and timing windows.</p>
+            </article>
+            <article className="focus-card">
+              <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Snapshot</p>
+              <p className="text-lg font-bold mt-1 text-brand-900">Priority Events</p>
+              <p className="text-xs mt-1 text-surface-600">{events.filter((event) => event.currentPhase === 'LIVE').length} live events need active monitoring.</p>
+            </article>
+          </div>
+        </div>
+
+        <div className="dashboard-canvas p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-surface-500">Workspace</p>
+          <p className="mt-2 text-lg font-semibold text-brand-900">Today&rsquo;s priorities</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {focusAreas.map((label) => (
+              <span
+                key={label}
+                className="inline-flex items-center rounded-full border border-surface-200 bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-700"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+          <div className="mt-5 rounded-2xl border border-surface-200 bg-surface-50 p-4">
+            <p className="text-xs uppercase tracking-widest text-surface-500 font-semibold">Momentum</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Guestbook</span>
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Voting</span>
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Check-ins</span>
+              <span className="rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-surface-700 text-center font-semibold">Payouts</span>
             </div>
-          </article>
+          </div>
         </div>
       </section>
 
       {stats && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <DashboardKpiCard label="Events" value={stats.totalEvents} icon={Icons.events} tone="blue" />
           <DashboardKpiCard label="RSVPs" value={stats.totalRsvps} icon={Icons.rsvps} tone="emerald" />
-          <DashboardKpiCard label="Check-ins" value={stats.totalCheckIns} icon={Icons.checkins} tone="violet" />
+          <DashboardKpiCard label="Check-Ins" value={stats.totalCheckIns} icon={Icons.checkins} tone="violet" />
           <DashboardKpiCard label="Media" value={stats.totalMedia} icon={Icons.media} tone="rose" />
         </div>
       )}
 
-      <DashboardSection title="Your Events" subtitle="Visual event cards with quick actions" contentClassName="p-4 sm:p-5">
+      <DashboardSection title="Featured Events" subtitle="App-like cards for quick access" contentClassName="p-4">
         {events.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-surface-300 bg-surface-50 p-8 text-center">
-            <p className="text-sm font-medium text-surface-700">No events yet.</p>
-            <p className="mt-1 text-sm text-surface-500">Create your first event to get started.</p>
-          </div>
+          <p className="text-sm text-surface-600">No events available yet.</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {events.slice(0, 6).map((event) => (
-              <article key={event.id} className="overflow-hidden rounded-2xl border border-surface-200 bg-white">
-                <div className="relative h-40">
-                  <img
-                    src={resolveEventCover(event)}
-                    alt={event.name}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = '/og-app-eventpeepo.png';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute left-3 right-3 top-3 flex items-center justify-between">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${getPhaseClass(event.currentPhase)}`}>
-                      {getPhaseLabel(event.currentPhase)}
-                    </span>
-                    <span className="rounded-full bg-black/35 px-2 py-0.5 text-xs font-semibold text-white">/{event.slug}</span>
-                  </div>
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="truncate text-base font-semibold text-white">{event.name}</h3>
-                  </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {events.slice(0, 3).map((event, index) => (
+              <article key={event.id} className="rounded-2xl border border-surface-200 bg-white overflow-hidden">
+                <div className={cn(
+                  'h-24 px-4 py-3 flex flex-col justify-end border-b',
+                  index % 3 === 0
+                    ? 'bg-white border-red-200'
+                    : index % 3 === 1
+                      ? 'bg-surface-50 border-surface-200'
+                      : 'bg-[#fdf9ef] border-amber-200'
+                )}>
+                  <p className="text-xs text-surface-500">/{event.slug}</p>
+                  <p className="font-semibold text-sm truncate text-brand-900">{event.name}</p>
                 </div>
-
-                <div className="space-y-3 p-4">
-                  <p className="text-xs text-surface-600">
-                    {formatDate(event.date, 'MMM d, yyyy')}
-                    {event.venue ? ` • ${event.venue}` : ''}
-                  </p>
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="rounded-lg border border-surface-200 bg-surface-50 px-2 py-2">
-                      <p className="font-semibold text-brand-900">{event._count.rsvps}</p>
-                      <p className="text-surface-500">RSVPs</p>
-                    </div>
-                    <div className="rounded-lg border border-surface-200 bg-surface-50 px-2 py-2">
-                      <p className="font-semibold text-brand-900">{event._count.checkIns}</p>
-                      <p className="text-surface-500">Check-ins</p>
-                    </div>
-                    <div className="rounded-lg border border-surface-200 bg-surface-50 px-2 py-2">
-                      <p className="font-semibold text-brand-900">{event._count.mediaAssets}</p>
-                      <p className="text-surface-500">Media</p>
-                    </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-xs text-surface-600">{formatDate(event.date)} {event.venue ? `- ${event.venue}` : ''}</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-surface-500">Check-ins</span>
+                    <span className="font-semibold text-brand-900">{event._count.checkIns}</span>
                   </div>
-                  <Link href={`/owner/events/${event.id}`} className="btn-accent w-full !min-h-[40px] !text-xs">
+                  <Link href={`/owner/events/${event.id}`} className="btn-accent w-full !min-h-[36px] !py-1.5 !text-xs">
                     Open Event
                   </Link>
                 </div>
@@ -232,28 +199,83 @@ export default function OwnerDashboardPage() {
 
       {stats && Object.keys(stats.revenueByCurrency).length > 0 && (
         <DashboardSection title="Revenue" subtitle="Net and gross by currency">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
-              <article key={currency} className="rounded-xl border border-surface-200 bg-surface-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-500">{currency}</p>
-                <p className="mt-1 text-2xl font-bold text-brand-900">
+              <div key={currency} className="rounded-xl border border-surface-200 bg-surface-50/50 p-4">
+                <p className="text-xs uppercase tracking-widest font-semibold text-surface-400 mb-1.5">{currency}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-brand-900">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency,
                   }).format(amounts.net)}
                 </p>
-                <p className="mt-1 text-sm text-surface-600">
-                  Gross{' '}
-                  {new Intl.NumberFormat('en-US', {
+                <p className="text-sm text-surface-500 mt-1">
+                  Gross: {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency,
                   }).format(amounts.gross)}
                 </p>
-              </article>
+              </div>
             ))}
           </div>
         </DashboardSection>
       )}
+
+      <DashboardSection
+        title="Your Events"
+        subtitle="Open an event to manage it"
+        action={(
+          <Link href="/owner/events" className="text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors px-1">
+            View all
+          </Link>
+        )}
+        contentClassName="p-0"
+      >
+        {events.length === 0 ? (
+          <div className="text-center py-10 px-4">
+            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
+              {Icons.events}
+            </div>
+            <p className="text-base font-medium text-surface-600">No events yet</p>
+            <p className="text-sm text-surface-400 mt-1">Events will appear here once created</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-surface-100">
+            {events.slice(0, 5).map((event) => (
+              <Link
+                key={event.id}
+                href={`/owner/events/${event.id}`}
+                className="group flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-surface-50 active:bg-surface-100 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
+                    <span
+                      className={cn(
+                        'inline-flex px-2 py-0.5 text-xs font-medium rounded border leading-none',
+                        getPhaseStyle(event.currentPhase)
+                      )}
+                    >
+                      {getPhaseLabel(event.currentPhase)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-sm text-surface-500">
+                    <span>{formatDate(event.date)}</span>
+                    {event.venue && <span>{event.venue}</span>}
+                  </div>
+                  <div className="flex gap-4 mt-2 text-sm">
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
+                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
+                  </div>
+                </div>
+                <div className="text-surface-300 group-hover:text-brand-600 transition-colors flex-shrink-0">
+                  {Icons.arrow}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </DashboardSection>
     </div>
   );
 }
