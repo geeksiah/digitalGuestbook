@@ -50,6 +50,8 @@ const updateOwnerSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
 /**
  * GET /api/owners
  * List all owners
@@ -131,11 +133,15 @@ router.get('/:id', asyncHandler(async (req, res) => {
  * Create new owner
  */
 router.post('/', asyncHandler(async (req, res) => {
-  const data = createOwnerSchema.parse(req.body);
+  const parsed = createOwnerSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    email: normalizeEmail(parsed.email),
+  };
   
   // Check if email already exists
-  const existing = await prisma.owner.findUnique({
-    where: { email: data.email },
+  const existing = await prisma.owner.findFirst({
+    where: { email: { equals: data.email, mode: 'insensitive' } },
   });
   
   if (existing) {
@@ -252,7 +258,11 @@ This is an automated message from EventPeepo
  * Update owner
  */
 router.put('/:id', asyncHandler(async (req, res) => {
-  const data = updateOwnerSchema.parse(req.body);
+  const parsed = updateOwnerSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    ...(parsed.email ? { email: normalizeEmail(parsed.email) } : {}),
+  };
   
   const owner = await prisma.owner.findUnique({
     where: { id: req.params.id },
@@ -264,8 +274,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
   
   // Check if email is being changed and if it's already in use
   if (data.email && data.email !== owner.email) {
-    const existing = await prisma.owner.findUnique({
-      where: { email: data.email },
+    const existing = await prisma.owner.findFirst({
+      where: { email: { equals: data.email, mode: 'insensitive' } },
     });
     
     if (existing) {

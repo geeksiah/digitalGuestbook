@@ -42,6 +42,7 @@ const updateOwnerSchema = zod_1.z.object({
     countryCode: zod_1.z.string().trim().regex(/^[A-Za-z]{2}$/).transform((v) => v.toUpperCase()).optional(),
     isActive: zod_1.z.boolean().optional(),
 });
+const normalizeEmail = (value) => value.trim().toLowerCase();
 /**
  * GET /api/owners
  * List all owners
@@ -113,10 +114,14 @@ router.get('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
  * Create new owner
  */
 router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const data = createOwnerSchema.parse(req.body);
+    const parsed = createOwnerSchema.parse(req.body);
+    const data = {
+        ...parsed,
+        email: normalizeEmail(parsed.email),
+    };
     // Check if email already exists
-    const existing = await prisma_js_1.default.owner.findUnique({
-        where: { email: data.email },
+    const existing = await prisma_js_1.default.owner.findFirst({
+        where: { email: { equals: data.email, mode: 'insensitive' } },
     });
     if (existing) {
         throw new errorHandler_js_1.AppError('Owner with this email already exists', 400);
@@ -221,7 +226,11 @@ This is an automated message from EventPeepo
  * Update owner
  */
 router.put('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const data = updateOwnerSchema.parse(req.body);
+    const parsed = updateOwnerSchema.parse(req.body);
+    const data = {
+        ...parsed,
+        ...(parsed.email ? { email: normalizeEmail(parsed.email) } : {}),
+    };
     const owner = await prisma_js_1.default.owner.findUnique({
         where: { id: req.params.id },
     });
@@ -230,8 +239,8 @@ router.put('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     }
     // Check if email is being changed and if it's already in use
     if (data.email && data.email !== owner.email) {
-        const existing = await prisma_js_1.default.owner.findUnique({
-            where: { email: data.email },
+        const existing = await prisma_js_1.default.owner.findFirst({
+            where: { email: { equals: data.email, mode: 'insensitive' } },
         });
         if (existing) {
             throw new errorHandler_js_1.AppError('Owner with this email already exists', 400);

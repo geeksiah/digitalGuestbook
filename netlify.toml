@@ -11,11 +11,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[[redirects]]
-  from = "/login"
-  to = "/owner/login"
-  status = 302
-
 [[headers]]
   for = "/*"
   [headers.values]

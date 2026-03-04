@@ -46,6 +46,8 @@ const requestPasswordResetSchema = z.object({
   reason: z.string().optional(),
 });
 
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
 // Get JWT secret
 const getJwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;
@@ -64,11 +66,15 @@ const getJwtSecret = (): string => {
  * Register new owner account
  */
 router.post('/register', asyncHandler(async (req, res) => {
-  const data = registerSchema.parse(req.body);
+  const parsed = registerSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    email: normalizeEmail(parsed.email),
+  };
 
   // Check if email already exists
-  const existing = await prisma.owner.findUnique({
-    where: { email: data.email },
+  const existing = await prisma.owner.findFirst({
+    where: { email: { equals: data.email, mode: 'insensitive' } },
   });
 
   if (existing) {
@@ -127,10 +133,14 @@ router.post('/register', asyncHandler(async (req, res) => {
  * Owner login
  */
 router.post('/login', asyncHandler(async (req, res) => {
-  const data = loginSchema.parse(req.body);
+  const parsed = loginSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    email: normalizeEmail(parsed.email),
+  };
 
-  const owner = await prisma.owner.findUnique({
-    where: { email: data.email },
+  const owner = await prisma.owner.findFirst({
+    where: { email: { equals: data.email, mode: 'insensitive' } },
   });
 
   if (!owner) {
@@ -222,10 +232,14 @@ router.get('/me', authenticateOwnerAccount, asyncHandler(async (req, res) => {
  * Set initial password for admin-created owner accounts
  */
 router.post('/setup-password', asyncHandler(async (req, res) => {
-  const data = setupPasswordSchema.parse(req.body);
+  const parsed = setupPasswordSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    email: normalizeEmail(parsed.email),
+  };
 
-  const owner = await prisma.owner.findUnique({
-    where: { email: data.email },
+  const owner = await prisma.owner.findFirst({
+    where: { email: { equals: data.email, mode: 'insensitive' } },
   });
 
   if (!owner) {
@@ -288,10 +302,14 @@ router.post('/setup-password', asyncHandler(async (req, res) => {
  * Submit a password reset request for admin review
  */
 router.post('/request-password-reset', asyncHandler(async (req, res) => {
-  const data = requestPasswordResetSchema.parse(req.body);
+  const parsed = requestPasswordResetSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    email: normalizeEmail(parsed.email),
+  };
 
-  const owner = await prisma.owner.findUnique({
-    where: { email: data.email },
+  const owner = await prisma.owner.findFirst({
+    where: { email: { equals: data.email, mode: 'insensitive' } },
   });
 
   if (!owner) {
@@ -371,7 +389,11 @@ router.post('/change-password', authenticateOwnerAccount, asyncHandler(async (re
  * Update owner profile
  */
 router.put('/profile', authenticateOwnerAccount, asyncHandler(async (req, res) => {
-  const data = updateProfileSchema.parse(req.body);
+  const parsed = updateProfileSchema.parse(req.body);
+  const data = {
+    ...parsed,
+    ...(parsed.email ? { email: normalizeEmail(parsed.email) } : {}),
+  };
   const ownerId = (req as any).ownerId;
 
   const owner = await prisma.owner.findUnique({
@@ -384,8 +406,8 @@ router.put('/profile', authenticateOwnerAccount, asyncHandler(async (req, res) =
 
   // Check if email is being changed and if it's already in use
   if (data.email && data.email !== owner.email) {
-    const existing = await prisma.owner.findUnique({
-      where: { email: data.email },
+    const existing = await prisma.owner.findFirst({
+      where: { email: { equals: data.email, mode: 'insensitive' } },
     });
 
     if (existing) {
