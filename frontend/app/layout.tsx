@@ -70,11 +70,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   })();
 
   const shouldRecover = (url) =>
-    typeof url === "string" && url.includes("/_next/static/chunks/");
+    typeof url === "string" && url.includes("/_next/static/");
+
+  const clearClientCaches = async () => {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.unregister()));
+    } catch {}
+
+    if ("caches" in window) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      } catch {}
+    }
+  };
 
   window.addEventListener(
     "error",
-    (event) => {
+    async (event) => {
       const target = event.target;
       const url = target && (target.src || target.href);
       if (!shouldRecover(url) || retried) return;
@@ -83,6 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         window.sessionStorage.setItem(retryFlag, "1");
       } catch {}
       retried = true;
+      await clearClientCaches();
 
       const nextUrl = new URL(window.location.href);
       nextUrl.searchParams.set("__chunk_retry", "1");

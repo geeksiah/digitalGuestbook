@@ -13,12 +13,24 @@
 [[redirects]]
   from = "/login"
   to = "/owner/login"
-  status = 301
+  status = 302
 
 [[headers]]
   for = "/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/login"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
+    Clear-Site-Data = "\"cache\""
+
+[[headers]]
+  for = "/owner/login"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
+    Clear-Site-Data = "\"cache\""
 
 [[headers]]
   for = "/sw.js"
