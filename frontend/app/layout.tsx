@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import Script from 'next/script';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
 import ServiceWorkerRegister from "./_components/ServiceWorkerRegister";
@@ -56,6 +57,42 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`}>
+      <head>
+        <Script id="chunk-load-recovery" strategy="beforeInteractive">
+          {`(() => {
+  const retryFlag = "__ep_chunk_retry_done";
+  let retried = (() => {
+    try {
+      return window.sessionStorage.getItem(retryFlag) === "1";
+    } catch {
+      return false;
+    }
+  })();
+
+  const shouldRecover = (url) =>
+    typeof url === "string" && url.includes("/_next/static/chunks/");
+
+  window.addEventListener(
+    "error",
+    (event) => {
+      const target = event.target;
+      const url = target && (target.src || target.href);
+      if (!shouldRecover(url) || retried) return;
+
+      try {
+        window.sessionStorage.setItem(retryFlag, "1");
+      } catch {}
+      retried = true;
+
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("__chunk_retry", "1");
+      window.location.replace(nextUrl.toString());
+    },
+    true
+  );
+})();`}
+        </Script>
+      </head>
       <body className="font-sans">
         <ServiceWorkerRegister />
         {children}
