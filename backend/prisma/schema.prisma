@@ -18,6 +18,45 @@ datasource db {
   // Note: Direct Connection (db.*.supabase.co) requires IPv6 and doesn't work on Render.com
 }
 
+enum PaymentIntentPurpose {
+  TICKET
+  GIFT
+  VOTE
+}
+
+enum PaymentIntentStatus {
+  PENDING
+  INITIALIZED
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum VoteMode {
+  AWARDS
+  ELECTION
+}
+
+enum VoteType {
+  FREE
+  PAID
+}
+
+enum TicketInventoryHoldStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+  EXPIRED
+}
+
 // ============================================
 // ADMIN & AUTHENTICATION
 // ============================================
@@ -142,8 +181,8 @@ model OwnerPayoutWallet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner        Owner          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  transactions Transaction[]  @relation("TransactionOwnerWallet")
+  owner        Owner                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  transactions TransactionLegacy[]  @relation("TransactionOwnerWallet")
 
   @@index([ownerId, isActive])
   @@index([ownerId, walletType, isActive])
@@ -391,7 +430,17 @@ model Event {
   promoCodes           PromoCode[]
   eventPaymentGateways EventPaymentGateway[]
   payoutWallet         PayoutWallet? // DEPRECATED: Use OwnerWallet via Owner relation instead
-  transactions         Transaction[]
+  transactions         TransactionLegacy[] @relation("EventLegacyTransactions")
+  purchaseTransactions Transaction[]       @relation("EventCoreTransactions")
+  paymentIntents       PaymentIntent[]
+  paymentWebhookEvents PaymentWebhookEvent[]
+  ticketInventoryHolds TicketInventoryHold[]
+  votingConfig         VotingEventConfig?
+  votingContests       VotingContest[]
+  votingOptions        VotingOption[]
+  voteRecords          VoteRecord[]
+  voterSessions        VoterSession[]
+  voteGrants           VoteGrant[]
   payoutRequests       PayoutRequest[]
   reelJobs             ReelJob[]
   boothDownloadTokens  BoothDownloadToken[]
@@ -487,8 +536,93 @@ model PayoutWallet {
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
-// Sales Transactions
+model PaymentIntent {
+  id                String              @id @default(uuid())
+  eventId           String
+  ownerId           String
+  purpose           PaymentIntentPurpose
+  gateway           String
+  amount            Float
+  currency          String              @default("USD")
+  status            PaymentIntentStatus @default(PENDING)
+  platformFeeAmount Float               @default(0)
+  organizerAmount   Float               @default(0)
+  metadataJson      String?
+  gatewayReference  String?
+  idempotencyKey    String              @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  event                 Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  transaction           Transaction?
+  ticketInventoryHolds  TicketInventoryHold[]
+  voteGrant             VoteGrant?
+  voteRecords           VoteRecord[]
+  giftOrder             GiftOrder?
+  rsvp                  RSVP?
+
+  @@index([eventId, purpose, status])
+  @@index([gatewayReference])
+}
+
 model Transaction {
+  id                    String            @id @default(uuid())
+  paymentIntentId       String            @unique
+  eventId               String
+  ownerId               String
+  gateway               String
+  grossAmount           Float
+  platformFeeAmount     Float             @default(0)
+  organizerAmount       Float             @default(0)
+  currency              String            @default("USD")
+  providerTransactionId String            @unique
+  status                TransactionStatus @default(PENDING)
+  createdAt             DateTime          @default(now())
+
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+  event         Event         @relation("EventCoreTransactions", fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status, createdAt])
+}
+
+model PaymentWebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String?
+  gateway     String
+  eventType   String
+  eventKey    String   @unique
+  payload     String
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([gateway, eventType])
+}
+
+model TicketInventoryHold {
+  id              String                    @id @default(uuid())
+  eventId         String
+  ticketTypeId    String
+  paymentIntentId String
+  quantity        Int
+  status          TicketInventoryHoldStatus @default(ACTIVE)
+  expiresAt       DateTime
+  releasedAt      DateTime?
+  consumedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType    TicketType  @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, ticketTypeId, status])
+  @@index([paymentIntentId, status])
+}
+
+// Legacy sales transactions (pre-payment-core reporting and payout rows)
+model TransactionLegacy {
   id      String  @id @default(uuid())
   eventId String
   rsvpId  String?
@@ -523,7 +657,7 @@ model Transaction {
   updatedAt DateTime @updatedAt
 
   // Relations
-  event       Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event              @relation("EventLegacyTransactions", fields: [eventId], references: [id], onDelete: Cascade)
   ownerWallet OwnerPayoutWallet? @relation("TransactionOwnerWallet", fields: [ownerWalletId], references: [id], onDelete: SetNull)
 
   @@index([eventId, payoutRouting, status])
@@ -642,6 +776,7 @@ model Template {
 model RSVP {
   id      String @id @default(uuid())
   eventId String
+  paymentIntentId String? @unique
 
   // Guest Information (SRS Section 4.2)
   primaryName   String
@@ -686,6 +821,7 @@ model RSVP {
 
   // Relations
   event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent?    @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
   invitation    Invitation?
   invites       RsvpInvite[]
   statusHistory RSVPStatusAudit[]
@@ -813,6 +949,7 @@ model TicketType {
 
   // Relations
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  inventoryHolds TicketInventoryHold[]
 }
 
 // Payment Gateway Configuration per Event
@@ -821,7 +958,7 @@ model TicketType {
 model PaymentGateway {
   id          String  @id @default(uuid())
   name        String // Display name (e.g., "Stripe Production", "Paystack Test")
-  gateway     String // stripe | paystack | flutterwave | paypal | mtn_momo | telecel_cash | airteltigo_cash | custom
+  gateway     String // stripe | paystack | flutterwave | paypal | mtn_momo | telecel_cash | airteltigo_cash | hubtel | custom
   description String? // Optional description
 
   isActive Boolean @default(true) // Enable/disable this gateway
@@ -855,6 +992,15 @@ model PaymentGateway {
   airteltigoCashApiKey     String?
   airteltigoCashApiSecret  String?
   airteltigoCashMerchantId String?
+
+  // Hubtel Configuration
+  hubtelClientId       String?
+  hubtelClientSecret   String?
+  hubtelMerchantId     String?
+  hubtelAccountNumber  String?
+  hubtelWebhookSecret  String?
+  hubtelEnvironment    String? // sandbox | production
+  hubtelConfigJson     String? // JSON mapping and provider-specific config
 
   // Custom Gateway Configuration
   customGatewayName      String?
@@ -1295,6 +1441,7 @@ model EventGiftPackage {
 model GiftOrder {
   id               String    @id @default(uuid())
   eventId          String
+  paymentIntentId  String?   @unique
   guestName        String
   guestPhone       String?
   guestEmail       String?
@@ -1310,10 +1457,145 @@ model GiftOrder {
   updatedAt        DateTime  @updatedAt
 
   // Relations
-  event Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  items GiftOrderItem[]
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+  items         GiftOrderItem[]
 
   @@index([eventId, status])
+}
+
+// ============================================
+// VOTING
+// ============================================
+
+model VotingEventConfig {
+  id                String   @id @default(uuid())
+  eventId           String   @unique
+  mode              VoteMode @default(AWARDS)
+  isEnabled         Boolean  @default(true)
+  allowFreeVotes    Boolean  @default(true)
+  allowPaidVotes    Boolean  @default(false)
+  requireOtpForElection Boolean @default(true)
+  voteUnitPrice     Float    @default(1)
+  currency          String   @default("USD")
+  maxVotesPerPurchase Int    @default(100)
+  freeVoteLabel     String?
+  paidVoteLabel     String?
+  settingsJson      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model VotingContest {
+  id          String   @id @default(uuid())
+  eventId     String
+  title       String
+  description String?
+  mode        VoteMode @default(AWARDS)
+  isActive    Boolean  @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  sortOrder   Int      @default(0)
+  metadataJson String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event      Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  options    VotingOption[]
+  voteRecords VoteRecord[]
+  voteGrants  VoteGrant[]
+
+  @@index([eventId, isActive, sortOrder])
+}
+
+model VotingOption {
+  id            String   @id @default(uuid())
+  eventId       String
+  contestId     String
+  name          String
+  description   String?
+  imagePath     String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  totalVotes    Int      @default(0)
+  freeVotes     Int      @default(0)
+  paidVotes     Int      @default(0)
+  metadataJson  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contest    VotingContest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  voteRecords VoteRecord[]
+
+  @@index([eventId, contestId, sortOrder])
+}
+
+model VoterSession {
+  id               String   @id @default(uuid())
+  eventId          String
+  voterKey         String
+  originHost       String?
+  ipHash           String?
+  userAgentHash    String?
+  verifiedPhone    String?
+  otpCodeHash      String?
+  otpExpiresAt     DateTime?
+  otpVerifiedAt    DateTime?
+  sessionTokenHash String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  lastSeenAt       DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, voterKey])
+  @@index([eventId, verifiedPhone])
+}
+
+model VoteGrant {
+  id               String   @id @default(uuid())
+  eventId          String
+  contestId        String
+  voterKey         String
+  electionVoterKey String?
+  voteType         VoteType
+  voteCount        Int      @default(1)
+  paymentIntentId  String?  @unique
+  metadataJson     String?
+  createdAt        DateTime @default(now())
+
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contest       VotingContest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+  voteRecords   VoteRecord[]
+
+  @@index([eventId, contestId, voteType])
+  @@unique([eventId, contestId, electionVoterKey])
+}
+
+model VoteRecord {
+  id             String   @id @default(uuid())
+  eventId        String
+  contestId      String
+  optionId       String
+  voteGrantId    String?
+  paymentIntentId String?
+  voterKey       String
+  voteType       VoteType
+  voteCount      Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contest       VotingContest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  option        VotingOption   @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  voteGrant     VoteGrant?     @relation(fields: [voteGrantId], references: [id], onDelete: SetNull)
+  paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, contestId, optionId, createdAt])
+  @@unique([eventId, contestId, voterKey, voteType])
 }
 
 model GiftOrderItem {

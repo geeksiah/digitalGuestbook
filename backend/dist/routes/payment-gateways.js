@@ -18,6 +18,7 @@ const paymentGatewaySchema = zod_1.z.object({
         'stripe',
         'paystack',
         'flutterwave',
+        'hubtel',
         'paypal',
         'mtn_momo',
         'telecel_cash',
@@ -37,6 +38,14 @@ const paymentGatewaySchema = zod_1.z.object({
     // Flutterwave
     flutterwavePublicKey: zod_1.z.string().optional(),
     flutterwaveSecretKey: zod_1.z.string().optional(),
+    // Hubtel
+    hubtelClientId: zod_1.z.string().optional(),
+    hubtelClientSecret: zod_1.z.string().optional(),
+    hubtelMerchantId: zod_1.z.string().optional(),
+    hubtelAccountNumber: zod_1.z.string().optional(),
+    hubtelWebhookSecret: zod_1.z.string().optional(),
+    hubtelEnvironment: zod_1.z.enum(['sandbox', 'production']).optional(),
+    hubtelConfigJson: zod_1.z.string().optional(),
     // MTN MoMo
     mtnMomoApiKey: zod_1.z.string().optional(),
     mtnMomoApiSecret: zod_1.z.string().optional(),
@@ -87,6 +96,10 @@ router.get('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)
             g.paystackSecretKey = '****' + g.paystackSecretKey.slice(-4);
         if (g.flutterwaveSecretKey)
             g.flutterwaveSecretKey = '****' + g.flutterwaveSecretKey.slice(-4);
+        if (g.hubtelClientSecret)
+            g.hubtelClientSecret = '****' + g.hubtelClientSecret.slice(-4);
+        if (g.hubtelWebhookSecret)
+            g.hubtelWebhookSecret = '****';
         if (g.mtnMomoApiSecret)
             g.mtnMomoApiSecret = '****' + g.mtnMomoApiSecret.slice(-4);
         if (g.telecelCashApiSecret)
@@ -103,7 +116,7 @@ router.get('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)
  * GET /api/payment-gateways/:id
  * Get a specific payment gateway
  */
-router.get('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+router.get('/:id([0-9a-fA-F-]{36})', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const gateway = await prisma_js_1.default.paymentGateway.findUnique({
         where: { id },
@@ -134,6 +147,10 @@ router.get('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandl
         masked.paystackSecretKey = '****' + masked.paystackSecretKey.slice(-4);
     if (masked.flutterwaveSecretKey)
         masked.flutterwaveSecretKey = '****' + masked.flutterwaveSecretKey.slice(-4);
+    if (masked.hubtelClientSecret)
+        masked.hubtelClientSecret = '****' + masked.hubtelClientSecret.slice(-4);
+    if (masked.hubtelWebhookSecret)
+        masked.hubtelWebhookSecret = '****';
     if (masked.mtnMomoApiSecret)
         masked.mtnMomoApiSecret = '****' + masked.mtnMomoApiSecret.slice(-4);
     if (masked.telecelCashApiSecret)
@@ -160,6 +177,10 @@ router.post('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler
         delete cleanData.paystackSecretKey;
     if (cleanData.flutterwaveSecretKey?.startsWith('****'))
         delete cleanData.flutterwaveSecretKey;
+    if (cleanData.hubtelClientSecret?.startsWith('****'))
+        delete cleanData.hubtelClientSecret;
+    if (cleanData.hubtelWebhookSecret === '****')
+        delete cleanData.hubtelWebhookSecret;
     if (cleanData.mtnMomoApiSecret?.startsWith('****'))
         delete cleanData.mtnMomoApiSecret;
     if (cleanData.telecelCashApiSecret?.startsWith('****'))
@@ -181,6 +202,10 @@ router.post('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler
         masked.paystackSecretKey = '****' + masked.paystackSecretKey.slice(-4);
     if (masked.flutterwaveSecretKey)
         masked.flutterwaveSecretKey = '****' + masked.flutterwaveSecretKey.slice(-4);
+    if (masked.hubtelClientSecret)
+        masked.hubtelClientSecret = '****' + masked.hubtelClientSecret.slice(-4);
+    if (masked.hubtelWebhookSecret)
+        masked.hubtelWebhookSecret = '****';
     if (masked.mtnMomoApiSecret)
         masked.mtnMomoApiSecret = '****' + masked.mtnMomoApiSecret.slice(-4);
     if (masked.telecelCashApiSecret)
@@ -195,7 +220,7 @@ router.post('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler
  * PUT /api/payment-gateways/:id
  * Update a payment gateway
  */
-router.put('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+router.put('/:id([0-9a-fA-F-]{36})', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const data = paymentGatewaySchema.partial().parse(req.body);
     const existing = await prisma_js_1.default.paymentGateway.findUnique({ where: { id } });
@@ -212,6 +237,10 @@ router.put('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandl
         delete cleanData.paystackSecretKey;
     if (cleanData.flutterwaveSecretKey?.startsWith('****'))
         delete cleanData.flutterwaveSecretKey;
+    if (cleanData.hubtelClientSecret?.startsWith('****'))
+        delete cleanData.hubtelClientSecret;
+    if (cleanData.hubtelWebhookSecret === '****')
+        delete cleanData.hubtelWebhookSecret;
     if (cleanData.mtnMomoApiSecret?.startsWith('****'))
         delete cleanData.mtnMomoApiSecret;
     if (cleanData.telecelCashApiSecret?.startsWith('****'))
@@ -234,6 +263,10 @@ router.put('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandl
         masked.paystackSecretKey = '****' + masked.paystackSecretKey.slice(-4);
     if (masked.flutterwaveSecretKey)
         masked.flutterwaveSecretKey = '****' + masked.flutterwaveSecretKey.slice(-4);
+    if (masked.hubtelClientSecret)
+        masked.hubtelClientSecret = '****' + masked.hubtelClientSecret.slice(-4);
+    if (masked.hubtelWebhookSecret)
+        masked.hubtelWebhookSecret = '****';
     if (masked.mtnMomoApiSecret)
         masked.mtnMomoApiSecret = '****' + masked.mtnMomoApiSecret.slice(-4);
     if (masked.telecelCashApiSecret)
@@ -248,7 +281,7 @@ router.put('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandl
  * DELETE /api/payment-gateways/:id
  * Delete a payment gateway (only if not used by any events)
  */
-router.delete('/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+router.delete('/:id([0-9a-fA-F-]{36})', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     // Check if gateway is used by any events
     const usage = await prisma_js_1.default.eventPaymentGateway.count({
@@ -289,6 +322,10 @@ router.get('/events/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_
             g.paystackSecretKey = '****' + g.paystackSecretKey.slice(-4);
         if (g.flutterwaveSecretKey)
             g.flutterwaveSecretKey = '****' + g.flutterwaveSecretKey.slice(-4);
+        if (g.hubtelClientSecret)
+            g.hubtelClientSecret = '****' + g.hubtelClientSecret.slice(-4);
+        if (g.hubtelWebhookSecret)
+            g.hubtelWebhookSecret = '****';
         if (g.mtnMomoApiSecret)
             g.mtnMomoApiSecret = '****' + g.mtnMomoApiSecret.slice(-4);
         if (g.telecelCashApiSecret)
@@ -343,6 +380,10 @@ router.put('/events/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_
             g.paystackSecretKey = '****' + g.paystackSecretKey.slice(-4);
         if (g.flutterwaveSecretKey)
             g.flutterwaveSecretKey = '****' + g.flutterwaveSecretKey.slice(-4);
+        if (g.hubtelClientSecret)
+            g.hubtelClientSecret = '****' + g.hubtelClientSecret.slice(-4);
+        if (g.hubtelWebhookSecret)
+            g.hubtelWebhookSecret = '****';
         if (g.mtnMomoApiSecret)
             g.mtnMomoApiSecret = '****' + g.mtnMomoApiSecret.slice(-4);
         if (g.telecelCashApiSecret)
@@ -354,6 +395,78 @@ router.put('/events/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_
         return eg;
     });
     res.json({ eventGateways: masked });
+}));
+/**
+ * Legacy compatibility
+ * GET /api/payment-gateways/event/:eventId
+ */
+router.get('/event/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { eventId } = req.params;
+    const eventGateways = await prisma_js_1.default.eventPaymentGateway.findMany({
+        where: { eventId, isActive: true },
+        include: { paymentGateway: true },
+        orderBy: { sortOrder: 'asc' },
+    });
+    const primary = eventGateways[0]?.paymentGateway || null;
+    res.json({
+        gateway: primary,
+        eventGateways,
+    });
+}));
+/**
+ * Legacy compatibility
+ * POST /api/payment-gateways/event/:eventId
+ */
+router.post('/event/:eventId', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { eventId } = req.params;
+    const input = req.body || {};
+    const event = await prisma_js_1.default.event.findUnique({ where: { id: eventId } });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    let gatewayIds = [];
+    if (Array.isArray(input.gatewayIds)) {
+        gatewayIds = input.gatewayIds.map((item, index) => ({
+            paymentGatewayId: String(item?.paymentGatewayId || item?.id || ''),
+            isActive: item?.isActive !== false,
+            sortOrder: typeof item?.sortOrder === 'number' ? item.sortOrder : index,
+        })).filter((item) => item.paymentGatewayId);
+    }
+    else if (input.paymentGatewayId || input.id) {
+        gatewayIds = [{ paymentGatewayId: String(input.paymentGatewayId || input.id), isActive: true, sortOrder: 0 }];
+    }
+    else if (input.gateway) {
+        const byType = await prisma_js_1.default.paymentGateway.findFirst({
+            where: {
+                gateway: String(input.gateway),
+                isActive: true,
+            },
+            select: { id: true },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (byType?.id) {
+            gatewayIds = [{ paymentGatewayId: byType.id, isActive: true, sortOrder: 0 }];
+        }
+    }
+    await prisma_js_1.default.eventPaymentGateway.deleteMany({ where: { eventId } });
+    if (gatewayIds.length > 0) {
+        await prisma_js_1.default.eventPaymentGateway.createMany({
+            data: gatewayIds.map((item, index) => ({
+                eventId,
+                paymentGatewayId: item.paymentGatewayId,
+                isActive: item.isActive !== false,
+                sortOrder: item.sortOrder ?? index,
+            })),
+        });
+    }
+    const eventGateways = await prisma_js_1.default.eventPaymentGateway.findMany({
+        where: { eventId },
+        include: { paymentGateway: true },
+        orderBy: { sortOrder: 'asc' },
+    });
+    res.json({
+        gateway: eventGateways[0]?.paymentGateway || null,
+        eventGateways,
+    });
 }));
 exports.default = router;
 //# sourceMappingURL=payment-gateways.js.map

@@ -396,7 +396,7 @@ router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
       take: pageLimit,
     }),
     prisma.rSVP.count({ where: rsvpWhere }),
-    prisma.transaction.findMany({
+    prisma.transactionLegacy.findMany({
       where: txWhere,
       include: {
         event: { select: { id: true, name: true, slug: true } },
@@ -405,7 +405,7 @@ router.get('/sales', authenticateAdmin, asyncHandler(async (req, res) => {
       skip: (pageNumber - 1) * pageLimit,
       take: pageLimit,
     }),
-    prisma.transaction.count({ where: txWhere }),
+    prisma.transactionLegacy.count({ where: txWhere }),
   ]);
 
   const sales = rsvps.filter((r: any) => r.ticketType && r.amountPaid);

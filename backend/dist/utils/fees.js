@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.defaultFeeConfig = exports.resolveEventFeeConfig = exports.getSystemFeeDefaults = void 0;
+exports.defaultFeeConfig = exports.computeFees = exports.resolveEventFeeConfig = exports.getSystemFeeDefaults = void 0;
 const prisma_js_1 = __importDefault(require("./prisma.js"));
 const FALLBACK_FEE_CONFIG = {
     platformFeeMode: 'PERCENTAGE',
@@ -42,5 +42,22 @@ const resolveEventFeeConfig = (event, defaults) => {
     });
 };
 exports.resolveEventFeeConfig = resolveEventFeeConfig;
+const roundMoney = (value) => Math.round(value * 100) / 100;
+const computeFees = async (baseAmount, event) => {
+    const amount = Math.max(0, Number(baseAmount || 0));
+    const defaults = await (0, exports.getSystemFeeDefaults)();
+    const feeConfig = (0, exports.resolveEventFeeConfig)(event, defaults);
+    const platformFeeAmount = feeConfig.platformFeeMode === 'FIXED'
+        ? Math.min(amount, feeConfig.platformFeeFixed)
+        : (amount * feeConfig.platformFeePercent) / 100;
+    const processingEstimate = (amount * feeConfig.processingFeePercent) / 100 + feeConfig.processingFeeFixed;
+    const organizerAmount = Math.max(0, amount - platformFeeAmount);
+    return {
+        platformFeeAmount: roundMoney(platformFeeAmount),
+        organizerAmount: roundMoney(organizerAmount),
+        processingEstimate: roundMoney(processingEstimate),
+    };
+};
+exports.computeFees = computeFees;
 exports.defaultFeeConfig = FALLBACK_FEE_CONFIG;
 //# sourceMappingURL=fees.js.map

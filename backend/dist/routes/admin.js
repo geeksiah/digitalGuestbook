@@ -364,7 +364,7 @@ router.get('/sales', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHan
             take: pageLimit,
         }),
         prisma_js_1.default.rSVP.count({ where: rsvpWhere }),
-        prisma_js_1.default.transaction.findMany({
+        prisma_js_1.default.transactionLegacy.findMany({
             where: txWhere,
             include: {
                 event: { select: { id: true, name: true, slug: true } },
@@ -373,7 +373,7 @@ router.get('/sales', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHan
             skip: (pageNumber - 1) * pageLimit,
             take: pageLimit,
         }),
-        prisma_js_1.default.transaction.count({ where: txWhere }),
+        prisma_js_1.default.transactionLegacy.count({ where: txWhere }),
     ]);
     const sales = rsvps.filter((r) => r.ticketType && r.amountPaid);
     const stats = {

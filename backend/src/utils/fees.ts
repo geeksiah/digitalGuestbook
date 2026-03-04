@@ -66,4 +66,35 @@ export const resolveEventFeeConfig = (
   });
 };
 
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+export const computeFees = async (
+  baseAmount: number,
+  event: EventLikeFeeConfig
+): Promise<{
+  platformFeeAmount: number;
+  organizerAmount: number;
+  processingEstimate: number;
+}> => {
+  const amount = Math.max(0, Number(baseAmount || 0));
+  const defaults = await getSystemFeeDefaults();
+  const feeConfig = resolveEventFeeConfig(event, defaults);
+
+  const platformFeeAmount =
+    feeConfig.platformFeeMode === 'FIXED'
+      ? Math.min(amount, feeConfig.platformFeeFixed)
+      : (amount * feeConfig.platformFeePercent) / 100;
+
+  const processingEstimate =
+    (amount * feeConfig.processingFeePercent) / 100 + feeConfig.processingFeeFixed;
+
+  const organizerAmount = Math.max(0, amount - platformFeeAmount);
+
+  return {
+    platformFeeAmount: roundMoney(platformFeeAmount),
+    organizerAmount: roundMoney(organizerAmount),
+    processingEstimate: roundMoney(processingEstimate),
+  };
+};
+
 export const defaultFeeConfig = FALLBACK_FEE_CONFIG;

@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
+const node_path_1 = __importDefault(require("node:path"));
+const node_fs_1 = __importDefault(require("node:fs"));
 const adm_zip_1 = __importDefault(require("adm-zip"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
@@ -46,13 +46,13 @@ const MIME_MAP = {
     '.md': 'text/markdown',
 };
 function getMimeType(filePath) {
-    const ext = path_1.default.extname(filePath).toLowerCase();
+    const ext = node_path_1.default.extname(filePath).toLowerCase();
     return MIME_MAP[ext] || 'application/octet-stream';
 }
 function normalizeSupabasePath(p) {
     return String(p || '')
-        .replace(/\\/g, '/')
-        .replace(/\/+/g, '/')
+        .replaceAll(/\\/g, '/')
+        .replaceAll(/\/+/g, '/')
         .replace(/^\//, '')
         .replace(/\/$/, '');
 }
@@ -81,7 +81,7 @@ router.get('/:id/assets/*', (0, errorHandler_js_1.asyncHandler)(async (req, res)
     if (!template?.assetsPath)
         throw new errorHandler_js_1.AppError('Template or assets not found', 404);
     // Prevent traversal
-    const normalized = assetPath.replace(/\.\./g, '').replace(/\/\//g, '/');
+    const normalized = assetPath.replaceAll(/\.\./g, '').replaceAll(/\/\//g, '/');
     if (normalized !== assetPath || assetPath.includes('..')) {
         throw new errorHandler_js_1.AppError('Invalid asset path', 403);
     }
@@ -119,12 +119,12 @@ router.get('/:id/assets/*', (0, errorHandler_js_1.asyncHandler)(async (req, res)
         // fall through to local
     }
     // Local fallback (dev only)
-    const fullPath = path_1.default.join(process.cwd(), template.assetsPath, normalized);
-    const templateDir = path_1.default.join(process.cwd(), template.assetsPath);
-    const resolvedPath = path_1.default.resolve(fullPath);
+    const fullPath = node_path_1.default.join(process.cwd(), template.assetsPath, normalized);
+    const templateDir = node_path_1.default.join(process.cwd(), template.assetsPath);
+    const resolvedPath = node_path_1.default.resolve(fullPath);
     if (!resolvedPath.startsWith(templateDir))
         throw new errorHandler_js_1.AppError('Invalid asset path', 403);
-    if (!fs_1.default.existsSync(resolvedPath))
+    if (!node_fs_1.default.existsSync(resolvedPath))
         throw new errorHandler_js_1.AppError('Asset not found', 404);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.sendFile(resolvedPath);
@@ -153,8 +153,8 @@ router.get('/:id/preview', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
                 // fall through
             }
         }
-        const thumbnailFullPath = path_1.default.join(process.cwd(), template.thumbnailPath);
-        if (fs_1.default.existsSync(thumbnailFullPath))
+        const thumbnailFullPath = node_path_1.default.join(process.cwd(), template.thumbnailPath);
+        if (node_fs_1.default.existsSync(thumbnailFullPath))
             return res.sendFile(thumbnailFullPath);
     }
     res.status(404).json({
@@ -347,7 +347,7 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             const base = normalizeSupabasePath(template.assetsPath);
             const files = await (0, supabaseStorage_js_1.listFiles)(supabaseStorage_js_1.BUCKETS.TEMPLATES, base);
             for (const f of files) {
-                const key = `${base}/${normalizeSupabasePath(f.name)}`.replace(/\/+/g, '/');
+                const key = `${base}/${normalizeSupabasePath(f.name)}`.replaceAll(/\/+/g, '/');
                 await (0, supabaseStorage_js_1.deleteFromSupabase)(supabaseStorage_js_1.BUCKETS.TEMPLATES, key);
             }
         }
@@ -422,7 +422,7 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
     catch (err) {
         throw new errorHandler_js_1.AppError(`Invalid ZIP file: ${err.message}`, 400);
     }
-    const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const templateId = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     const supabasePrefix = templateId;
     const entries = zip.getEntries();
     let wrapperPrefix = '';
@@ -462,7 +462,7 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
         if (!relativePath)
             continue;
         const lowerName = relativePath.toLowerCase();
-        const baseName = path_1.default.basename(lowerName);
+        const baseName = node_path_1.default.basename(lowerName);
         if (!htmlContent && (baseName === 'index.html' || lowerName.endsWith('.html'))) {
             htmlContent = entry.getData().toString('utf-8');
         }
@@ -502,7 +502,7 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
                 });
                 uploadedFiles.push(relativePath);
                 if (!firstImagePath && /\.(jpe?g|png|webp|gif)$/i.test(relativePath)) {
-                    if (/thumbnail|preview|cover/i.test(path_1.default.basename(relativePath)))
+                    if (/thumbnail|preview|cover/i.test(node_path_1.default.basename(relativePath)))
                         firstImagePath = supabasePath;
                     else if (!firstImagePath)
                         firstImagePath = supabasePath;
@@ -518,8 +518,8 @@ router.post('/upload', upload.single('template'), (0, errorHandler_js_1.asyncHan
     }
     else {
         console.warn('[Templates] Supabase not configured — falling back to local disk');
-        const extractPath = path_1.default.join(process.cwd(), 'templates', templateId);
-        fs_1.default.mkdirSync(extractPath, { recursive: true });
+        const extractPath = node_path_1.default.join(process.cwd(), 'templates', templateId);
+        node_fs_1.default.mkdirSync(extractPath, { recursive: true });
         zip.extractAllTo(extractPath, true);
     }
     // Store assetsPath as the assets folder (preferred)
@@ -572,14 +572,14 @@ router.get('/:id/files', (0, errorHandler_js_1.asyncHandler)(async (req, res) =>
             const base = normalizeSupabasePath(template.assetsPath);
             const supabaseFiles = await (0, supabaseStorage_js_1.listFiles)(supabaseStorage_js_1.BUCKETS.TEMPLATES, base);
             for (const f of supabaseFiles) {
-                const ext = path_1.default.extname(f.name).toLowerCase();
+                const ext = node_path_1.default.extname(f.name).toLowerCase();
                 const displayName = baseHasAssetsFolder(base)
                     ? `assets/${f.name}`
                     : f.name.startsWith('assets/')
                         ? f.name
                         : `assets/${f.name}`;
                 files.push({
-                    name: displayName.replace(/\/+/g, '/'),
+                    name: displayName.replaceAll(/\/+/g, '/'),
                     type: ext.slice(1) || 'file',
                     size: f.metadata?.size || 0,
                     editable: ['.html', '.css', '.js', '.json', '.txt', '.md'].includes(ext),
@@ -614,7 +614,7 @@ router.get('/:id/file-content', (0, errorHandler_js_1.asyncHandler)(async (req, 
         return res.json({ content: template.jsContent || '' });
     if (template.assetsPath && filePath.startsWith('assets/')) {
         const relativePath = filePath.replace(/^assets\//, '');
-        const ext = path_1.default.extname(filePath).toLowerCase();
+        const ext = node_path_1.default.extname(filePath).toLowerCase();
         const textExtensions = ['.html', '.css', '.js', '.json', '.txt', '.md', '.xml', '.svg'];
         if (!textExtensions.includes(ext))
             throw new errorHandler_js_1.AppError('File type not supported for editing', 400);

@@ -1269,6 +1269,7 @@ export default function OwnerEventDetailPage() {
                     { label: 'Event Page', path: `/e/${event.slug}` },
                     { label: 'RSVP Page', path: `/e/${event.slug}/rsvp` },
                     { label: 'Gift Page', path: `/gift/${event.slug}` },
+                    { label: 'Vote Page', path: `/e/${event.slug}/vote` },
                     { label: 'Itinerary', path: `/e/${event.slug}/itinerary` },
                   ].map((link) => (
                     <button
@@ -1280,6 +1281,14 @@ export default function OwnerEventDetailPage() {
                       <span className="text-sm font-medium text-brand-900 truncate">{link.label}</span>
                     </button>
                   ))}
+                </div>
+                <div className="mt-3">
+                  <Link
+                    href={`/owner/events/${event.id}/voting`}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
+                  >
+                    Open Voting Dashboard
+                  </Link>
                 </div>
               </div>
             </div>

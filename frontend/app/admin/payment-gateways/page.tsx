@@ -22,6 +22,7 @@ interface PaymentGateway {
   stripePublicKey?: string;
   paystackPublicKey?: string;
   flutterwavePublicKey?: string;
+  hubtelClientId?: string;
 }
 
 export default function PaymentGatewaysPage() {
@@ -193,6 +194,13 @@ function PaymentGatewayModal({
     paystackSecretKey: '',
     flutterwavePublicKey: gateway?.flutterwavePublicKey || '',
     flutterwaveSecretKey: '',
+    hubtelClientId: gateway?.hubtelClientId || '',
+    hubtelClientSecret: '',
+    hubtelMerchantId: '',
+    hubtelAccountNumber: '',
+    hubtelWebhookSecret: '',
+    hubtelEnvironment: 'sandbox' as 'sandbox' | 'production',
+    hubtelConfigJson: '',
     mtnMomoApiKey: '',
     mtnMomoApiSecret: '',
     mtnMomoSubscriptionKey: '',
@@ -299,6 +307,35 @@ function PaymentGatewayModal({
             </Field>
             <Field label="Secret Key">
               <input type="password" className="input" value={formData.flutterwaveSecretKey} onChange={(e) => setField('flutterwaveSecretKey', e.target.value)} placeholder={credentialPlaceholder('FLWSECK_...')} />
+            </Field>
+          </>
+        );
+      case 'hubtel':
+        return (
+          <>
+            <Field label="Client ID">
+              <input type="text" className="input" value={formData.hubtelClientId} onChange={(e) => setField('hubtelClientId', e.target.value)} />
+            </Field>
+            <Field label="Client Secret">
+              <input type="password" className="input" value={formData.hubtelClientSecret} onChange={(e) => setField('hubtelClientSecret', e.target.value)} placeholder={credentialPlaceholder('')} />
+            </Field>
+            <Field label="Merchant ID">
+              <input type="text" className="input" value={formData.hubtelMerchantId} onChange={(e) => setField('hubtelMerchantId', e.target.value)} />
+            </Field>
+            <Field label="Account Number">
+              <input type="text" className="input" value={formData.hubtelAccountNumber} onChange={(e) => setField('hubtelAccountNumber', e.target.value)} />
+            </Field>
+            <Field label="Webhook Secret">
+              <input type="password" className="input" value={formData.hubtelWebhookSecret} onChange={(e) => setField('hubtelWebhookSecret', e.target.value)} placeholder={credentialPlaceholder('')} />
+            </Field>
+            <Field label="Environment">
+              <select className="input" value={formData.hubtelEnvironment} onChange={(e) => setField('hubtelEnvironment', e.target.value as 'sandbox' | 'production')}>
+                <option value="sandbox">Sandbox</option>
+                <option value="production">Production</option>
+              </select>
+            </Field>
+            <Field label="Config JSON">
+              <textarea className="input min-h-[96px]" value={formData.hubtelConfigJson} onChange={(e) => setField('hubtelConfigJson', e.target.value)} placeholder='{"initializeUrl":"...","verifyUrl":"..."}' />
             </Field>
           </>
         );

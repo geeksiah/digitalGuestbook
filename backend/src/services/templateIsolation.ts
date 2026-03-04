@@ -1,7 +1,6 @@
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import prisma from '../utils/prisma.js';
-import { AppError } from '../middleware/errorHandler.js';
 import { isSupabaseConfigured, BUCKETS, listFiles, downloadFile } from './supabaseStorage.js';
 
 interface TemplateAssignments {
@@ -47,7 +46,7 @@ export const copyTemplateAssetsForEvent = async (
         select: { assetsPath: true, id: true, name: true },
       });
       
-      if (!template || !template.assetsPath) {
+      if (!template?.assetsPath) {
         // No assets to copy (template is HTML-only)
         return;
       }
@@ -61,7 +60,7 @@ export const copyTemplateAssetsForEvent = async (
         // If Supabase is configured, attempt to download the assets into the event folder
         if (isSupabaseConfigured() && template.assetsPath) {
           try {
-            const normalized = template.assetsPath.replace(/^\/+/,'').replace(/\\/g, '/');
+            const normalized = template.assetsPath.replace(/^\/+/, '').replaceAll(/\\/g, '/');
 
             // Ensure destination exists
             if (!fs.existsSync(destPath)) {
@@ -79,6 +78,7 @@ export const copyTemplateAssetsForEvent = async (
                   fs.writeFileSync(outFile, buf);
                   console.log(`[TemplateIsolation] Downloaded ${entryPath} -> ${outFile}`);
                 } catch (err: any) {
+                  const downloadError = err instanceof Error ? err.message : String(err);
                   // If download failed, it may be a folder - recurse into it
                   try {
                     const nestedOut = path.join(outDir, e.name);
@@ -87,7 +87,9 @@ export const copyTemplateAssetsForEvent = async (
                     }
                     await downloadRecursive(entryPath, nestedOut);
                   } catch (nestedErr: any) {
-                    console.warn(`[TemplateIsolation] Skipping ${entryPath}: ${nestedErr?.message || nestedErr}`);
+                    console.warn(
+                      `[TemplateIsolation] Skipping ${entryPath}: ${nestedErr?.message || nestedErr} (download error: ${downloadError})`
+                    );
                   }
                 }
               }

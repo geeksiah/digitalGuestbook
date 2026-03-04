@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { randomBytes, randomUUID } from 'crypto';
-import { promises as dns } from 'dns';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { promises as dns } from 'node:dns';
 import multer from 'multer';
 import sharp from 'sharp';
 import prisma from '../utils/prisma.js';
@@ -250,21 +250,23 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   }
 
   // Enforce logic: check-in disabled when invitation-only is false
+  const resolvedEndDate =
+    data.endDate === undefined ? undefined : data.endDate === null ? null : new Date(data.endDate);
   const updateData: any = {
     ...data,
     date: data.date ? new Date(data.date) : undefined,
-    endDate: data.endDate === null ? null : data.endDate ? new Date(data.endDate) : undefined,
-    socialTitle: data.socialTitle !== undefined ? data.socialTitle : undefined,
-    socialDescription: data.socialDescription !== undefined ? data.socialDescription : undefined,
-    coverImagePath: data.coverImagePath !== undefined ? data.coverImagePath : undefined,
-    coverImageAlt: data.coverImageAlt !== undefined ? data.coverImageAlt : undefined,
-    ownerName: data.ownerName !== undefined ? data.ownerName : undefined,
-    ownerEmail: data.ownerEmail !== undefined ? data.ownerEmail : undefined,
-    ownerPhone: data.ownerPhone !== undefined ? data.ownerPhone : undefined,
-    organizationName: data.organizationName !== undefined ? data.organizationName : undefined,
-    itineraryTemplateId: data.itineraryTemplateId !== undefined ? data.itineraryTemplateId : undefined,
-    itineraryPageTemplateId: data.itineraryPageTemplateId !== undefined ? data.itineraryPageTemplateId : undefined,
-    giftingPageTemplateId: data.giftingPageTemplateId !== undefined ? data.giftingPageTemplateId : undefined,
+    endDate: resolvedEndDate,
+    socialTitle: data.socialTitle,
+    socialDescription: data.socialDescription,
+    coverImagePath: data.coverImagePath,
+    coverImageAlt: data.coverImageAlt,
+    ownerName: data.ownerName,
+    ownerEmail: data.ownerEmail,
+    ownerPhone: data.ownerPhone,
+    organizationName: data.organizationName,
+    itineraryTemplateId: data.itineraryTemplateId,
+    itineraryPageTemplateId: data.itineraryPageTemplateId,
+    giftingPageTemplateId: data.giftingPageTemplateId,
   };
   
   if (updateData.invitationOnly === false) {
@@ -684,7 +686,10 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) 
   }
 
   const verified = txtMatch && cnameMatch;
-  const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
+  let status: 'ACTIVE' | 'VERIFIED' | 'FAILED' = 'FAILED';
+  if (verified) {
+    status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
+  }
 
   if (!verified) {
     errorMessage = 'TXT and/or CNAME records are not yet configured correctly';
@@ -830,7 +835,7 @@ router.post('/:id/duplicate', asyncHandler(async (req, res) => {
   // Ensure slug is unique
   const existing = await prisma.event.findUnique({ where: { slug: newSlug } });
   if (existing) {
-    newSlug = `${newSlug}-${Math.random().toString(36).substr(2, 5)}`;
+    newSlug = `${newSlug}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
   // Generate new owner access token
@@ -924,9 +929,14 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   });
 
   // Create audit log
+  const adminId = req.admin?.id;
+  if (!adminId) {
+    throw new AppError('Admin authentication required', 401);
+  }
+
   await prisma.auditLog.create({
     data: {
-      adminId: req.admin!.id,
+      adminId,
       action: 'EVENT_DELETED',
       entityType: 'EVENT',
       entityId: req.params.id,
@@ -972,8 +982,9 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
   // Debug: log incoming assignment payload
   try {
     console.info(`[Events] Assign templates request for event=${eventId} body=${JSON.stringify(req.body)}`);
-  } catch (e) {
-    console.info('[Events] Assign templates request (unable to stringify body)');
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.info(`[Events] Assign templates request (unable to stringify body: ${detail})`);
   }
 
   // Import template assignment logic
@@ -1000,7 +1011,7 @@ router.post('/:id/templates', asyncHandler(async (req, res) => {
     }
     
     const template = await prisma.template.findUnique({ where: { id: templateId } });
-    if (!template || template.type !== expectedType) {
+    if (template?.type !== expectedType) {
       throw new AppError(`Invalid ${expectedType} template. Expected type: ${expectedType}, got: ${template?.type || 'none'}`, 400);
     }
     templateAssignments[fieldName] = templateId;

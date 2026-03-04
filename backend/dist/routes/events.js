@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const uuid_1 = require("uuid");
-const crypto_1 = require("crypto");
-const dns_1 = require("dns");
+const node_crypto_1 = require("node:crypto");
+const node_dns_1 = require("node:dns");
 const multer_1 = __importDefault(require("multer"));
 const sharp_1 = __importDefault(require("sharp"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
@@ -164,7 +164,7 @@ router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             itineraryTemplateId: data.itineraryTemplateId ?? null,
             itineraryPageTemplateId: data.itineraryPageTemplateId ?? null,
             giftingPageTemplateId: data.giftingPageTemplateId ?? null,
-            ownerAccessToken: (0, crypto_1.randomUUID)(),
+            ownerAccessToken: (0, node_crypto_1.randomUUID)(),
         },
     });
     // Create audit log
@@ -229,21 +229,22 @@ router.patch('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         data.checkInEnabled = false;
     }
     // Enforce logic: check-in disabled when invitation-only is false
+    const resolvedEndDate = data.endDate === undefined ? undefined : data.endDate === null ? null : new Date(data.endDate);
     const updateData = {
         ...data,
         date: data.date ? new Date(data.date) : undefined,
-        endDate: data.endDate === null ? null : data.endDate ? new Date(data.endDate) : undefined,
-        socialTitle: data.socialTitle !== undefined ? data.socialTitle : undefined,
-        socialDescription: data.socialDescription !== undefined ? data.socialDescription : undefined,
-        coverImagePath: data.coverImagePath !== undefined ? data.coverImagePath : undefined,
-        coverImageAlt: data.coverImageAlt !== undefined ? data.coverImageAlt : undefined,
-        ownerName: data.ownerName !== undefined ? data.ownerName : undefined,
-        ownerEmail: data.ownerEmail !== undefined ? data.ownerEmail : undefined,
-        ownerPhone: data.ownerPhone !== undefined ? data.ownerPhone : undefined,
-        organizationName: data.organizationName !== undefined ? data.organizationName : undefined,
-        itineraryTemplateId: data.itineraryTemplateId !== undefined ? data.itineraryTemplateId : undefined,
-        itineraryPageTemplateId: data.itineraryPageTemplateId !== undefined ? data.itineraryPageTemplateId : undefined,
-        giftingPageTemplateId: data.giftingPageTemplateId !== undefined ? data.giftingPageTemplateId : undefined,
+        endDate: resolvedEndDate,
+        socialTitle: data.socialTitle,
+        socialDescription: data.socialDescription,
+        coverImagePath: data.coverImagePath,
+        coverImageAlt: data.coverImageAlt,
+        ownerName: data.ownerName,
+        ownerEmail: data.ownerEmail,
+        ownerPhone: data.ownerPhone,
+        organizationName: data.organizationName,
+        itineraryTemplateId: data.itineraryTemplateId,
+        itineraryPageTemplateId: data.itineraryPageTemplateId,
+        giftingPageTemplateId: data.giftingPageTemplateId,
     };
     if (updateData.invitationOnly === false) {
         updateData.checkInEnabled = false;
@@ -540,7 +541,7 @@ router.post('/:eventId/domains', (0, errorHandler_js_1.asyncHandler)(async (req,
             data: { isPrimary: false },
         });
     }
-    const verificationToken = (0, crypto_1.randomBytes)(16).toString('hex');
+    const verificationToken = (0, node_crypto_1.randomBytes)(16).toString('hex');
     const domain = await prisma_js_1.default.eventDomain.create({
         data: {
             eventId,
@@ -588,7 +589,7 @@ router.post('/:eventId/domains/:domainId/verify', (0, errorHandler_js_1.asyncHan
     let cnameMatch = false;
     let errorMessage = null;
     try {
-        const txtRecords = await dns_1.promises.resolveTxt(txtHost);
+        const txtRecords = await node_dns_1.promises.resolveTxt(txtHost);
         const flat = txtRecords.flat().map((value) => value.trim());
         txtMatch = flat.includes(domain.verificationToken);
     }
@@ -597,14 +598,17 @@ router.post('/:eventId/domains/:domainId/verify', (0, errorHandler_js_1.asyncHan
     }
     try {
         const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
-        const cnameRecords = await dns_1.promises.resolveCname(cnameHost);
+        const cnameRecords = await node_dns_1.promises.resolveCname(cnameHost);
         cnameMatch = cnameRecords.some((record) => record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, ''));
     }
     catch {
         cnameMatch = false;
     }
     const verified = txtMatch && cnameMatch;
-    const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
+    let status = 'FAILED';
+    if (verified) {
+        status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
+    }
     if (!verified) {
         errorMessage = 'TXT and/or CNAME records are not yet configured correctly';
     }
@@ -726,7 +730,7 @@ router.post('/:id/duplicate', (0, errorHandler_js_1.asyncHandler)(async (req, re
     // Ensure slug is unique
     const existing = await prisma_js_1.default.event.findUnique({ where: { slug: newSlug } });
     if (existing) {
-        newSlug = `${newSlug}-${Math.random().toString(36).substr(2, 5)}`;
+        newSlug = `${newSlug}-${Math.random().toString(36).slice(2, 7)}`;
     }
     // Generate new owner access token
     const newOwnerToken = (0, uuid_1.v4)();
@@ -808,9 +812,13 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
         where: { id: req.params.id },
     });
     // Create audit log
+    const adminId = req.admin?.id;
+    if (!adminId) {
+        throw new errorHandler_js_1.AppError('Admin authentication required', 401);
+    }
     await prisma_js_1.default.auditLog.create({
         data: {
-            adminId: req.admin.id,
+            adminId,
             action: 'EVENT_DELETED',
             entityType: 'EVENT',
             entityId: req.params.id,
@@ -836,8 +844,9 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
     try {
         console.info(`[Events] Assign templates request for event=${eventId} body=${JSON.stringify(req.body)}`);
     }
-    catch (e) {
-        console.info('[Events] Assign templates request (unable to stringify body)');
+    catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.info(`[Events] Assign templates request (unable to stringify body: ${detail})`);
     }
     // Import template assignment logic
     const { copyTemplateAssetsForEvent } = await import('../services/templateIsolation.js');
@@ -855,7 +864,7 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
             throw new errorHandler_js_1.AppError(`Cannot assign ${expectedType} template - ${requiresService.name} service is disabled`, 400);
         }
         const template = await prisma_js_1.default.template.findUnique({ where: { id: templateId } });
-        if (!template || template.type !== expectedType) {
+        if (template?.type !== expectedType) {
             throw new errorHandler_js_1.AppError(`Invalid ${expectedType} template. Expected type: ${expectedType}, got: ${template?.type || 'none'}`, 400);
         }
         templateAssignments[fieldName] = templateId;
@@ -949,7 +958,7 @@ router.post('/:id/templates', (0, errorHandler_js_1.asyncHandler)(async (req, re
 router.post('/:id/regenerate-owner-token', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.update({
         where: { id: req.params.id },
-        data: { ownerAccessToken: (0, crypto_1.randomUUID)() },
+        data: { ownerAccessToken: (0, node_crypto_1.randomUUID)() },
     });
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
@@ -963,7 +972,7 @@ router.post('/:id/regenerate-owner-token', (0, errorHandler_js_1.asyncHandler)(a
 router.post('/:id/regenerate-couple-token', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const event = await prisma_js_1.default.event.update({
         where: { id: req.params.id },
-        data: { ownerAccessToken: (0, crypto_1.randomUUID)() },
+        data: { ownerAccessToken: (0, node_crypto_1.randomUUID)() },
     });
     res.json({
         ownerAccessToken: event.ownerAccessToken,

@@ -9,6 +9,7 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const paystack_js_1 = require("../services/paystack.js");
 const payoutAutomation_js_1 = require("../services/payoutAutomation.js");
+const paymentCore_js_1 = require("../services/paymentCore.js");
 const router = (0, express_1.Router)();
 const db = prisma_js_1.default;
 router.get('/health', (_req, res) => {
@@ -55,6 +56,13 @@ router.post('/', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     if (eventName.toLowerCase().startsWith('transfer.')) {
         await (0, payoutAutomation_js_1.reconcilePaystackTransfer)({
             eventName,
+            payload,
+            rawPayload,
+        });
+    }
+    else {
+        await (0, paymentCore_js_1.handleWebhook)({
+            gateway: 'paystack',
             payload,
             rawPayload,
         });

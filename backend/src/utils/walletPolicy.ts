@@ -19,6 +19,7 @@ const GATEWAY_TO_WALLET_TYPE: Record<string, string> = {
   paystack: 'paystack',
   paypal: 'paypal',
   flutterwave: 'flutterwave',
+  hubtel: 'hubtel',
 };
 
 const GATEWAY_COVERAGE_RULES: Record<string, CoverageRule> = {
@@ -29,6 +30,7 @@ const GATEWAY_COVERAGE_RULES: Record<string, CoverageRule> = {
   ],
   paystack: ['NG', 'GH', 'ZA', 'KE', 'CI', 'EG'],
   flutterwave: ['NG', 'GH', 'KE', 'UG', 'RW', 'TZ', 'ZA'],
+  hubtel: ['GH'],
   mtn_momo: ['GH', 'UG', 'CM', 'CI', 'RW', 'ZM', 'BJ', 'GN'],
   telecel_cash: ['GH'],
   airteltigo_cash: ['GH'],
@@ -51,6 +53,7 @@ export const isGatewayConfigured = (gateway: any) => {
   if (type === 'stripe') return Boolean(gateway?.stripePublicKey && gateway?.stripeSecretKey);
   if (type === 'paystack') return Boolean(gateway?.paystackPublicKey && gateway?.paystackSecretKey);
   if (type === 'flutterwave') return Boolean(gateway?.flutterwavePublicKey && gateway?.flutterwaveSecretKey);
+  if (type === 'hubtel') return Boolean(gateway?.hubtelClientId && gateway?.hubtelClientSecret);
   if (type === 'paypal') return Boolean(gateway?.customGatewayApiKey || gateway?.customGatewayApiSecret || gateway?.customGatewayApiUrl);
   if (type === 'mtn_momo') return Boolean(gateway?.mtnMomoApiKey && gateway?.mtnMomoApiSecret && gateway?.mtnMomoSubscriptionKey);
   if (type === 'telecel_cash') return Boolean(gateway?.telecelCashApiKey && gateway?.telecelCashApiSecret && gateway?.telecelCashMerchantId);
@@ -149,4 +152,3 @@ export const resolveRoutingForMethod = (params: {
     wallet: null,
   };
 };
-

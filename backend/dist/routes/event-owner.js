@@ -261,6 +261,34 @@ router.get('/:token/checkins', validateOwnerToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch check-ins' });
     }
 });
+// GET /api/event-owner/:token/tickets - Get ticket types for event
+router.get('/:token/tickets', validateOwnerToken, async (req, res) => {
+    try {
+        const eventId = req.eventId;
+        const tickets = await prisma.ticketType.findMany({
+            where: { eventId },
+            orderBy: { sortOrder: 'asc' },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+                price: true,
+                currency: true,
+                quantityTotal: true,
+                quantitySold: true,
+                maxPerOrder: true,
+                saleStartDate: true,
+                saleEndDate: true,
+                isActive: true,
+            },
+        });
+        res.json({ tickets });
+    }
+    catch (error) {
+        console.error('Error fetching tickets:', error);
+        res.status(500).json({ error: 'Failed to fetch tickets' });
+    }
+});
 // GET /api/event-owner/:token/media/download - Download all media as ZIP
 router.get('/:token/media/download', validateOwnerToken, async (req, res) => {
     try {
@@ -426,7 +454,7 @@ router.get('/:token/sales', validateOwnerToken, async (req, res) => {
     try {
         const eventId = req.eventId;
         // Get all transactions
-        const transactions = await prisma.transaction.findMany({
+        const transactions = await prisma.transactionLegacy.findMany({
             where: { eventId },
             orderBy: { createdAt: 'desc' },
         });
@@ -484,7 +512,7 @@ router.get('/:token/sales/by-ticket', validateOwnerToken, async (req, res) => {
         });
         // Get transaction aggregates per ticket type
         const salesByTicket = await Promise.all(ticketTypes.map(async (ticket) => {
-            const transactions = await prisma.transaction.findMany({
+            const transactions = await prisma.transactionLegacy.findMany({
                 where: {
                     eventId,
                     ticketTypeName: ticket.name,
@@ -647,7 +675,7 @@ router.post('/:token/payouts/request', validateOwnerToken, async (req, res) => {
             return res.status(400).json({ error: 'Please configure your payout wallet first' });
         }
         // Calculate available balance
-        const transactions = await prisma.transaction.findMany({
+        const transactions = await prisma.transactionLegacy.findMany({
             where: { eventId },
         });
         let availableBalance = 0;

@@ -16,6 +16,7 @@ const paymentGatewaySchema = z.object({
     'stripe',
     'paystack',
     'flutterwave',
+    'hubtel',
     'paypal',
     'mtn_momo',
     'telecel_cash',
@@ -35,6 +36,14 @@ const paymentGatewaySchema = z.object({
   // Flutterwave
   flutterwavePublicKey: z.string().optional(),
   flutterwaveSecretKey: z.string().optional(),
+  // Hubtel
+  hubtelClientId: z.string().optional(),
+  hubtelClientSecret: z.string().optional(),
+  hubtelMerchantId: z.string().optional(),
+  hubtelAccountNumber: z.string().optional(),
+  hubtelWebhookSecret: z.string().optional(),
+  hubtelEnvironment: z.enum(['sandbox', 'production']).optional(),
+  hubtelConfigJson: z.string().optional(),
   // MTN MoMo
   mtnMomoApiKey: z.string().optional(),
   mtnMomoApiSecret: z.string().optional(),
@@ -84,6 +93,8 @@ router.get('/', authenticateAdmin, asyncHandler(async (req, res) => {
     if (g.stripeWebhookSecret) g.stripeWebhookSecret = '****';
     if (g.paystackSecretKey) g.paystackSecretKey = '****' + g.paystackSecretKey.slice(-4);
     if (g.flutterwaveSecretKey) g.flutterwaveSecretKey = '****' + g.flutterwaveSecretKey.slice(-4);
+    if (g.hubtelClientSecret) g.hubtelClientSecret = '****' + g.hubtelClientSecret.slice(-4);
+    if (g.hubtelWebhookSecret) g.hubtelWebhookSecret = '****';
     if (g.mtnMomoApiSecret) g.mtnMomoApiSecret = '****' + g.mtnMomoApiSecret.slice(-4);
     if (g.telecelCashApiSecret) g.telecelCashApiSecret = '****' + g.telecelCashApiSecret.slice(-4);
     if (g.airteltigoCashApiSecret) g.airteltigoCashApiSecret = '****' + g.airteltigoCashApiSecret.slice(-4);
@@ -128,6 +139,8 @@ router.get('/:id([0-9a-fA-F-]{36})', authenticateAdmin, asyncHandler(async (req,
   if (masked.stripeWebhookSecret) masked.stripeWebhookSecret = '****';
   if (masked.paystackSecretKey) masked.paystackSecretKey = '****' + masked.paystackSecretKey.slice(-4);
   if (masked.flutterwaveSecretKey) masked.flutterwaveSecretKey = '****' + masked.flutterwaveSecretKey.slice(-4);
+  if (masked.hubtelClientSecret) masked.hubtelClientSecret = '****' + masked.hubtelClientSecret.slice(-4);
+  if (masked.hubtelWebhookSecret) masked.hubtelWebhookSecret = '****';
   if (masked.mtnMomoApiSecret) masked.mtnMomoApiSecret = '****' + masked.mtnMomoApiSecret.slice(-4);
   if (masked.telecelCashApiSecret) masked.telecelCashApiSecret = '****' + masked.telecelCashApiSecret.slice(-4);
   if (masked.airteltigoCashApiSecret) masked.airteltigoCashApiSecret = '****' + masked.airteltigoCashApiSecret.slice(-4);
@@ -149,6 +162,8 @@ router.post('/', authenticateAdmin, asyncHandler(async (req, res) => {
   if (cleanData.stripeWebhookSecret === '****') delete cleanData.stripeWebhookSecret;
   if (cleanData.paystackSecretKey?.startsWith('****')) delete cleanData.paystackSecretKey;
   if (cleanData.flutterwaveSecretKey?.startsWith('****')) delete cleanData.flutterwaveSecretKey;
+  if (cleanData.hubtelClientSecret?.startsWith('****')) delete cleanData.hubtelClientSecret;
+  if (cleanData.hubtelWebhookSecret === '****') delete cleanData.hubtelWebhookSecret;
   if (cleanData.mtnMomoApiSecret?.startsWith('****')) delete cleanData.mtnMomoApiSecret;
   if (cleanData.telecelCashApiSecret?.startsWith('****')) delete cleanData.telecelCashApiSecret;
   if (cleanData.airteltigoCashApiSecret?.startsWith('****')) delete cleanData.airteltigoCashApiSecret;
@@ -164,6 +179,8 @@ router.post('/', authenticateAdmin, asyncHandler(async (req, res) => {
   if (masked.stripeWebhookSecret) masked.stripeWebhookSecret = '****';
   if (masked.paystackSecretKey) masked.paystackSecretKey = '****' + masked.paystackSecretKey.slice(-4);
   if (masked.flutterwaveSecretKey) masked.flutterwaveSecretKey = '****' + masked.flutterwaveSecretKey.slice(-4);
+  if (masked.hubtelClientSecret) masked.hubtelClientSecret = '****' + masked.hubtelClientSecret.slice(-4);
+  if (masked.hubtelWebhookSecret) masked.hubtelWebhookSecret = '****';
   if (masked.mtnMomoApiSecret) masked.mtnMomoApiSecret = '****' + masked.mtnMomoApiSecret.slice(-4);
   if (masked.telecelCashApiSecret) masked.telecelCashApiSecret = '****' + masked.telecelCashApiSecret.slice(-4);
   if (masked.airteltigoCashApiSecret) masked.airteltigoCashApiSecret = '****' + masked.airteltigoCashApiSecret.slice(-4);
@@ -191,6 +208,8 @@ router.put('/:id([0-9a-fA-F-]{36})', authenticateAdmin, asyncHandler(async (req,
   if (cleanData.stripeWebhookSecret === '****') delete cleanData.stripeWebhookSecret;
   if (cleanData.paystackSecretKey?.startsWith('****')) delete cleanData.paystackSecretKey;
   if (cleanData.flutterwaveSecretKey?.startsWith('****')) delete cleanData.flutterwaveSecretKey;
+  if (cleanData.hubtelClientSecret?.startsWith('****')) delete cleanData.hubtelClientSecret;
+  if (cleanData.hubtelWebhookSecret === '****') delete cleanData.hubtelWebhookSecret;
   if (cleanData.mtnMomoApiSecret?.startsWith('****')) delete cleanData.mtnMomoApiSecret;
   if (cleanData.telecelCashApiSecret?.startsWith('****')) delete cleanData.telecelCashApiSecret;
   if (cleanData.airteltigoCashApiSecret?.startsWith('****')) delete cleanData.airteltigoCashApiSecret;
@@ -207,6 +226,8 @@ router.put('/:id([0-9a-fA-F-]{36})', authenticateAdmin, asyncHandler(async (req,
   if (masked.stripeWebhookSecret) masked.stripeWebhookSecret = '****';
   if (masked.paystackSecretKey) masked.paystackSecretKey = '****' + masked.paystackSecretKey.slice(-4);
   if (masked.flutterwaveSecretKey) masked.flutterwaveSecretKey = '****' + masked.flutterwaveSecretKey.slice(-4);
+  if (masked.hubtelClientSecret) masked.hubtelClientSecret = '****' + masked.hubtelClientSecret.slice(-4);
+  if (masked.hubtelWebhookSecret) masked.hubtelWebhookSecret = '****';
   if (masked.mtnMomoApiSecret) masked.mtnMomoApiSecret = '****' + masked.mtnMomoApiSecret.slice(-4);
   if (masked.telecelCashApiSecret) masked.telecelCashApiSecret = '****' + masked.telecelCashApiSecret.slice(-4);
   if (masked.airteltigoCashApiSecret) masked.airteltigoCashApiSecret = '****' + masked.airteltigoCashApiSecret.slice(-4);
@@ -267,6 +288,8 @@ router.get('/events/:eventId', authenticateAdmin, asyncHandler(async (req, res) 
     if (g.stripeWebhookSecret) g.stripeWebhookSecret = '****';
     if (g.paystackSecretKey) g.paystackSecretKey = '****' + g.paystackSecretKey.slice(-4);
     if (g.flutterwaveSecretKey) g.flutterwaveSecretKey = '****' + g.flutterwaveSecretKey.slice(-4);
+    if (g.hubtelClientSecret) g.hubtelClientSecret = '****' + g.hubtelClientSecret.slice(-4);
+    if (g.hubtelWebhookSecret) g.hubtelWebhookSecret = '****';
     if (g.mtnMomoApiSecret) g.mtnMomoApiSecret = '****' + g.mtnMomoApiSecret.slice(-4);
     if (g.telecelCashApiSecret) g.telecelCashApiSecret = '****' + g.telecelCashApiSecret.slice(-4);
     if (g.airteltigoCashApiSecret) g.airteltigoCashApiSecret = '****' + g.airteltigoCashApiSecret.slice(-4);
@@ -324,6 +347,8 @@ router.put('/events/:eventId', authenticateAdmin, asyncHandler(async (req, res) 
     if (g.stripeWebhookSecret) g.stripeWebhookSecret = '****';
     if (g.paystackSecretKey) g.paystackSecretKey = '****' + g.paystackSecretKey.slice(-4);
     if (g.flutterwaveSecretKey) g.flutterwaveSecretKey = '****' + g.flutterwaveSecretKey.slice(-4);
+    if (g.hubtelClientSecret) g.hubtelClientSecret = '****' + g.hubtelClientSecret.slice(-4);
+    if (g.hubtelWebhookSecret) g.hubtelWebhookSecret = '****';
     if (g.mtnMomoApiSecret) g.mtnMomoApiSecret = '****' + g.mtnMomoApiSecret.slice(-4);
     if (g.telecelCashApiSecret) g.telecelCashApiSecret = '****' + g.telecelCashApiSecret.slice(-4);
     if (g.airteltigoCashApiSecret) g.airteltigoCashApiSecret = '****' + g.airteltigoCashApiSecret.slice(-4);

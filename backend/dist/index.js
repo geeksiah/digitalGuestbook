@@ -9,8 +9,8 @@ const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = __importDefault(require("dotenv"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
+const node_path_1 = __importDefault(require("node:path"));
+const node_fs_1 = __importDefault(require("node:fs"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_js_1 = __importDefault(require("./utils/prisma.js"));
 // Load environment variables
@@ -113,12 +113,32 @@ async function initializeDatabase() {
             await prisma_js_1.default.template.createMany({
                 data: [
                     { id: 'default-invitation', name: 'Elegant Invitation', type: 'INVITATION', isDefault: true, htmlContent: '<div>{{event.name}}</div>', cssContent: '' },
-                    { id: 'default-rsvp', name: 'Classic RSVP', type: 'RSVP', isDefault: true, htmlContent: '<div>RSVP Form</div>', cssContent: '' },
+                    { id: 'default-rsvp', name: 'Ticket Checkout Flow', type: 'RSVP', isDefault: true, htmlContent: '<div>RSVP / Ticket Page</div>', cssContent: '' },
                     { id: 'default-guestbook', name: 'Modern Guestbook', type: 'GUESTBOOK', isDefault: true, htmlContent: '<div>Guestbook</div>', cssContent: '' },
                     { id: 'default-thankyou', name: 'Thank You', type: 'THANK_YOU', isDefault: true, htmlContent: '<div>Thank You</div>', cssContent: '' },
+                    { id: 'default-gifting', name: 'Modern Gifting Catalog', type: 'GIFTING', isDefault: true, htmlContent: '<div>Gifting Catalog</div>', cssContent: '' },
                 ],
             });
             console.log('✅ Default templates created');
+        }
+        // Ensure core defaults exist on already-populated databases too.
+        const requiredDefaults = [
+            { id: 'default-rsvp', name: 'Ticket Checkout Flow', type: 'RSVP', htmlContent: '<div>RSVP / Ticket Page</div>' },
+            { id: 'default-gifting', name: 'Modern Gifting Catalog', type: 'GIFTING', htmlContent: '<div>Gifting Catalog</div>' },
+        ];
+        for (const template of requiredDefaults) {
+            await prisma_js_1.default.template.upsert({
+                where: { id: template.id },
+                update: {},
+                create: {
+                    id: template.id,
+                    name: template.name,
+                    type: template.type,
+                    isDefault: true,
+                    htmlContent: template.htmlContent,
+                    cssContent: '',
+                },
+            });
         }
         // Create system settings if not exists
         const settings = await prisma_js_1.default.systemSettings.findUnique({ where: { id: 'default' } });
@@ -142,7 +162,7 @@ async function initializeDatabase() {
                     name: 'Default SMTP',
                     provider: 'smtp',
                     smtpHost: smtpHost,
-                    smtpPort: parseInt(smtpPort),
+                    smtpPort: Number.parseInt(smtpPort, 10),
                     smtpSecure: process.env.DEFAULT_EMAIL_SECURE === 'true' || process.env.SMTP_SECURE === 'true',
                     smtpUser: smtpUser,
                     smtpPass: smtpPass || '',
@@ -232,6 +252,9 @@ const itinerary_js_1 = __importDefault(require("./routes/itinerary.js"));
 const gifting_js_1 = __importDefault(require("./routes/gifting.js"));
 const whatsapp_webhooks_js_1 = __importDefault(require("./routes/whatsapp-webhooks.js"));
 const paystack_webhooks_js_1 = __importDefault(require("./routes/paystack-webhooks.js"));
+const webhooks_js_1 = __importDefault(require("./routes/webhooks.js"));
+const voting_js_1 = __importDefault(require("./routes/voting.js"));
+const voting_owner_js_1 = __importDefault(require("./routes/voting-owner.js"));
 // Middleware
 const errorHandler_js_1 = require("./middleware/errorHandler.js");
 const requestLogger_js_1 = require("./middleware/requestLogger.js");
@@ -263,11 +286,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 // Add local app origins outside production (web + emulator + Capacitor app shell).
 if (process.env.NODE_ENV !== 'production') {
-    allowedOrigins.push('http://localhost:3000');
-    allowedOrigins.push('http://localhost:5173');
-    allowedOrigins.push('http://localhost:5174');
-    allowedOrigins.push('http://10.0.2.2:5174');
-    allowedOrigins.push('capacitor://localhost');
+    allowedOrigins.push('http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://10.0.2.2:5174', 'capacitor://localhost');
 }
 // Deduplicate
 const uniqueOrigins = [...new Set(allowedOrigins)];
@@ -293,7 +312,8 @@ app.use((0, cors_1.default)({
         }
         // Allow any *.eventpeepo.com subdomain
         try {
-            if (/\.eventpeepo\.com$/.test(new URL(origin).hostname)) {
+            const hostname = new URL(origin).hostname;
+            if (hostname.endsWith('.eventpeepo.com')) {
                 return callback(null, true);
             }
         }
@@ -337,6 +357,7 @@ const authLimiter = (0, express_rate_limit_1.default)({
 app.use('/api/auth/', authLimiter);
 // Body Parsing
 app.use('/api/paystack/webhooks', express_1.default.raw({ type: 'application/json', limit: '2mb' }), paystack_webhooks_js_1.default);
+app.use('/api/webhooks', express_1.default.raw({ type: 'application/json', limit: '2mb' }), webhooks_js_1.default);
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 // Request Logging
@@ -350,9 +371,9 @@ app.get('/', (req, res) => {
     });
 });
 // Static Files (uploads, generated PDFs, templates)
-app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
-app.use('/generated', express_1.default.static(path_1.default.join(process.cwd(), 'generated')));
-app.use('/templates', express_1.default.static(path_1.default.join(process.cwd(), 'templates')));
+app.use('/uploads', express_1.default.static(node_path_1.default.join(process.cwd(), 'uploads')));
+app.use('/generated', express_1.default.static(node_path_1.default.join(process.cwd(), 'generated')));
+app.use('/templates', express_1.default.static(node_path_1.default.join(process.cwd(), 'templates')));
 // Enhanced Health Check with comprehensive status
 app.get('/health', async (req, res) => {
     const healthStatus = {
@@ -375,14 +396,14 @@ app.get('/health', async (req, res) => {
         const fsChecks = {};
         const requiredDirs = ['uploads/media', 'generated/reels', 'templates/archives', 'data'];
         for (const dir of requiredDirs) {
-            const dirPath = path_1.default.join(process.cwd(), dir);
+            const dirPath = node_path_1.default.join(process.cwd(), dir);
             try {
-                fs_1.default.accessSync(dirPath, fs_1.default.constants.F_OK | fs_1.default.constants.W_OK);
+                node_fs_1.default.accessSync(dirPath, node_fs_1.default.constants.F_OK | node_fs_1.default.constants.W_OK);
                 fsChecks[dir] = { status: 'pass', writable: true };
             }
             catch {
                 try {
-                    fs_1.default.mkdirSync(dirPath, { recursive: true });
+                    node_fs_1.default.mkdirSync(dirPath, { recursive: true });
                     fsChecks[dir] = { status: 'pass', writable: true, created: true };
                 }
                 catch {
@@ -392,7 +413,7 @@ app.get('/health', async (req, res) => {
         }
         healthStatus.checks.filesystem = fsChecks;
         try {
-            const { spawn } = await import('child_process');
+            const { spawn } = await import('node:child_process');
             const ffmpegCheck = spawn('ffmpeg', ['-version']);
             await new Promise((resolve, reject) => {
                 ffmpegCheck.on('close', (code) => {
@@ -422,8 +443,16 @@ app.get('/health', async (req, res) => {
         };
         const allChecks = Object.values(healthStatus.checks).flat();
         const hasFailures = allChecks.some((check) => check.status === 'fail');
-        healthStatus.status = hasFailures ? (dbHealthy ? 'degraded' : 'unhealthy') : 'healthy';
-        const statusCode = healthStatus.status === 'healthy' ? 200 : healthStatus.status === 'degraded' ? 200 : 503;
+        if (!hasFailures) {
+            healthStatus.status = 'healthy';
+        }
+        else if (dbHealthy) {
+            healthStatus.status = 'degraded';
+        }
+        else {
+            healthStatus.status = 'unhealthy';
+        }
+        const statusCode = healthStatus.status === 'unhealthy' ? 503 : 200;
         res.status(statusCode).json(healthStatus);
     }
     catch (error) {
@@ -489,8 +518,10 @@ app.use('/api/promo-codes', promo_codes_js_1.default);
 app.use('/api/owners', owners_js_1.default);
 app.use('/api/owner-auth', owner_auth_js_1.default);
 app.use('/api/owner-dashboard', owner_dashboard_js_1.default);
+app.use('/api/owner-dashboard', voting_owner_js_1.default);
 app.use('/api/itinerary', itinerary_js_1.default);
 app.use('/api/gifting', gifting_js_1.default);
+app.use('/api/voting', voting_js_1.default);
 app.use('/api/whatsapp', whatsapp_webhooks_js_1.default);
 // 404 Handler
 app.use((req, res) => {

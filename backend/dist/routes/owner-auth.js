@@ -18,6 +18,7 @@ const registerSchema = zod_1.z.object({
     password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
     phone: zod_1.z.string().optional(),
     company: zod_1.z.string().optional(),
+    countryCode: zod_1.z.string().trim().regex(/^[A-Za-z]{2}$/).transform((v) => v.toUpperCase()).default('US'),
 });
 const loginSchema = zod_1.z.object({
     email: zod_1.z.string().email('Valid email is required'),
@@ -36,6 +37,7 @@ const updateProfileSchema = zod_1.z.object({
     email: zod_1.z.string().email().optional(),
     phone: zod_1.z.string().optional(),
     company: zod_1.z.string().optional(),
+    countryCode: zod_1.z.string().trim().regex(/^[A-Za-z]{2}$/).transform((v) => v.toUpperCase()).optional(),
 });
 const requestPasswordResetSchema = zod_1.z.object({
     email: zod_1.z.string().email('Valid email is required'),
@@ -76,6 +78,7 @@ router.post('/register', (0, errorHandler_js_1.asyncHandler)(async (req, res) =>
             passwordHash,
             phone: data.phone,
             company: data.company,
+            countryCode: data.countryCode,
             emailVerified: false, // Email verification can be added later
         },
         select: {
@@ -84,6 +87,7 @@ router.post('/register', (0, errorHandler_js_1.asyncHandler)(async (req, res) =>
             email: true,
             phone: true,
             company: true,
+            countryCode: true,
             isActive: true,
             createdAt: true,
         },
@@ -162,6 +166,7 @@ router.get('/me', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyn
             email: true,
             phone: true,
             company: true,
+            countryCode: true,
             isActive: true,
             emailVerified: true,
             createdAt: true,
@@ -327,6 +332,7 @@ router.put('/profile', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1
             email: true,
             phone: true,
             company: true,
+            countryCode: true,
             isActive: true,
             emailVerified: true,
             createdAt: true,

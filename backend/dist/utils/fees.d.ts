@@ -16,6 +16,11 @@ type EventLikeFeeConfig = {
     processingFeeFixed?: number | null | undefined;
 };
 export declare const resolveEventFeeConfig: (event: EventLikeFeeConfig, defaults: FeeConfig) => FeeConfig;
+export declare const computeFees: (baseAmount: number, event: EventLikeFeeConfig) => Promise<{
+    platformFeeAmount: number;
+    organizerAmount: number;
+    processingEstimate: number;
+}>;
 export declare const defaultFeeConfig: FeeConfig;
 export {};
 //# sourceMappingURL=fees.d.ts.map

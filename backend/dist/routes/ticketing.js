@@ -4,12 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const crypto_1 = require("crypto");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const zod_1 = require("zod");
-const paystack_js_1 = require("../services/paystack.js");
-const fees_js_1 = require("../utils/fees.js");
+const paymentCore_js_1 = require("../services/paymentCore.js");
+const walletPolicy_js_1 = require("../utils/walletPolicy.js");
 const router = (0, express_1.Router)();
 // ============================================
 // CUSTOM FORM FIELDS
@@ -107,13 +108,13 @@ router.put('/events/:eventId/fields/reorder', auth_js_1.authenticateAdmin, (0, e
 // ============================================
 const ticketTypeSchema = zod_1.z.object({
     name: zod_1.z.string().min(1).max(100),
-    description: zod_1.z.string().optional(),
+    description: zod_1.z.string().nullable().optional(),
     price: zod_1.z.number().min(0),
     currency: zod_1.z.string().default('USD'),
-    quantityTotal: zod_1.z.number().min(0).default(0),
-    maxPerOrder: zod_1.z.number().min(1).default(10),
-    saleStartDate: zod_1.z.string().datetime().optional(),
-    saleEndDate: zod_1.z.string().datetime().optional(),
+    quantityTotal: zod_1.z.number().min(0).nullable().optional(),
+    maxPerOrder: zod_1.z.number().min(1).nullable().optional(),
+    saleStartDate: zod_1.z.string().datetime().nullable().optional(),
+    saleEndDate: zod_1.z.string().datetime().nullable().optional(),
     sortOrder: zod_1.z.number().default(0),
     isActive: zod_1.z.boolean().default(true),
 });
@@ -152,6 +153,9 @@ router.post('/events/:eventId/tickets', auth_js_1.authenticateAdmin, (0, errorHa
         data: {
             eventId,
             ...data,
+            description: data.description ?? null,
+            quantityTotal: data.quantityTotal ?? 0,
+            maxPerOrder: data.maxPerOrder ?? 10,
             saleStartDate: data.saleStartDate ? new Date(data.saleStartDate) : null,
             saleEndDate: data.saleEndDate ? new Date(data.saleEndDate) : null,
         },
@@ -169,8 +173,19 @@ router.put('/events/:eventId/tickets/:ticketId', auth_js_1.authenticateAdmin, (0
         where: { id: ticketId, eventId },
         data: {
             ...data,
-            saleStartDate: data.saleStartDate ? new Date(data.saleStartDate) : undefined,
-            saleEndDate: data.saleEndDate ? new Date(data.saleEndDate) : undefined,
+            saleStartDate: data.saleStartDate === undefined
+                ? undefined
+                : data.saleStartDate
+                    ? new Date(data.saleStartDate)
+                    : null,
+            saleEndDate: data.saleEndDate === undefined
+                ? undefined
+                : data.saleEndDate
+                    ? new Date(data.saleEndDate)
+                    : null,
+            description: data.description === undefined ? undefined : data.description,
+            quantityTotal: data.quantityTotal === undefined ? undefined : (data.quantityTotal ?? 0),
+            maxPerOrder: data.maxPerOrder === undefined ? undefined : (data.maxPerOrder ?? 10),
         },
     });
     res.json({ ticket });
@@ -206,10 +221,17 @@ router.get('/public/:eventSlug/form', (0, errorHandler_js_1.asyncHandler)(async 
         include: {
             Owner: {
                 select: {
-                    wallet: {
+                    countryCode: true,
+                    wallets: {
+                        where: { isActive: true },
                         select: {
-                            paystackSubaccount: true,
+                            id: true,
+                            walletType: true,
+                            isActive: true,
                             isVerified: true,
+                            currency: true,
+                            paystackSubaccount: true,
+                            paystackRecipientCode: true,
                         },
                     },
                 },
@@ -268,21 +290,29 @@ router.get('/public/:eventSlug/form', (0, errorHandler_js_1.asyncHandler)(async 
         available: t.quantityTotal === 0 ? 999 : t.quantityTotal - t.quantitySold,
         maxPerOrder: t.maxPerOrder,
     }));
+    const walletState = (0, walletPolicy_js_1.resolveOwnerWalletState)((event.Owner?.wallets || []));
+    const visibleGateways = (0, walletPolicy_js_1.filterEventGatewaysForOwner)({
+        eventGateways: event.eventPaymentGateways,
+        walletState,
+    });
+    const paystackWallet = walletState.walletByType.get('paystack');
+    const isPaidMode = String(event.rsvpMode || '').toLowerCase() === 'paid';
     res.json({
         eventId: event.id,
         eventName: event.name,
         rsvpMode: event.rsvpMode,
         requireApproval: event.requireApproval,
         fields,
-        tickets: event.rsvpMode === 'rsvp' ? [] : tickets,
-        paymentGateways: event.rsvpMode !== 'rsvp' && event.eventPaymentGateways?.length > 0
-            ? event.eventPaymentGateways.map((eg) => {
+        tickets: isPaidMode ? tickets : [],
+        walletMode: walletState.mode,
+        paymentGateways: isPaidMode && visibleGateways?.length > 0
+            ? visibleGateways.map((eg) => {
                 const g = eg.paymentGateway;
-                const splitConfig = g.gateway === 'paystack' && event.Owner?.wallet?.paystackSubaccount
+                const splitConfig = g.gateway === 'paystack' && paystackWallet?.paystackSubaccount
                     ? {
-                        subaccount: event.Owner.wallet.paystackSubaccount,
+                        subaccount: paystackWallet.paystackSubaccount,
                         bearer: 'subaccount',
-                        ownerWalletVerified: Boolean(event.Owner.wallet.isVerified),
+                        ownerWalletVerified: Boolean(paystackWallet.isVerified),
                     }
                     : null;
                 return {
@@ -323,8 +353,7 @@ const checkoutSchema = zod_1.z.object({
     promoCode: zod_1.z.string().optional(),
     // Payment
     paymentGatewayId: zod_1.z.string().uuid(),
-    paymentMethod: zod_1.z.string(), // stripe | paystack | flutterwave | etc
-    paymentReference: zod_1.z.string(), // External payment reference from gateway
+    paymentMethod: zod_1.z.string().optional(), // legacy ignored in webhook-first flow
     // Custom form fields
     customFields: zod_1.z.record(zod_1.z.any()).optional(),
     // Other RSVP fields
@@ -338,13 +367,26 @@ const checkoutSchema = zod_1.z.object({
 router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventSlug } = req.params;
     const data = checkoutSchema.parse(req.body);
+    const holdExpiryMinutes = Math.max(5, Number(process.env.TICKET_HOLD_EXPIRY_MINUTES || 30));
+    const holdExpiresAt = new Date(Date.now() + holdExpiryMinutes * 60 * 1000);
     // Find event
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug: eventSlug },
         include: {
             Owner: {
                 include: {
-                    wallet: true,
+                    wallets: {
+                        where: { isActive: true },
+                        select: {
+                            id: true,
+                            walletType: true,
+                            isActive: true,
+                            isVerified: true,
+                            currency: true,
+                            paystackSubaccount: true,
+                            paystackRecipientCode: true,
+                        },
+                    },
                 },
             },
             ticketTypes: true,
@@ -360,9 +402,35 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
     if (event.rsvpMode !== 'paid') {
         throw new errorHandler_js_1.AppError('This event does not accept paid tickets', 400);
     }
-    // Verify ticket availability and calculate total
+    // Verify selected gateway is enabled and visible for owner wallet policy
+    const ownerWalletState = (0, walletPolicy_js_1.resolveOwnerWalletState)((event.Owner?.wallets || []));
+    const allowedGateways = (0, walletPolicy_js_1.filterEventGatewaysForOwner)({
+        eventGateways: event.eventPaymentGateways,
+        walletState: ownerWalletState,
+    });
+    const selectedGateway = allowedGateways.find((entry) => entry.paymentGatewayId === data.paymentGatewayId);
+    if (!selectedGateway) {
+        throw new errorHandler_js_1.AppError('Selected payment gateway is not enabled for this event', 400);
+    }
+    // Verify ticket availability and calculate base total
     let totalAmount = 0;
-    const ticketUpdates = [];
+    const ticketSelections = [];
+    const now = new Date();
+    const activeHolds = await prisma_js_1.default.ticketInventoryHold.findMany({
+        where: {
+            eventId: event.id,
+            status: 'ACTIVE',
+            expiresAt: { gt: now },
+        },
+        select: {
+            ticketTypeId: true,
+            quantity: true,
+        },
+    });
+    const heldByTicket = new Map();
+    for (const hold of activeHolds) {
+        heldByTicket.set(hold.ticketTypeId, (heldByTicket.get(hold.ticketTypeId) || 0) + hold.quantity);
+    }
     for (const selection of data.tickets) {
         const ticketType = event.ticketTypes.find((t) => t.id === selection.ticketTypeId);
         if (!ticketType) {
@@ -374,14 +442,16 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
         if (selection.quantity > ticketType.maxPerOrder) {
             throw new errorHandler_js_1.AppError(`Maximum ${ticketType.maxPerOrder} tickets allowed for ${ticketType.name}`, 400);
         }
-        const available = ticketType.quantityTotal === 0
-            ? 999
+        const availableFromStock = ticketType.quantityTotal === 0
+            ? 999999
             : ticketType.quantityTotal - ticketType.quantitySold;
+        const heldQuantity = heldByTicket.get(ticketType.id) || 0;
+        const available = Math.max(0, availableFromStock - heldQuantity);
         if (selection.quantity > available) {
             throw new errorHandler_js_1.AppError(`Only ${available} tickets available for ${ticketType.name}`, 400);
         }
         totalAmount += ticketType.price * selection.quantity;
-        ticketUpdates.push({ id: ticketType.id, quantity: selection.quantity });
+        ticketSelections.push({ ticketTypeId: ticketType.id, quantity: selection.quantity });
     }
     // Apply promo code if provided
     let discountAmount = 0;
@@ -416,132 +486,105 @@ router.post('/public/:eventSlug/checkout', (0, errorHandler_js_1.asyncHandler)(a
             throw new errorHandler_js_1.AppError('Invalid or expired promo code', 400);
         }
     }
-    const finalAmount = totalAmount - discountAmount;
-    // Calculate fees (global defaults with optional event override)
-    const feeDefaults = await (0, fees_js_1.getSystemFeeDefaults)();
-    const feeConfig = (0, fees_js_1.resolveEventFeeConfig)(event, feeDefaults);
-    const platformFee = feeConfig.platformFeeMode === 'FIXED'
-        ? Math.min(finalAmount, feeConfig.platformFeeFixed)
-        : (finalAmount * feeConfig.platformFeePercent) / 100;
-    const processingFeePercent = feeConfig.processingFeePercent;
-    const processingFeeFixed = feeConfig.processingFeeFixed;
-    const processingFee = (finalAmount * processingFeePercent) / 100 + processingFeeFixed;
-    const amountPaid = finalAmount + platformFee + processingFee;
-    const paymentReference = data.paymentReference?.trim();
-    const paymentMethod = (data.paymentMethod || '').trim().toLowerCase();
-    const isPaystackPayment = paymentMethod === 'paystack';
-    if (!paymentReference) {
-        throw new errorHandler_js_1.AppError('Payment reference is required', 400);
-    }
-    const duplicate = await prisma_js_1.default.transaction.findFirst({
+    const baseAmount = Math.max(0, totalAmount - discountAmount);
+    const ticketCurrency = event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD';
+    const idempotencySeed = JSON.stringify({
+        eventId: event.id,
+        gatewayId: data.paymentGatewayId,
+        primaryName: data.primaryName.trim().toLowerCase(),
+        phone: data.phone.trim(),
+        tickets: ticketSelections.map((item) => ({ id: item.ticketTypeId, qty: item.quantity })),
+        promoCode: promoCodeRecord?.id || null,
+        total: Number(baseAmount.toFixed(2)),
+    });
+    const idempotencyKey = String(req.get('Idempotency-Key') || '').trim() ||
+        (0, crypto_1.createHash)('sha256').update(idempotencySeed).digest('hex');
+    const checkoutMetadata = {
+        primaryName: data.primaryName.trim(),
+        secondaryName: data.secondaryName?.trim() || undefined,
+        email: data.email?.trim() || undefined,
+        phone: data.phone.trim(),
+        attendance: data.attendance,
+        guestCount: data.guestCount,
+        mealPreference: data.mealPreference?.trim() || undefined,
+        dietaryNotes: data.dietaryNotes?.trim() || undefined,
+        note: data.note?.trim() || undefined,
+        submissionChannel: data.submissionChannel || 'web',
+        customFields: data.customFields || {},
+        tickets: ticketSelections,
+        promoCodeId: promoCodeRecord?.id || undefined,
+    };
+    const { intent, nextAction } = await (0, paymentCore_js_1.createPaymentIntent)({
+        eventId: event.id,
+        purpose: 'TICKET',
+        amount: baseAmount,
+        currency: ticketCurrency,
+        paymentGatewayId: data.paymentGatewayId,
+        metadata: checkoutMetadata,
+        idempotencyKey,
+    });
+    const existingHold = await prisma_js_1.default.ticketInventoryHold.findFirst({
         where: {
-            paymentRef: paymentReference,
-            status: 'completed',
+            paymentIntentId: intent.id,
+            status: 'ACTIVE',
+            expiresAt: { gt: new Date() },
         },
-        select: { id: true },
+        select: { expiresAt: true },
     });
-    if (duplicate) {
-        throw new errorHandler_js_1.AppError('This payment reference has already been used', 400);
-    }
-    // Verify payment gateway
-    const eventGateway = event.eventPaymentGateways[0];
-    if (!eventGateway) {
-        throw new errorHandler_js_1.AppError('Payment gateway not configured for this event', 400);
-    }
-    if (isPaystackPayment) {
-        const verification = await (0, paystack_js_1.verifyPaystackTransaction)(paymentReference);
-        const expectedMinor = Math.round(amountPaid * 100);
-        const paidMinor = Number(verification.amount || 0);
-        if (verification.status !== 'success') {
-            throw new errorHandler_js_1.AppError('Paystack payment is not successful', 400);
-        }
-        if (paidMinor !== expectedMinor) {
-            throw new errorHandler_js_1.AppError('Paystack amount does not match order total', 400);
-        }
-        const ticketCurrency = event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD';
-        if ((verification.currency || '').toUpperCase() !== ticketCurrency.toUpperCase()) {
-            throw new errorHandler_js_1.AppError('Paystack currency does not match event currency', 400);
-        }
-        const expectedSubaccount = event.Owner?.wallet?.paystackSubaccount || null;
-        const verifiedSubaccount = typeof verification.subaccount === 'string'
-            ? verification.subaccount
-            : verification.subaccount?.subaccount_code || verification.split?.subaccount || null;
-        if (expectedSubaccount && verifiedSubaccount && verifiedSubaccount !== expectedSubaccount) {
-            throw new errorHandler_js_1.AppError('Payment split destination does not match this event owner account', 400);
-        }
-    }
-    // Get primary ticket type name
-    const primaryTicketType = event.ticketTypes.find((t) => t.id === data.tickets[0].ticketTypeId);
-    const ticketTypeName = primaryTicketType?.name || 'Ticket';
-    // Create RSVP with ticket purchase
-    const rsvp = await prisma_js_1.default.rSVP.create({
-        data: {
-            eventId: event.id,
-            primaryName: data.primaryName,
-            secondaryName: data.secondaryName,
-            email: data.email || null,
-            phone: data.phone,
-            attendance: data.attendance,
-            guestCount: data.guestCount,
-            mealPreference: data.mealPreference,
-            dietaryNotes: data.dietaryNotes,
-            note: data.note,
-            submissionChannel: data.submissionChannel || 'web',
-            status: event.requireApproval ? 'PENDING' : 'APPROVED',
-            // Ticket purchase fields (using String fields from schema)
-            ticketType: ticketTypeName,
-            ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
-            amountPaid: amountPaid,
-            currency: event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD',
-            paymentStatus: 'PAID',
-            paymentMethod: paymentMethod,
-            paymentRef: paymentReference,
-            paymentDate: new Date(),
-        },
-    });
-    // Update ticket quantities
-    await Promise.all(ticketUpdates.map((update) => prisma_js_1.default.ticketType.update({
-        where: { id: update.id },
-        data: {
-            quantitySold: { increment: update.quantity },
-        },
-    })));
-    // Update promo code usage
-    if (promoCodeRecord) {
-        await prisma_js_1.default.promoCode.update({
-            where: { id: promoCodeRecord.id },
-            data: {
-                usageCount: { increment: 1 },
-            },
+    let effectiveHoldExpiresAt = holdExpiresAt;
+    if (!existingHold) {
+        await prisma_js_1.default.$transaction(async (tx) => {
+            const refreshHolds = await tx.ticketInventoryHold.findMany({
+                where: {
+                    eventId: event.id,
+                    status: 'ACTIVE',
+                    expiresAt: { gt: new Date() },
+                },
+                select: {
+                    ticketTypeId: true,
+                    quantity: true,
+                },
+            });
+            const holdMap = new Map();
+            for (const hold of refreshHolds) {
+                holdMap.set(hold.ticketTypeId, (holdMap.get(hold.ticketTypeId) || 0) + hold.quantity);
+            }
+            for (const selection of ticketSelections) {
+                const ticketType = event.ticketTypes.find((ticket) => ticket.id === selection.ticketTypeId);
+                if (!ticketType)
+                    throw new errorHandler_js_1.AppError('Ticket type no longer exists', 404);
+                const stockAvailable = ticketType.quantityTotal === 0
+                    ? 999999
+                    : ticketType.quantityTotal - ticketType.quantitySold;
+                const holdQuantity = holdMap.get(ticketType.id) || 0;
+                const available = Math.max(0, stockAvailable - holdQuantity);
+                if (selection.quantity > available) {
+                    throw new errorHandler_js_1.AppError(`Only ${available} tickets available for ${ticketType.name}`, 400);
+                }
+                await tx.ticketInventoryHold.create({
+                    data: {
+                        eventId: event.id,
+                        ticketTypeId: selection.ticketTypeId,
+                        paymentIntentId: intent.id,
+                        quantity: selection.quantity,
+                        expiresAt: holdExpiresAt,
+                        status: 'ACTIVE',
+                    },
+                });
+            }
         });
     }
-    // Create transaction record
-    await prisma_js_1.default.transaction.create({
-        data: {
-            eventId: event.id,
-            rsvpId: rsvp.id,
-            type: 'ticket_sale',
-            grossAmount: finalAmount,
-            platformFee: platformFee,
-            processingFee: processingFee,
-            netAmount: finalAmount - platformFee,
-            currency: event.ticketTypes[0]?.currency || event.defaultCurrency || 'USD',
-            paymentMethod: paymentMethod,
-            paymentRef: paymentReference,
-            ticketTypeName: event.ticketTypes[0]?.name,
-            ticketQuantity: data.tickets.reduce((sum, t) => sum + t.quantity, 0),
-            buyerName: data.primaryName,
-            buyerEmail: data.email,
-            status: 'completed',
-        },
-    });
+    else {
+        effectiveHoldExpiresAt = existingHold.expiresAt;
+    }
     res.status(201).json({
         success: true,
-        rsvp: {
-            id: rsvp.id,
-            status: rsvp.status,
-        },
-        message: 'Ticket purchase successful!',
+        paymentIntentId: intent.id,
+        amount: intent.amount,
+        currency: intent.currency,
+        holdExpiresAt: effectiveHoldExpiresAt.toISOString(),
+        nextAction,
+        message: 'Ticket checkout initialized. Complete payment to confirm.',
     });
 }));
 exports.default = router;

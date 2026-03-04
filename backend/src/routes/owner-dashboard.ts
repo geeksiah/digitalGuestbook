@@ -1399,7 +1399,7 @@ router.get('/events/:eventId/gift-orders', asyncHandler(async (req, res) => {
     .filter((ref): ref is string => Boolean(ref));
 
   const transactions = paymentRefs.length
-    ? await prisma.transaction.findMany({
+    ? await prisma.transactionLegacy.findMany({
         where: {
           eventId,
           paymentRef: { in: paymentRefs },
@@ -1670,7 +1670,7 @@ router.get('/wallet', asyncHandler(async (req, res) => {
         airteltigoCashMerchantId: true,
       },
     }),
-    prisma.transaction.aggregate({
+    prisma.transactionLegacy.aggregate({
       where: {
         event: { ownerId },
         status: 'completed',
@@ -2231,7 +2231,7 @@ router.get('/payouts', asyncHandler(async (req, res) => {
   const eventTotals = await Promise.all(
     events.map(async (event) => {
       // Get all transactions for this event
-      const transactions = await prisma.transaction.findMany({
+      const transactions = await prisma.transactionLegacy.findMany({
         where: {
           eventId: event.id,
           type: { in: ['ticket_sale', 'gift_cash'] },
@@ -2341,7 +2341,7 @@ router.post('/payouts', asyncHandler(async (req, res) => {
   // Enforce wallet configuration as source of truth for secure payouts.
   
   // Calculate available balance for this event
-  const transactions = await prisma.transaction.findMany({
+  const transactions = await prisma.transactionLegacy.findMany({
     where: {
       eventId: data.eventId,
       type: { in: ['ticket_sale', 'gift_cash'] },

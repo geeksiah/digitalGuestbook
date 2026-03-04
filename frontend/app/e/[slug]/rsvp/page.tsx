@@ -100,7 +100,6 @@ export default function EventRsvpPage() {
   const [ticketQuantities, setTicketQuantities] = useState<Record<string, number>>({});
   const [selectedGatewayId, setSelectedGatewayId] = useState('');
   const [promoCode, setPromoCode] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, string | boolean>>({});
 
   const isPaidMode = String(ticketingForm?.rsvpMode || '').toLowerCase() === 'paid';
@@ -136,7 +135,6 @@ export default function EventRsvpPage() {
     Boolean(primaryName.trim()) &&
     Boolean(phone.trim()) &&
     Boolean(selectedGateway?.id) &&
-    Boolean(paymentReference.trim()) &&
     selectedTickets.length > 0 &&
     hasGatewayOptions;
   const freeReadyToSubmit = Boolean(primaryName.trim());
@@ -295,14 +293,9 @@ export default function EventRsvpPage() {
         toast.error('Select a payment gateway');
         return;
       }
-      if (!paymentReference.trim()) {
-        toast.error('Payment reference is required');
-        return;
-      }
-
       setSubmitting(true);
       try {
-        await ticketingApi.publicCheckout(slug, {
+        const response = await ticketingApi.publicCheckout(slug, {
           primaryName: primaryName.trim(),
           secondaryName: secondaryName.trim() || undefined,
           email: email.trim() || undefined,
@@ -311,7 +304,6 @@ export default function EventRsvpPage() {
           promoCode: promoCode.trim() || undefined,
           paymentGatewayId: selectedGateway.id,
           paymentMethod: selectedGateway.gateway,
-          paymentReference: paymentReference.trim(),
           customFields: customFieldsObject,
           attendance: 'YES',
           guestCount: totalTicketQty || 1,
@@ -319,7 +311,12 @@ export default function EventRsvpPage() {
           submissionChannel: 'web',
         });
 
-        toast.success('Ticket checkout submitted successfully');
+        const nextAction = response.data?.nextAction;
+        if (nextAction?.type === 'REDIRECT' && nextAction?.url) {
+          globalThis.window.location.href = String(nextAction.url);
+          return;
+        }
+        toast.success('Checkout initialized. Please complete payment in the gateway window.');
       } catch (requestError: any) {
         toast.error(requestError?.response?.data?.error || 'Ticket checkout failed');
       } finally {
@@ -517,7 +514,6 @@ export default function EventRsvpPage() {
                 </div>
               ) : null}
               <input className="input" placeholder="Promo code (optional)" value={promoCode} onChange={(event) => setPromoCode(event.target.value)} />
-              <input className="input" placeholder="Payment reference / transaction id" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} />
             </>
           ) : null}
 

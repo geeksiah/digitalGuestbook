@@ -54,7 +54,6 @@ export default function GiftPage() {
   const [guestPhone, setGuestPhone] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [selectedGatewayId, setSelectedGatewayId] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
   const [note, setNote] = useState('');
 
   const toAbsoluteAssetUrl = (value: string | null | undefined) => {
@@ -210,26 +209,29 @@ export default function GiftPage() {
 
     setSubmitting(true);
     try {
-      await giftingApi.checkout(slug, {
+      const response = await giftingApi.checkout(slug, {
         guestName: guestName.trim(),
         guestEmail: guestEmail.trim() || undefined,
         guestPhone: guestPhone.trim() || undefined,
         paymentGatewayId: selectedGateway?.id || undefined,
         paymentMethod: paymentMethod || undefined,
-        paymentReference: paymentReference.trim() || undefined,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
         note: note.trim() || undefined,
         cashGiftAmount: cashGiftAmount > 0 ? cashGiftAmount : undefined,
         packageItems: selectedPackageItems.length ? selectedPackageItems : undefined,
       });
-      toast.success('Thank you. Your gift has been submitted.');
+      const nextAction = response.data?.nextAction;
+      if (nextAction?.type === 'REDIRECT' && nextAction?.url) {
+        window.location.href = String(nextAction.url);
+        return;
+      }
+      toast.success('Checkout initialized. Complete payment to submit your gift.');
       setQuantities({});
       setCashGiftAmount(0);
       setGuestName('');
       setGuestEmail('');
       setGuestPhone('');
       setDeliveryDate('');
-      setPaymentReference('');
       setNote('');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to submit gift');
@@ -402,7 +404,6 @@ export default function GiftPage() {
               Selected gateway currency does not match selected package currency.
             </div>
           ) : null}
-          <input className="input" placeholder="Payment reference (optional)" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} />
           <textarea className="input min-h-[88px]" placeholder="Notes (optional)" value={note} onChange={(event) => setNote(event.target.value)} />
           <button
             className="btn-primary w-full justify-center"

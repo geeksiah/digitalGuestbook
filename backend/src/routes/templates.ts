@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import AdmZip from 'adm-zip';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
@@ -57,8 +57,8 @@ function getMimeType(filePath: string): string {
 
 function normalizeSupabasePath(p: string): string {
   return String(p || '')
-    .replace(/\\/g, '/')
-    .replace(/\/+/g, '/')
+    .replaceAll(/\\/g, '/')
+    .replaceAll(/\/+/g, '/')
     .replace(/^\//, '')
     .replace(/\/$/, '');
 }
@@ -92,7 +92,7 @@ router.get('/:id/assets/*', asyncHandler(async (req, res) => {
   if (!template?.assetsPath) throw new AppError('Template or assets not found', 404);
 
   // Prevent traversal
-  const normalized = assetPath.replace(/\.\./g, '').replace(/\/\//g, '/');
+  const normalized = assetPath.replaceAll(/\.\./g, '').replaceAll(/\/\//g, '/');
   if (normalized !== assetPath || assetPath.includes('..')) {
     throw new AppError('Invalid asset path', 403);
   }
@@ -387,7 +387,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
       const files = await listFiles(BUCKETS.TEMPLATES, base);
 
       for (const f of files) {
-        const key = `${base}/${normalizeSupabasePath(f.name)}`.replace(/\/+/g, '/');
+        const key = `${base}/${normalizeSupabasePath(f.name)}`.replaceAll(/\/+/g, '/');
         await deleteFromSupabase(BUCKETS.TEMPLATES, key);
       }
     } catch (err) {
@@ -465,7 +465,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
     throw new AppError(`Invalid ZIP file: ${err.message}`, 400);
   }
 
-  const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const templateId = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const supabasePrefix = templateId;
 
   const entries = zip.getEntries();
@@ -630,7 +630,7 @@ router.get('/:id/files', asyncHandler(async (req, res) => {
             : `assets/${f.name}`;
 
         files.push({
-          name: displayName.replace(/\/+/g, '/'),
+          name: displayName.replaceAll(/\/+/g, '/'),
           type: ext.slice(1) || 'file',
           size: f.metadata?.size || 0,
           editable: ['.html', '.css', '.js', '.json', '.txt', '.md'].includes(ext),

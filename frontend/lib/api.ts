@@ -625,6 +625,50 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/support-content`, {
       headers: ownerHeaders(),
     }),
+  getVotingContests: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests`, {
+      headers: ownerHeaders(),
+    }),
+  getVotingConfig: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/config`, {
+      headers: ownerHeaders(),
+    }),
+  updateVotingConfig: (eventId: string, data: any) =>
+    axios.put(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/config`, data, {
+      headers: ownerHeaders(),
+    }),
+  createVotingContest: (eventId: string, data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests`, data, {
+      headers: ownerHeaders(),
+    }),
+  updateVotingContest: (eventId: string, contestId: string, data: any) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}`, data, {
+      headers: ownerHeaders(),
+    }),
+  deleteVotingContest: (eventId: string, contestId: string) =>
+    axios.delete(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}`, {
+      headers: ownerHeaders(),
+    }),
+  getVotingOptions: (eventId: string, contestId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, {
+      headers: ownerHeaders(),
+    }),
+  createVotingOption: (eventId: string, contestId: string, data: any) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, data, {
+      headers: ownerHeaders(),
+    }),
+  updateVotingOption: (eventId: string, optionId: string, data: any) =>
+    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/options/${optionId}`, data, {
+      headers: ownerHeaders(),
+    }),
+  deleteVotingOption: (eventId: string, optionId: string) =>
+    axios.delete(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/options/${optionId}`, {
+      headers: ownerHeaders(),
+    }),
+  getVotingAnalytics: (eventId: string) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/analytics`, {
+      headers: ownerHeaders(),
+    }),
 };
 
 export const itineraryApi = {
@@ -674,6 +718,42 @@ export const giftingApi = {
     api.put(`/gifting/events/${eventId}/packages`, { packageIds }),
   listOrders: (eventId?: string) => api.get('/gifting/orders', { params: { eventId } }),
   listOwnerOrders: () => axios.get(`${API_BASE_URL}/api/gifting/owner/orders`, { headers: ownerHeaders() }),
+};
+
+export const votingApi = {
+  getPublicVoting: (slug: string, sessionToken?: string, embedToken?: string) =>
+    axios.get(`${API_BASE_URL}/api/voting/public/${slug}`, {
+      params: {
+        ...(sessionToken ? { sessionToken } : {}),
+        ...(embedToken ? { embedToken } : {}),
+      },
+    }),
+  freeVote: (data: {
+    slug: string;
+    contestId: string;
+    optionId: string;
+    sessionToken?: string;
+    embedToken?: string;
+  }) => axios.post(`${API_BASE_URL}/api/voting/free-vote`, data),
+  createPaymentIntent: (data: {
+    slug: string;
+    contestId: string;
+    optionId: string;
+    voteCount: number;
+    paymentGatewayId: string;
+    sessionToken?: string;
+    embedToken?: string;
+  }) => axios.post(`${API_BASE_URL}/api/voting/payment-intent`, data),
+  requestOtp: (data: { slug: string; phone: string; sessionToken?: string; embedToken?: string }) =>
+    axios.post(`${API_BASE_URL}/api/voting/otp/request`, data),
+  verifyOtp: (data: { slug: string; code: string; sessionToken?: string; embedToken?: string }) =>
+    axios.post(`${API_BASE_URL}/api/voting/otp/verify`, data),
+  leaderboard: (slug: string, contestId?: string) =>
+    axios.get(`${API_BASE_URL}/api/voting/public/${slug}/leaderboard`, {
+      params: contestId ? { contestId } : undefined,
+    }),
+  createEmbedToken: (slug: string) =>
+    axios.post(`${API_BASE_URL}/api/voting/embed/token`, { slug }),
 };
 
 

@@ -507,7 +507,7 @@ router.get('/:token/sales', validateOwnerToken, async (req: Request, res: Respon
     const eventId = (req as any).eventId;
 
     // Get all transactions
-    const transactions = await prisma.transaction.findMany({
+    const transactions = await prisma.transactionLegacy.findMany({
       where: { eventId },
       orderBy: { createdAt: 'desc' },
     });
@@ -572,7 +572,7 @@ router.get('/:token/sales/by-ticket', validateOwnerToken, async (req: Request, r
     // Get transaction aggregates per ticket type
     const salesByTicket = await Promise.all(
       ticketTypes.map(async (ticket) => {
-        const transactions = await prisma.transaction.findMany({
+        const transactions = await prisma.transactionLegacy.findMany({
           where: {
             eventId,
             ticketTypeName: ticket.name,
@@ -769,7 +769,7 @@ router.post('/:token/payouts/request', validateOwnerToken, async (req: Request, 
     }
 
     // Calculate available balance
-    const transactions = await prisma.transaction.findMany({
+    const transactions = await prisma.transactionLegacy.findMany({
       where: { eventId },
     });
 

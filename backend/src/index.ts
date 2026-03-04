@@ -4,8 +4,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import prisma from './utils/prisma.js';
 
@@ -174,7 +174,7 @@ async function initializeDatabase() {
           name: 'Default SMTP',
           provider: 'smtp',
           smtpHost: smtpHost,
-          smtpPort: parseInt(smtpPort),
+          smtpPort: Number.parseInt(smtpPort, 10),
           smtpSecure: process.env.DEFAULT_EMAIL_SECURE === 'true' || process.env.SMTP_SECURE === 'true',
           smtpUser: smtpUser,
           smtpPass: smtpPass || '',
@@ -263,6 +263,9 @@ import itineraryRoutes from './routes/itinerary.js';
 import giftingRoutes from './routes/gifting.js';
 import whatsappWebhookRoutes from './routes/whatsapp-webhooks.js';
 import paystackWebhookRoutes from './routes/paystack-webhooks.js';
+import webhooksRoutes from './routes/webhooks.js';
+import votingRoutes from './routes/voting.js';
+import votingOwnerRoutes from './routes/voting-owner.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -302,11 +305,13 @@ const allowedOrigins: string[] = [
 
 // Add local app origins outside production (web + emulator + Capacitor app shell).
 if (process.env.NODE_ENV !== 'production') {
-  allowedOrigins.push('http://localhost:3000');
-  allowedOrigins.push('http://localhost:5173');
-  allowedOrigins.push('http://localhost:5174');
-  allowedOrigins.push('http://10.0.2.2:5174');
-  allowedOrigins.push('capacitor://localhost');
+  allowedOrigins.push(
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://10.0.2.2:5174',
+    'capacitor://localhost'
+  );
 }
 
 // Deduplicate
@@ -335,7 +340,8 @@ app.use(cors({
 
     // Allow any *.eventpeepo.com subdomain
     try {
-      if (/\.eventpeepo\.com$/.test(new URL(origin).hostname)) {
+      const hostname = new URL(origin).hostname;
+      if (hostname.endsWith('.eventpeepo.com')) {
         return callback(null, true);
       }
     } catch {
@@ -382,6 +388,7 @@ app.use('/api/auth/', authLimiter);
 
 // Body Parsing
 app.use('/api/paystack/webhooks', express.raw({ type: 'application/json', limit: '2mb' }), paystackWebhookRoutes);
+app.use('/api/webhooks', express.raw({ type: 'application/json', limit: '2mb' }), webhooksRoutes);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -443,7 +450,7 @@ app.get('/health', async (req, res) => {
     healthStatus.checks.filesystem = fsChecks;
 
     try {
-      const { spawn } = await import('child_process');
+      const { spawn } = await import('node:child_process');
       const ffmpegCheck = spawn('ffmpeg', ['-version']);
       await new Promise<void>((resolve, reject) => {
         ffmpegCheck.on('close', (code) => {
@@ -472,9 +479,15 @@ app.get('/health', async (req, res) => {
 
     const allChecks = Object.values(healthStatus.checks).flat();
     const hasFailures = allChecks.some((check: any) => check.status === 'fail');
-    healthStatus.status = hasFailures ? (dbHealthy ? 'degraded' : 'unhealthy') : 'healthy';
+    if (!hasFailures) {
+      healthStatus.status = 'healthy';
+    } else if (dbHealthy) {
+      healthStatus.status = 'degraded';
+    } else {
+      healthStatus.status = 'unhealthy';
+    }
 
-    const statusCode = healthStatus.status === 'healthy' ? 200 : healthStatus.status === 'degraded' ? 200 : 503;
+    const statusCode = healthStatus.status === 'unhealthy' ? 503 : 200;
     res.status(statusCode).json(healthStatus);
   } catch (error: any) {
     healthStatus.status = 'unhealthy';
@@ -542,8 +555,10 @@ app.use('/api/promo-codes', promoCodeRoutes);
 app.use('/api/owners', ownerRoutes);
 app.use('/api/owner-auth', ownerAuthRoutes);
 app.use('/api/owner-dashboard', ownerDashboardRoutes);
+app.use('/api/owner-dashboard', votingOwnerRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/gifting', giftingRoutes);
+app.use('/api/voting', votingRoutes);
 app.use('/api/whatsapp', whatsappWebhookRoutes);
 
 // 404 Handler

@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEventTemplateAssetPath = exports.copyTemplateAssetsForEvent = void 0;
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
+const node_path_1 = __importDefault(require("node:path"));
+const node_fs_1 = __importDefault(require("node:fs"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const supabaseStorage_js_1 = require("./supabaseStorage.js");
 /**
@@ -13,10 +13,10 @@ const supabaseStorage_js_1 = require("./supabaseStorage.js");
  * This ensures templates assigned to Event A don't leak into Event B
  */
 const copyTemplateAssetsForEvent = async (eventId, assignments) => {
-    const eventAssetsDir = path_1.default.join(process.cwd(), 'templates', 'events', eventId);
+    const eventAssetsDir = node_path_1.default.join(process.cwd(), 'templates', 'events', eventId);
     // Ensure event directory exists
-    if (!fs_1.default.existsSync(eventAssetsDir)) {
-        fs_1.default.mkdirSync(eventAssetsDir, { recursive: true });
+    if (!node_fs_1.default.existsSync(eventAssetsDir)) {
+        node_fs_1.default.mkdirSync(eventAssetsDir, { recursive: true });
     }
     // Helper to copy template assets
     const copyAssets = async (templateId, fieldName) => {
@@ -27,21 +27,21 @@ const copyTemplateAssetsForEvent = async (eventId, assignments) => {
                 where: { id: templateId },
                 select: { assetsPath: true, id: true, name: true },
             });
-            if (!template || !template.assetsPath) {
+            if (!template?.assetsPath) {
                 // No assets to copy (template is HTML-only)
                 return;
             }
-            const sourcePath = path_1.default.join(process.cwd(), template.assetsPath);
-            const destPath = path_1.default.join(eventAssetsDir, fieldName.replace('TemplateId', ''));
-            if (!fs_1.default.existsSync(sourcePath)) {
+            const sourcePath = node_path_1.default.join(process.cwd(), template.assetsPath);
+            const destPath = node_path_1.default.join(eventAssetsDir, fieldName.replace('TemplateId', ''));
+            if (!node_fs_1.default.existsSync(sourcePath)) {
                 console.warn(`[TemplateIsolation] Local template assets not found: ${sourcePath} for template ${template.id}`);
                 // If Supabase is configured, attempt to download the assets into the event folder
                 if ((0, supabaseStorage_js_1.isSupabaseConfigured)() && template.assetsPath) {
                     try {
-                        const normalized = template.assetsPath.replace(/^\/+/, '').replace(/\\/g, '/');
+                        const normalized = template.assetsPath.replace(/^\/+/, '').replaceAll(/\\/g, '/');
                         // Ensure destination exists
-                        if (!fs_1.default.existsSync(destPath)) {
-                            fs_1.default.mkdirSync(destPath, { recursive: true });
+                        if (!node_fs_1.default.existsSync(destPath)) {
+                            node_fs_1.default.mkdirSync(destPath, { recursive: true });
                         }
                         // Recursive downloader using listFiles + downloadFile
                         const downloadRecursive = async (folderPrefix, outDir) => {
@@ -50,21 +50,22 @@ const copyTemplateAssetsForEvent = async (eventId, assignments) => {
                                 const entryPath = folderPrefix.endsWith('/') ? `${folderPrefix}${e.name}` : `${folderPrefix}/${e.name}`;
                                 try {
                                     const buf = await (0, supabaseStorage_js_1.downloadFile)(supabaseStorage_js_1.BUCKETS.TEMPLATES, entryPath);
-                                    const outFile = path_1.default.join(outDir, e.name);
-                                    fs_1.default.writeFileSync(outFile, buf);
+                                    const outFile = node_path_1.default.join(outDir, e.name);
+                                    node_fs_1.default.writeFileSync(outFile, buf);
                                     console.log(`[TemplateIsolation] Downloaded ${entryPath} -> ${outFile}`);
                                 }
                                 catch (err) {
+                                    const downloadError = err instanceof Error ? err.message : String(err);
                                     // If download failed, it may be a folder - recurse into it
                                     try {
-                                        const nestedOut = path_1.default.join(outDir, e.name);
-                                        if (!fs_1.default.existsSync(nestedOut)) {
-                                            fs_1.default.mkdirSync(nestedOut, { recursive: true });
+                                        const nestedOut = node_path_1.default.join(outDir, e.name);
+                                        if (!node_fs_1.default.existsSync(nestedOut)) {
+                                            node_fs_1.default.mkdirSync(nestedOut, { recursive: true });
                                         }
                                         await downloadRecursive(entryPath, nestedOut);
                                     }
                                     catch (nestedErr) {
-                                        console.warn(`[TemplateIsolation] Skipping ${entryPath}: ${nestedErr?.message || nestedErr}`);
+                                        console.warn(`[TemplateIsolation] Skipping ${entryPath}: ${nestedErr?.message || nestedErr} (download error: ${downloadError})`);
                                     }
                                 }
                             }
@@ -82,11 +83,11 @@ const copyTemplateAssetsForEvent = async (eventId, assignments) => {
                 return;
             }
             // Remove old assets for this field if exists
-            if (fs_1.default.existsSync(destPath)) {
-                fs_1.default.rmSync(destPath, { recursive: true, force: true });
+            if (node_fs_1.default.existsSync(destPath)) {
+                node_fs_1.default.rmSync(destPath, { recursive: true, force: true });
             }
             // Copy assets recursively
-            fs_1.default.cpSync(sourcePath, destPath, { recursive: true });
+            node_fs_1.default.cpSync(sourcePath, destPath, { recursive: true });
             console.log(`[TemplateIsolation] Copied assets for ${fieldName} to ${destPath}`);
         }
         catch (error) {
@@ -119,9 +120,9 @@ exports.copyTemplateAssetsForEvent = copyTemplateAssetsForEvent;
 const getEventTemplateAssetPath = async (eventId, templateId, fieldName) => {
     if (!templateId)
         return null;
-    const eventAssetPath = path_1.default.join(process.cwd(), 'templates', 'events', eventId, fieldName.replace('TemplateId', ''));
+    const eventAssetPath = node_path_1.default.join(process.cwd(), 'templates', 'events', eventId, fieldName.replace('TemplateId', ''));
     // Check if event-specific assets exist
-    if (fs_1.default.existsSync(eventAssetPath)) {
+    if (node_fs_1.default.existsSync(eventAssetPath)) {
         return `templates/events/${eventId}/${fieldName.replace('TemplateId', '')}`;
     }
     // Fallback to template's default assets

@@ -22,11 +22,14 @@ import { featureFlags } from '../utils/featureFlags.js';
 
 const router = Router();
 
+const getQueryString = (value: unknown, fallback: string) =>
+  typeof value === 'string' ? value : fallback;
+
 const compareSemver = (a: string, b: string) => {
   const parse = (input: string) =>
     String(input || '0.0.0')
       .split('.')
-      .map((part) => Number(part.replace(/[^\d]/g, '') || 0))
+      .map((part) => Number(part.replaceAll(/[^\d]/g, '') || 0))
       .slice(0, 3);
   const left = parse(a);
   const right = parse(b);
@@ -50,9 +53,9 @@ router.get('/mobile-version-check', asyncHandler(async (req, res) => {
     });
   }
 
-  const platformRaw = String(req.query.platform || 'android').toLowerCase();
+  const platformRaw = getQueryString(req.query.platform, 'android').toLowerCase();
   const platform = platformRaw === 'ios' ? 'ios' : 'android';
-  const currentVersion = String(req.query.version || '0.0.0');
+  const currentVersion = getQueryString(req.query.version, '0.0.0');
 
   const settings = await prisma.systemSettings.findUnique({
     where: { id: 'default' },
@@ -233,7 +236,7 @@ function renderTemplateWithBlocks(
   let output = tpl;
 
   // {{#each path}}...{{/each}}
-  output = output.replace(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_match, pathStr, inner) => {
+  output = output.replaceAll(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_match, pathStr, inner) => {
     const collection = resolveTemplateValue(pathStr, currentData, rootData);
     if (Array.isArray(collection)) {
       return collection
@@ -261,14 +264,14 @@ function renderTemplateWithBlocks(
   });
 
   // {{#if path}}...{{else}}...{{/if}}
-  output = output.replace(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g, (_match, pathStr, truthyBlock, falsyBlock = '') => {
+  output = output.replaceAll(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g, (_match, pathStr, truthyBlock, falsyBlock = '') => {
     const conditionValue = resolveTemplateValue(pathStr, currentData, rootData);
     const chosenBlock = isTruthyTemplateValue(conditionValue) ? truthyBlock : falsyBlock;
     return renderTemplateWithBlocks(chosenBlock, currentData, rootData, depth + 1);
   });
 
   // Standard variables: {{event.name}}, {{title}}, {{this}}
-  output = output.replace(/\{\{\s*([^#\/][^}]*)\s*\}\}/g, (match, pathStr) => {
+  output = output.replaceAll(/\{\{\s*([^#/][^}]*)\s*\}\}/g, (match, pathStr) => {
     const value = resolveTemplateValue(pathStr, currentData, rootData);
     if (value === undefined || value === null) return '';
     if (typeof value === 'object') return JSON.stringify(value);
@@ -276,7 +279,7 @@ function renderTemplateWithBlocks(
   });
 
   // Compatibility syntax: {urls.invitation}
-  output = output.replace(/\{\s*((?:urls|event|phase|capabilities|itinerary|itineraryMeta)\.[^{}]+?)\s*\}/g, (match, pathStr) => {
+  output = output.replaceAll(/\{\s*((?:urls|event|phase|capabilities|itinerary|itineraryMeta)\.[^{}]+?)\s*\}/g, (match, pathStr) => {
     const value = resolveTemplateValue(pathStr, currentData, rootData);
     if (value === undefined || value === null) return match;
     if (typeof value === 'object') return JSON.stringify(value);
@@ -446,32 +449,32 @@ async function renderEventTemplate(
 
   if (template.assetsPath) {
     // Pattern 1: src="./assets/..." or src="../assets/..."
-    html = html.replace(
+    html = html.replaceAll(
       /(src|href)=["'](\.\/|\.\.\/)?assets\//g,
       `$1="${assetBaseForHtml}`
     );
 
     // Pattern 2: src="/assets/..."
-    html = html.replace(
+    html = html.replaceAll(
       /(src|href)=["']\/assets\//g,
       `$1="${assetBaseForHtml}`
     );
 
     // Pattern 3: bare filenames like src="MCS_9627.jpeg"
-    html = html.replace(
+    html = html.replaceAll(
       /(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi,
       `$1="${assetBaseForHtml}$2"`
     );
 
     // Pattern 4: CSS url() references in inline styles
-    html = html.replace(
+    html = html.replaceAll(
       /url\(['"]?(?:\.\/|\.\.\/)?assets\//g,
       `url('${assetBaseForHtml}`
     );
 
     // Pattern 5: CSS url() in separate cssContent
     if (template.cssContent) {
-      template.cssContent = template.cssContent.replace(
+      template.cssContent = template.cssContent.replaceAll(
         /url\(['"]?(?:\.\/|\.\.\/)?assets\//g,
         `url('${assetBaseForHtml}`
       );
@@ -728,7 +731,8 @@ router.get('/event/:slug/itinerary', asyncHandler(async (req, res) => {
   const total = event.itineraryItems.length;
   const completed = event.itineraryItems.filter((item) => item.isCompleted).length;
   const lastUpdatedAt = event.itineraryItems.reduce<Date>(
-    (latest, item) => (item.updatedAt > latest ? item.updatedAt : latest),
+    (latest, item) =>
+      new Date(Math.max(latest.getTime(), item.updatedAt.getTime())),
     event.updatedAt
   );
   const sinceParam = typeof req.query.since === 'string' ? req.query.since : '';

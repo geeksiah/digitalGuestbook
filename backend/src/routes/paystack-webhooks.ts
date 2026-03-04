@@ -4,6 +4,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { verifyPaystackWebhookSignature } from '../services/paystack.js';
 import { reconcilePaystackTransfer } from '../services/payoutAutomation.js';
+import { handleWebhook as handlePaymentWebhook } from '../services/paymentCore.js';
 
 const router = Router();
 const db = prisma as any;
@@ -58,6 +59,12 @@ router.post('/', asyncHandler(async (req, res) => {
   if (eventName.toLowerCase().startsWith('transfer.')) {
     await reconcilePaystackTransfer({
       eventName,
+      payload,
+      rawPayload,
+    });
+  } else {
+    await handlePaymentWebhook({
+      gateway: 'paystack',
       payload,
       rawPayload,
     });

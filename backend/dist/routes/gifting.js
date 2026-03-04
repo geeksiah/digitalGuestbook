@@ -10,9 +10,10 @@ const crypto_1 = require("crypto");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
-const paystack_js_1 = require("../services/paystack.js");
+const paymentCore_js_1 = require("../services/paymentCore.js");
 const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const fees_js_1 = require("../utils/fees.js");
+const walletPolicy_js_1 = require("../utils/walletPolicy.js");
 const router = (0, express_1.Router)();
 const giftPackageImageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
@@ -39,7 +40,6 @@ const checkoutSchema = zod_1.z.object({
     guestEmail: zod_1.z.string().email().optional().nullable(),
     paymentGatewayId: zod_1.z.string().uuid().optional().nullable(),
     paymentMethod: zod_1.z.string().optional().nullable(),
-    paymentReference: zod_1.z.string().optional().nullable(),
     note: zod_1.z.string().optional().nullable(),
     deliveryDate: zod_1.z.string().datetime().optional().nullable(),
     cashGiftAmount: zod_1.z.number().min(0).optional().nullable(),
@@ -146,22 +146,46 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
         },
         orderBy: { sortOrder: 'asc' },
     });
-    const ownerWallet = event.ownerId
-        ? await prisma_js_1.default.ownerWallet.findUnique({
-            where: { ownerId: event.ownerId },
-            select: { paystackSubaccount: true, isVerified: true },
+    const ownerProfile = event.ownerId
+        ? await prisma_js_1.default.owner.findUnique({
+            where: { id: event.ownerId },
+            select: {
+                countryCode: true,
+                wallets: {
+                    where: { isActive: true },
+                    select: {
+                        id: true,
+                        walletType: true,
+                        isActive: true,
+                        isVerified: true,
+                        currency: true,
+                        paystackSubaccount: true,
+                        paystackRecipientCode: true,
+                    },
+                },
+            },
         })
         : null;
+    const walletState = (0, walletPolicy_js_1.resolveOwnerWalletState)((ownerProfile?.wallets || []));
+    const visibleGateways = (0, walletPolicy_js_1.filterEventGatewaysForOwner)({
+        eventGateways: eventGateways,
+        walletState,
+    });
+    const paystackWallet = walletState.walletByType.get('paystack');
     res.json({
         event: eventPublic,
-        packages,
+        packages: packages.map((pkg) => ({
+            ...pkg,
+            thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+        })),
         momoEnabled: true,
+        walletMode: walletState.mode,
         settlementPolicy: {
-            cashGift: ownerWallet?.paystackSubaccount ? 'split_to_owner_subaccount' : 'platform_settlement',
+            cashGift: walletState.mode === 'AUTOMATED' ? 'owner_wallet_routing' : 'platform_settlement',
             packagePurchase: 'platform_only',
             mixedPaystackCheckoutAllowed: false,
         },
-        paymentGateways: eventGateways.map((eventGateway) => {
+        paymentGateways: visibleGateways.map((eventGateway) => {
             const gateway = eventGateway.paymentGateway;
             const publicKey = gateway.gateway === 'paystack'
                 ? gateway.paystackPublicKey
@@ -176,11 +200,11 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
                 gateway: gateway.gateway,
                 currency: gateway.currency,
                 publicKey,
-                splitConfig: gateway.gateway === 'paystack' && ownerWallet?.paystackSubaccount
+                splitConfig: gateway.gateway === 'paystack' && paystackWallet?.paystackSubaccount
                     ? {
-                        subaccount: ownerWallet.paystackSubaccount,
+                        subaccount: paystackWallet.paystackSubaccount,
                         bearer: 'subaccount',
-                        ownerWalletVerified: Boolean(ownerWallet.isVerified),
+                        ownerWalletVerified: Boolean(paystackWallet.isVerified),
                     }
                     : null,
             };
@@ -208,6 +232,23 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
             platformFeeFixed: true,
             processingFeePercent: true,
             processingFeeFixed: true,
+            Owner: {
+                select: {
+                    countryCode: true,
+                    wallets: {
+                        where: { isActive: true },
+                        select: {
+                            id: true,
+                            walletType: true,
+                            isActive: true,
+                            isVerified: true,
+                            currency: true,
+                            paystackSubaccount: true,
+                            paystackRecipientCode: true,
+                        },
+                    },
+                },
+            },
         },
     });
     if (!event)
@@ -227,6 +268,7 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
                     id: true,
                     gateway: true,
                     currency: true,
+                    name: true,
                 },
             },
         },
@@ -250,7 +292,7 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
         })
         : [];
     let packagesTotal = 0;
-    const lines = packageItems.map((item) => {
+    const normalizedPackageItems = packageItems.map((item) => {
         const pkg = giftPackages.find((p) => p.id === item.giftPackageId);
         if (!pkg)
             throw new errorHandler_js_1.AppError('One or more gift packages are unavailable', 400);
@@ -258,20 +300,27 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
         packagesTotal += lineTotal;
         return {
             giftPackageId: pkg.id,
-            type: 'PACKAGE',
             quantity: item.quantity,
             unitPrice: pkg.price,
-            lineTotal,
+            currency: pkg.currency,
         };
     });
     const requestedGatewayId = data.paymentGatewayId || null;
     const requestedPaymentMethod = (data.paymentMethod || '').trim().toLowerCase() || null;
+    const ownerWalletState = (0, walletPolicy_js_1.resolveOwnerWalletState)((event.Owner?.wallets || []));
+    const visibleGateways = (0, walletPolicy_js_1.filterEventGatewaysForOwner)({
+        eventGateways: configuredGateways,
+        walletState: ownerWalletState,
+    });
+    if (!visibleGateways.length) {
+        throw new errorHandler_js_1.AppError('No payment gateway is enabled for this event', 400);
+    }
     const selectedGateway = requestedGatewayId
-        ? configuredGateways.find((gateway) => gateway.paymentGatewayId === requestedGatewayId)
+        ? visibleGateways.find((gateway) => gateway.paymentGatewayId === requestedGatewayId)
         : requestedPaymentMethod
-            ? configuredGateways.find((gateway) => gateway.paymentGateway.gateway === requestedPaymentMethod)
-            : null;
-    if (requestedGatewayId && !selectedGateway) {
+            ? visibleGateways.find((gateway) => gateway.paymentGateway.gateway === requestedPaymentMethod)
+            : visibleGateways[0];
+    if (!selectedGateway) {
         throw new errorHandler_js_1.AppError('Selected payment gateway is not enabled for this event', 400);
     }
     if (selectedGateway &&
@@ -279,201 +328,63 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
         selectedGateway.paymentGateway.gateway !== requestedPaymentMethod) {
         throw new errorHandler_js_1.AppError('Payment method does not match selected gateway', 400);
     }
-    if (configuredGateways.length > 0 &&
-        !selectedGateway &&
-        (requestedGatewayId || requestedPaymentMethod || data.paymentReference)) {
-        throw new errorHandler_js_1.AppError('Please select one of the enabled gateways for this event', 400);
-    }
-    const paymentMethod = selectedGateway?.paymentGateway.gateway || requestedPaymentMethod || null;
     const totalAmount = packagesTotal + cashGiftAmount;
     const currency = giftPackages[0]?.currency || selectedGateway?.paymentGateway.currency || 'USD';
-    const paymentReference = data.paymentReference?.trim() || null;
-    const isPaystackPayment = paymentMethod === 'paystack';
     if (selectedGateway &&
         selectedGateway.paymentGateway.currency &&
         selectedGateway.paymentGateway.currency.toUpperCase() !== currency.toUpperCase()) {
         throw new errorHandler_js_1.AppError(`Selected gateway currency (${selectedGateway.paymentGateway.currency.toUpperCase()}) does not match order currency (${currency.toUpperCase()})`, 400);
     }
-    if (paymentReference) {
-        const duplicate = await prisma_js_1.default.transaction.findFirst({
-            where: {
-                paymentRef: paymentReference,
-                status: 'completed',
-            },
-            select: { id: true },
-        });
-        if (duplicate) {
-            throw new errorHandler_js_1.AppError('This payment reference has already been used', 400);
-        }
-    }
-    let ownerWallet = null;
-    if (event.ownerId) {
-        ownerWallet = await prisma_js_1.default.ownerWallet.findUnique({
-            where: { ownerId: event.ownerId },
-            select: { paystackSubaccount: true, isVerified: true },
-        });
-    }
-    if (isPaystackPayment) {
-        if (!paymentReference) {
-            throw new errorHandler_js_1.AppError('Payment reference is required for Paystack gifts', 400);
-        }
-        if (cashGiftAmount > 0 && packagesTotal > 0) {
-            throw new errorHandler_js_1.AppError('For secure split settlement, complete cash gift and package purchase as separate payments', 400);
-        }
-        const verification = await (0, paystack_js_1.verifyPaystackTransaction)(paymentReference);
-        const expectedMinor = Math.round(totalAmount * 100);
-        const paidMinor = Number(verification.amount || 0);
-        if (verification.status !== 'success') {
-            throw new errorHandler_js_1.AppError('Paystack payment is not successful', 400);
-        }
-        if (paidMinor !== expectedMinor) {
-            throw new errorHandler_js_1.AppError('Paystack amount does not match order total', 400);
-        }
-        if ((verification.currency || '').toUpperCase() !== currency.toUpperCase()) {
-            throw new errorHandler_js_1.AppError('Paystack currency does not match order currency', 400);
-        }
-        const expectedSubaccount = ownerWallet?.paystackSubaccount || null;
-        const verifiedSubaccount = typeof verification.subaccount === 'string'
-            ? verification.subaccount
-            : verification.subaccount?.subaccount_code || verification.split?.subaccount || null;
-        if (cashGiftAmount > 0 && !expectedSubaccount) {
-            throw new errorHandler_js_1.AppError('Owner payout account is not configured for this event. Please complete with MoMo or card, or contact support.', 400);
-        }
-        if (cashGiftAmount > 0 && expectedSubaccount && verifiedSubaccount !== expectedSubaccount) {
-            throw new errorHandler_js_1.AppError('Payment split destination does not match this event owner account', 400);
-        }
-        if (packagesTotal > 0 && verifiedSubaccount) {
-            throw new errorHandler_js_1.AppError('Package purchases must be processed without owner split destination', 400);
-        }
-        // If no split details are returned on verification, we still rely on amount/currency/reference checks.
-        // This fallback keeps backward compatibility for providers that omit split fields.
-    }
-    const feeDefaults = await (0, fees_js_1.getSystemFeeDefaults)();
-    const feeConfig = (0, fees_js_1.resolveEventFeeConfig)(event, feeDefaults);
-    const platformFeeMode = feeConfig.platformFeeMode;
-    const ownerFeePercent = feeConfig.platformFeePercent;
-    const ownerFeeFixed = feeConfig.platformFeeFixed;
-    const cashOwnerFee = platformFeeMode === 'FIXED'
-        ? Math.min(cashGiftAmount, ownerFeeFixed)
-        : (cashGiftAmount * ownerFeePercent) / 100;
-    const cashOwnerNet = Math.max(0, cashGiftAmount - cashOwnerFee);
-    const order = await prisma_js_1.default.$transaction(async (tx) => {
-        const created = await tx.giftOrder.create({
-            data: {
-                eventId: event.id,
-                guestName: data.guestName,
-                guestPhone: data.guestPhone || null,
-                guestEmail: data.guestEmail || null,
-                deliveryDate: data.deliveryDate ? new Date(data.deliveryDate) : null,
-                note: data.note || null,
-                paymentMethod: paymentMethod || null,
-                paymentReference,
-                currency,
-                totalAmount,
-                cashGiftAmount: cashGiftAmount > 0 ? cashGiftAmount : null,
-                status: paymentReference ? 'PAID' : 'PENDING',
-            },
-        });
-        const orderItems = [...lines];
-        if (cashGiftAmount > 0) {
-            orderItems.push({
-                giftPackageId: null,
-                type: 'CASH',
-                quantity: 1,
-                unitPrice: cashGiftAmount,
-                lineTotal: cashGiftAmount,
-            });
-        }
-        if (orderItems.length) {
-            await tx.giftOrderItem.createMany({
-                data: orderItems.map((item) => ({
-                    orderId: created.id,
-                    giftPackageId: item.giftPackageId,
-                    type: item.type,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    lineTotal: item.lineTotal,
-                })),
-            });
-        }
-        await tx.auditLog.create({
-            data: {
-                eventId: event.id,
-                action: 'GIFT_ORDER_CREATED',
-                entityType: 'GIFT_ORDER',
-                entityId: created.id,
-                details: JSON.stringify({
-                    totalAmount,
-                    currency,
-                    hasCashGift: cashGiftAmount > 0,
-                    packageCount: lines.length,
-                    ownerFeePercent,
-                    platformFeeMode,
-                    ownerFeeFixed,
-                    cashOwnerNet,
-                    paymentReference,
-                }),
-            },
-        });
-        // Record transaction ledger entries once paid
-        if (paymentReference) {
-            if (cashGiftAmount > 0) {
-                await tx.transaction.create({
-                    data: {
-                        eventId: event.id,
-                        type: 'gift_cash',
-                        grossAmount: cashGiftAmount,
-                        platformFee: cashOwnerFee,
-                        processingFee: 0,
-                        netAmount: cashOwnerNet,
-                        currency,
-                        paymentMethod: paymentMethod || 'unknown',
-                        paymentRef: paymentReference,
-                        buyerName: data.guestName,
-                        buyerEmail: data.guestEmail || null,
-                        status: 'completed',
-                    },
-                });
-            }
-            if (packagesTotal > 0) {
-                await tx.transaction.create({
-                    data: {
-                        eventId: event.id,
-                        type: 'gift_package_sale',
-                        grossAmount: packagesTotal,
-                        platformFee: packagesTotal,
-                        processingFee: 0,
-                        netAmount: 0,
-                        currency,
-                        paymentMethod: paymentMethod || 'unknown',
-                        paymentRef: paymentReference,
-                        buyerName: data.guestName,
-                        buyerEmail: data.guestEmail || null,
-                        status: 'completed',
-                    },
-                });
-            }
-        }
-        return created;
+    const idempotencySeed = JSON.stringify({
+        eventId: event.id,
+        gatewayId: selectedGateway.paymentGatewayId,
+        guestName: data.guestName.trim().toLowerCase(),
+        guestPhone: String(data.guestPhone || '').trim(),
+        packageItems: normalizedPackageItems.map((item) => ({
+            id: item.giftPackageId,
+            qty: item.quantity,
+        })),
+        cashGiftAmount: Number(cashGiftAmount.toFixed(2)),
+        totalAmount: Number(totalAmount.toFixed(2)),
+    });
+    const idempotencyKey = String(req.get('Idempotency-Key') || '').trim() ||
+        (0, crypto_1.createHash)('sha256').update(idempotencySeed).digest('hex');
+    const { intent, nextAction } = await (0, paymentCore_js_1.createPaymentIntent)({
+        eventId: event.id,
+        purpose: 'GIFT',
+        amount: totalAmount,
+        currency,
+        paymentGatewayId: selectedGateway.paymentGatewayId,
+        metadata: {
+            guestName: data.guestName.trim(),
+            guestPhone: data.guestPhone?.trim() || undefined,
+            guestEmail: data.guestEmail?.trim() || undefined,
+            note: data.note?.trim() || undefined,
+            deliveryDate: data.deliveryDate || undefined,
+            cashGiftAmount: cashGiftAmount > 0 ? cashGiftAmount : undefined,
+            packageItems: normalizedPackageItems.map((item) => ({
+                giftPackageId: item.giftPackageId,
+                quantity: item.quantity,
+            })),
+        },
+        idempotencyKey,
     });
     res.status(201).json({
         success: true,
-        order,
+        paymentIntentId: intent.id,
+        amount: intent.amount,
+        currency: intent.currency,
+        nextAction,
         breakdown: {
             totalAmount,
             packageAmount: packagesTotal,
             cashGiftAmount,
-            ownerFeePercent,
-            platformFeeMode,
-            ownerFeeFixed,
-            ownerNetCash: cashOwnerNet,
-            adminRetainedAmount: packagesTotal + cashOwnerFee,
             settlementPolicy: {
-                cashGift: cashGiftAmount > 0 ? 'split_to_owner_subaccount' : 'none',
+                cashGift: cashGiftAmount > 0 ? 'pending_webhook_confirmation' : 'none',
                 packagePurchase: packagesTotal > 0 ? 'platform_only' : 'none',
             },
         },
-        message: 'Gift checkout submitted successfully',
+        message: 'Gift checkout initialized. Complete payment to confirm.',
     });
 }));
 // ============================================
@@ -483,7 +394,12 @@ router.get('/packages', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.async
     const packages = await prisma_js_1.default.giftPackage.findMany({
         orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
     });
-    res.json({ packages });
+    res.json({
+        packages: packages.map((pkg) => ({
+            ...pkg,
+            thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+        })),
+    });
 }));
 router.post('/packages/upload-image', auth_js_1.authenticateAdmin, giftPackageImageUpload.single('image'), (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     if (!req.file) {
@@ -568,6 +484,7 @@ router.get('/events/:eventId/packages', auth_js_1.authenticateAdmin, (0, errorHa
         assignedPackageIds: Array.from(assignedSet),
         packages: packages.map((pkg) => ({
             ...pkg,
+            thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
             assigned: assignedSet.has(pkg.id),
         })),
     });

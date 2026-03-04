@@ -24,10 +24,11 @@ const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const itineraryRealtime_js_1 = require("../services/itineraryRealtime.js");
 const featureFlags_js_1 = require("../utils/featureFlags.js");
 const router = (0, express_1.Router)();
+const getQueryString = (value, fallback) => typeof value === 'string' ? value : fallback;
 const compareSemver = (a, b) => {
     const parse = (input) => String(input || '0.0.0')
         .split('.')
-        .map((part) => Number(part.replace(/[^\d]/g, '') || 0))
+        .map((part) => Number(part.replaceAll(/[^\d]/g, '') || 0))
         .slice(0, 3);
     const left = parse(a);
     const right = parse(b);
@@ -51,9 +52,9 @@ router.get('/mobile-version-check', (0, errorHandler_js_1.asyncHandler)(async (r
             reason: 'disabled',
         });
     }
-    const platformRaw = String(req.query.platform || 'android').toLowerCase();
+    const platformRaw = getQueryString(req.query.platform, 'android').toLowerCase();
     const platform = platformRaw === 'ios' ? 'ios' : 'android';
-    const currentVersion = String(req.query.version || '0.0.0');
+    const currentVersion = getQueryString(req.query.version, '0.0.0');
     const settings = await prisma_js_1.default.systemSettings.findUnique({
         where: { id: 'default' },
         select: {
@@ -222,7 +223,7 @@ function renderTemplateWithBlocks(tpl, currentData, rootData, depth = 0) {
         return tpl;
     let output = tpl;
     // {{#each path}}...{{/each}}
-    output = output.replace(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_match, pathStr, inner) => {
+    output = output.replaceAll(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_match, pathStr, inner) => {
         const collection = resolveTemplateValue(pathStr, currentData, rootData);
         if (Array.isArray(collection)) {
             return collection
@@ -247,13 +248,13 @@ function renderTemplateWithBlocks(tpl, currentData, rootData, depth = 0) {
         return '';
     });
     // {{#if path}}...{{else}}...{{/if}}
-    output = output.replace(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g, (_match, pathStr, truthyBlock, falsyBlock = '') => {
+    output = output.replaceAll(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g, (_match, pathStr, truthyBlock, falsyBlock = '') => {
         const conditionValue = resolveTemplateValue(pathStr, currentData, rootData);
         const chosenBlock = isTruthyTemplateValue(conditionValue) ? truthyBlock : falsyBlock;
         return renderTemplateWithBlocks(chosenBlock, currentData, rootData, depth + 1);
     });
     // Standard variables: {{event.name}}, {{title}}, {{this}}
-    output = output.replace(/\{\{\s*([^#\/][^}]*)\s*\}\}/g, (match, pathStr) => {
+    output = output.replaceAll(/\{\{\s*([^#/][^}]*)\s*\}\}/g, (match, pathStr) => {
         const value = resolveTemplateValue(pathStr, currentData, rootData);
         if (value === undefined || value === null)
             return '';
@@ -262,7 +263,7 @@ function renderTemplateWithBlocks(tpl, currentData, rootData, depth = 0) {
         return String(value);
     });
     // Compatibility syntax: {urls.invitation}
-    output = output.replace(/\{\s*((?:urls|event|phase|capabilities|itinerary|itineraryMeta)\.[^{}]+?)\s*\}/g, (match, pathStr) => {
+    output = output.replaceAll(/\{\s*((?:urls|event|phase|capabilities|itinerary|itineraryMeta)\.[^{}]+?)\s*\}/g, (match, pathStr) => {
         const value = resolveTemplateValue(pathStr, currentData, rootData);
         if (value === undefined || value === null)
             return match;
@@ -408,16 +409,16 @@ async function renderEventTemplate(event, templateType, templateId, templateData
     const assetBaseForHtml = apiAssetBase;
     if (template.assetsPath) {
         // Pattern 1: src="./assets/..." or src="../assets/..."
-        html = html.replace(/(src|href)=["'](\.\/|\.\.\/)?assets\//g, `$1="${assetBaseForHtml}`);
+        html = html.replaceAll(/(src|href)=["'](\.\/|\.\.\/)?assets\//g, `$1="${assetBaseForHtml}`);
         // Pattern 2: src="/assets/..."
-        html = html.replace(/(src|href)=["']\/assets\//g, `$1="${assetBaseForHtml}`);
+        html = html.replaceAll(/(src|href)=["']\/assets\//g, `$1="${assetBaseForHtml}`);
         // Pattern 3: bare filenames like src="MCS_9627.jpeg"
-        html = html.replace(/(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi, `$1="${assetBaseForHtml}$2"`);
+        html = html.replaceAll(/(src)=["'](?!\w+:\/\/|\/|#|data:|blob:)([^"']+\.(jpe?g|png|gif|webp|svg|ico|css|js|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf))["']/gi, `$1="${assetBaseForHtml}$2"`);
         // Pattern 4: CSS url() references in inline styles
-        html = html.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBaseForHtml}`);
+        html = html.replaceAll(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBaseForHtml}`);
         // Pattern 5: CSS url() in separate cssContent
         if (template.cssContent) {
-            template.cssContent = template.cssContent.replace(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBaseForHtml}`);
+            template.cssContent = template.cssContent.replaceAll(/url\(['"]?(?:\.\/|\.\.\/)?assets\//g, `url('${assetBaseForHtml}`);
         }
         console.info(`[Render] Asset paths resolved for template=${template.id} ` +
             `htmlBase=${assetBaseForHtml} headerBase=${assetBaseForHeader}`);
@@ -650,7 +651,7 @@ router.get('/event/:slug/itinerary', (0, errorHandler_js_1.asyncHandler)(async (
         throw new errorHandler_js_1.AppError('Itinerary is disabled for this event', 404);
     const total = event.itineraryItems.length;
     const completed = event.itineraryItems.filter((item) => item.isCompleted).length;
-    const lastUpdatedAt = event.itineraryItems.reduce((latest, item) => (item.updatedAt > latest ? item.updatedAt : latest), event.updatedAt);
+    const lastUpdatedAt = event.itineraryItems.reduce((latest, item) => new Date(Math.max(latest.getTime(), item.updatedAt.getTime())), event.updatedAt);
     const sinceParam = typeof req.query.since === 'string' ? req.query.since : '';
     const sinceDate = sinceParam ? new Date(sinceParam) : null;
     const hasValidSince = Boolean(sinceDate && !Number.isNaN(sinceDate.getTime()));

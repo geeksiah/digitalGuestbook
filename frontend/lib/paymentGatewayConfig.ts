@@ -2,6 +2,7 @@ export type GatewayType =
   | 'stripe'
   | 'paystack'
   | 'flutterwave'
+  | 'hubtel'
   | 'paypal'
   | 'mtn_momo'
   | 'telecel_cash'
@@ -23,6 +24,7 @@ export const GATEWAY_OPTIONS: GatewayMeta[] = [
   { value: 'stripe', label: 'Stripe', description: 'Cards and digital wallets' },
   { value: 'paystack', label: 'Paystack', description: 'Cards and bank transfer' },
   { value: 'flutterwave', label: 'Flutterwave', description: 'Cards and local payments' },
+  { value: 'hubtel', label: 'Hubtel', description: 'Hubtel mobile and card checkout' },
   { value: 'paypal', label: 'PayPal', description: 'PayPal checkout' },
   { value: 'mtn_momo', label: 'MTN MoMo', description: 'Mobile money collection' },
   { value: 'telecel_cash', label: 'Telecel Cash', description: 'Telecel mobile money' },
@@ -47,6 +49,7 @@ const GATEWAY_SUPPORTED_CURRENCIES: Record<GatewayType, 'ALL' | string[]> = {
   stripe: 'ALL',
   paystack: ['NGN', 'GHS', 'USD', 'ZAR', 'KES'],
   flutterwave: ['NGN', 'GHS', 'USD', 'KES', 'UGX', 'TZS', 'RWF', 'ZAR'],
+  hubtel: ['GHS'],
   paypal: ['USD', 'EUR', 'GBP'],
   mtn_momo: ['GHS', 'UGX'],
   telecel_cash: ['GHS'],
@@ -82,4 +85,3 @@ export const uniqueCurrencyCodes = (codes: Array<string | null | undefined>): st
     .filter(Boolean);
   return Array.from(new Set(normalized));
 };
-
