@@ -1,14 +1,11 @@
 [build]
   base = "frontend"
   command = "npm run build"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
-
-# Next.js requires the @netlify/plugin-nextjs
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
 
 [[redirects]]
   from = "/login"
