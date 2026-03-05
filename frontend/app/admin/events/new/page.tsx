@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { adminVotingApi, eventsApi, templatesApi, ownersApi, API_BASE_URL } from '@/lib/api';
+import { eventsApi, templatesApi, ownersApi, API_BASE_URL } from '@/lib/api';
 import { slugify, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -256,7 +256,7 @@ export default function NewEventPage() {
         invitationEnabled: formData.invitationEnabled,
         rsvpEnabled: formData.rsvpEnabled,
         guestbookEnabled: formData.guestbookEnabled,
-        checkInEnabled: formData.checkInEnabled,
+        checkInEnabled: formData.invitationOnly ? formData.checkInEnabled : false,
         maxRecordingDuration: formData.maxRecordingDuration,
         minRecordingDuration: formData.minRecordingDuration,
         maxPhotosPerGuest: formData.maxPhotosPerGuest,
@@ -288,26 +288,31 @@ export default function NewEventPage() {
         leaderboardPageTemplateId: formData.votingEnabled ? (formData.leaderboardPageTemplateId || undefined) : undefined,
       });
 
-      if (formData.votingEnabled) {
-        await adminVotingApi.updateVotingConfig(response.data.event.id, {
-          isEnabled: true,
-          allowFreeVotes: true,
-          allowPaidVotes: false,
-          allowPublicNominations: true,
-        });
-      }
+      const createdEventId = response.data.event.id as string;
+      const followUpWarnings: string[] = [];
 
       if (coverFile) {
-        const coverData = new FormData();
-        coverData.append('cover', coverFile);
-        if (formData.coverImageAlt) {
-          coverData.append('alt', formData.coverImageAlt);
+        try {
+          const coverData = new FormData();
+          coverData.append('cover', coverFile);
+          if (formData.coverImageAlt) {
+            coverData.append('alt', formData.coverImageAlt);
+          }
+          await eventsApi.uploadCover(createdEventId, coverData);
+        } catch (error) {
+          console.error('Cover upload failed after event creation:', error);
+          followUpWarnings.push('Cover image upload');
         }
-        await eventsApi.uploadCover(response.data.event.id, coverData);
       }
 
-      toast.success('Event created successfully!');
-      router.push(`/admin/events/${response.data.event.id}`);
+      if (followUpWarnings.length === 0) {
+        toast.success('Event created successfully!');
+      } else {
+        toast.success('Event created. Complete remaining setup inside event settings.');
+        toast.error(`${followUpWarnings.join(' and ')} could not be completed automatically.`);
+      }
+
+      router.push(`/admin/events/${createdEventId}`);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to create event');
     } finally {
@@ -376,12 +381,7 @@ export default function NewEventPage() {
           <div>
             <span className="pill-accent">Event Setup</span>
             <h1 className="text-2xl font-display font-bold text-navy-900 mt-2">Create New Event</h1>
-            <p className="text-surface-600 mt-1">Set up event details, services, pricing, templates, and voting in one flow.</p>
-          </div>
-          <div className="segmented">
-            <span className="segmented-item segmented-item-active">Details</span>
-            <span className="segmented-item">Services</span>
-            <span className="segmented-item">Templates</span>
+            <p className="text-surface-600 mt-1">Set up details, services, templates, and access controls in one flow.</p>
           </div>
         </div>
       </div>
@@ -767,15 +767,23 @@ export default function NewEventPage() {
               />
             </label>
 
-            <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
+            <label className={cn(
+              'flex items-center justify-between p-4 rounded-lg border transition-colors',
+              formData.invitationOnly
+                ? 'bg-surface-50 border-surface-200 cursor-pointer hover:bg-surface-100'
+                : 'bg-surface-100 border-surface-200 opacity-60 cursor-not-allowed'
+            )}>
               <div>
                 <p className="font-medium text-navy-900">Check-In System</p>
-                <p className="text-sm text-surface-600">QR code & manual verification</p>
+                <p className="text-sm text-surface-600">
+                  {formData.invitationOnly ? 'QR code and manual verification' : 'Enable invitation-only first to use check-in'}
+                </p>
               </div>
               <input
                 type="checkbox"
                 className="w-5 h-5 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
-                checked={formData.checkInEnabled}
+                checked={formData.checkInEnabled && formData.invitationOnly}
+                disabled={!formData.invitationOnly}
                 onChange={(e) => setFormData({ ...formData, checkInEnabled: e.target.checked })}
               />
             </label>
@@ -789,7 +797,14 @@ export default function NewEventPage() {
                 type="checkbox"
                 className="w-5 h-5 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
                 checked={formData.invitationOnly}
-                onChange={(e) => setFormData({ ...formData, invitationOnly: e.target.checked })}
+                onChange={(e) => {
+                  const invitationOnly = e.target.checked;
+                  setFormData({
+                    ...formData,
+                    invitationOnly,
+                    checkInEnabled: invitationOnly ? formData.checkInEnabled : false,
+                  });
+                }}
               />
             </label>
 

@@ -1138,7 +1138,7 @@ export default function OwnerEventDetailPage() {
               className={cn(
                 'px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium rounded-lg transition-all border whitespace-nowrap flex-shrink-0',
                 activeTab === tab.id
-                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-red-100'
+                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-primary-100'
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
               )}
             >

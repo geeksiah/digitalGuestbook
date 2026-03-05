@@ -263,7 +263,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <input
                     type="search"
                     placeholder="Search events, templates, owners..."
-                    className="h-10 w-full rounded-full border border-surface-200 bg-surface-50 pl-9 pr-4 text-sm text-brand-900 placeholder:text-surface-400 focus:bg-white focus:border-red-300 focus:ring-2 focus:ring-red-100 focus:outline-none transition-colors"
+                    className="h-10 w-full rounded-full border border-surface-200 bg-surface-50 pl-9 pr-4 text-sm text-brand-900 placeholder:text-surface-400 focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -307,19 +307,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-80',
                     isActive
-                      ? 'text-[#ff3b30] bg-[#fff3f1] ring-1 ring-[#ffd6d2]'
+                      ? 'text-primary-700 bg-primary-50 ring-1 ring-primary-200'
                       : 'text-surface-500'
                   )}
                 >
                   <span className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-xl transition-all [&>svg]:w-6 [&>svg]:h-6',
-                    isActive ? 'text-[#ff3b30]' : 'text-surface-500'
+                    isActive ? 'text-primary-700' : 'text-surface-500'
                   )}>
                     {item.icon}
                   </span>
                   <span className={cn(
                     'text-[11px] font-medium leading-none',
-                    isActive ? 'font-semibold text-[#ff3b30]' : 'text-surface-500'
+                    isActive ? 'font-semibold text-primary-700' : 'text-surface-500'
                   )}>
                     {item.name}
                   </span>

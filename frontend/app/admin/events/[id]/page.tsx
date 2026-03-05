@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi, paymentGatewaysApi, API_BASE_URL } from '@/lib/api';
+import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi, paymentGatewaysApi, adminVotingApi, API_BASE_URL } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import PaymentGatewaySelector from '@/components/tickets/PaymentGatewaySelector';
@@ -333,6 +333,7 @@ export default function EventDetailPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainHost, setDomainHost] = useState('');
   const [savingDomain, setSavingDomain] = useState(false);
+  const [votingEnabled, setVotingEnabled] = useState(false);
 
   const [selectedTemplates, setSelectedTemplates] = useState({
     invitationTemplateId: '', rsvpTemplateId: '', guestbookTemplateId: '',
@@ -457,9 +458,29 @@ export default function EventDetailPage() {
   }, [event]);
 
   const fetchEvent = async () => {
-    try { const r = await eventsApi.get(eventId); setEvent(r.data.event); }
-    catch { toast.error('Failed to load event'); router.push('/admin/events'); }
-    finally { setLoading(false); }
+    try {
+      const [eventResponse, votingResponse] = await Promise.all([
+        eventsApi.get(eventId),
+        adminVotingApi.getVotingConfig(eventId).catch(() => null),
+      ]);
+      const loadedEvent = eventResponse.data.event;
+      setEvent(loadedEvent);
+
+      const templateBasedVoting =
+        Boolean(loadedEvent?.votingPageTemplateId)
+        || Boolean((loadedEvent as any)?.nominationPageTemplateId)
+        || Boolean((loadedEvent as any)?.nomineesPageTemplateId)
+        || Boolean((loadedEvent as any)?.leaderboardPageTemplateId);
+      const configVoting = Boolean(votingResponse?.data?.config?.isEnabled);
+      setVotingEnabled(configVoting || templateBasedVoting);
+    }
+    catch {
+      toast.error('Failed to load event');
+      router.push('/admin/events');
+    }
+    finally {
+      setLoading(false);
+    }
   };
   const fetchDefaultFeeSettings = async () => {
     try {
@@ -1073,6 +1094,7 @@ export default function EventDetailPage() {
         // Owner
         ownerId: eventSettings.ownerId || null, ownerName: eventSettings.ownerName || null, ownerEmail: eventSettings.ownerEmail || null, ownerPhone: eventSettings.ownerPhone || null, organizationName: eventSettings.organizationName || null,
       });
+      await adminVotingApi.updateVotingConfig(eventId, { isEnabled: votingEnabled });
       toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
     finally { setSavingSettings(false); }
@@ -1166,7 +1188,7 @@ export default function EventDetailPage() {
               className={cn(
                 'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border',
                 activeTab === tab.id 
-                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-red-100' 
+                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-primary-100' 
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
               )}
             >
@@ -3173,6 +3195,18 @@ export default function EventDetailPage() {
                       </p>
                     </div>
                   </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-surface-300 text-brand-900"
+                      checked={votingEnabled}
+                      onChange={e => setVotingEnabled(e.target.checked)}
+                    />
+                    <div>
+                      <span className="font-medium text-brand-900">Voting</span>
+                      <p className="text-xs text-surface-500">Enable nomination, nominees, voting, and leaderboard flows.</p>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -3549,6 +3583,7 @@ export default function EventDetailPage() {
                   { l: 'Strict Invite Mode', v: event.strictInviteOnly ? 'Enabled' : 'Disabled' },
                   { l: 'Itinerary', v: event.itineraryEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Gifting', v: event.giftingEnabled ? 'Enabled' : 'Disabled' },
+                  { l: 'Voting', v: votingEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Reel Generation', v: event.reelEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Recording Limits', v: `${event.minRecordingDuration}s – ${event.maxRecordingDuration}s` },
                   { l: 'Max Photos/Guest', v: event.maxPhotosPerGuest },

@@ -37,100 +37,73 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-50">
-      <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-8 sm:px-8">
-        <div className="grid w-full gap-5 lg:grid-cols-[1fr_0.92fr]">
-          <section className="overflow-hidden rounded-3xl border border-surface-200 bg-white">
-            <div className="relative h-52 sm:h-64">
-              <img src="/og-app-eventpeepo.png" alt="EventPeepo" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-white/90">Admin Console</p>
-                <p className="mt-1 text-lg font-semibold text-white sm:text-xl">Keep operations simple and in sync.</p>
-              </div>
-            </div>
-            <div className="grid gap-2 p-4 sm:grid-cols-3 sm:p-5">
-              {['Events', 'Owners', 'Payouts'].map((item) => (
-                <div key={item} className="rounded-xl bg-surface-100 px-3 py-2 text-center text-xs font-semibold text-surface-700">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </section>
+    <div className="min-h-screen soft-grid-bg px-4 py-8 sm:px-6">
+      <div className="mx-auto flex min-h-screen max-w-md items-center">
+        <section className="w-full rounded-3xl border border-surface-200 bg-white p-6 sm:p-8">
+          <Link href="/" className="inline-flex items-center text-sm text-surface-600 transition-colors hover:text-brand-900">
+            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to home
+          </Link>
 
-          <section className="rounded-3xl border border-surface-200 bg-white p-6 sm:p-8">
-            <Link href="/" className="inline-flex items-center text-sm text-surface-600 transition-colors hover:text-brand-900">
-              <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to home
-            </Link>
+          <div className="mt-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">EventPeepo</p>
+            <h1 className="mt-2 text-3xl font-bold text-brand-900">Admin sign in</h1>
+            <p className="mt-1 text-sm text-surface-600">Access operations and event controls.</p>
+          </div>
 
-            <div className="mt-6">
-              <p className="text-xs font-semibold uppercase tracking-widest text-red-600">EventPeepo</p>
-              <h1 className="mt-2 text-3xl font-bold text-brand-900">Admin sign in</h1>
-              <p className="mt-1 text-sm text-surface-600">Access system controls and live operations.</p>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="email" className="label">Email</label>
+              <input
+                id="email"
+                type="email"
+                required
+                className="input"
+                placeholder="admin@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <div>
-                <label htmlFor="email" className="label">Email</label>
+            <div>
+              <label htmlFor="password" className="label">Password</label>
+              <div className="relative">
                 <input
-                  id="email"
-                  type="email"
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  className="input"
-                  placeholder="admin@example.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="input pr-12"
+                  placeholder="********"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-surface-500 transition-colors hover:text-brand-900"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
               </div>
+            </div>
 
-              <div>
-                <label htmlFor="password" className="label">Password</label>
-                <div className="relative">
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    className="input pr-12"
-                    placeholder="********"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-surface-500 transition-colors hover:text-brand-900"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                  >
-                    {showPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-              </div>
-
-              <button type="submit" disabled={loading} className="btn-accent w-full">
-                {loading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Signing in...
-                  </span>
-                ) : (
-                  'Sign in'
-                )}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-surface-600">
-              Need access support?{' '}
-              <a href="mailto:support@eventpeepo.com" className="font-semibold text-brand-900 transition-colors hover:text-brand-700">
-                Contact support
-              </a>
-            </p>
-          </section>
-        </div>
+            <button type="submit" disabled={loading} className="btn-accent w-full">
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Signing in...
+                </span>
+              ) : (
+                'Sign in'
+              )}
+            </button>
+          </form>
+        </section>
       </div>
     </div>
   );

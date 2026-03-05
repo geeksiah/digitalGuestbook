@@ -74,7 +74,7 @@ export function DashboardKpiCard({
   }[tone];
 
   return (
-    <div className="kpi-tile p-4 sm:p-5 hover:border-red-200 hover:bg-[#fffdfd] transition-all">
+    <div className="kpi-tile p-4 sm:p-5 hover:border-primary-200 hover:bg-primary-50/40 transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1.5">{label}</p>

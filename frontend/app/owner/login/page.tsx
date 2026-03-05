@@ -122,42 +122,23 @@ export default function OwnerLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-50">
-      <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-8 sm:px-8">
-        <div className="grid w-full gap-5 lg:grid-cols-[1fr_0.92fr]">
-          <section className="overflow-hidden rounded-3xl border border-surface-200 bg-white">
-            <div className="relative h-52 sm:h-64">
-              <img src="/og-app-eventpeepo.png" alt="EventPeepo" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-white/90">Owner Workspace</p>
-                <p className="mt-1 text-lg font-semibold text-white sm:text-xl">Keep your event operations in one place.</p>
-              </div>
-            </div>
-            <div className="grid gap-2 p-4 sm:grid-cols-3 sm:p-5">
-              {['RSVPs', 'Guestbook', 'Payouts'].map((item) => (
-                <div key={item} className="rounded-xl bg-surface-100 px-3 py-2 text-center text-xs font-semibold text-surface-700">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </section>
+    <div className="min-h-screen soft-grid-bg px-4 py-8 sm:px-6">
+      <div className="mx-auto flex min-h-screen max-w-md items-center">
+        <section className="w-full rounded-3xl border border-surface-200 bg-white p-6 sm:p-8">
+          <Link href="/" className="inline-flex items-center text-sm text-surface-600 transition-colors hover:text-brand-900">
+            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to home
+          </Link>
 
-          <section className="rounded-3xl border border-surface-200 bg-white p-6 sm:p-8">
-            <Link href="/" className="inline-flex items-center text-sm text-surface-600 transition-colors hover:text-brand-900">
-              <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to home
-            </Link>
+          <div className="mt-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">EventPeepo</p>
+            <h1 className="mt-2 text-3xl font-bold text-brand-900">{pageTitle}</h1>
+            <p className="mt-1 text-sm text-surface-600">{pageSubtitle}</p>
+          </div>
 
-            <div className="mt-6">
-              <p className="text-xs font-semibold uppercase tracking-widest text-red-600">EventPeepo</p>
-              <h1 className="mt-2 text-3xl font-bold text-brand-900">{pageTitle}</h1>
-              <p className="mt-1 text-sm text-surface-600">{pageSubtitle}</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               {isRequestReset && (
                 <>
                   <div>
@@ -288,49 +269,48 @@ export default function OwnerLoginPage() {
                   submitLabel
                 )}
               </button>
-            </form>
+          </form>
 
-            <div className="mt-6 space-y-2 text-center">
-              {!isRequestReset && !isSetupPassword && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegister((prev) => !prev);
-                    setIsRequestReset(false);
-                    setFormData({ name: '', email: '', password: '', phone: '', company: '' });
-                    setShowPassword(false);
-                  }}
-                  className="text-sm text-surface-600 transition-colors hover:text-brand-900"
-                >
-                  {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-                </button>
-              )}
+          <div className="mt-6 space-y-2 text-center">
+            {!isRequestReset && !isSetupPassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister((prev) => !prev);
+                  setIsRequestReset(false);
+                  setFormData({ name: '', email: '', password: '', phone: '', company: '' });
+                  setShowPassword(false);
+                }}
+                className="text-sm text-surface-600 transition-colors hover:text-brand-900"
+              >
+                {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </button>
+            )}
 
-              {!isRegister && !isSetupPassword && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRequestReset((prev) => !prev);
-                    setIsRegister(false);
-                    setFormData({ name: '', email: '', password: '', phone: '', company: '' });
-                    setSetupEmail('');
-                    setResetReason('');
-                    setShowPassword(false);
-                  }}
-                  className="text-sm text-surface-600 transition-colors hover:text-brand-900"
-                >
-                  {isRequestReset ? 'Back to sign in' : 'Forgot password?'}
-                </button>
-              )}
+            {!isRegister && !isSetupPassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRequestReset((prev) => !prev);
+                  setIsRegister(false);
+                  setFormData({ name: '', email: '', password: '', phone: '', company: '' });
+                  setSetupEmail('');
+                  setResetReason('');
+                  setShowPassword(false);
+                }}
+                className="text-sm text-surface-600 transition-colors hover:text-brand-900"
+              >
+                {isRequestReset ? 'Back to sign in' : 'Forgot password?'}
+              </button>
+            )}
 
-              {isSetupPassword && (
-                <button type="button" onClick={resetModeState} className="text-sm text-surface-600 transition-colors hover:text-brand-900">
-                  Back to sign in
-                </button>
-              )}
-            </div>
-          </section>
-        </div>
+            {isSetupPassword && (
+              <button type="button" onClick={resetModeState} className="text-sm text-surface-600 transition-colors hover:text-brand-900">
+                Back to sign in
+              </button>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

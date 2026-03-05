@@ -11,15 +11,15 @@
     --muted: 248 249 250;
     --muted-foreground: 107 114 128;
     --border: 229 231 235;
-    --accent: 99 102 241;
+    --accent: 27 212 188;
     --brand: 6 57 50;
-    --action: 255 59 48;
-    --action-strong: 229 51 40;
-    --action-soft: 255 237 234;
-    --highlight: 212 175 55;
+    --action: 27 212 188;
+    --action-strong: 21 179 159;
+    --action-soft: 232 250 246;
+    --highlight: 27 212 188;
     --elevated: 255 255 255;
     --surface-veil: 255 255 255 / 0.72;
-    --ring-soft: 6 57 50 / 0.18;
+    --ring-soft: 27 212 188 / 0.2;
   }
 
   * {
@@ -72,11 +72,11 @@
   }
 
   .btn-accent {
-    @apply btn rounded-full bg-[#ff3b30] text-white focus:ring-red-400;
+    @apply btn rounded-full border border-primary-500 bg-primary-500 text-brand-900 focus:ring-primary-300;
   }
 
   .btn-accent:hover {
-    @apply bg-[#e64c42];
+    @apply border-primary-600 bg-primary-600 text-white;
   }
 
   .btn-secondary {
@@ -124,8 +124,8 @@
   .hero-premium {
     @apply rounded-2xl text-white border border-white/10 shadow-elegant;
     background:
-      radial-gradient(circle at 100% -10%, rgba(255,59,48,0.28), transparent 38%),
-      radial-gradient(circle at -10% 110%, rgba(212,175,55,0.22), transparent 42%),
+      radial-gradient(circle at 100% -10%, rgba(27,212,188,0.24), transparent 38%),
+      radial-gradient(circle at -10% 110%, rgba(6,57,50,0.2), transparent 42%),
       linear-gradient(135deg, #0f1724 0%, #1a1a2e 48%, #1f2837 100%);
   }
 
@@ -141,7 +141,7 @@
   .phone-stage {
     @apply rounded-[34px] border border-surface-200 bg-white;
     background:
-      radial-gradient(circle at 100% -8%, rgba(255, 59, 48, 0.1), transparent 42%),
+      radial-gradient(circle at 100% -8%, rgba(27, 212, 188, 0.12), transparent 42%),
       linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
   }
 
@@ -162,7 +162,7 @@
   }
 
   .pill-accent {
-    @apply inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700;
+    @apply inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-brand-900;
   }
 
   .kpi-tile {
@@ -174,7 +174,7 @@
   }
 
   .focus-card:hover {
-    @apply border-red-200 bg-[#fffaf9];
+    @apply border-primary-200 bg-primary-50/40;
   }
 
   .shell-sidebar {
@@ -196,12 +196,12 @@
   }
 
   .nav-pill-active {
-    @apply bg-[#fff4f2] text-brand-900 border-[#ffd8d4];
+    @apply bg-primary-50 text-brand-900 border-primary-200;
   }
 
   .soft-grid-bg {
     background:
-      radial-gradient(circle at 100% 0%, rgba(255, 59, 48, 0.07), transparent 34%),
+      radial-gradient(circle at 100% 0%, rgba(27, 212, 188, 0.1), transparent 34%),
       radial-gradient(circle at 0% 100%, rgba(6, 57, 50, 0.07), transparent 34%),
       #f5f6f7;
   }
@@ -211,7 +211,7 @@
   }
 
   .chip-accent {
-    @apply chip border-red-200 text-red-700 bg-red-50;
+    @apply chip border-primary-200 text-brand-900 bg-primary-50;
   }
 
   .chip-brand {

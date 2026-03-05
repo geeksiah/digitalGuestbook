@@ -86,7 +86,36 @@ const toAbsoluteMediaUrl = (value: string | null | undefined) => {
 const resolveEventCover = (event: Event) =>
   toAbsoluteMediaUrl(event.coverImageUrl)
   || toAbsoluteMediaUrl(event.coverImagePath)
-  || '/og-app-eventpeepo.png';
+  || null;
+
+function EventCover({
+  src,
+  name,
+  className,
+}: {
+  src: string | null;
+  name: string;
+  className: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <div className={`flex items-center justify-center bg-gradient-to-br from-brand-900 to-brand-700 ${className}`}>
+        <span className="px-3 text-center text-sm font-semibold text-white/95">{name}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      className={className}
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export default function OwnerDashboardPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -150,13 +179,10 @@ export default function OwnerDashboardPage() {
           </div>
 
           <article className="relative overflow-hidden rounded-2xl border border-surface-200">
-            <img
-              src={featuredEvent ? resolveEventCover(featuredEvent) : '/og-app-eventpeepo.png'}
-              alt={featuredEvent ? featuredEvent.name : 'EventPeepo'}
+            <EventCover
+              src={featuredEvent ? resolveEventCover(featuredEvent) : null}
+              name={featuredEvent?.name || 'No cover image'}
               className="h-48 w-full object-cover sm:h-56"
-              onError={(e) => {
-                e.currentTarget.src = '/og-app-eventpeepo.png';
-              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-3 left-3 right-3 text-white">
@@ -193,13 +219,10 @@ export default function OwnerDashboardPage() {
             {events.slice(0, 6).map((event) => (
               <article key={event.id} className="overflow-hidden rounded-2xl border border-surface-200 bg-white">
                 <div className="relative h-32">
-                  <img
+                  <EventCover
                     src={resolveEventCover(event)}
-                    alt={event.name}
+                    name={event.name}
                     className="h-full w-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = '/og-app-eventpeepo.png';
-                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute left-3 top-3">
