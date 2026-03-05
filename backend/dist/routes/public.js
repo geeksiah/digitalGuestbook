@@ -143,6 +143,11 @@ const EVENT_PUBLIC_SELECT = {
     nominationPageTemplateId: true,
     nomineesPageTemplateId: true,
     leaderboardPageTemplateId: true,
+    votingConfig: {
+        select: {
+            isEnabled: true,
+        },
+    },
 };
 // ─── Helper: standard template data ────────────────────────────────────────────
 function buildTemplateData(event, currentPhase, capabilities) {
@@ -193,11 +198,11 @@ function buildTemplateData(event, currentPhase, capabilities) {
             boothPhoto: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth/photo` : null,
             itinerary: event.itineraryEnabled ? `${frontendUrl}/e/${event.slug}/itinerary` : null,
             gifting: event.giftingEnabled ? `${frontendUrl}/gift/${event.slug}` : null,
-            vote: `${frontendUrl}/e/${event.slug}/vote`,
-            voting: `${frontendUrl}/e/${event.slug}/vote`,
-            nominate: `${frontendUrl}/e/${event.slug}/nominate`,
-            nominees: `${frontendUrl}/e/${event.slug}/nominees`,
-            leaderboard: `${frontendUrl}/e/${event.slug}/leaderboard`,
+            vote: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/vote` : null,
+            voting: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/vote` : null,
+            nominate: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/nominate` : null,
+            nominees: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/nominees` : null,
+            leaderboard: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/leaderboard` : null,
         },
         api: {
             baseUrl: apiBaseUrl,

@@ -22,6 +22,8 @@ enum PaymentIntentPurpose {
   TICKET
   GIFT
   VOTE
+  USSD_CREDITS_TOPUP
+  VOTE_PURCHASE
 }
 
 enum PaymentIntentStatus {
@@ -46,8 +48,34 @@ enum VoteMode {
 }
 
 enum VoteType {
+  ELECTION
   FREE
   PAID
+}
+
+enum VoteChannel {
+  WEB
+  USSD
+}
+
+enum FreeVoteScope {
+  EVENT
+  CONTEST
+}
+
+enum UssdProvider {
+  WIGAL_FROG
+}
+
+enum UssdChannelStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UssdCreditLedgerType {
+  TOPUP
+  CONSUME
+  ADJUST
 }
 
 enum VotingNominationStatus {
@@ -120,6 +148,9 @@ model Owner {
   notifications          OwnerNotification[]
   pushDeliveries         PushCampaignDelivery[]
   rsvpStatusAudits       RSVPStatusAudit[]            @relation("RsvpStatusChangedByOwner")
+  ussdChannels           UssdChannel[]
+  ussdChannelBindings    UssdChannelBinding[]
+  ussdCreditWallets      UssdCreditWallet[]
 }
 
 // Owner Wallet Configuration (for payouts across all events)
@@ -456,6 +487,10 @@ model Event {
   voteRecords          VoteRecord[]
   voterSessions        VoterSession[]
   voteGrants           VoteGrant[]
+  freeVoteUsages       FreeVoteUsage[]
+  ussdChannelBindings  UssdChannelBinding[]
+  ussdSessions         UssdSession[]
+  ussdCreditWallets    UssdCreditWallet[]
   payoutRequests       PayoutRequest[]
   reelJobs             ReelJob[]
   boothDownloadTokens  BoothDownloadToken[]
@@ -575,6 +610,7 @@ model PaymentIntent {
   voteRecords           VoteRecord[]
   giftOrder             GiftOrder?
   rsvp                  RSVP?
+  ussdCreditEntries     UssdCreditLedgerEntry[]
 
   @@index([eventId, purpose, status])
   @@index([gatewayReference])
@@ -1492,15 +1528,19 @@ model VotingEventConfig {
   eventId           String   @unique
   mode              VoteMode @default(AWARDS)
   isEnabled         Boolean  @default(true)
+  isPublished       Boolean  @default(false)
   allowFreeVotes    Boolean  @default(true)
   allowPaidVotes    Boolean  @default(false)
   allowPublicNominations Boolean @default(false)
   requireOtpForElection Boolean @default(true)
+  freeVoteScope     FreeVoteScope @default(CONTEST)
   voteUnitPrice     Float    @default(1)
   currency          String   @default("USD")
   maxVotesPerPurchase Int    @default(100)
   freeVoteLabel     String?
   paidVoteLabel     String?
+  startsAt          DateTime?
+  endsAt            DateTime?
   settingsJson      String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -1529,6 +1569,7 @@ model VotingContest {
   voteRecords VoteRecord[]
   voteGrants  VoteGrant[]
   nominations VotingNomination[]
+  freeVoteUsages FreeVoteUsage[]
 
   @@index([eventId, isActive, sortOrder])
 }
@@ -1553,6 +1594,7 @@ model VotingOption {
   contest    VotingContest @relation(fields: [contestId], references: [id], onDelete: Cascade)
   voteRecords VoteRecord[]
   approvedNominations VotingNomination[] @relation("NominationApprovedOption")
+  freeVoteUsages FreeVoteUsage[]
 
   @@index([eventId, contestId, sortOrder])
 }
@@ -1609,6 +1651,7 @@ model VoteRecord {
   paymentIntentId String?
   voterKey       String
   voteType       VoteType
+  channel        VoteChannel @default(WEB)
   voteCount      Int      @default(1)
   createdAt      DateTime @default(now())
 
@@ -1617,9 +1660,136 @@ model VoteRecord {
   option        VotingOption   @relation(fields: [optionId], references: [id], onDelete: Cascade)
   voteGrant     VoteGrant?     @relation(fields: [voteGrantId], references: [id], onDelete: SetNull)
   paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+  freeVoteUsage FreeVoteUsage?
 
   @@index([eventId, contestId, optionId, createdAt])
   @@unique([eventId, contestId, voterKey, voteType])
+}
+
+model FreeVoteUsage {
+  id          String   @id @default(uuid())
+  eventId     String
+  contestId   String?
+  optionId    String?
+  voterKey    String
+  voteRecordId String? @unique
+  createdAt   DateTime @default(now())
+
+  event      Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contest    VotingContest? @relation(fields: [contestId], references: [id], onDelete: SetNull)
+  option     VotingOption?  @relation(fields: [optionId], references: [id], onDelete: SetNull)
+  voteRecord VoteRecord?    @relation(fields: [voteRecordId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, voterKey])
+  @@index([eventId, contestId, createdAt])
+}
+
+model UssdChannel {
+  id               String            @id @default(uuid())
+  provider         UssdProvider      @default(WIGAL_FROG)
+  codeLabel        String
+  shortcode        String?
+  status           UssdChannelStatus @default(ACTIVE)
+  ownerId          String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  owner    Owner?               @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  bindings UssdChannelBinding[]
+  sessions UssdSession[]
+
+  @@unique([provider, codeLabel])
+  @@index([shortcode, status])
+}
+
+model UssdChannelBinding {
+  id            String   @id @default(uuid())
+  ussdChannelId String
+  ownerId       String?
+  eventId       String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ussdChannel UssdChannel @relation(fields: [ussdChannelId], references: [id], onDelete: Cascade)
+  owner       Owner?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([ussdChannelId, eventId])
+  @@index([ownerId, isActive])
+  @@index([eventId, isActive])
+}
+
+model UssdSession {
+  id                String   @id @default(uuid())
+  providerSessionId String   @unique
+  lastTrafficId     String?
+  msisdnNormalized  String
+  ussdChannelId     String
+  eventId           String
+  state             String   @default("WELCOME")
+  contextJson       String?
+  responseJson      String?
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  ussdChannel UssdChannel     @relation(fields: [ussdChannelId], references: [id], onDelete: Cascade)
+  event       Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  trafficLogs UssdTrafficLog[]
+
+  @@index([eventId, msisdnNormalized])
+  @@index([ussdChannelId, expiresAt])
+}
+
+model UssdTrafficLog {
+  id            String   @id @default(uuid())
+  ussdSessionId String
+  trafficId     String
+  requestJson   String
+  responseJson  String
+  createdAt     DateTime @default(now())
+
+  ussdSession UssdSession @relation(fields: [ussdSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([ussdSessionId, trafficId])
+  @@index([trafficId, createdAt])
+}
+
+model UssdCreditWallet {
+  id           String   @id @default(uuid())
+  ownerId      String?
+  eventId      String?
+  balanceUnits Int      @default(0)
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner         Owner?                 @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  event         Event?                 @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  ledgerEntries UssdCreditLedgerEntry[]
+
+  @@unique([ownerId, eventId])
+  @@index([ownerId])
+  @@index([eventId])
+}
+
+model UssdCreditLedgerEntry {
+  id              String               @id @default(uuid())
+  walletId         String
+  type             UssdCreditLedgerType
+  amountUnits      Int
+  reference        String
+  paymentIntentId  String?
+  metadataJson     String?
+  createdAt        DateTime            @default(now())
+
+  wallet        UssdCreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent?   @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, type, reference])
+  @@index([paymentIntentId, type])
+  @@index([createdAt])
 }
 
 model VotingNomination {

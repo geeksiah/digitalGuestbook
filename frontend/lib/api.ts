@@ -643,37 +643,37 @@ export const ownerDashboardApi = {
       headers: ownerHeaders(),
     }),
   getVotingContests: (eventId: string) =>
-    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests`, {
+    axios.get(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/contests`, {
       headers: ownerHeaders(),
     }),
   getVotingConfig: (eventId: string) =>
-    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/config`, {
+    axios.get(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/config`, {
       headers: ownerHeaders(),
     }),
   updateVotingConfig: (eventId: string, data: any) =>
-    axios.put(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/config`, data, {
+    axios.put(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/config`, data, {
       headers: ownerHeaders(),
     }),
   createVotingContest: (eventId: string, data: any) =>
-    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests`, data, {
+    axios.post(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/contests`, data, {
       headers: ownerHeaders(),
     }),
   updateVotingContest: (eventId: string, contestId: string, data: any) =>
-    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}`, data, {
+    axios.patch(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/contests/${contestId}`, data, {
       headers: ownerHeaders(),
     }),
   deleteVotingContest: (eventId: string, contestId: string) =>
-    axios.delete(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}`, {
+    axios.delete(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/contests/${contestId}`, {
       headers: ownerHeaders(),
     }),
   getVotingOptions: (eventId: string, contestId: string) =>
-    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, {
+    axios.get(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/contests/${contestId}/options`, {
       headers: ownerHeaders(),
     }),
   uploadVotingOptionImage: (eventId: string, file: File) => {
     const formData = new FormData();
     formData.append('image', file);
-    return axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/options/upload-image`, formData, {
+    return axios.post(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/options/upload-image`, formData, {
       headers: {
         ...ownerHeaders(),
         'Content-Type': 'multipart/form-data',
@@ -681,15 +681,15 @@ export const ownerDashboardApi = {
     });
   },
   createVotingOption: (eventId: string, contestId: string, data: any) =>
-    axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, data, {
+    axios.post(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/contests/${contestId}/options`, data, {
       headers: ownerHeaders(),
     }),
   updateVotingOption: (eventId: string, optionId: string, data: any) =>
-    axios.patch(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/options/${optionId}`, data, {
+    axios.patch(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/options/${optionId}`, data, {
       headers: ownerHeaders(),
     }),
   deleteVotingOption: (eventId: string, optionId: string) =>
-    axios.delete(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/options/${optionId}`, {
+    axios.delete(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/options/${optionId}`, {
       headers: ownerHeaders(),
     }),
   getVotingAnalytics: (eventId: string) =>
@@ -697,7 +697,7 @@ export const ownerDashboardApi = {
       headers: ownerHeaders(),
     }),
   getVotingNominations: (eventId: string, params?: { status?: string; contestId?: string; limit?: number }) =>
-    axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/nominations`, {
+    axios.get(`${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/nominations`, {
       params,
       headers: ownerHeaders(),
     }),
@@ -707,7 +707,7 @@ export const ownerDashboardApi = {
     data: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; createNomineeOnApprove?: boolean }
   ) =>
     axios.patch(
-      `${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/nominations/${nominationId}/review`,
+      `${API_BASE_URL}/api/v2/owner-voting/events/${eventId}/nominations/${nominationId}/review`,
       data,
       { headers: ownerHeaders() }
     ),
@@ -813,6 +813,7 @@ export const votingApi = {
     slug: string,
     data: {
       contestId: string;
+      categoryId?: string;
       nomineeName: string;
       nomineeDescription?: string;
       nomineeImagePath?: string;
@@ -828,42 +829,42 @@ export const votingApi = {
 
 export const adminVotingApi = {
   getVotingContests: (eventId: string) =>
-    api.get(`/admin-voting/events/${eventId}/voting/contests`),
+    api.get(`/v2/admin-voting/events/${eventId}/contests`),
   getVotingConfig: (eventId: string) =>
-    api.get(`/admin-voting/events/${eventId}/voting/config`),
+    api.get(`/v2/admin-voting/events/${eventId}/config`),
   updateVotingConfig: (eventId: string, data: any) =>
-    api.put(`/admin-voting/events/${eventId}/voting/config`, data),
+    api.put(`/v2/admin-voting/events/${eventId}/config`, data),
   createVotingContest: (eventId: string, data: any) =>
-    api.post(`/admin-voting/events/${eventId}/voting/contests`, data),
+    api.post(`/v2/admin-voting/events/${eventId}/contests`, data),
   updateVotingContest: (eventId: string, contestId: string, data: any) =>
-    api.patch(`/admin-voting/events/${eventId}/voting/contests/${contestId}`, data),
+    api.patch(`/v2/admin-voting/events/${eventId}/contests/${contestId}`, data),
   deleteVotingContest: (eventId: string, contestId: string) =>
-    api.delete(`/admin-voting/events/${eventId}/voting/contests/${contestId}`),
+    api.delete(`/v2/admin-voting/events/${eventId}/contests/${contestId}`),
   getVotingOptions: (eventId: string, contestId: string) =>
-    api.get(`/admin-voting/events/${eventId}/voting/contests/${contestId}/options`),
+    api.get(`/v2/admin-voting/events/${eventId}/contests/${contestId}/options`),
   uploadVotingOptionImage: (eventId: string, file: File) => {
     const formData = new FormData();
     formData.append('image', file);
-    return api.post(`/admin-voting/events/${eventId}/voting/options/upload-image`, formData, {
+    return api.post(`/v2/admin-voting/events/${eventId}/options/upload-image`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   createVotingOption: (eventId: string, contestId: string, data: any) =>
-    api.post(`/admin-voting/events/${eventId}/voting/contests/${contestId}/options`, data),
+    api.post(`/v2/admin-voting/events/${eventId}/contests/${contestId}/options`, data),
   updateVotingOption: (eventId: string, optionId: string, data: any) =>
-    api.patch(`/admin-voting/events/${eventId}/voting/options/${optionId}`, data),
+    api.patch(`/v2/admin-voting/events/${eventId}/options/${optionId}`, data),
   deleteVotingOption: (eventId: string, optionId: string) =>
-    api.delete(`/admin-voting/events/${eventId}/voting/options/${optionId}`),
+    api.delete(`/v2/admin-voting/events/${eventId}/options/${optionId}`),
   getVotingAnalytics: (eventId: string) =>
     api.get(`/admin-voting/events/${eventId}/voting/analytics`),
   getVotingNominations: (eventId: string, params?: { status?: string; contestId?: string; limit?: number }) =>
-    api.get(`/admin-voting/events/${eventId}/voting/nominations`, { params }),
+    api.get(`/v2/admin-voting/events/${eventId}/nominations`, { params }),
   reviewVotingNomination: (
     eventId: string,
     nominationId: string,
     data: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; createNomineeOnApprove?: boolean }
   ) =>
-    api.patch(`/admin-voting/events/${eventId}/voting/nominations/${nominationId}/review`, data),
+    api.patch(`/v2/admin-voting/events/${eventId}/nominations/${nominationId}/review`, data),
 };
 
 

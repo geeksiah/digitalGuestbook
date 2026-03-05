@@ -270,6 +270,7 @@ const ensureVotingContext = async (slug: string) => {
           mode: true,
           allowPublicNominations: true,
           nominationFormFieldsJson: true,
+          metadataJson: true,
         },
       },
     },
@@ -362,6 +363,18 @@ router.get('/public/:slug/nomination-form', asyncHandler(async (req, res) => {
       title: contest.title,
       mode: contest.mode,
       nominationFormFields: parseNominationFields(contest.nominationFormFieldsJson),
+      categories: (() => {
+        const metadata = parseJson<Record<string, unknown>>(contest.metadataJson, {});
+        const list = Array.isArray(metadata.categories) ? metadata.categories : [];
+        return list
+          .filter((entry: any) => entry?.isActive !== false)
+          .map((entry: any) => ({
+            id: String(entry.id || ''),
+            label: String(entry.label || ''),
+            description: entry.description ? String(entry.description) : null,
+          }))
+          .filter((entry: any) => entry.id && entry.label);
+      })(),
     }));
 
   res.json({
@@ -413,6 +426,7 @@ router.post(
 
 const submitNominationSchema = z.object({
   contestId: z.string().uuid(),
+  categoryId: z.string().optional().nullable(),
   nomineeName: z.string().min(2).max(160),
   nomineeDescription: z.string().max(2000).optional().nullable(),
   nomineeImagePath: z.string().max(1024).optional().nullable(),
@@ -445,6 +459,7 @@ router.post('/public/:slug/nominations', asyncHandler(async (req, res) => {
       title: true,
       allowPublicNominations: true,
       nominationFormFieldsJson: true,
+      metadataJson: true,
     },
   });
   if (!contest) throw new AppError('Voting contest not found', 404);
@@ -462,6 +477,20 @@ router.post('/public/:slug/nominations', asyncHandler(async (req, res) => {
   const definitionList = parseNominationFields(contest.nominationFormFieldsJson);
   const customFields = input.customFields || {};
   const normalizedFields: Record<string, unknown> = {};
+
+  const contestMetadata = parseJson<Record<string, unknown>>((contest as any).metadataJson, {});
+  const categories = Array.isArray(contestMetadata.categories) ? contestMetadata.categories : [];
+  if (categories.length > 0) {
+    const categoryId = String(input.categoryId || '').trim();
+    if (!categoryId) {
+      throw new AppError('Please select a nomination category', 400);
+    }
+    const match = categories.find((entry: any) => String(entry.id) === categoryId && entry.isActive !== false);
+    if (!match) {
+      throw new AppError('Selected nomination category is invalid', 400);
+    }
+    normalizedFields.categoryId = categoryId;
+  }
 
   for (const definition of definitionList) {
     const key = definition.id;

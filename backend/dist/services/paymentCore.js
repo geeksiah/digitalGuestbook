@@ -300,6 +300,9 @@ const callFulfillmentHandler = async (intent, tx) => {
         await (0, paymentFulfillment_js_1.fulfillVotePurchase)(intent, tx);
         return;
     }
+    if (intent.purpose === 'USSD_CREDITS_TOPUP' || intent.purpose === 'VOTE_PURCHASE') {
+        return;
+    }
     throw new errorHandler_js_1.AppError(`Unsupported payment intent purpose: ${intent.purpose}`, 400);
 };
 exports.callFulfillmentHandler = callFulfillmentHandler;

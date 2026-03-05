@@ -291,6 +291,9 @@ const paystack_webhooks_js_1 = __importDefault(require("./routes/paystack-webhoo
 const webhooks_js_1 = __importDefault(require("./routes/webhooks.js"));
 const voting_js_1 = __importDefault(require("./routes/voting.js"));
 const voting_owner_js_1 = __importDefault(require("./routes/voting-owner.js"));
+const v2_voting_js_1 = __importDefault(require("./routes/v2-voting.js"));
+const v2_admin_voting_js_1 = __importDefault(require("./routes/v2-admin-voting.js"));
+const channels_ussd_v2_js_1 = __importDefault(require("./routes/channels-ussd-v2.js"));
 // Middleware
 const errorHandler_js_1 = require("./middleware/errorHandler.js");
 const requestLogger_js_1 = require("./middleware/requestLogger.js");
@@ -556,9 +559,13 @@ app.use('/api/owner-auth', owner_auth_js_1.default);
 app.use('/api/admin-voting', voting_owner_js_1.default);
 app.use('/api/owner-dashboard', voting_owner_js_1.default);
 app.use('/api/owner-dashboard', owner_dashboard_js_1.default);
+app.use('/api/v2/admin-voting', v2_admin_voting_js_1.default);
+app.use('/api/v2/owner-voting', v2_admin_voting_js_1.default);
 app.use('/api/itinerary', itinerary_js_1.default);
 app.use('/api/gifting', gifting_js_1.default);
 app.use('/api/voting', voting_js_1.default);
+app.use('/api/v2/voting', v2_voting_js_1.default);
+app.use('/api/channels/ussd', channels_ussd_v2_js_1.default);
 app.use('/api/whatsapp', whatsapp_webhooks_js_1.default);
 // 404 Handler
 app.use((req, res) => {

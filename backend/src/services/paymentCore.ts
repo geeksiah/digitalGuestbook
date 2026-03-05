@@ -23,7 +23,7 @@ type EventFeeLike = {
 
 type CreatePaymentIntentInput = {
   eventId: string;
-  purpose: 'TICKET' | 'GIFT' | 'VOTE';
+  purpose: 'TICKET' | 'GIFT' | 'VOTE' | 'USSD_CREDITS_TOPUP' | 'VOTE_PURCHASE';
   amount: number;
   currency?: string;
   paymentGatewayId: string;
@@ -359,6 +359,9 @@ export const callFulfillmentHandler = async (intent: PaymentIntent, tx: Transact
   }
   if (intent.purpose === 'VOTE') {
     await fulfillVotePurchase(intent, tx);
+    return;
+  }
+  if (intent.purpose === 'USSD_CREDITS_TOPUP' || intent.purpose === 'VOTE_PURCHASE') {
     return;
   }
   throw new AppError(`Unsupported payment intent purpose: ${intent.purpose}`, 400);

@@ -21,6 +21,11 @@ type NominationContest = {
   title: string;
   mode: 'AWARDS' | 'ELECTION';
   nominationFormFields: NominationField[];
+  categories?: Array<{
+    id: string;
+    label: string;
+    description?: string | null;
+  }>;
 };
 
 type NominationFormPayload = {
@@ -57,6 +62,7 @@ export default function NominatePage() {
   const [submitterEmail, setSubmitterEmail] = useState('');
   const [submitterPhone, setSubmitterPhone] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
+  const [categoryId, setCategoryId] = useState('');
   const [sessionToken, setSessionToken] = useState('');
   const [nomineeImagePath, setNomineeImagePath] = useState('');
   const [nomineeImagePreview, setNomineeImagePreview] = useState('');
@@ -98,6 +104,8 @@ export default function NominatePage() {
 
   useEffect(() => {
     if (!selectedContest) return;
+    const firstCategory = selectedContest.categories?.[0]?.id || '';
+    setCategoryId((current) => current || firstCategory);
     setCustomFields((current) => {
       const next: Record<string, string> = {};
       selectedContest.nominationFormFields.forEach((field) => {
@@ -116,11 +124,16 @@ export default function NominatePage() {
       toast.error('Nominee and your name are required');
       return;
     }
+    if (selectedContest?.categories?.length && !categoryId) {
+      toast.error('Select an award category');
+      return;
+    }
 
     setSubmitting(true);
     try {
       const response = await votingApi.submitNomination(slug, {
         contestId,
+        categoryId: categoryId || undefined,
         nomineeName: nomineeName.trim(),
         nomineeDescription: nomineeDescription.trim() || undefined,
         nomineeImagePath: nomineeImagePath || undefined,
@@ -144,6 +157,7 @@ export default function NominatePage() {
       setSubmitterEmail('');
       setSubmitterPhone('');
       setCustomFields({});
+      setCategoryId('');
       setNomineeImagePath('');
       setNomineeImagePreview('');
       toast.success('Nomination submitted for review');
@@ -244,11 +258,27 @@ export default function NominatePage() {
                 ))}
               </select>
             </label>
-            <label className="space-y-1 block">
-              <span className="text-xs text-surface-600">Nominee Name *</span>
-              <input className="input" value={nomineeName} onChange={(event) => setNomineeName(event.target.value)} />
-            </label>
+          <label className="space-y-1 block">
+            <span className="text-xs text-surface-600">Nominee Name *</span>
+            <input className="input" value={nomineeName} onChange={(event) => setNomineeName(event.target.value)} />
+          </label>
           </div>
+
+          {selectedContest?.categories?.length ? (
+            <label className="space-y-1 block">
+              <span className="text-xs text-surface-600">Award Category *</span>
+              <select className="input" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+                <option value="" disabled>
+                  Select award category
+                </option>
+                {selectedContest.categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           <label className="space-y-1 block">
             <span className="text-xs text-surface-600">Nominee Description</span>

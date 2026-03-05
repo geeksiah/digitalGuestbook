@@ -43,7 +43,7 @@ export type AdapterGatewayConfig = {
 export type AdapterIntent = {
     id: string;
     eventId: string;
-    purpose: 'TICKET' | 'GIFT' | 'VOTE';
+    purpose: 'TICKET' | 'GIFT' | 'VOTE' | 'USSD_CREDITS_TOPUP' | 'VOTE_PURCHASE';
     amount: number;
     currency: string;
     metadata: Record<string, unknown>;

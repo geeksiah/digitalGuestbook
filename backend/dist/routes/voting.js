@@ -219,6 +219,7 @@ const ensureVotingContext = async (slug) => {
                     mode: true,
                     allowPublicNominations: true,
                     nominationFormFieldsJson: true,
+                    metadataJson: true,
                 },
             },
         },
@@ -302,6 +303,18 @@ router.get('/public/:slug/nomination-form', (0, errorHandler_js_1.asyncHandler)(
         title: contest.title,
         mode: contest.mode,
         nominationFormFields: parseNominationFields(contest.nominationFormFieldsJson),
+        categories: (() => {
+            const metadata = parseJson(contest.metadataJson, {});
+            const list = Array.isArray(metadata.categories) ? metadata.categories : [];
+            return list
+                .filter((entry) => entry?.isActive !== false)
+                .map((entry) => ({
+                id: String(entry.id || ''),
+                label: String(entry.label || ''),
+                description: entry.description ? String(entry.description) : null,
+            }))
+                .filter((entry) => entry.id && entry.label);
+        })(),
     }));
     res.json({
         event: {
@@ -344,6 +357,7 @@ router.post('/public/:slug/nominations/photo', nominationPhotoUpload.single('pho
 }));
 const submitNominationSchema = zod_1.z.object({
     contestId: zod_1.z.string().uuid(),
+    categoryId: zod_1.z.string().optional().nullable(),
     nomineeName: zod_1.z.string().min(2).max(160),
     nomineeDescription: zod_1.z.string().max(2000).optional().nullable(),
     nomineeImagePath: zod_1.z.string().max(1024).optional().nullable(),
@@ -373,6 +387,7 @@ router.post('/public/:slug/nominations', (0, errorHandler_js_1.asyncHandler)(asy
             title: true,
             allowPublicNominations: true,
             nominationFormFieldsJson: true,
+            metadataJson: true,
         },
     });
     if (!contest)
@@ -384,6 +399,19 @@ router.post('/public/:slug/nominations', (0, errorHandler_js_1.asyncHandler)(asy
     const definitionList = parseNominationFields(contest.nominationFormFieldsJson);
     const customFields = input.customFields || {};
     const normalizedFields = {};
+    const contestMetadata = parseJson(contest.metadataJson, {});
+    const categories = Array.isArray(contestMetadata.categories) ? contestMetadata.categories : [];
+    if (categories.length > 0) {
+        const categoryId = String(input.categoryId || '').trim();
+        if (!categoryId) {
+            throw new errorHandler_js_1.AppError('Please select a nomination category', 400);
+        }
+        const match = categories.find((entry) => String(entry.id) === categoryId && entry.isActive !== false);
+        if (!match) {
+            throw new errorHandler_js_1.AppError('Selected nomination category is invalid', 400);
+        }
+        normalizedFields.categoryId = categoryId;
+    }
     for (const definition of definitionList) {
         const key = definition.id;
         const rawValue = customFields[key];

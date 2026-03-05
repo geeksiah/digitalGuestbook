@@ -2,7 +2,7 @@ import type { PaymentIntent, Transaction } from '@prisma/client';
 import type { PaymentNextAction } from './paymentAdapters/types.js';
 type CreatePaymentIntentInput = {
     eventId: string;
-    purpose: 'TICKET' | 'GIFT' | 'VOTE';
+    purpose: 'TICKET' | 'GIFT' | 'VOTE' | 'USSD_CREDITS_TOPUP' | 'VOTE_PURCHASE';
     amount: number;
     currency?: string;
     paymentGatewayId: string;

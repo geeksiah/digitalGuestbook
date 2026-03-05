@@ -308,6 +308,9 @@ import paystackWebhookRoutes from './routes/paystack-webhooks.js';
 import webhooksRoutes from './routes/webhooks.js';
 import votingRoutes from './routes/voting.js';
 import votingOwnerRoutes from './routes/voting-owner.js';
+import votingV2Routes from './routes/v2-voting.js';
+import votingAdminV2Routes from './routes/v2-admin-voting.js';
+import ussdV2Routes from './routes/channels-ussd-v2.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -599,9 +602,13 @@ app.use('/api/owner-auth', ownerAuthRoutes);
 app.use('/api/admin-voting', votingOwnerRoutes);
 app.use('/api/owner-dashboard', votingOwnerRoutes);
 app.use('/api/owner-dashboard', ownerDashboardRoutes);
+app.use('/api/v2/admin-voting', votingAdminV2Routes);
+app.use('/api/v2/owner-voting', votingAdminV2Routes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/gifting', giftingRoutes);
 app.use('/api/voting', votingRoutes);
+app.use('/api/v2/voting', votingV2Routes);
+app.use('/api/channels/ussd', ussdV2Routes);
 app.use('/api/whatsapp', whatsappWebhookRoutes);
 
 // 404 Handler
