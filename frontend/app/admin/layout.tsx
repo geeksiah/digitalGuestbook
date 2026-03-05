@@ -256,7 +256,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <div className="flex-1 min-w-0 ml-2 lg:ml-0">
               <div className="hidden md:flex items-center gap-2 text-sm">
-                <span className="text-surface-500 font-medium">Admin Console</span>
+                <span className="text-surface-500 font-medium">Admin Workspace</span>
                 <span className="text-surface-300">/</span>
                 <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
               </div>

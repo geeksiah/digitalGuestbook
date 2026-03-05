@@ -299,7 +299,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 
               <div className="min-w-0 flex items-center gap-2 flex-1">
                 <span className="hidden xl:inline-block flex-shrink-0 text-[10px] font-semibold uppercase tracking-widest text-surface-400">
-                  Event
+                  Current Event
                 </span>
                 <select
                   value={selectedEventId || '__all__'}

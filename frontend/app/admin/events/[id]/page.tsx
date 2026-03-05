@@ -1196,6 +1196,7 @@ export default function EventDetailPage() {
             <span className="ml-1">Back to Events</span>
           </Link>
           <h1 className="text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
+          <p className="text-sm text-surface-600 mt-1">Manage content, guest flow, and operations from one workspace.</p>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className={getStatusColor(event.currentPhase)}>{getPhaseLabel(event.currentPhase)}</span>
             {event.phaseOverride && <span className="text-xs text-surface-500">(Override)</span>}
@@ -1220,7 +1221,7 @@ export default function EventDetailPage() {
               key={tab.id} 
               onClick={() => setActiveTab(tab.id)} 
               className={cn(
-                'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border',
+                'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border whitespace-nowrap',
                 activeTab === tab.id 
                   ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-primary-100' 
                   : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
@@ -1238,10 +1239,10 @@ export default function EventDetailPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
             {[
-              { l: 'Total RSVPs', v: event._count.rsvps, icon: Icons.check },
-              { l: 'Invitations', v: event._count.invitations, icon: Icons.copy },
-              { l: 'Checked In', v: event._count.checkIns, icon: Icons.check },
-              { l: 'Media', v: event._count.mediaAssets, icon: Icons.video },
+              { l: 'Guest Responses', v: event._count.rsvps, icon: Icons.check },
+              { l: 'Invites Sent', v: event._count.invitations, icon: Icons.copy },
+              { l: 'Arrivals', v: event._count.checkIns, icon: Icons.check },
+              { l: 'Guest Media', v: event._count.mediaAssets, icon: Icons.video },
             ].map(s => (
               <div key={s.l} className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 transition-colors">
                 <div className="flex items-center justify-between">
@@ -1258,7 +1259,7 @@ export default function EventDetailPage() {
           </div>
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-surface-200 p-5">
-              <h3 className="font-semibold text-brand-900 mb-4">Phase Control</h3>
+              <h3 className="font-semibold text-brand-900 mb-4">Event Stage</h3>
               <div className="space-y-2">
                 {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map(p => (
                   <button 
@@ -1280,7 +1281,7 @@ export default function EventDetailPage() {
             <div className="card-premium p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold text-brand-900">Voting Console</h3>
+                  <h3 className="font-semibold text-brand-900">Voting Hub</h3>
                   <p className="text-sm text-surface-600 mt-1">
                     Manage categories, nominees, nominations, and live rankings.
                   </p>
@@ -1289,7 +1290,7 @@ export default function EventDetailPage() {
               </div>
               <div className="mt-4">
                 <Link href={`/admin/events/${event.id}/voting`} className="btn-accent w-full justify-center">
-                  Open Admin Voting Console
+                  Open Voting Dashboard
                 </Link>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1328,7 +1329,7 @@ export default function EventDetailPage() {
               </div>
             </div>
             <div className="bg-white rounded-xl border border-surface-200 p-5">
-              <h3 className="font-semibold text-brand-900 mb-4">Quick Links</h3>
+              <h3 className="font-semibold text-brand-900 mb-4">Public Pages</h3>
               <div className="space-y-1 text-sm">
                 {[
                   { l: 'Event Home', p: `/e/${event.slug}`, enabled: true },
@@ -2164,7 +2165,7 @@ export default function EventDetailPage() {
                           {(item.startsAt || item.location) && (
                             <p className="text-xs text-surface-500 mt-1">
                               {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : ''}
-                              {item.startsAt && item.location ? ' • ' : ''}
+                              {item.startsAt && item.location ? ' - ' : ''}
                               {item.location ? item.location : ''}
                             </p>
                           )}
@@ -2892,16 +2893,16 @@ export default function EventDetailPage() {
       {activeTab === 'voting' && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <h3 className="text-lg font-semibold text-brand-900">Voting</h3>
+            <h3 className="text-lg font-semibold text-brand-900">Voting Workspace</h3>
             <p className="text-sm text-surface-600 mt-1">
-              Configure voting mode, contests, nominees, public nomination review, and analytics from the admin voting console.
+              Run your full voting program from one place, from setup to results.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 href={`/admin/events/${event.id}/voting`}
                 className="btn-primary"
               >
-                Open Admin Voting Console
+                Open Voting Dashboard
               </Link>
               {event.ownerId ? (
                 <Link
@@ -2925,9 +2926,9 @@ export default function EventDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <h4 className="text-base font-semibold text-brand-900">Embed Setup</h4>
+            <h4 className="text-base font-semibold text-brand-900">Share Voting Links</h4>
             <p className="text-sm text-surface-600 mt-1">
-              Hosted route: `/e/{event.slug}/vote`. Embed script: `/embed/vote.js` with short-lived token issuance.
+              Share direct links for voting, nominations, and live leaderboard.
             </p>
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
@@ -2974,16 +2975,16 @@ export default function EventDetailPage() {
       {activeTab === 'settings' && (
         <div className="bg-white rounded-xl border border-surface-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-brand-900">Event Settings</h3>
+            <h3 className="text-lg font-semibold text-brand-900">Event Setup</h3>
             {!editingSettings ? (
               <button onClick={() => setEditingSettings(true)} className="btn-outline">
                 {Icons.edit}
-                <span className="ml-2">Edit</span>
+                <span className="ml-2">Edit Setup</span>
               </button>
             ) : (
               <div className="flex gap-2">
                 <button onClick={() => setEditingSettings(false)} className="btn-ghost">Cancel</button>
-                <button onClick={handleSaveSettings} disabled={savingSettings} className="btn-primary">{savingSettings ? 'Saving...' : 'Save'}</button>
+                <button onClick={handleSaveSettings} disabled={savingSettings} className="btn-primary">{savingSettings ? 'Saving...' : 'Save Changes'}</button>
               </div>
             )}
           </div>
@@ -3601,7 +3602,7 @@ export default function EventDetailPage() {
                 {[
                   { l: 'Slug', v: `/${event.slug}` },
                   { l: 'Date', v: formatDate(event.date, 'PPP') },
-                  { l: 'Venue', v: event.venue || '—' },
+                  { l: 'Venue', v: event.venue || '-' },
                   { l: 'Timezone', v: event.timezone },
                   { l: 'Default Currency', v: event.defaultCurrency || 'USD' },
                 ].map((r, i) => (
@@ -3619,7 +3620,7 @@ export default function EventDetailPage() {
                   { l: 'Gifting', v: event.giftingEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Voting', v: votingEnabled ? 'Enabled' : 'Disabled' },
                   { l: 'Reel Generation', v: event.reelEnabled ? 'Enabled' : 'Disabled' },
-                  { l: 'Recording Limits', v: `${event.minRecordingDuration}s – ${event.maxRecordingDuration}s` },
+                  { l: 'Recording Limits', v: `${event.minRecordingDuration}s - ${event.maxRecordingDuration}s` },
                   { l: 'Max Photos/Guest', v: event.maxPhotosPerGuest },
                   { l: 'Custom Domains', v: domains.length || 0 },
                 ].map((r, i) => (
@@ -3637,3 +3638,4 @@ export default function EventDetailPage() {
     </div>
   );
 }
+

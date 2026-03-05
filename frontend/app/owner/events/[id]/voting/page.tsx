@@ -614,9 +614,9 @@ export default function AdminVotingPage() {
           <Link href={`/owner/events/${eventId}`} className="text-sm text-surface-600 hover:text-brand-900">
             Back to event
           </Link>
-          <h1 className="text-2xl font-bold text-brand-900 mt-1">Voting Dashboard</h1>
+          <h1 className="text-2xl font-bold text-brand-900 mt-1">Voting Workspace</h1>
           <p className="text-sm text-surface-600">
-            {event?.name || 'Event'} {event?.slug ? `• /e/${event.slug}/vote` : ''}
+            {event?.name || 'Event'} {event?.slug ? `- /e/${event.slug}/vote` : ''}
           </p>
         </div>
         {event?.slug ? (
@@ -638,7 +638,8 @@ export default function AdminVotingPage() {
       </div>
 
       <section className="dashboard-canvas p-4 space-y-4">
-        <h2 className="text-lg font-semibold text-brand-900">Voting Configuration</h2>
+        <h2 className="text-lg font-semibold text-brand-900">Voting Setup</h2>
+        <p className="text-sm text-surface-600">Control how guests can vote and nominate.</p>
         {config ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -651,8 +652,8 @@ export default function AdminVotingPage() {
                     setConfig((current) => (current ? { ...current, mode: event.target.value as VoteMode } : current))
                   }
                 >
-                  <option value="AWARDS">AWARDS</option>
-                  <option value="ELECTION">ELECTION</option>
+                  <option value="AWARDS">Awards</option>
+                  <option value="ELECTION">Election</option>
                 </select>
               </label>
               <label className="space-y-1">
@@ -697,7 +698,7 @@ export default function AdminVotingPage() {
                 className={`btn-outline ${config.isEnabled ? 'border-emerald-300 text-emerald-700' : ''}`}
                 onClick={() => setConfig((current) => (current ? { ...current, isEnabled: !current.isEnabled } : current))}
               >
-                Voting page {config.isEnabled ? 'enabled' : 'disabled'}
+                Voting page {config.isEnabled ? 'live' : 'hidden'}
               </button>
               <button
                 type="button"
@@ -706,7 +707,7 @@ export default function AdminVotingPage() {
                   setConfig((current) => (current ? { ...current, allowFreeVotes: !current.allowFreeVotes } : current))
                 }
               >
-                Free voting {config.allowFreeVotes ? 'enabled' : 'disabled'}
+                Free votes {config.allowFreeVotes ? 'on' : 'off'}
               </button>
               <button
                 type="button"
@@ -715,7 +716,7 @@ export default function AdminVotingPage() {
                   setConfig((current) => (current ? { ...current, allowPaidVotes: !current.allowPaidVotes } : current))
                 }
               >
-                Paid voting {config.allowPaidVotes ? 'enabled' : 'disabled'}
+                Paid votes {config.allowPaidVotes ? 'on' : 'off'}
               </button>
               <button
                 type="button"
@@ -726,7 +727,7 @@ export default function AdminVotingPage() {
                   )
                 }
               >
-                OTP {config.requireOtpForElection ? 'required' : 'optional'}
+                OTP checks {config.requireOtpForElection ? 'on' : 'off'}
               </button>
               <button
                 type="button"
@@ -737,15 +738,15 @@ export default function AdminVotingPage() {
                   )
                 }
               >
-                Public nominations {config.allowPublicNominations ? 'enabled' : 'disabled'}
+                Public nominations {config.allowPublicNominations ? 'open' : 'closed'}
               </button>
               <button className="btn-primary" onClick={saveConfig} disabled={savingConfig}>
-                {savingConfig ? 'Saving...' : 'Save Settings'}
+                {savingConfig ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </>
         ) : (
-          <p className="text-sm text-surface-500">No voting configuration found.</p>
+          <p className="text-sm text-surface-500">Voting setup is not available for this event yet.</p>
         )}
       </section>
 
@@ -760,8 +761,8 @@ export default function AdminVotingPage() {
               onChange={(event) => setNewContestTitle(event.target.value)}
             />
             <select className="input" value={newContestMode} onChange={(event) => setNewContestMode(event.target.value as VoteMode)}>
-              <option value="AWARDS">AWARDS</option>
-              <option value="ELECTION">ELECTION</option>
+              <option value="AWARDS">Awards</option>
+              <option value="ELECTION">Election</option>
             </select>
             <button className="btn-primary" onClick={createContest} disabled={savingContest}>
               Add
@@ -769,7 +770,7 @@ export default function AdminVotingPage() {
           </div>
           <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
             {contests.length === 0 ? (
-              <p className="text-sm text-surface-500">No contests yet.</p>
+              <p className="text-sm text-surface-500">No categories yet. Add your first one to get started.</p>
             ) : (
               contests.map((contest) => (
                 <div
@@ -784,7 +785,7 @@ export default function AdminVotingPage() {
                     >
                       <p className="text-sm font-semibold text-brand-900">{contest.title}</p>
                       <p className="text-xs text-surface-600 mt-0.5">
-                        {contest.mode} • {contest.options?.length || 0} nominees • {contest.isActive ? 'Active' : 'Inactive'}
+                        {contest.mode} - {contest.options?.length || 0} nominees - {contest.isActive ? 'Active' : 'Inactive'}
                       </p>
                     </button>
                     <div className="flex gap-1">
@@ -889,11 +890,11 @@ export default function AdminVotingPage() {
                   })
                 }
               >
-                {selectedContest?.allowPublicNominations ? 'Disable Public Nominations' : 'Enable Public Nominations'}
+                {selectedContest?.allowPublicNominations ? 'Close Public Nominations' : 'Open Public Nominations'}
               </button>
             </div>
             <p className="text-xs text-surface-600">
-              Category-level toggle for public nominee submissions. Global toggle is in Voting Configuration.
+              Category-level setting for public nominee submissions. Global control is in Voting Setup.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1064,7 +1065,7 @@ export default function AdminVotingPage() {
           </div>
           <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
             {options.length === 0 ? (
-              <p className="text-sm text-surface-500">No nominees in this contest.</p>
+              <p className="text-sm text-surface-500">No nominees in this category yet.</p>
             ) : (
               options.map((option) => (
                 <div key={option.id} className="rounded-lg border border-surface-200 p-3">
@@ -1082,7 +1083,7 @@ export default function AdminVotingPage() {
                       <div className="min-w-0">
   <p className="text-sm font-semibold text-brand-900">{option.name}</p>
   <p className="text-xs text-surface-600 mt-0.5">{option.description || 'Nominee profile'}</p>
-  <p className="text-xs text-surface-500 mt-0.5">Total {option.totalVotes} / Free {option.freeVotes} / Paid {option.paidVotes}</p>
+  <p className="text-xs text-surface-500 mt-0.5">Votes {option.totalVotes} (free {option.freeVotes}, paid {option.paidVotes})</p>
 </div>
                     </div>
                     <div className="flex gap-1">
@@ -1127,7 +1128,7 @@ export default function AdminVotingPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-brand-900">{nomination.nomineeName}</p>
                         <p className="text-xs text-surface-600 mt-1">
-                          Category: {nomination.contest?.title || nomination.contestId} • Submitted by {nomination.submitterName}
+                          Category: {nomination.contest?.title || nomination.contestId} - Submitted by {nomination.submitterName}
                         </p>
                         {nomination.nomineeDescription ? (
                           <p className="text-xs text-surface-600 mt-1">{nomination.nomineeDescription}</p>
@@ -1275,7 +1276,7 @@ export default function AdminVotingPage() {
                     <p className="text-surface-600">{day.day}</p>
                     <p className="font-semibold text-brand-900">{day.votes} votes</p>
                     <p className="text-xs text-surface-600">
-                      Free {day.freeVotes} • Paid {day.paidVotes}
+                      Free {day.freeVotes} - Paid {day.paidVotes}
                     </p>
                   </div>
                 ))}
@@ -1289,6 +1290,8 @@ export default function AdminVotingPage() {
     </div>
   );
 }
+
+
 
 
 

@@ -15,7 +15,7 @@ export function DashboardPageHeader({
   return (
     <div className={cn('flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-in', className)}>
       <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-surface-400">Control Center</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-surface-400">Workspace</p>
         <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 mt-0.5 tracking-tight">{title}</h1>
         {subtitle ? <p className="text-sm text-surface-500 mt-1 leading-relaxed">{subtitle}</p> : null}
       </div>

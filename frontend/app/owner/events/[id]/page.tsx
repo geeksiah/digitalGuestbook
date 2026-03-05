@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -1171,11 +1171,12 @@ export default function OwnerEventDetailPage() {
       <div className="dashboard-canvas px-4 sm:px-5 py-3.5 sm:py-4">
         <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
           {Icons.back}
-          <span className="ml-1">Events</span>
+          <span className="ml-1">Back to events</span>
         </Link>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
+            <p className="text-sm text-surface-600 mt-1">Track your event performance and guest activity in one place.</p>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
               <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', getPhaseStyle(event.currentPhase))}>
                 {getPhaseLabel(event.currentPhase)}
@@ -1223,15 +1224,15 @@ export default function OwnerEventDetailPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">RSVPs</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Responses</p>
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.rsvps}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Check-Ins</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Arrivals</p>
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.checkIns}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Media</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Guest Media</p>
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.mediaAssets}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
@@ -1241,7 +1242,7 @@ export default function OwnerEventDetailPage() {
             </div>
 
             <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h3 className="text-lg font-semibold text-brand-900 mb-4">Approval Status</h3>
+              <h3 className="text-lg font-semibold text-brand-900 mb-4">Approval</h3>
               {loadingApproval ? (
                 <div className="flex items-center gap-3 text-sm text-surface-500">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-900" />
@@ -1292,7 +1293,7 @@ export default function OwnerEventDetailPage() {
             </div>
 
             <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h3 className="text-lg font-semibold text-brand-900 mb-4">Event Details</h3>
+              <h3 className="text-lg font-semibold text-brand-900 mb-4">Event Summary</h3>
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm font-medium text-surface-600">Name</dt>
@@ -1952,7 +1953,7 @@ export default function OwnerEventDetailPage() {
                             {(item.startsAt || item.location) && (
                               <p className="text-xs text-surface-500 mt-1">
                                 {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : ''}
-                                {item.startsAt && item.location ? ' • ' : ''}
+                                {item.startsAt && item.location ? ' - ' : ''}
                                 {item.location ? item.location : ''}
                               </p>
                             )}
@@ -2300,31 +2301,31 @@ export default function OwnerEventDetailPage() {
         {activeTab === 'voting' && (
           <div className="space-y-4">
             <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h3 className="text-lg font-semibold text-brand-900">Voting Setup</h3>
+              <h3 className="text-lg font-semibold text-brand-900">Voting Workspace</h3>
               <p className="text-sm text-surface-600 mt-1">
-                Configure contests/nominees, review leaderboard, and monitor paid/free vote analytics from the voting dashboard.
+                Manage categories, nominees, and live results from one dashboard.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   href={`/owner/events/${event.id}/voting`}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
                 >
-                  Open Voting Dashboard
+                  Open Voting Console
                 </Link>
                 <Link
                   href={`/e/${event.slug}/vote`}
                   target="_blank"
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-surface-200 text-surface-700 hover:bg-surface-50 transition-colors text-sm font-medium"
                 >
-                  Open Public Vote Page
+                  Open Public Voting Page
                 </Link>
               </div>
             </div>
 
             <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h4 className="text-base font-semibold text-brand-900">Embed & Link Sharing</h4>
+              <h4 className="text-base font-semibold text-brand-900">Share Voting Links</h4>
               <p className="text-sm text-surface-600 mt-1">
-                Use `/e/{event.slug}/vote` for hosted voting and `/embed/vote.js` for website embeds.
+                Share direct links so guests can nominate and vote quickly.
               </p>
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
@@ -2429,3 +2430,4 @@ export default function OwnerEventDetailPage() {
     </div>
   );
 }
+
