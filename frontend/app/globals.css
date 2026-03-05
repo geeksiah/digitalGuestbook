@@ -72,11 +72,11 @@
   }
 
   .btn-accent {
-    @apply btn rounded-full border border-primary-500 bg-primary-500 text-brand-900 focus:ring-primary-300;
+    @apply btn rounded-full border border-brand-900 bg-brand-900 text-white focus:ring-primary-300;
   }
 
   .btn-accent:hover {
-    @apply border-primary-600 bg-primary-600 text-white;
+    @apply border-brand-800 bg-brand-800 text-white;
   }
 
   .btn-secondary {
@@ -135,7 +135,7 @@
   }
 
   .dashboard-canvas {
-    @apply rounded-[24px] border border-surface-200 bg-white;
+    @apply rounded-[18px] border border-surface-200 bg-white;
   }
 
   .phone-stage {
@@ -178,32 +178,29 @@
   }
 
   .shell-sidebar {
-    @apply rounded-r-[28px] border-r border-surface-200/90 bg-white;
-    box-shadow: 10px 0 28px -28px rgba(15, 23, 42, 0.3);
+    @apply rounded-r-[24px] border-r border-brand-800 bg-brand-900 text-white;
+    box-shadow: none;
   }
 
   .shell-main-surface {
-    @apply rounded-[22px] border border-surface-200 bg-white;
-    box-shadow: 0 8px 20px -20px rgba(15, 23, 42, 0.22);
+    @apply rounded-[16px] border border-surface-200 bg-white;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
   }
 
   .nav-pill {
-    @apply flex items-center px-3 py-2.5 rounded-xl text-sm font-medium border border-transparent text-surface-700 transition-all duration-150;
+    @apply flex items-center px-3 py-2.5 rounded-xl text-sm font-medium border border-transparent text-white/75 transition-all duration-150;
   }
 
   .nav-pill:hover {
-    @apply bg-surface-50 text-brand-900 border-surface-200;
+    @apply bg-brand-800 text-white border-brand-700;
   }
 
   .nav-pill-active {
-    @apply bg-primary-50 text-brand-900 border-primary-200;
+    @apply bg-primary-500 text-brand-950 border-primary-400;
   }
 
   .soft-grid-bg {
-    background:
-      radial-gradient(circle at 100% 0%, rgba(27, 212, 188, 0.1), transparent 34%),
-      radial-gradient(circle at 0% 100%, rgba(6, 57, 50, 0.07), transparent 34%),
-      #f5f6f7;
+    background: #f3f4f6;
   }
 
   .chip {

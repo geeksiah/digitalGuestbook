@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { adminApi, eventsApi } from '@/lib/api';
+import { adminApi, eventsApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, getPhaseLabel, cn } from '@/lib/utils';
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
@@ -13,6 +13,8 @@ interface Event {
   name: string;
   date: string;
   venue: string | null;
+  coverImagePath?: string | null;
+  coverImageUrl?: string | null;
   currentPhase: string;
   invitationOnly: boolean;
   isArchived: boolean;
@@ -28,6 +30,26 @@ interface Event {
   approvalStatus?: string;
   Owner?: { id: string; name: string; email: string };
 }
+
+const toAbsoluteMediaUrl = (value: string | null | undefined) => {
+  if (!value) return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+  if (
+    raw.startsWith('/storage/v1/object/public/')
+    || raw.startsWith('/uploads/')
+    || raw.startsWith('/api/')
+    || raw.startsWith('/media/')
+    || raw.startsWith('/generated/')
+  ) {
+    return `${API_BASE_URL}${raw}`;
+  }
+  return null;
+};
+
+const resolveEventCover = (event: Event) =>
+  toAbsoluteMediaUrl(event.coverImageUrl) || toAbsoluteMediaUrl(event.coverImagePath);
 
 // Monochrome icons
 const Icons = {
@@ -230,8 +252,16 @@ export default function EventsPage() {
             {events.map((event) => (
               <div key={event.id} className="rounded-2xl border border-surface-200 bg-white px-5 py-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all">
                 <div className="flex flex-col xl:flex-row xl:items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <div className="flex-1 min-w-0 flex items-start gap-3">
+                    <div className="h-14 w-20 overflow-hidden rounded-lg border border-surface-200 bg-surface-100 flex-shrink-0">
+                      {resolveEventCover(event) ? (
+                        <img src={resolveEventCover(event)!} alt={event.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
                       <h3 className="text-lg font-semibold text-brand-900">{event.name}</h3>
                       <span className={cn('px-2 py-0.5 rounded border text-xs font-medium', getPhaseStyle(event.currentPhase))}>
                         {event.currentPhase === 'LIVE' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />}
@@ -244,18 +274,19 @@ export default function EventsPage() {
                         <span className="px-2 py-0.5 rounded border text-xs font-medium bg-surface-100 text-surface-500 border-surface-200">Archived</span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-surface-500">
-                      <span className="flex items-center gap-1.5">
-                        {Icons.calendar}
-                        {formatDate(event.date, 'MMM d, yyyy')}
-                      </span>
-                      {event.venue && (
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-surface-500">
                         <span className="flex items-center gap-1.5">
-                          {Icons.location}
-                          {event.venue}
+                          {Icons.calendar}
+                          {formatDate(event.date, 'MMM d, yyyy')}
                         </span>
-                      )}
-                      <span className="text-surface-400 font-mono text-xs">/{event.slug}</span>
+                        {event.venue && (
+                          <span className="flex items-center gap-1.5">
+                            {Icons.location}
+                            {event.venue}
+                          </span>
+                        )}
+                        <span className="text-surface-400 font-mono text-xs">/{event.slug}</span>
+                      </div>
                     </div>
                   </div>
 

@@ -163,7 +163,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
             <Link href="/admin" className="flex items-center space-x-3 min-w-0">
               <img 
-                src="/img/logo-dark.svg" 
+                src="/img/logo-light.svg" 
                 alt="EventPeepo" 
                 className="h-8 w-auto"
                 onError={(e) => {
@@ -174,15 +174,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }}
               />
               <div className="logo-fallback hidden items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-brand-900 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">E</span>
+                <div className="w-9 h-9 rounded-lg bg-primary-500 flex items-center justify-center">
+                  <span className="text-brand-950 text-sm font-bold">E</span>
                 </div>
-                <span className="font-semibold text-brand-900 text-lg truncate">EventPeepo</span>
+                <span className="font-semibold text-white text-lg truncate">EventPeepo</span>
               </div>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
+              className="lg:hidden p-2 rounded-lg text-white/70 hover:bg-brand-800 hover:text-white transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -201,7 +201,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   onClick={() => setSidebarOpen(false)}
                   className={cn('nav-pill', isActive && 'nav-pill-active')}
                 >
-                  <span className={cn(isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
+                  <span className={cn(isActive ? 'text-brand-950' : 'text-white/65')}>{item.icon}</span>
                   <span className="ml-3 font-medium">{item.name}</span>
                 </Link>
               );
@@ -209,20 +209,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-surface-200/70">
-            <div className="flex items-center rounded-xl border border-surface-200 bg-surface-50 px-3 py-2.5">
-              <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center">
-                <span className="text-brand-900 font-semibold text-sm">
+          <div className="p-4 border-t border-white/10">
+            <div className="flex items-center rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+              <div className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center">
+                <span className="text-brand-950 font-semibold text-sm">
                   {admin?.name?.charAt(0).toUpperCase() || 'A'}
                 </span>
               </div>
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-brand-900 truncate">{admin?.name || 'Admin'}</p>
-                <p className="text-xs text-surface-500 truncate">{admin?.email}</p>
+                <p className="text-sm font-medium text-white truncate">{admin?.name || 'Admin'}</p>
+                <p className="text-xs text-white/65 truncate">{admin?.email}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-surface-500 hover:text-brand-900 hover:bg-white rounded-lg transition-colors"
+                className="p-2 text-white/75 hover:text-white hover:bg-brand-800 rounded-lg transition-colors"
                 title="Sign out"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

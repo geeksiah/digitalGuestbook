@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ownerDashboardApi } from '@/lib/api';
+import { ownerDashboardApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, cn, slugify } from '@/lib/utils';
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
@@ -14,6 +14,8 @@ interface Event {
   date: string;
   defaultCurrency?: string;
   venue: string | null;
+  coverImagePath?: string | null;
+  coverImageUrl?: string | null;
   currentPhase: string;
   approvalStatus?: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | string;
   _count: {
@@ -24,6 +26,26 @@ interface Event {
     transactions: number;
   };
 }
+
+const toAbsoluteMediaUrl = (value: string | null | undefined) => {
+  if (!value) return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+  if (
+    raw.startsWith('/storage/v1/object/public/')
+    || raw.startsWith('/uploads/')
+    || raw.startsWith('/api/')
+    || raw.startsWith('/media/')
+    || raw.startsWith('/generated/')
+  ) {
+    return `${API_BASE_URL}${raw}`;
+  }
+  return null;
+};
+
+const resolveEventCover = (event: Event) =>
+  toAbsoluteMediaUrl(event.coverImageUrl) || toAbsoluteMediaUrl(event.coverImagePath);
 
 const Icons = {
   calendar: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
@@ -294,6 +316,13 @@ export default function OwnerEventsPage() {
                 href={`/owner/events/${event.id}`}
                 className="group flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-surface-50 active:bg-surface-100 transition-colors"
               >
+                <div className="h-14 w-20 overflow-hidden rounded-lg border border-surface-200 bg-surface-100 flex-shrink-0">
+                  {resolveEventCover(event) ? (
+                    <img src={resolveEventCover(event)!} alt={event.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>

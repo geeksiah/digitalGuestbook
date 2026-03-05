@@ -388,7 +388,7 @@ export default function NewEventPage() {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Basic Info */}
-        <div className="dashboard-canvas">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Basic Information</h2>
           <div className="space-y-4">
             <div>
@@ -491,7 +491,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Date & Location */}
-        <div className="dashboard-canvas">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Date & Location</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
@@ -592,7 +592,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Event Owner */}
-        <div className="dashboard-canvas">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Event Owner</h2>
           <div className="space-y-4">
             <div className="flex gap-3">
@@ -725,7 +725,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Services */}
-        <div className="dashboard-canvas">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">Services</h2>
           <div className="space-y-4">
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
@@ -863,7 +863,7 @@ export default function NewEventPage() {
         </div>
 
         {/* RSVP Pricing & Ticketing */}
-        <div className="dashboard-canvas">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-navy-900 mb-4">RSVP Pricing & Ticketing</h2>
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
@@ -1026,7 +1026,7 @@ export default function NewEventPage() {
         </div>
 
         {/* Template Selection */}
-        <div className="dashboard-canvas">
+        <div className="dashboard-canvas p-5 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-navy-900">Page Templates</h2>
@@ -1165,7 +1165,7 @@ export default function NewEventPage() {
 
         {/* Guestbook Settings */}
         {formData.guestbookEnabled && (
-          <div className="dashboard-canvas">
+          <div className="dashboard-canvas p-5 sm:p-6">
             <h2 className="text-lg font-semibold text-navy-900 mb-4">Guestbook Settings</h2>
             <div className="grid sm:grid-cols-3 gap-4">
               <div>

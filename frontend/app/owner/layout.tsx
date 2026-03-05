@@ -202,10 +202,10 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-white/10">
             <div className="flex items-center">
               <img 
-                src="/img/logo-dark.svg" 
+                src="/img/logo-light.svg" 
                 alt="EventPeepo" 
                 className="h-8 w-auto"
                 onError={(e) => {
@@ -216,15 +216,15 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                 }}
               />
               <div className="logo-fallback hidden items-center ml-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-900 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">E</span>
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
+                  <span className="text-brand-950 font-bold text-sm">E</span>
                 </div>
-                <span className="ml-3 text-lg font-semibold text-brand-900">EventPeepo</span>
+                <span className="ml-3 text-lg font-semibold text-white">EventPeepo</span>
               </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
+              className="lg:hidden p-2 rounded-lg text-white/70 hover:bg-brand-800 hover:text-white transition-colors"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -243,7 +243,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   onClick={() => setSidebarOpen(false)}
                   className={cn('nav-pill', isActive && 'nav-pill-active')}
                 >
-                  <span className={cn('mr-3', isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
+                  <span className={cn('mr-3', isActive ? 'text-brand-950' : 'text-white/65')}>{item.icon}</span>
                   {item.name}
                 </Link>
               );
@@ -251,21 +251,21 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-surface-200/70">
-            <div className="flex items-center px-3 py-2.5 rounded-xl border border-surface-200 bg-surface-50">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
-                <span className="text-brand-900 font-semibold">
+          <div className="p-4 border-t border-white/10">
+            <div className="flex items-center px-3 py-2.5 rounded-xl border border-white/10 bg-white/5">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center">
+                <span className="text-brand-950 font-semibold">
                   {owner?.name?.charAt(0).toUpperCase() || 'O'}
                 </span>
               </div>
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-brand-900 truncate">{owner?.name}</p>
-                <p className="text-xs text-surface-500 truncate">{owner?.email}</p>
+                <p className="text-sm font-medium text-white truncate">{owner?.name}</p>
+                <p className="text-xs text-white/65 truncate">{owner?.email}</p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full mt-2 flex items-center px-3 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 rounded-lg transition-colors"
+              className="w-full mt-2 flex items-center px-3 py-2 text-sm font-medium text-white/80 hover:bg-brand-800 rounded-lg transition-colors"
             >
               <svg className="w-4 h-4 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
