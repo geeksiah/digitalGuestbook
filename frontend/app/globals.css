@@ -13,13 +13,6 @@
     --border: 229 231 235;
     --accent: 27 212 188;
     --brand: 6 57 50;
-    --action: 27 212 188;
-    --action-strong: 21 179 159;
-    --action-soft: 232 250 246;
-    --highlight: 27 212 188;
-    --elevated: 255 255 255;
-    --surface-veil: 255 255 255 / 0.72;
-    --ring-soft: 27 212 188 / 0.2;
   }
 
   * {
@@ -28,9 +21,11 @@
 
   body {
     @apply bg-surface-50 text-navy-900 antialiased;
-    background-color: #f5f6f7;
+    background-image:
+      radial-gradient(circle at 5% 0%, rgba(6, 57, 50, 0.10), transparent 40%),
+      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.08), transparent 32%),
+      radial-gradient(circle at 50% 100%, rgba(6, 57, 50, 0.04), transparent 50%);
     font-feature-settings: "rlig" 1, "calt" 1;
-    letter-spacing: -0.01em;
   }
 
   /* Professional scrollbar */
@@ -64,19 +59,11 @@
 @layer components {
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-semibold tracking-tight transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2.5 min-h-[44px] text-sm font-semibold tracking-tight transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-primary {
     @apply btn bg-brand-900 text-white hover:bg-brand-800 active:bg-brand-950 focus:ring-brand-500;
-  }
-
-  .btn-accent {
-    @apply btn rounded-full border border-brand-900 bg-brand-900 text-white focus:ring-primary-300;
-  }
-
-  .btn-accent:hover {
-    @apply border-brand-800 bg-brand-800 text-white;
   }
 
   .btn-secondary {
@@ -110,109 +97,11 @@
 
   /* Cards */
   .card {
-    @apply bg-white rounded-2xl border border-surface-200/80 p-5 sm:p-6 transition-all duration-150;
+    @apply bg-white rounded-xl border border-surface-200/80 p-5 sm:p-6 shadow-soft transition-all duration-150;
   }
 
   .card-hover {
     @apply card hover:border-surface-300 hover:shadow-sm;
-  }
-
-  .card-premium {
-    @apply rounded-[24px] border border-surface-200/80 bg-white;
-  }
-
-  .hero-premium {
-    @apply rounded-2xl text-white border border-white/10 shadow-elegant;
-    background:
-      radial-gradient(circle at 100% -10%, rgba(27,212,188,0.24), transparent 38%),
-      radial-gradient(circle at -10% 110%, rgba(6,57,50,0.2), transparent 42%),
-      linear-gradient(135deg, #0f1724 0%, #1a1a2e 48%, #1f2837 100%);
-  }
-
-  .shell-panel {
-    @apply rounded-2xl border border-white/70 shadow-soft backdrop-blur-md;
-    background: rgb(var(--surface-veil));
-  }
-
-  .dashboard-canvas {
-    @apply rounded-[18px] border border-surface-200 bg-white;
-  }
-
-  .phone-stage {
-    @apply rounded-[34px] border border-surface-200 bg-white;
-    background:
-      radial-gradient(circle at 100% -8%, rgba(27, 212, 188, 0.12), transparent 42%),
-      linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
-  }
-
-  .phone-notch {
-    @apply mx-auto h-6 w-28 rounded-full bg-black;
-  }
-
-  .segmented {
-    @apply inline-grid grid-flow-col auto-cols-fr rounded-full bg-surface-100 p-1;
-  }
-
-  .segmented-item {
-    @apply rounded-full px-3 py-1.5 text-xs font-semibold text-surface-600 transition-colors;
-  }
-
-  .segmented-item-active {
-    @apply bg-white text-brand-900;
-  }
-
-  .pill-accent {
-    @apply inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-brand-900;
-  }
-
-  .kpi-tile {
-    @apply rounded-2xl border border-surface-200 bg-white px-4 py-3;
-  }
-
-  .focus-card {
-    @apply rounded-2xl border border-surface-200 bg-white p-4 transition-all duration-200;
-  }
-
-  .focus-card:hover {
-    @apply border-primary-200 bg-primary-50/40;
-  }
-
-  .shell-sidebar {
-    @apply rounded-r-[24px] border-r border-brand-800 bg-brand-900 text-white;
-    box-shadow: none;
-  }
-
-  .shell-main-surface {
-    @apply rounded-[16px] border border-surface-200 bg-white;
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
-  }
-
-  .nav-pill {
-    @apply flex items-center px-3 py-2.5 rounded-xl text-sm font-medium border border-transparent text-white/75 transition-all duration-150;
-  }
-
-  .nav-pill:hover {
-    @apply bg-brand-800 text-white border-brand-700;
-  }
-
-  .nav-pill-active {
-    @apply bg-primary-500 text-brand-950 border-primary-400;
-  }
-
-  .soft-grid-bg {
-    background: #f3f4f6;
-  }
-
-  .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide;
-  }
-
-  .chip-accent {
-    @apply chip border-primary-200 text-brand-900 bg-primary-50;
-  }
-
-  .chip-brand {
-    @apply chip border-brand-200 text-brand-700 bg-brand-50;
   }
 
   /* Badges */
@@ -335,10 +224,6 @@
 
   .glass {
     @apply bg-white/90 backdrop-blur-md;
-  }
-
-  .section-gradient {
-    background: #f6f6f4;
   }
 
   /* Focus visible for keyboard nav */

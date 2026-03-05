@@ -13,10 +13,11 @@ export function DashboardPageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('dashboard-canvas px-5 py-5 sm:px-6 sm:py-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-in', className)}>
+    <div className={cn('flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-in', className)}>
       <div className="min-w-0">
-        <h1 className="text-2xl sm:text-3xl font-display font-bold text-brand-900 tracking-tight">{title}</h1>
-        {subtitle ? <p className="text-sm text-surface-600 mt-1.5 leading-relaxed">{subtitle}</p> : null}
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-surface-400">Control Center</p>
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 mt-0.5 tracking-tight">{title}</h1>
+        {subtitle ? <p className="text-sm text-surface-500 mt-1 leading-relaxed">{subtitle}</p> : null}
       </div>
       {action ? <div className="flex items-center gap-2 flex-shrink-0">{action}</div> : null}
     </div>
@@ -39,12 +40,12 @@ export function DashboardSection({
   contentClassName?: string;
 }) {
   return (
-    <section className={cn('dashboard-canvas overflow-hidden animate-in', className)}>
+    <section className={cn('bg-white rounded-xl border border-surface-200/80 shadow-soft overflow-hidden animate-in', className)}>
       {(title || subtitle || action) ? (
-        <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-surface-100/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-white">
+        <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-surface-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-brand-50/40">
           <div className="min-w-0">
             {title ? <h2 className="text-base sm:text-lg font-semibold text-brand-900">{title}</h2> : null}
-            {subtitle ? <p className="text-xs sm:text-sm text-surface-600 mt-0.5 leading-relaxed">{subtitle}</p> : null}
+            {subtitle ? <p className="text-xs sm:text-sm text-surface-500 mt-0.5 leading-relaxed">{subtitle}</p> : null}
           </div>
           {action ? <div className="flex-shrink-0">{action}</div> : null}
         </div>
@@ -74,7 +75,7 @@ export function DashboardKpiCard({
   }[tone];
 
   return (
-    <div className="kpi-tile p-4 sm:p-5 hover:border-primary-200 hover:bg-primary-50/40 transition-all">
+    <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4 sm:p-5 hover:border-brand-200 transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1.5">{label}</p>

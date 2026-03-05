@@ -147,7 +147,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const currentSection = navigation.find((item) => pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href)))?.name || 'Dashboard';
 
   return (
-    <div className="min-h-screen soft-grid-bg">
+    <div className="min-h-screen bg-surface-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-brand-950/45 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -155,15 +155,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Sidebar */}
       <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 w-[272px] shell-sidebar transform transition-transform duration-300 lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200/80 shadow-soft transform transition-transform duration-300 lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70">
             <Link href="/admin" className="flex items-center space-x-3 min-w-0">
               <img 
-                src="/img/logo-light.svg" 
+                src="/img/logo-dark.svg" 
                 alt="EventPeepo" 
                 className="h-8 w-auto"
                 onError={(e) => {
@@ -174,15 +174,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }}
               />
               <div className="logo-fallback hidden items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-primary-500 flex items-center justify-center">
-                  <span className="text-brand-950 text-sm font-bold">E</span>
+                <div className="w-9 h-9 rounded-lg bg-brand-900 flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">E</span>
                 </div>
-                <span className="font-semibold text-white text-lg truncate">EventPeepo</span>
+                <span className="font-semibold text-brand-900 text-lg truncate">EventPeepo</span>
               </div>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg text-white/70 hover:bg-brand-800 hover:text-white transition-colors"
+              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -199,9 +199,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   key={item.name}
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={cn('nav-pill', isActive && 'nav-pill-active')}
+                  className={cn(
+                    'flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 border',
+                    isActive
+                      ? 'bg-brand-50 text-brand-900 border-brand-100 shadow-sm'
+                      : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
+                  )}
                 >
-                  <span className={cn(isActive ? 'text-brand-950' : 'text-white/65')}>{item.icon}</span>
+                  <span className={cn(isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
                   <span className="ml-3 font-medium">{item.name}</span>
                 </Link>
               );
@@ -209,20 +214,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-white/10">
-            <div className="flex items-center rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-              <div className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center">
-                <span className="text-brand-950 font-semibold text-sm">
+          <div className="p-4 border-t border-surface-200/70">
+            <div className="flex items-center rounded-xl border border-surface-200 bg-surface-50 px-3 py-2.5">
+              <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center">
+                <span className="text-brand-900 font-semibold text-sm">
                   {admin?.name?.charAt(0).toUpperCase() || 'A'}
                 </span>
               </div>
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{admin?.name || 'Admin'}</p>
-                <p className="text-xs text-white/65 truncate">{admin?.email}</p>
+                <p className="text-sm font-medium text-brand-900 truncate">{admin?.name || 'Admin'}</p>
+                <p className="text-xs text-surface-500 truncate">{admin?.email}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-white/75 hover:text-white hover:bg-brand-800 rounded-lg transition-colors"
+                className="p-2 text-surface-500 hover:text-brand-900 hover:bg-white rounded-lg transition-colors"
                 title="Sign out"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -235,10 +240,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-[272px] min-h-screen flex flex-col">
+      <div className="lg:pl-[272px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 px-4 pt-3 sm:px-6 lg:px-8">
-          <div className="shell-main-surface flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 gap-3">
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-surface-200/80">
+          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
             {/* Mobile menu button */}
             <button
               className="lg:hidden p-2 -ml-2 text-surface-500 hover:text-brand-900 hover:bg-surface-100 rounded-lg transition-colors"
@@ -249,39 +254,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </svg>
             </button>
 
-            <div className="flex-1 min-w-0 ml-2 lg:ml-0 flex items-center gap-3">
-              <div className="hidden xl:flex items-center gap-2 text-sm">
-                <span className="chip-brand">Admin Console</span>
+            <div className="flex-1 min-w-0 ml-2 lg:ml-0">
+              <div className="hidden md:flex items-center gap-2 text-sm">
+                <span className="text-surface-500 font-medium">Admin Console</span>
                 <span className="text-surface-300">/</span>
                 <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
-              </div>
-              <div className="hidden md:flex items-center w-full max-w-[520px]">
-                <div className="relative w-full">
-                  <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.8 5.8a7.5 7.5 0 0010.85 10.85z" />
-                  </svg>
-                  <input
-                    type="search"
-                    placeholder="Search events, templates, owners..."
-                    className="h-10 w-full rounded-full border border-surface-200 bg-surface-50 pl-9 pr-4 text-sm text-brand-900 placeholder:text-surface-400 focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 focus:outline-none transition-colors"
-                  />
-                </div>
               </div>
             </div>
 
             {/* Quick actions */}
-            <div className="flex items-center space-x-2 shrink-0">
-              <Link href="/admin/events/new" className="btn-accent">
+            <div className="flex items-center space-x-2">
+              <Link href="/admin/events/new" className="btn-primary">
                 <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 New Event
               </Link>
-              <button className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-full border border-surface-200 bg-surface-50 text-surface-600 hover:bg-white hover:text-brand-900 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V4a2 2 0 10-4 0v1.3A6 6 0 006 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
-                </svg>
-              </button>
               <div className="hidden sm:flex items-center justify-center w-9 h-9 rounded-full bg-brand-100 text-brand-900 text-sm font-semibold">
                 {admin?.name?.charAt(0).toUpperCase() || 'A'}
               </div>
@@ -290,44 +278,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 pb-24 sm:p-6 sm:pb-28 lg:p-7 lg:pb-7">
-          {children}
-        </main>
-
-        {/* Mobile bottom tab bar */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-200 bg-white shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-5 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-            {navigation.slice(0, 5).map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-colors active:opacity-80',
-                    isActive
-                      ? 'text-primary-700 bg-primary-50 ring-1 ring-primary-200'
-                      : 'text-surface-500'
-                  )}
-                >
-                  <span className={cn(
-                    'flex h-9 w-9 items-center justify-center rounded-xl transition-all [&>svg]:w-6 [&>svg]:h-6',
-                    isActive ? 'text-primary-700' : 'text-surface-500'
-                  )}>
-                    {item.icon}
-                  </span>
-                  <span className={cn(
-                    'text-[11px] font-medium leading-none',
-                    isActive ? 'font-semibold text-primary-700' : 'text-surface-500'
-                  )}>
-                    {item.name}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
+        <main className="p-4 sm:p-6 lg:p-7">{children}</main>
       </div>
     </div>
   );
