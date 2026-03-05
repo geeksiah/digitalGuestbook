@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 
 type Nominee = {
   optionId: string;
@@ -38,30 +37,70 @@ export default function NomineesPage() {
   const searchParams = useSearchParams();
   const slug = String(params.slug || '');
   const contestQuery = String(searchParams.get('contestId') || '');
-  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'nominees-page');
 
   const [loading, setLoading] = useState(true);
   const [eventName, setEventName] = useState('');
   const [categories, setCategories] = useState<NomineeCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [modeFilter, setModeFilter] = useState<'ALL' | 'AWARDS' | 'ELECTION'>('ALL');
 
   const visibleCategories = useMemo(() => {
-    if (!selectedCategory) return categories;
-    return categories.filter((category) => category.contestId === selectedCategory);
-  }, [categories, selectedCategory]);
+    const query = searchQuery.trim().toLowerCase();
+    const scopedCategories = selectedCategory
+      ? categories.filter((category) => category.contestId === selectedCategory)
+      : categories;
+
+    return scopedCategories
+      .filter((category) => (modeFilter === 'ALL' ? true : category.mode === modeFilter))
+      .map((category) => {
+        const nominees = query
+          ? category.nominees.filter((nominee) => {
+              const name = nominee.name.toLowerCase();
+              const description = String(nominee.description || '').toLowerCase();
+              return name.includes(query) || description.includes(query);
+            })
+          : category.nominees;
+
+        return {
+          ...category,
+          nominees: [...nominees].sort((a, b) => Number(b.totalVotes || 0) - Number(a.totalVotes || 0)),
+        };
+      })
+      .filter((category) => category.nominees.length > 0);
+  }, [categories, selectedCategory, modeFilter, searchQuery]);
 
   useEffect(() => {
-    if (!slug || templateLoading || hasTemplate) return;
+    if (!slug) return;
     const run = async () => {
       setLoading(true);
       try {
         const response = await votingApi.nominees(slug);
-        const payload = response.data as NomineesPayload;
-        const categoriesData = payload.categories || [];
-        setEventName(payload.event?.name || '');
+        const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
+        const rawCategories = Array.isArray(payload.categories) ? payload.categories : [];
+        const categoriesData: NomineeCategory[] = rawCategories.map((category: any) => ({
+          contestId: String(category?.contestId || category?.id || ''),
+          title: String(category?.title || category?.name || 'Untitled category'),
+          mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+          totalVotes: Number(category?.totalVotes || 0),
+          nominees: (Array.isArray(category?.nominees) ? category.nominees : []).map((nominee: any) => ({
+            optionId: String(nominee?.optionId || nominee?.id || ''),
+            name: String(nominee?.name || 'Unnamed nominee'),
+            description: nominee?.description ? String(nominee.description) : null,
+            imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
+            imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
+            totalVotes: Number(nominee?.totalVotes || 0),
+            freeVotes: Number(nominee?.freeVotes || 0),
+            paidVotes: Number(nominee?.paidVotes || 0),
+            voteSharePercent: Number(nominee?.voteSharePercent || 0),
+            approvalStatus: nominee?.approvalStatus === 'APPROVED' ? 'APPROVED' : 'ADMIN_ADDED',
+          })).filter((nominee: Nominee) => Boolean(nominee.optionId)),
+        })).filter((category) => category.contestId);
+
+        setEventName(String(payload?.event?.name || slug));
         setCategories(categoriesData);
         const validQuery = contestQuery && categoriesData.some((category) => category.contestId === contestQuery);
-        setSelectedCategory(validQuery ? contestQuery : categoriesData[0]?.contestId || '');
+        setSelectedCategory(validQuery ? contestQuery : '');
       } catch (error: any) {
         toast.error(error?.response?.data?.error || 'Failed to load nominees');
       } finally {
@@ -69,19 +108,7 @@ export default function NomineesPage() {
       }
     };
     void run();
-  }, [slug, contestQuery, templateLoading, hasTemplate]);
-
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="nominees-page" refreshIntervalMs={15000} revalidateOnFocus forceFresh />;
-  }
+  }, [slug, contestQuery]);
 
   if (loading) {
     return (
@@ -119,17 +146,32 @@ export default function NomineesPage() {
         <section className="dashboard-canvas p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-brand-900">Category Nominees</h2>
-            <select className="input max-w-[360px]" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <input
+              className="input"
+              placeholder="Search nominees"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            <select className="input" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+              <option value="">All categories</option>
               {categories.map((category) => (
                 <option key={category.contestId} value={category.contestId}>
                   {category.title} ({category.mode})
                 </option>
               ))}
             </select>
+            <select className="input" value={modeFilter} onChange={(event) => setModeFilter(event.target.value as 'ALL' | 'AWARDS' | 'ELECTION')}>
+              <option value="ALL">All modes</option>
+              <option value="AWARDS">Awards</option>
+              <option value="ELECTION">Election</option>
+            </select>
           </div>
 
           {!visibleCategories.length ? (
-            <p className="text-surface-600">No nominees are currently available.</p>
+            <p className="text-surface-600">No nominees match your filters.</p>
           ) : (
             <div className="space-y-5">
               {visibleCategories.map((category) => (
@@ -138,7 +180,7 @@ export default function NomineesPage() {
                     <div>
                       <h3 className="font-semibold text-brand-900">{category.title}</h3>
                       <p className="text-xs text-surface-600">
-                        {category.mode} • {category.totalVotes.toLocaleString()} total votes
+                        {category.mode} - {category.totalVotes.toLocaleString()} total votes
                       </p>
                     </div>
                     <Link
@@ -171,7 +213,7 @@ export default function NomineesPage() {
                             </span>
                           </div>
                           <p className="text-sm text-surface-600 mt-2 min-h-[40px]">
-                            {nominee.description || 'Nominee profile'}
+                            {nominee.description || 'Learn more and cast your vote from this card.'}
                           </p>
                           <div className="mt-2 h-1.5 rounded-full bg-surface-100 overflow-hidden">
                             <div className="h-1.5 rounded-full bg-[#ff3b30]" style={{ width: `${Math.min(100, Math.max(0, nominee.voteSharePercent))}%` }} />

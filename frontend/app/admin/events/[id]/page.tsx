@@ -1121,9 +1121,11 @@ export default function EventDetailPage() {
   };
 
 
-  if (loading || !event) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>;
-
   const tabs: { id: Tab; label: string; count?: number }[] = useMemo(() => {
+    if (!event) {
+      return [{ id: 'overview', label: 'Overview' }];
+    }
+
     const rsvpEnabled = Boolean(event.rsvpEnabled);
     const checkInEnabled = Boolean(event.checkInEnabled);
     const guestbookEnabled = Boolean(event.guestbookEnabled);
@@ -1145,17 +1147,17 @@ export default function EventDetailPage() {
       { id: 'settings', label: 'Settings' },
     ];
   }, [
-    event.rsvpEnabled,
-    event.checkInEnabled,
-    event.guestbookEnabled,
-    event.itineraryEnabled,
-    event.giftingEnabled,
-    event.ticketingEnabled,
-    event.rsvpMode,
-    event._count.rsvps,
-    event._count.checkIns,
-    event._count.mediaAssets,
-    event._count.giftOrders,
+    event?.rsvpEnabled,
+    event?.checkInEnabled,
+    event?.guestbookEnabled,
+    event?.itineraryEnabled,
+    event?.giftingEnabled,
+    event?.ticketingEnabled,
+    event?.rsvpMode,
+    event?._count?.rsvps,
+    event?._count?.checkIns,
+    event?._count?.mediaAssets,
+    event?._count?.giftOrders,
     itineraryItems.length,
     formFields.length,
     votingEnabled,
@@ -1166,6 +1168,8 @@ export default function EventDetailPage() {
       setActiveTab('overview');
     }
   }, [activeTab, tabs]);
+
+  if (loading || !event) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>;
 
   const giftSummary = giftOrders.reduce(
     (acc, order) => {

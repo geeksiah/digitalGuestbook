@@ -1106,15 +1106,11 @@ export default function OwnerEventDetailPage() {
     };
   }, [invites]);
 
-  if (loading || !event) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
   const tabs: { id: Tab; label: string; count?: number }[] = useMemo(() => {
+    if (!event) {
+      return [{ id: 'overview', label: 'Overview' }];
+    }
+
     const rsvpEnabled = event.rsvpEnabled !== false;
     const checkInEnabled = event.checkInEnabled !== false;
     const guestbookEnabled = event.guestbookEnabled !== false;
@@ -1137,18 +1133,18 @@ export default function OwnerEventDetailPage() {
       ...(giftingEnabled ? [{ id: 'gifts' as Tab, label: 'Gifts', count: event._count.giftOrders || 0 }] : []),
     ];
   }, [
-    event.rsvpEnabled,
-    event.checkInEnabled,
-    event.guestbookEnabled,
-    event.ticketingEnabled,
-    event.rsvpMode,
-    event.itineraryEnabled,
-    event.giftingEnabled,
-    event._count.rsvps,
-    event._count.checkIns,
-    event._count.mediaAssets,
-    event._count.giftOrders,
-    event.ticketTypes,
+    event?.rsvpEnabled,
+    event?.checkInEnabled,
+    event?.guestbookEnabled,
+    event?.ticketingEnabled,
+    event?.rsvpMode,
+    event?.itineraryEnabled,
+    event?.giftingEnabled,
+    event?._count?.rsvps,
+    event?._count?.checkIns,
+    event?._count?.mediaAssets,
+    event?._count?.giftOrders,
+    event?.ticketTypes,
     itineraryItems.length,
     invites.length,
     domains.length,
@@ -1160,6 +1156,14 @@ export default function OwnerEventDetailPage() {
       setActiveTab('overview');
     }
   }, [activeTab, tabs]);
+
+  if (loading || !event) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-7">

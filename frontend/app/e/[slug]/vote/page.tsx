@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 
 type VotingConfig = {
   mode: 'AWARDS' | 'ELECTION';
@@ -60,6 +59,22 @@ type VotingEventPayload = {
   };
 };
 
+type LeaderboardContest = {
+  contestId: string;
+  rankings?: Array<{
+    optionId: string;
+    name: string;
+    description?: string | null;
+    imagePath?: string | null;
+    imageUrl?: string | null;
+    rank?: number;
+    totalVotes?: number;
+    freeVotes?: number;
+    paidVotes?: number;
+    voteSharePercent?: number;
+  }>;
+};
+
 const formatMoney = (currency: string, amount: number) => {
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
@@ -76,7 +91,6 @@ export default function VotePage() {
   const slug = String(params.slug || '');
   const contestQuery = String(searchParams.get('contestId') || '');
   const optionQuery = String(searchParams.get('optionId') || '');
-  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'voting-page');
   const embedToken = String(searchParams.get('token') || searchParams.get('embedToken') || '');
   const storageKey = `${SESSION_STORAGE_KEY_PREFIX}${slug}`;
 
@@ -95,6 +109,7 @@ export default function VotePage() {
   const [otpVerified, setOtpVerified] = useState(false);
   const [voteCount, setVoteCount] = useState(1);
   const [selectedGatewayId, setSelectedGatewayId] = useState('');
+  const [nomineeSearch, setNomineeSearch] = useState('');
 
   const selectedContest = useMemo(
     () => contests.find((contest) => contest.id === selectedContestId) || null,
@@ -114,8 +129,8 @@ export default function VotePage() {
   }, [config, voteCount]);
 
   const topRankings = useMemo(() => {
-    const contest = leaderboard.find((item: any) => item.contestId === selectedContestId) || leaderboard[0];
-    return contest?.rankings?.slice(0, 3) || [];
+    const contest = (leaderboard as LeaderboardContest[]).find((item) => item.contestId === selectedContestId) || (leaderboard as LeaderboardContest[])[0];
+    return (contest?.rankings || []).slice(0, 3);
   }, [leaderboard, selectedContestId]);
 
   const rankedOptions = useMemo(() => {
@@ -130,6 +145,20 @@ export default function VotePage() {
       }));
   }, [selectedContest]);
 
+  const filteredRankedOptions = useMemo(() => {
+    const query = nomineeSearch.trim().toLowerCase();
+    if (!query) return rankedOptions;
+    return rankedOptions.filter((option) => {
+      const name = String(option.name || '').toLowerCase();
+      const description = String(option.description || '').toLowerCase();
+      return name.includes(query) || description.includes(query);
+    });
+  }, [rankedOptions, nomineeSearch]);
+
+  const hasContests = contests.length > 0;
+  const hasGateways = paymentGateways.length > 0;
+  const canUsePaidVoting = Boolean(config?.allowPaidVotes && hasGateways);
+
   const resolveNomineeImage = (option: VotingOption) => option.imageUrl || option.imagePath || '';
 
   const fetchVoteData = async () => {
@@ -142,24 +171,63 @@ export default function VotePage() {
         votingApi.leaderboard(slug),
       ]);
 
-      const payload = publicResponse.data as VotingEventPayload;
-      setEventName(payload.event.name);
-      setConfig(payload.config);
-      setContests(payload.contests || []);
-      setLeaderboard(leaderboardResponse.data?.contests || []);
+      const payload = ((publicResponse.data as any)?.data || publicResponse.data || {}) as Partial<VotingEventPayload>;
+      const rawContests = Array.isArray(payload.contests) ? payload.contests : [];
+      const normalizedContests: VotingContest[] = rawContests.map((contest: any) => ({
+        id: String(contest?.id || ''),
+        title: String(contest?.title || contest?.name || 'Untitled contest'),
+        description: contest?.description ? String(contest.description) : null,
+        mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+        allowPublicNominations: Boolean(contest?.allowPublicNominations),
+        options: (Array.isArray(contest?.options) ? contest.options : []).map((option: any) => ({
+          id: String(option?.id || option?.optionId || ''),
+          name: String(option?.name || 'Unnamed nominee'),
+          description: option?.description ? String(option.description) : null,
+          imagePath: option?.imagePath ? String(option.imagePath) : null,
+          imageUrl: option?.imageUrl ? String(option.imageUrl) : null,
+          totalVotes: Number(option?.totalVotes || 0),
+          freeVotes: Number(option?.freeVotes || 0),
+          paidVotes: Number(option?.paidVotes || 0),
+        })).filter((option: VotingOption) => Boolean(option.id)),
+      })).filter((contest) => contest.id);
 
-      const gateways = (payload.paymentGateways || []) as PaymentGateway[];
+      const normalizedConfig: VotingConfig | null = payload.config
+        ? {
+            mode: payload.config.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS',
+            allowFreeVotes: Boolean(payload.config.allowFreeVotes),
+            allowPaidVotes: Boolean(payload.config.allowPaidVotes),
+            allowPublicNominations: Boolean(payload.config.allowPublicNominations),
+            requireOtpForElection: Boolean(payload.config.requireOtpForElection),
+            voteUnitPrice: Number(payload.config.voteUnitPrice || 0),
+            currency: String(payload.config.currency || 'USD'),
+            maxVotesPerPurchase: Math.max(1, Number(payload.config.maxVotesPerPurchase || 1)),
+          }
+        : null;
+
+      const leaderboardPayload = ((leaderboardResponse.data as any)?.data || leaderboardResponse.data || {}) as any;
+      const normalizedLeaderboard = Array.isArray(leaderboardPayload?.contests) ? leaderboardPayload.contests : [];
+      const gateways = (Array.isArray(payload.paymentGateways) ? payload.paymentGateways : []) as PaymentGateway[];
+
+      setEventName(String(payload?.event?.name || slug));
+      setConfig(normalizedConfig);
+      setContests(normalizedContests);
+      setLeaderboard(normalizedLeaderboard);
       setPaymentGateways(gateways);
       if (gateways.length > 0) {
         setSelectedGatewayId((current) => current || gateways[0].id);
+      } else {
+        setSelectedGatewayId('');
       }
 
-      if (payload.contests.length > 0) {
+      if (normalizedContests.length > 0) {
         const queriedContest = contestQuery
-          ? payload.contests.find((contest) => contest.id === contestQuery)
+          ? normalizedContests.find((contest) => contest.id === contestQuery)
           : null;
-        const rememberedContest = payload.contests.find((contest) => contest.id === selectedContestId);
-        const contest = queriedContest || rememberedContest || payload.contests[0];
+        const queriedContestByOption = optionQuery
+          ? normalizedContests.find((contest) => contest.options?.some((option) => option.id === optionQuery))
+          : null;
+        const rememberedContest = normalizedContests.find((contest) => contest.id === selectedContestId);
+        const contest = queriedContest || queriedContestByOption || rememberedContest || normalizedContests[0];
         setSelectedContestId(contest.id);
 
         const queriedOption = optionQuery
@@ -168,6 +236,9 @@ export default function VotePage() {
         const rememberedOption = contest.options?.find((option) => option.id === selectedOptionId);
         const nextOption = queriedOption || rememberedOption || contest.options?.[0];
         setSelectedOptionId(nextOption?.id || '');
+      } else {
+        setSelectedContestId('');
+        setSelectedOptionId('');
       }
 
       setOtpVerified(Boolean(payload.voterSession?.otpVerified));
@@ -186,10 +257,10 @@ export default function VotePage() {
   };
 
   useEffect(() => {
-    if (!slug || templateLoading || hasTemplate) return;
+    if (!slug) return;
     void fetchVoteData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, embedToken, contestQuery, optionQuery, templateLoading, hasTemplate]);
+  }, [slug, embedToken, contestQuery, optionQuery]);
 
   useEffect(() => {
     if (!selectedContest) {
@@ -253,7 +324,7 @@ export default function VotePage() {
       return;
     }
     if (!selectedGatewayId) {
-      toast.error('Select a payment gateway');
+      toast.error('Choose a payment method to continue');
       return;
     }
     if (electionMode && config.requireOtpForElection && !otpVerified) {
@@ -281,7 +352,7 @@ export default function VotePage() {
         globalThis.window.location.href = String(nextAction.url);
         return;
       }
-      toast.success('Payment intent created. Complete payment in your gateway.');
+      toast.success('Payment started. Complete checkout to finish your vote.');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to start paid vote');
     } finally {
@@ -355,18 +426,6 @@ export default function VotePage() {
     }
   };
 
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="voting-page" refreshIntervalMs={15000} revalidateOnFocus forceFresh />;
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
@@ -382,10 +441,10 @@ export default function VotePage() {
           <div className="phone-notch mb-4" />
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">E-Voting</p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Live Voting</p>
               <h1 className="text-xl font-bold text-brand-900 mt-1 leading-tight">{eventName}</h1>
             </div>
-            <span className="pill-accent">Active Vote</span>
+            <span className="pill-accent">Open</span>
           </div>
 
           <div className="mt-4 segmented w-full">
@@ -405,15 +464,15 @@ export default function VotePage() {
           </div>
 
           <div className="mt-4 rounded-3xl border border-red-200 bg-[#fff7f5] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-red-600">Featured Category</p>
-            <p className="mt-1 text-lg font-semibold text-brand-900">{selectedContest?.title || 'Select a contest'}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-red-600">Selected Category</p>
+            <p className="mt-1 text-lg font-semibold text-brand-900">{selectedContest?.title || 'Choose a category below'}</p>
             <p className="text-xs text-surface-600 mt-1">
-              {(selectedContest?.options.length || 0).toLocaleString()} contestants
-              {config?.allowPaidVotes ? ` • ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
+              {(selectedContest?.options.length || 0).toLocaleString()} nominees
+              {config?.allowPaidVotes ? ' - ' + formatMoney(config.currency, config.voteUnitPrice) + ' per vote' : ''}
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
-                <p className="text-[11px] text-surface-500">Contestants</p>
+                <p className="text-[11px] text-surface-500">Nominees</p>
                 <p className="text-base font-semibold text-brand-900">{selectedContest?.options.length || 0}</p>
               </div>
               <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
@@ -421,8 +480,8 @@ export default function VotePage() {
                 <p className="text-base font-semibold text-brand-900">{selectedContest?.mode || config?.mode || 'AWARDS'}</p>
               </div>
               <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
-                <p className="text-[11px] text-surface-500">OTP</p>
-                <p className="text-base font-semibold text-brand-900">{electionMode ? (otpVerified ? 'Verified' : 'Needed') : 'No'}</p>
+                <p className="text-[11px] text-surface-500">Verification</p>
+                <p className="text-base font-semibold text-brand-900">{electionMode ? (otpVerified ? 'Complete' : 'Required') : 'Not required'}</p>
               </div>
             </div>
             {config?.allowPublicNominations ? (
@@ -441,7 +500,8 @@ export default function VotePage() {
         <div className="space-y-4">
           {config && electionMode ? (
             <section className="dashboard-canvas p-4 space-y-3">
-              <h2 className="text-base font-semibold text-brand-900">Election verification</h2>
+              <h2 className="text-base font-semibold text-brand-900">Secure Election Check</h2>
+              <p className="text-xs text-surface-600">Verify your phone once to cast your vote in election mode.</p>
               <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto,auto] gap-2">
                 <input
                   className="input"
@@ -451,27 +511,29 @@ export default function VotePage() {
                 />
                 <input
                   className="input"
-                  placeholder="OTP code"
+                  placeholder="Verification code"
                   value={otpCode}
                   onChange={(event) => setOtpCode(event.target.value)}
                 />
                 <button className="btn-outline" onClick={requestOtp} disabled={submitting}>
-                  Request
+                  Send code
                 </button>
                 <button className="btn-primary" onClick={verifyOtp} disabled={submitting}>
                   Verify
                 </button>
               </div>
-              <p className="text-xs text-surface-600">{otpVerified ? 'Phone verified' : 'Verify phone to continue voting'}</p>
+              <p className="text-xs text-surface-600">{otpVerified ? 'Verification complete.' : 'Verification is required before voting.'}</p>
             </section>
           ) : null}
 
           <section className="dashboard-canvas p-4 space-y-3">
-            <h2 className="text-base font-semibold text-brand-900">Contest & Vote Setup</h2>
+            <h2 className="text-base font-semibold text-brand-900">Vote Setup</h2>
+            <p className="text-xs text-surface-600">Choose a category, set vote quantity, then vote for your preferred nominee.</p>
             <div className="grid grid-cols-1 md:grid-cols-[1fr,130px,1fr,auto] gap-2">
               <select
                 className="input"
                 value={selectedContestId}
+                disabled={!hasContests}
                 onChange={(event) => {
                   const nextContestId = event.target.value;
                   setSelectedContestId(nextContestId);
@@ -480,6 +542,9 @@ export default function VotePage() {
                   setSelectedOptionId(firstOption?.id || '');
                 }}
               >
+                {!hasContests ? (
+                  <option value="">No categories available</option>
+                ) : null}
                 {contests.map((contest) => (
                   <option key={contest.id} value={contest.id}>
                     {contest.title} ({contest.mode})
@@ -492,21 +557,38 @@ export default function VotePage() {
                 min={1}
                 max={config?.maxVotesPerPurchase || 100}
                 value={voteCount}
+                disabled={!hasContests}
                 onChange={(event) => setVoteCount(Math.max(1, Number(event.target.value || 1)))}
               />
-              <select className="input" value={selectedGatewayId} onChange={(event) => setSelectedGatewayId(event.target.value)}>
+              <select
+                className="input"
+                value={selectedGatewayId}
+                disabled={!canUsePaidVoting}
+                onChange={(event) => setSelectedGatewayId(event.target.value)}
+              >
+                {!canUsePaidVoting ? (
+                  <option value="">
+                    {config?.allowPaidVotes ? 'No payment gateway available' : 'Paid voting is disabled'}
+                  </option>
+                ) : null}
                 {paymentGateways.map((gateway) => (
                   <option key={gateway.id} value={gateway.id}>
                     {gateway.name} ({gateway.currency})
                   </option>
                 ))}
               </select>
-              <button className="btn-accent" onClick={() => { void createPaidIntent(); }} disabled={submitting || !config?.allowPaidVotes}>
+              <button className="btn-accent" onClick={() => { void createPaidIntent(); }} disabled={submitting || !canUsePaidVoting || !hasContests}>
                 Pay & Vote
               </button>
             </div>
+            {!hasContests ? (
+              <p className="text-xs text-surface-600">This event has no published nominees yet. Check back soon.</p>
+            ) : null}
+            {config?.allowPaidVotes && !hasGateways ? (
+              <p className="text-xs text-surface-600">Paid voting is enabled but no payment gateway is currently available for this event.</p>
+            ) : null}
             {config?.allowFreeVotes ? (
-              <button className="btn-outline w-full md:w-auto" onClick={() => { void castFreeVote(); }} disabled={submitting}>
+              <button className="btn-outline w-full md:w-auto" onClick={() => { void castFreeVote(); }} disabled={submitting || !hasContests}>
                 Cast Free Vote
               </button>
             ) : null}
@@ -519,8 +601,19 @@ export default function VotePage() {
                 {config ? formatMoney(config.currency, voteAmount) : ''}
               </p>
             </div>
+            <input
+              className="input"
+              placeholder="Search nominee by name or description"
+              value={nomineeSearch}
+              onChange={(event) => setNomineeSearch(event.target.value)}
+            />
             <div className="space-y-2">
-              {rankedOptions.map((option) => {
+              {filteredRankedOptions.length === 0 ? (
+                <div className="rounded-xl border border-surface-200 bg-white p-3 text-sm text-surface-600">
+                  No nominees match your search.
+                </div>
+              ) : null}
+              {filteredRankedOptions.map((option) => {
                 const selected = selectedOptionId === option.id;
                 return (
                   <article
@@ -544,7 +637,7 @@ export default function VotePage() {
                           <p className="text-sm font-semibold text-brand-900 truncate">{option.name}</p>
                           <p className="text-xs text-surface-500">#{option.rank}</p>
                         </div>
-                        <p className="text-xs text-surface-600 truncate">{option.description || 'Nominee profile'}</p>
+                        <p className="text-xs text-surface-600 truncate">{option.description || 'Tap vote to support this nominee.'}</p>
                       </div>
                       <button
                         type="button"
@@ -567,7 +660,7 @@ export default function VotePage() {
 
           <section className="dashboard-canvas p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-brand-900">Top Nominees</h2>
+              <h2 className="text-base font-semibold text-brand-900">Current Leaders</h2>
               <Link
                 href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
                 className="text-xs font-semibold text-red-700 hover:text-red-800"
@@ -592,7 +685,7 @@ export default function VotePage() {
                       <div className="min-w-0">
                         <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
                         <p className="font-semibold text-brand-900 truncate">{entry.name}</p>
-                        <p className="text-xs text-surface-600 truncate">{entry.description || 'Nominee profile'}</p>
+                        <p className="text-xs text-surface-600 truncate">{entry.description || 'Top performing nominee'}</p>
                       </div>
                     </div>
                     <button
@@ -612,7 +705,7 @@ export default function VotePage() {
                 </article>
               ))
             ) : (
-              <p className="text-sm text-surface-600">Leaderboard is still warming up.</p>
+              <p className="text-sm text-surface-600">Results will appear here once voting starts.</p>
             )}
           </section>
         </div>
@@ -620,3 +713,4 @@ export default function VotePage() {
     </div>
   );
 }
+

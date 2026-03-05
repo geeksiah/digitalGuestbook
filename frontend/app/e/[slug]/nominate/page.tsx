@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 
 type NominationField = {
   id: string;
@@ -48,7 +47,6 @@ export default function NominatePage() {
   const contestQuery = String(searchParams.get('contestId') || '');
   const embedToken = String(searchParams.get('token') || searchParams.get('embedToken') || '');
   const storageKey = `${SESSION_STORAGE_KEY_PREFIX}${slug}`;
-  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'nomination-page');
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -78,12 +76,20 @@ export default function NominatePage() {
     setLoading(true);
     try {
       const response = await votingApi.getNominationForm(slug);
-      const payload = response.data as NominationFormPayload;
+      const payload = ((response.data as any)?.data || response.data || {}) as Partial<NominationFormPayload>;
+      const normalizedContests: NominationContest[] = (Array.isArray(payload.contests) ? payload.contests : []).map((contest: any) => ({
+        id: String(contest?.id || ''),
+        title: String(contest?.title || contest?.name || 'Untitled category'),
+        mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+        nominationFormFields: Array.isArray(contest?.nominationFormFields) ? contest.nominationFormFields : [],
+        categories: Array.isArray(contest?.categories) ? contest.categories : [],
+      })).filter((contest) => contest.id);
+
       setEnabled(Boolean(payload.enabled));
-      setEventName(payload.event?.name || '');
-      setContests(payload.contests || []);
-      const firstContest = payload.contests?.[0]?.id || '';
-      const requested = contestQuery && payload.contests.some((contest) => contest.id === contestQuery) ? contestQuery : '';
+      setEventName(String(payload.event?.name || slug));
+      setContests(normalizedContests);
+      const firstContest = normalizedContests[0]?.id || '';
+      const requested = contestQuery && normalizedContests.some((contest) => contest.id === contestQuery) ? contestQuery : '';
       setContestId((current) => current || requested || firstContest);
       const persisted = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
       if (persisted) {
@@ -97,15 +103,19 @@ export default function NominatePage() {
   };
 
   useEffect(() => {
-    if (!slug || templateLoading || hasTemplate) return;
+    if (!slug) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, templateLoading, hasTemplate]);
+  }, [slug]);
 
   useEffect(() => {
     if (!selectedContest) return;
     const firstCategory = selectedContest.categories?.[0]?.id || '';
-    setCategoryId((current) => current || firstCategory);
+    setCategoryId((current) => {
+      if (!selectedContest.categories?.length) return '';
+      const stillValid = selectedContest.categories.some((category) => category.id === current);
+      return stillValid ? current : firstCategory;
+    });
     setCustomFields((current) => {
       const next: Record<string, string> = {};
       selectedContest.nominationFormFields.forEach((field) => {
@@ -126,6 +136,15 @@ export default function NominatePage() {
     }
     if (selectedContest?.categories?.length && !categoryId) {
       toast.error('Select an award category');
+      return;
+    }
+
+    const missingRequiredField = (selectedContest?.nominationFormFields || []).find((field) => {
+      if (!field.required) return false;
+      return !String(customFields[field.id] || '').trim();
+    });
+    if (missingRequiredField) {
+      toast.error(`Please complete "${missingRequiredField.label}"`);
       return;
     }
 
@@ -156,8 +175,12 @@ export default function NominatePage() {
       setSubmitterName('');
       setSubmitterEmail('');
       setSubmitterPhone('');
-      setCustomFields({});
-      setCategoryId('');
+      const resetFields: Record<string, string> = {};
+      (selectedContest?.nominationFormFields || []).forEach((field) => {
+        resetFields[field.id] = '';
+      });
+      setCustomFields(resetFields);
+      setCategoryId(selectedContest?.categories?.[0]?.id || '');
       setNomineeImagePath('');
       setNomineeImagePreview('');
       toast.success('Nomination submitted for review');
@@ -182,18 +205,6 @@ export default function NominatePage() {
     }
   };
 
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="nomination-page" refreshIntervalMs={15000} revalidateOnFocus forceFresh />;
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
@@ -216,15 +227,29 @@ export default function NominatePage() {
     );
   }
 
+  if (enabled && contests.length === 0) {
+    return (
+      <div className="min-h-screen bg-surface-50 p-6">
+        <div className="mx-auto max-w-xl card-premium p-6 space-y-3">
+          <h1 className="text-xl font-semibold text-brand-900">Nominations Are Not Ready Yet</h1>
+          <p className="text-sm text-surface-600">This event has no nomination categories published right now.</p>
+          <Link className="btn-outline inline-flex" href={`/e/${slug}/vote`}>
+            Back To Voting
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-surface-50 py-6 px-4">
       <div className="mx-auto max-w-4xl space-y-4">
         <section className="phone-stage p-5">
           <div className="phone-notch mb-4" />
-          <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Nomination Flow</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Public Nomination</p>
           <h1 className="text-2xl font-bold mt-2 text-brand-900">{eventName}</h1>
           <p className="text-sm text-surface-600 mt-1">
-            Submit nominees by category. Approved nominees automatically appear on the public nominees page.
+            Submit a nominee for review. Approved nominees appear automatically on the public list.
           </p>
           <div className="mt-4 segmented w-full max-w-md">
             <span className="segmented-item segmented-item-active text-center">Nominate</span>
@@ -246,7 +271,7 @@ export default function NominatePage() {
         <section className="dashboard-canvas p-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1 block">
-              <span className="text-xs text-surface-600">Category</span>
+              <span className="text-xs text-surface-600">Voting Category</span>
               <select className="input" value={contestId} onChange={(event) => setContestId(event.target.value)}>
                 <option value="" disabled>
                   Select category
