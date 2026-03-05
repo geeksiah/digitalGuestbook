@@ -21,6 +21,7 @@ type EventLite = {
   id: string;
   name: string;
   slug: string;
+  defaultCurrency?: string | null;
 };
 
 type VotingConfig = {
@@ -42,6 +43,8 @@ type VotingOption = {
   contestId: string;
   name: string;
   description?: string | null;
+  imagePath?: string | null;
+  imageUrl?: string | null;
   totalVotes: number;
   freeVotes: number;
   paidVotes: number;
@@ -66,6 +69,8 @@ type VotingNomination = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   nomineeName: string;
   nomineeDescription?: string | null;
+  nomineeImagePath?: string | null;
+  nomineeImageUrl?: string | null;
   submitterName: string;
   submitterEmail?: string | null;
   submitterPhone?: string | null;
@@ -76,6 +81,16 @@ type VotingNomination = {
   contest?: { id: string; title: string; mode: VoteMode } | null;
   createdAt: string;
 };
+
+type FieldDraft = {
+  label: string;
+  type: NominationField['type'];
+  required: boolean;
+  placeholder: string;
+  options: string;
+};
+
+const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
 
 type VotingAnalytics = {
   totals: {
@@ -126,6 +141,30 @@ const formatMoney = (currency: string, amount: number) => {
   }
 };
 
+const parseCustomFields = (raw: string | null | undefined) => {
+  if (!raw) return {} as Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const parseFieldOptions = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const fieldToDraft = (field: NominationField): FieldDraft => ({
+  label: field.label,
+  type: field.type,
+  required: Boolean(field.required),
+  placeholder: field.placeholder || '',
+  options: (field.options || []).join(', '),
+});
+
 export default function AdminVotingPage() {
   const params = useParams();
   const eventId = String(params.id || '');
@@ -149,10 +188,14 @@ export default function AdminVotingPage() {
   const [newContestMode, setNewContestMode] = useState<VoteMode>('AWARDS');
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionDescription, setNewOptionDescription] = useState('');
+  const [newOptionImagePath, setNewOptionImagePath] = useState('');
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldType, setNewFieldType] = useState<NominationField['type']>('text');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
+  const [newFieldPlaceholder, setNewFieldPlaceholder] = useState('');
   const [newFieldOptions, setNewFieldOptions] = useState('');
+  const [editingFieldId, setEditingFieldId] = useState('');
+  const [editingFieldDraft, setEditingFieldDraft] = useState<FieldDraft | null>(null);
 
   const selectedContest = useMemo(
     () => contests.find((contest) => contest.id === selectedContestId) || null,
@@ -166,6 +209,35 @@ export default function AdminVotingPage() {
     () => nominations.filter((nomination) => nomination.status === 'PENDING'),
     [nominations]
   );
+  const eventCurrency = useMemo(
+    () => String(event && (event as any).defaultCurrency ? (event as any).defaultCurrency : config?.currency || 'USD').toUpperCase(),
+    [event, config?.currency]
+  );
+
+  const getContestById = (contestId: string) =>
+    contests.find((contest) => contest.id === contestId) || null;
+
+  const nominationPresentation = (nomination: VotingNomination) => {
+    const fields = parseCustomFields(nomination.customFieldsJson);
+    const imagePathFromFields =
+      typeof fields[NOMINATION_PHOTO_FIELD_KEY] === 'string'
+        ? String(fields[NOMINATION_PHOTO_FIELD_KEY]).trim()
+        : '';
+    delete fields[NOMINATION_PHOTO_FIELD_KEY];
+
+    const contest = getContestById(nomination.contestId);
+    const labelMap = new Map((contest?.nominationFormFields || []).map((field) => [field.id, field.label] as const));
+    const customFieldRows = Object.entries(fields).map(([key, value]) => ({
+      key,
+      label: labelMap.get(key) || key.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+      value: String(value ?? ''),
+    }));
+
+    return {
+      customFieldRows,
+      nomineeImageUrl: nomination.nomineeImageUrl || nomination.nomineeImagePath || imagePathFromFields || '',
+    };
+  };
 
   const loadVotingConfig = async () => {
     const response = await adminVotingApi.getVotingConfig(eventId);
@@ -204,7 +276,16 @@ export default function AdminVotingPage() {
     try {
       const eventResponse = await eventsApi.get(eventId);
       const eventPayload = eventResponse.data?.event || null;
-      setEvent(eventPayload ? { id: eventPayload.id, name: eventPayload.name, slug: eventPayload.slug } : null);
+      setEvent(
+        eventPayload
+          ? {
+              id: eventPayload.id,
+              name: eventPayload.name,
+              slug: eventPayload.slug,
+              defaultCurrency: eventPayload.defaultCurrency || 'USD',
+            }
+          : null
+      );
 
       await Promise.all([loadVotingConfig(), loadContests(), loadAnalytics(), loadNominations()]);
     } catch (error: any) {
@@ -229,8 +310,17 @@ export default function AdminVotingPage() {
     setSavingConfig(true);
     try {
       const payload = {
-        ...config,
-        currency: String(config.currency || 'USD').toUpperCase(),
+        mode: config.mode,
+        isEnabled: config.isEnabled,
+        allowFreeVotes: config.allowFreeVotes,
+        allowPaidVotes: config.allowPaidVotes,
+        allowPublicNominations: Boolean(config.allowPublicNominations),
+        requireOtpForElection: config.requireOtpForElection,
+        voteUnitPrice: Number(config.voteUnitPrice || 0),
+        maxVotesPerPurchase: Math.max(1, Number(config.maxVotesPerPurchase || 1)),
+        freeVoteLabel: config.freeVoteLabel || null,
+        paidVoteLabel: config.paidVoteLabel || null,
+        currency: eventCurrency,
       };
       const response = await adminVotingApi.updateVotingConfig(eventId, payload);
       setConfig(response.data?.config || config);
@@ -319,9 +409,11 @@ export default function AdminVotingPage() {
       await adminVotingApi.createVotingOption(eventId, selectedContestId, {
         name: newOptionName.trim(),
         description: newOptionDescription.trim() || undefined,
+        imagePath: newOptionImagePath.trim() || undefined,
       });
       setNewOptionName('');
       setNewOptionDescription('');
+      setNewOptionImagePath('');
       await Promise.all([loadOptions(selectedContestId), loadContests(), loadAnalytics()]);
       toast.success('Nominee added');
     } catch (error: any) {
@@ -405,12 +497,10 @@ export default function AdminVotingPage() {
       label: newFieldLabel.trim(),
       type: newFieldType,
       required: newFieldRequired,
+      placeholder: newFieldPlaceholder.trim() || null,
       ...(newFieldType === 'select'
         ? {
-            options: newFieldOptions
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean),
+            options: parseFieldOptions(newFieldOptions),
           }
         : {}),
     };
@@ -420,6 +510,7 @@ export default function AdminVotingPage() {
     setNewFieldLabel('');
     setNewFieldType('text');
     setNewFieldRequired(false);
+    setNewFieldPlaceholder('');
     setNewFieldOptions('');
   };
 
@@ -428,6 +519,40 @@ export default function AdminVotingPage() {
     await updateSelectedContestNominationRules({
       nominationFormFields: selectedNominationFields.filter((field) => field.id !== fieldId),
     });
+    if (editingFieldId === fieldId) {
+      setEditingFieldId('');
+      setEditingFieldDraft(null);
+    }
+  };
+
+  const startEditingField = (field: NominationField) => {
+    setEditingFieldId(field.id);
+    setEditingFieldDraft(fieldToDraft(field));
+  };
+
+  const saveFieldEdit = async () => {
+    if (!selectedContest || !editingFieldId || !editingFieldDraft) return;
+    if (!editingFieldDraft.label.trim()) {
+      toast.error('Field label is required');
+      return;
+    }
+    const nextFields = selectedNominationFields.map((field) =>
+      field.id === editingFieldId
+        ? {
+            ...field,
+            label: editingFieldDraft.label.trim(),
+            type: editingFieldDraft.type,
+            required: editingFieldDraft.required,
+            placeholder: editingFieldDraft.placeholder.trim() || null,
+            options: editingFieldDraft.type === 'select' ? parseFieldOptions(editingFieldDraft.options) : undefined,
+          }
+        : field
+    );
+    await updateSelectedContestNominationRules({
+      nominationFormFields: nextFields,
+    });
+    setEditingFieldId('');
+    setEditingFieldDraft(null);
   };
 
   const reviewNomination = async (nominationId: string, status: 'APPROVED' | 'REJECTED') => {
@@ -503,16 +628,10 @@ export default function AdminVotingPage() {
                 </select>
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-surface-600">Currency</span>
-                <input
-                  className="input"
-                  value={config.currency}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      current ? { ...current, currency: event.target.value.toUpperCase().slice(0, 3) } : current
-                    )
-                  }
-                />
+                <span className="text-xs text-surface-600">Event Currency</span>
+                <div className="input flex items-center font-semibold text-brand-900 bg-surface-50">
+                  {eventCurrency}
+                </div>
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-surface-600">Unit Price</span>
@@ -550,7 +669,7 @@ export default function AdminVotingPage() {
                 className={`btn-outline ${config.isEnabled ? 'border-emerald-300 text-emerald-700' : ''}`}
                 onClick={() => setConfig((current) => (current ? { ...current, isEnabled: !current.isEnabled } : current))}
               >
-                Voting: {config.isEnabled ? 'On' : 'Off'}
+                Voting page {config.isEnabled ? 'enabled' : 'disabled'}
               </button>
               <button
                 type="button"
@@ -559,7 +678,7 @@ export default function AdminVotingPage() {
                   setConfig((current) => (current ? { ...current, allowFreeVotes: !current.allowFreeVotes } : current))
                 }
               >
-                Free: {config.allowFreeVotes ? 'On' : 'Off'}
+                Free voting {config.allowFreeVotes ? 'enabled' : 'disabled'}
               </button>
               <button
                 type="button"
@@ -568,7 +687,7 @@ export default function AdminVotingPage() {
                   setConfig((current) => (current ? { ...current, allowPaidVotes: !current.allowPaidVotes } : current))
                 }
               >
-                Paid: {config.allowPaidVotes ? 'On' : 'Off'}
+                Paid voting {config.allowPaidVotes ? 'enabled' : 'disabled'}
               </button>
               <button
                 type="button"
@@ -579,7 +698,7 @@ export default function AdminVotingPage() {
                   )
                 }
               >
-                OTP: {config.requireOtpForElection ? 'Required' : 'Optional'}
+                OTP {config.requireOtpForElection ? 'required' : 'optional'}
               </button>
               <button
                 type="button"
@@ -590,10 +709,10 @@ export default function AdminVotingPage() {
                   )
                 }
               >
-                Nominations: {config.allowPublicNominations ? 'On' : 'Off'}
+                Public nominations {config.allowPublicNominations ? 'enabled' : 'disabled'}
               </button>
               <button className="btn-primary" onClick={saveConfig} disabled={savingConfig}>
-                {savingConfig ? 'Saving...' : 'Save Config'}
+                {savingConfig ? 'Saving...' : 'Save Settings'}
               </button>
             </div>
           </>
@@ -674,6 +793,13 @@ export default function AdminVotingPage() {
               onChange={(event) => setNewOptionDescription(event.target.value)}
               disabled={!selectedContestId}
             />
+            <input
+              className="input"
+              placeholder="Nominee photo URL (optional)"
+              value={newOptionImagePath}
+              onChange={(event) => setNewOptionImagePath(event.target.value)}
+              disabled={!selectedContestId}
+            />
             <button className="btn-primary w-full" onClick={createNominee} disabled={!selectedContestId || savingOption}>
               Add Nominee
             </button>
@@ -720,6 +846,13 @@ export default function AdminVotingPage() {
                 <option value="select">select</option>
               </select>
             </div>
+            <input
+              className="input"
+              placeholder="Field placeholder (optional)"
+              value={newFieldPlaceholder}
+              onChange={(event) => setNewFieldPlaceholder(event.target.value)}
+              disabled={!selectedContest}
+            />
             {newFieldType === 'select' ? (
               <input
                 className="input"
@@ -748,20 +881,112 @@ export default function AdminVotingPage() {
               {selectedNominationFields.length === 0 ? (
                 <p className="text-xs text-surface-500">No custom fields configured.</p>
               ) : (
-                selectedNominationFields.map((field) => (
-                  <div key={field.id} className="flex items-center justify-between rounded border border-surface-200 px-2 py-1.5 text-xs">
-                    <span>
-                      {field.label} ({field.type}){field.required ? ' *' : ''}
-                    </span>
-                    <button
-                      className="text-rose-700 hover:text-rose-800"
-                      onClick={() => removeNominationField(field.id)}
-                      disabled={savingNominationRule}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
+                selectedNominationFields.map((field) => {
+                  const isEditing = editingFieldId === field.id && editingFieldDraft;
+                  return (
+                    <div key={field.id} className="rounded border border-surface-200 p-2 text-xs space-y-2">
+                      {isEditing ? (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input
+                              className="input"
+                              value={editingFieldDraft.label}
+                              onChange={(event) =>
+                                setEditingFieldDraft((current) =>
+                                  current ? { ...current, label: event.target.value } : current
+                                )
+                              }
+                            />
+                            <select
+                              className="input"
+                              value={editingFieldDraft.type}
+                              onChange={(event) =>
+                                setEditingFieldDraft((current) =>
+                                  current ? { ...current, type: event.target.value as NominationField['type'] } : current
+                                )
+                              }
+                            >
+                              <option value="text">text</option>
+                              <option value="textarea">textarea</option>
+                              <option value="email">email</option>
+                              <option value="phone">phone</option>
+                              <option value="number">number</option>
+                              <option value="select">select</option>
+                            </select>
+                          </div>
+                          <input
+                            className="input"
+                            placeholder="Field placeholder (optional)"
+                            value={editingFieldDraft.placeholder}
+                            onChange={(event) =>
+                              setEditingFieldDraft((current) =>
+                                current ? { ...current, placeholder: event.target.value } : current
+                              )
+                            }
+                          />
+                          {editingFieldDraft.type === 'select' ? (
+                            <input
+                              className="input"
+                              placeholder="Select options (comma separated)"
+                              value={editingFieldDraft.options}
+                              onChange={(event) =>
+                                setEditingFieldDraft((current) =>
+                                  current ? { ...current, options: event.target.value } : current
+                                )
+                              }
+                            />
+                          ) : null}
+                          <div className="flex items-center justify-between">
+                            <label className="inline-flex items-center gap-2 text-xs text-surface-700">
+                              <input
+                                type="checkbox"
+                                checked={editingFieldDraft.required}
+                                onChange={(event) =>
+                                  setEditingFieldDraft((current) =>
+                                    current ? { ...current, required: event.target.checked } : current
+                                  )
+                                }
+                              />
+                              Required
+                            </label>
+                            <div className="flex gap-1">
+                              <button className="btn-outline text-xs" onClick={saveFieldEdit} disabled={savingNominationRule}>
+                                Save
+                              </button>
+                              <button
+                                className="btn-outline text-xs"
+                                onClick={() => {
+                                  setEditingFieldId('');
+                                  setEditingFieldDraft(null);
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between rounded border border-surface-200 px-2 py-1.5 text-xs">
+                          <span>
+                            {field.label} ({field.type}){field.required ? ' *' : ''}
+                          </span>
+                          <div className="flex gap-2">
+                            <button className="text-brand-700 hover:text-brand-900" onClick={() => startEditingField(field)}>
+                              Edit
+                            </button>
+                            <button
+                              className="text-rose-700 hover:text-rose-800"
+                              onClick={() => removeNominationField(field.id)}
+                              disabled={savingNominationRule}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -772,11 +997,22 @@ export default function AdminVotingPage() {
               options.map((option) => (
                 <div key={option.id} className="rounded-lg border border-surface-200 p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="flex items-start gap-2 min-w-0">
+                      {option.imageUrl || option.imagePath ? (
+                        <img
+                          src={option.imageUrl || option.imagePath || ''}
+                          alt={option.name}
+                          className="h-11 w-11 rounded-lg border border-surface-200 object-cover"
+                        />
+                      ) : (
+                        <div className="h-11 w-11 rounded-lg border border-surface-200 bg-surface-100" />
+                      )}
+                      <div className="min-w-0">
                       <p className="text-sm font-semibold text-brand-900">{option.name}</p>
                       <p className="text-xs text-surface-600 mt-0.5">
                         Total {option.totalVotes} • Free {option.freeVotes} • Paid {option.paidVotes}
                       </p>
+                      </div>
                     </div>
                     <div className="flex gap-1">
                       <button className="btn-outline text-xs" onClick={() => renameNominee(option)}>Rename</button>
@@ -804,57 +1040,80 @@ export default function AdminVotingPage() {
           <p className="text-sm text-surface-500">No nominations yet.</p>
         ) : (
           <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
-            {nominations.map((nomination) => (
-              <div key={nomination.id} className="rounded-lg border border-surface-200 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-brand-900">{nomination.nomineeName}</p>
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs border ${
-                      nomination.status === 'PENDING'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+            {nominations.map((nomination) => {
+              const view = nominationPresentation(nomination);
+              return (
+                <div key={nomination.id} className="rounded-lg border border-surface-200 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex gap-3 min-w-0">
+                      {view.nomineeImageUrl ? (
+                        <img
+                          src={view.nomineeImageUrl}
+                          alt={nomination.nomineeName}
+                          className="h-14 w-14 rounded-lg border border-surface-200 object-cover"
+                        />
+                      ) : null}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-brand-900">{nomination.nomineeName}</p>
+                        <p className="text-xs text-surface-600 mt-1">
+                          Category: {nomination.contest?.title || nomination.contestId} • Submitted by {nomination.submitterName}
+                        </p>
+                        {nomination.nomineeDescription ? (
+                          <p className="text-xs text-surface-600 mt-1">{nomination.nomineeDescription}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs border ${
+                        nomination.status === 'PENDING'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : nomination.status === 'APPROVED'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}
+                    >
+                      {nomination.status === 'PENDING'
+                        ? 'Awaiting review'
                         : nomination.status === 'APPROVED'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
-                    }`}
-                  >
-                    {nomination.status}
-                  </span>
-                </div>
-                <p className="text-xs text-surface-600 mt-1">
-                  Category: {nomination.contest?.title || nomination.contestId} • Submitted by {nomination.submitterName}
-                </p>
-                {nomination.nomineeDescription ? (
-                  <p className="text-xs text-surface-600 mt-1">{nomination.nomineeDescription}</p>
-                ) : null}
-                {nomination.customFieldsJson ? (
-                  <pre className="mt-2 text-[11px] bg-surface-50 border border-surface-100 rounded p-2 overflow-x-auto text-surface-700">
-                    {nomination.customFieldsJson}
-                  </pre>
-                ) : null}
-                {nomination.status === 'PENDING' ? (
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      className="btn-outline text-xs border-emerald-200 text-emerald-700"
-                      onClick={() => reviewNomination(nomination.id, 'APPROVED')}
-                      disabled={reviewingNominationId === nomination.id}
-                    >
-                      Approve + Add Nominee
-                    </button>
-                    <button
-                      className="btn-outline text-xs border-rose-200 text-rose-700"
-                      onClick={() => reviewNomination(nomination.id, 'REJECTED')}
-                      disabled={reviewingNominationId === nomination.id}
-                    >
-                      Reject
-                    </button>
+                        ? 'Approved'
+                        : 'Declined'}
+                    </span>
                   </div>
-                ) : nomination.approvedOption ? (
-                  <p className="text-xs text-emerald-700 mt-2">
-                    Added nominee: {nomination.approvedOption.name}
-                  </p>
-                ) : null}
-              </div>
-            ))}
+                  {view.customFieldRows.length ? (
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {view.customFieldRows.map((row) => (
+                        <div key={`${nomination.id}:${row.key}`} className="rounded border border-surface-100 bg-surface-50 px-2 py-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-surface-500">{row.label}</p>
+                          <p className="text-xs text-brand-900">{row.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {nomination.status === 'PENDING' ? (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        className="btn-outline text-xs border-emerald-200 text-emerald-700"
+                        onClick={() => reviewNomination(nomination.id, 'APPROVED')}
+                        disabled={reviewingNominationId === nomination.id}
+                      >
+                        Approve and publish nominee
+                      </button>
+                      <button
+                        className="btn-outline text-xs border-rose-200 text-rose-700"
+                        onClick={() => reviewNomination(nomination.id, 'REJECTED')}
+                        disabled={reviewingNominationId === nomination.id}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : nomination.approvedOption ? (
+                    <p className="text-xs text-emerald-700 mt-2">
+                      Published as: {nomination.approvedOption.name}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -883,7 +1142,7 @@ export default function AdminVotingPage() {
               <div className="rounded-lg bg-surface-50 p-3">
                 <p className="text-xs text-surface-500">Revenue</p>
                 <p className="text-lg font-semibold text-brand-900">
-                  {formatMoney(config?.currency || 'USD', analytics.totals.paidRevenue)}
+                  {formatMoney(eventCurrency, analytics.totals.paidRevenue)}
                 </p>
               </div>
               <div className="rounded-lg bg-surface-50 p-3">

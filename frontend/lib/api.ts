@@ -1,6 +1,12 @@
 import axios from 'axios';
 
 const normalizeOwnerEmail = (email: string) => email.trim().toLowerCase();
+const readToken = (key: string) => {
+  if (typeof window === 'undefined') return null;
+  const token = localStorage.getItem(key);
+  if (!token || token === 'null' || token === 'undefined') return null;
+  return token;
+};
 
 // API Base URL - defaults to localhost:3001 for development
 export const API_BASE_URL = typeof window !== 'undefined' 
@@ -422,27 +428,37 @@ export const ownerAuthApi = {
 };
 
 const getOwnerToken = () =>
-  typeof window !== 'undefined' ? localStorage.getItem('owner_token') : null;
+  readToken('owner_token');
 const getAdminToken = () =>
-  typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+  readToken('admin_token');
 
-const ownerHeaders = () => ({
-  Authorization: `Bearer ${getOwnerToken() || ''}`,
-});
+const ownerHeaders = () => {
+  const token = getOwnerToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
-const managementHeaders = () => ({
-  Authorization: `Bearer ${getAdminToken() || getOwnerToken() || ''}`,
-});
+const managementHeaders = () => {
+  const token = getAdminToken() || getOwnerToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 export const ownerDashboardApi = {
   // Existing (keep backward compat)
   events: (token?: string, params?: any) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events`, {
-      params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
+      params,
+      headers:
+        token && token !== 'null' && token !== 'undefined'
+          ? { Authorization: `Bearer ${token}` }
+          : ownerHeaders(),
     }),
   payouts: (token?: string, params?: any) =>
     axios.get(`${API_BASE_URL}/api/owner-dashboard/payouts`, {
-      params, headers: { Authorization: `Bearer ${token || getOwnerToken()}` },
+      params,
+      headers:
+        token && token !== 'null' && token !== 'undefined'
+          ? { Authorization: `Bearer ${token}` }
+          : ownerHeaders(),
     }),
   // NEW — methods called without explicit token (use stored token)
   getEvents: (params?: any) =>
@@ -776,12 +792,20 @@ export const votingApi = {
     axios.post(`${API_BASE_URL}/api/voting/embed/token`, { slug }),
   getNominationForm: (slug: string) =>
     axios.get(`${API_BASE_URL}/api/voting/public/${slug}/nomination-form`),
+  uploadNominationPhoto: (slug: string, file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return axios.post(`${API_BASE_URL}/api/voting/public/${slug}/nominations/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   submitNomination: (
     slug: string,
     data: {
       contestId: string;
       nomineeName: string;
       nomineeDescription?: string;
+      nomineeImagePath?: string;
       submitterName: string;
       submitterEmail?: string;
       submitterPhone?: string;

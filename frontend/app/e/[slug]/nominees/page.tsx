@@ -12,6 +12,7 @@ type Nominee = {
   name: string;
   description: string | null;
   imagePath: string | null;
+  imageUrl?: string | null;
   totalVotes: number;
   freeVotes: number;
   paidVotes: number;
@@ -149,18 +150,18 @@ export default function NomineesPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                     {category.nominees.map((nominee, index) => {
-                      const initials = nominee.name
-                        .split(' ')
-                        .map((part) => part[0])
-                        .join('')
-                        .slice(0, 2)
-                        .toUpperCase();
                       return (
                         <article key={nominee.optionId} className="focus-card">
                           <div className="flex items-center gap-3">
-                            <div className="h-11 w-11 rounded-full border border-surface-200 bg-surface-100 flex items-center justify-center text-xs font-semibold text-brand-900">
-                              {initials}
-                            </div>
+                            {nominee.imageUrl || nominee.imagePath ? (
+                              <img
+                                src={nominee.imageUrl || nominee.imagePath || ''}
+                                alt={nominee.name}
+                                className="h-11 w-11 rounded-full border border-surface-200 object-cover"
+                              />
+                            ) : (
+                              <div className="h-11 w-11 rounded-full border border-surface-200 bg-surface-100" />
+                            )}
                             <div className="min-w-0 flex-1">
                               <p className="text-sm text-surface-500">Rank #{index + 1}</p>
                               <h4 className="font-semibold text-brand-900 truncate">{nominee.name}</h4>

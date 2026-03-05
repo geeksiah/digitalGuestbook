@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, ownersApi, adminApi, giftingApi, itineraryApi, paymentGatewaysApi, adminVotingApi, API_BASE_URL } from '@/lib/api';
@@ -1123,19 +1123,49 @@ export default function EventDetailPage() {
 
   if (loading || !event) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>;
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'rsvps', label: 'RSVPs', count: event._count.rsvps },
-    { id: 'checkin', label: 'Check-In', count: event._count.checkIns },
-    { id: 'media', label: 'Media', count: event._count.mediaAssets },
-    { id: 'templates', label: 'Templates' },
-    { id: 'tickets', label: 'Tickets' },
-    { id: 'itinerary', label: 'Itinerary', count: itineraryItems.length || undefined },
-    { id: 'formFields', label: 'Form Fields', count: formFields.length },
-    { id: 'gifts', label: 'Gifts', count: event._count.giftOrders || undefined },
-    { id: 'voting', label: 'Voting' },
-    { id: 'settings', label: 'Settings' },
-  ];
+  const tabs: { id: Tab; label: string; count?: number }[] = useMemo(() => {
+    const rsvpEnabled = Boolean(event.rsvpEnabled);
+    const checkInEnabled = Boolean(event.checkInEnabled);
+    const guestbookEnabled = Boolean(event.guestbookEnabled);
+    const itineraryEnabled = Boolean(event.itineraryEnabled);
+    const giftingEnabled = Boolean(event.giftingEnabled);
+    const ticketingEnabled = Boolean(event.ticketingEnabled) || (rsvpEnabled && event.rsvpMode === 'paid');
+
+    return [
+      { id: 'overview', label: 'Overview' },
+      ...(rsvpEnabled ? [{ id: 'rsvps' as Tab, label: 'RSVPs', count: event._count.rsvps }] : []),
+      ...(checkInEnabled ? [{ id: 'checkin' as Tab, label: 'Check-In', count: event._count.checkIns }] : []),
+      ...(guestbookEnabled ? [{ id: 'media' as Tab, label: 'Media', count: event._count.mediaAssets }] : []),
+      { id: 'templates', label: 'Templates' },
+      ...(ticketingEnabled ? [{ id: 'tickets' as Tab, label: 'Tickets' }] : []),
+      ...(itineraryEnabled ? [{ id: 'itinerary' as Tab, label: 'Itinerary', count: itineraryItems.length || undefined }] : []),
+      ...(rsvpEnabled ? [{ id: 'formFields' as Tab, label: 'Form Fields', count: formFields.length }] : []),
+      ...(giftingEnabled ? [{ id: 'gifts' as Tab, label: 'Gifts', count: event._count.giftOrders || undefined }] : []),
+      ...(votingEnabled ? [{ id: 'voting' as Tab, label: 'Voting' }] : []),
+      { id: 'settings', label: 'Settings' },
+    ];
+  }, [
+    event.rsvpEnabled,
+    event.checkInEnabled,
+    event.guestbookEnabled,
+    event.itineraryEnabled,
+    event.giftingEnabled,
+    event.ticketingEnabled,
+    event.rsvpMode,
+    event._count.rsvps,
+    event._count.checkIns,
+    event._count.mediaAssets,
+    event._count.giftOrders,
+    itineraryItems.length,
+    formFields.length,
+    votingEnabled,
+  ]);
+
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab('overview');
+    }
+  }, [activeTab, tabs]);
 
   const giftSummary = giftOrders.reduce(
     (acc, order) => {

@@ -5,18 +5,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const crypto_1 = require("crypto");
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
+const sharp_1 = __importDefault(require("sharp"));
 const zod_1 = require("zod");
 const notifications_js_1 = require("../services/notifications.js");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const paymentCore_js_1 = require("../services/paymentCore.js");
 const walletPolicy_js_1 = require("../utils/walletPolicy.js");
+const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const router = (0, express_1.Router)();
 const VOTING_SESSION_SECRET = process.env.VOTING_SESSION_SECRET || process.env.JWT_SECRET || 'eventpeepo-vote-session-secret';
 const EMBED_TOKEN_SECRET = process.env.VOTING_EMBED_SECRET || process.env.JWT_SECRET || 'eventpeepo-vote-embed-secret';
 const SESSION_TTL_SECONDS = Math.max(300, Number(process.env.VOTING_SESSION_TTL_SECONDS || 86400));
 const OTP_TTL_SECONDS = Math.max(60, Number(process.env.VOTING_OTP_TTL_SECONDS || 300));
 const EMBED_TOKEN_TTL_SECONDS = Math.max(60, Number(process.env.VOTING_EMBED_TOKEN_TTL_SECONDS || 300));
+const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
 const parseJson = (value, fallback) => {
     if (!value)
         return fallback;
@@ -27,6 +31,38 @@ const parseJson = (value, fallback) => {
         return fallback;
     }
 };
+const resolveMediaUrl = (mediaPath) => {
+    if (!mediaPath)
+        return null;
+    const normalized = String(mediaPath).trim();
+    if (!normalized)
+        return null;
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+        return normalized;
+    }
+    try {
+        return (0, supabaseStorage_js_1.getPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, normalized);
+    }
+    catch {
+        try {
+            return (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, normalized);
+        }
+        catch {
+            return normalized;
+        }
+    }
+};
+const nominationPhotoUpload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 8 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        if (!String(file.mimetype || '').startsWith('image/')) {
+            cb(new errorHandler_js_1.AppError('Please upload an image file', 400));
+            return;
+        }
+        cb(null, true);
+    },
+});
 const parseNominationFields = (value) => parseJson(value, [])
     .filter((field) => field && typeof field.id === 'string' && typeof field.label === 'string')
     .map((field) => ({
@@ -227,6 +263,10 @@ router.get('/public/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res)
     });
     const contests = contestsWithOptions.map((contest) => ({
         ...contest,
+        options: contest.options.map((option) => ({
+            ...option,
+            imageUrl: resolveMediaUrl(option.imagePath),
+        })),
         nominationFormFields: parseNominationFields(contest.nominationFormFieldsJson),
     }));
     res.json({
@@ -270,13 +310,43 @@ router.get('/public/:slug/nomination-form', (0, errorHandler_js_1.asyncHandler)(
             name: event.name,
         },
         enabled: nominationEnabled,
+        supportsPhotoUpload: true,
         contests,
+    });
+}));
+router.post('/public/:slug/nominations/photo', nominationPhotoUpload.single('photo'), (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { slug } = req.params;
+    const event = await ensureVotingContext(slug);
+    if (!event.votingConfig.allowPublicNominations) {
+        throw new errorHandler_js_1.AppError('Public nominations are disabled for this event', 400);
+    }
+    const file = req.file;
+    if (!file)
+        throw new errorHandler_js_1.AppError('Photo file is required', 400);
+    const optimized = await (0, sharp_1.default)(file.buffer)
+        .rotate()
+        .resize(1400, 1400, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 84 })
+        .toBuffer();
+    const assetPath = `events/${event.id}/voting/nominations/${Date.now()}-${(0, crypto_1.randomUUID)()}.webp`;
+    const uploaded = await (0, supabaseStorage_js_1.uploadToSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, assetPath, optimized, {
+        contentType: 'image/webp',
+        cacheControl: '31536000, immutable',
+        metadata: {
+            eventId: event.id,
+            purpose: 'voting_nomination_photo',
+        },
+    });
+    res.status(201).json({
+        imagePath: uploaded.path,
+        imageUrl: uploaded.publicUrl || resolveMediaUrl(uploaded.path),
     });
 }));
 const submitNominationSchema = zod_1.z.object({
     contestId: zod_1.z.string().uuid(),
     nomineeName: zod_1.z.string().min(2).max(160),
     nomineeDescription: zod_1.z.string().max(2000).optional().nullable(),
+    nomineeImagePath: zod_1.z.string().max(1024).optional().nullable(),
     submitterName: zod_1.z.string().min(2).max(160),
     submitterEmail: zod_1.z.string().email().optional().nullable(),
     submitterPhone: zod_1.z.string().max(40).optional().nullable(),
@@ -346,6 +416,10 @@ router.post('/public/:slug/nominations', (0, errorHandler_js_1.asyncHandler)(asy
         }
         normalizedFields[key] = value;
     }
+    const nominationImagePath = String(input.nomineeImagePath || '').trim();
+    if (nominationImagePath) {
+        normalizedFields[NOMINATION_PHOTO_FIELD_KEY] = nominationImagePath;
+    }
     const nomination = await prisma_js_1.default.votingNomination.create({
         data: {
             eventId: event.id,
@@ -364,6 +438,7 @@ router.post('/public/:slug/nominations', (0, errorHandler_js_1.asyncHandler)(asy
         success: true,
         nominationId: nomination.id,
         status: nomination.status,
+        nomineeImagePath: nominationImagePath || null,
         voterSessionToken: token,
         message: 'Nomination submitted successfully and is pending review',
     });
@@ -555,7 +630,7 @@ router.post('/payment-intent', (0, errorHandler_js_1.asyncHandler)(async (req, r
         eventId: event.id,
         purpose: 'VOTE',
         amount: baseAmount,
-        currency: event.votingConfig.currency || event.defaultCurrency || 'USD',
+        currency: event.defaultCurrency || event.votingConfig.currency || 'USD',
         paymentGatewayId: input.paymentGatewayId,
         metadata: {
             contestId: contest.id,
@@ -684,6 +759,7 @@ router.get('/public/:slug/nominees', (0, errorHandler_js_1.asyncHandler)(async (
                 name: option.name,
                 description: option.description,
                 imagePath: option.imagePath,
+                imageUrl: resolveMediaUrl(option.imagePath),
                 totalVotes: option.totalVotes,
                 freeVotes: option.freeVotes,
                 paidVotes: option.paidVotes,
@@ -747,6 +823,7 @@ router.get('/public/:slug/leaderboard', (0, errorHandler_js_1.asyncHandler)(asyn
                 optionId: option.id,
                 name: option.name,
                 imagePath: option.imagePath,
+                imageUrl: resolveMediaUrl(option.imagePath),
                 rank: index + 1,
                 totalVotes: option.totalVotes,
                 freeVotes: option.freeVotes,

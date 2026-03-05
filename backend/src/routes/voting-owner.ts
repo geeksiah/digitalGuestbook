@@ -1,17 +1,27 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticateAdminOrOwnerAccount } from '../middleware/auth.js';
+import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import prisma from '../utils/prisma.js';
+import { BUCKETS, buildPublicUrl, getPublicUrl } from '../services/supabaseStorage.js';
 
 const router = Router();
-router.use(authenticateAdminOrOwnerAccount);
+router.use((req, res, next) => {
+  if (req.baseUrl.includes('/api/admin-voting')) {
+    return authenticateAdmin(req, res, next);
+  }
+  if (req.baseUrl.includes('/api/owner-dashboard')) {
+    return authenticateOwnerAccount(req, res, next);
+  }
+  return authenticateOwnerAccount(req, res, next);
+});
 const DEFAULT_VOTING_TEMPLATE_IDS = {
   VOTING: 'default-voting',
   VOTING_NOMINATION: 'default-voting-nomination',
   VOTING_NOMINEES: 'default-voting-nominees',
   VOTING_LEADERBOARD: 'default-voting-leaderboard',
 } as const;
+const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
 
 const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
   if (!value) return fallback;
@@ -19,6 +29,28 @@ const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
     return JSON.parse(value) as T;
   } catch {
     return fallback;
+  }
+};
+
+const extractNominationPhotoPath = (customFieldsJson: string | null | undefined) => {
+  const fields = parseJson<Record<string, unknown>>(customFieldsJson, {});
+  const raw = fields[NOMINATION_PHOTO_FIELD_KEY];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+};
+
+const resolveMediaUrl = (mediaPath: string | null | undefined) => {
+  if (!mediaPath) return null;
+  const normalized = String(mediaPath).trim();
+  if (!normalized) return null;
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
+  try {
+    return getPublicUrl(BUCKETS.MEDIA, normalized);
+  } catch {
+    try {
+      return buildPublicUrl(BUCKETS.MEDIA, normalized);
+    } catch {
+      return normalized;
+    }
   }
 };
 
@@ -39,6 +71,7 @@ const ensureManagedEvent = async (eventId: string, ownerId?: string, adminId?: s
           id: true,
           name: true,
           ownerId: true,
+          defaultCurrency: true,
           votingPageTemplateId: true,
           nominationPageTemplateId: true,
           nomineesPageTemplateId: true,
@@ -52,6 +85,7 @@ const ensureManagedEvent = async (eventId: string, ownerId?: string, adminId?: s
           id: true,
           name: true,
           ownerId: true,
+          defaultCurrency: true,
           votingPageTemplateId: true,
           nominationPageTemplateId: true,
           nomineesPageTemplateId: true,
@@ -143,7 +177,14 @@ const configSchema = z.object({
   allowPublicNominations: z.boolean().optional(),
   requireOtpForElection: z.boolean().optional(),
   voteUnitPrice: z.number().nonnegative().optional(),
-  currency: z.string().min(3).max(3).optional(),
+  currency: z.preprocess(
+    (value) => {
+      if (typeof value !== 'string') return value;
+      const normalized = value.trim().toUpperCase();
+      return normalized || undefined;
+    },
+    z.string().regex(/^[A-Z]{3}$/).optional()
+  ),
   maxVotesPerPurchase: z.number().int().min(1).max(10000).optional(),
   freeVoteLabel: z.string().max(120).optional().nullable(),
   paidVoteLabel: z.string().max(120).optional().nullable(),
@@ -188,6 +229,17 @@ router.get('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
     config = await prisma.votingEventConfig.create({
       data: {
         eventId,
+        currency: event.defaultCurrency || 'USD',
+      },
+    });
+  }
+
+  const normalizedEventCurrency = (event.defaultCurrency || 'USD').toUpperCase();
+  if (config.currency !== normalizedEventCurrency) {
+    config = await prisma.votingEventConfig.update({
+      where: { eventId },
+      data: {
+        currency: normalizedEventCurrency,
       },
     });
   }
@@ -207,8 +259,9 @@ router.get('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
 router.put('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
   const { ownerId, adminId } = getActorIds(req);
   const { eventId } = req.params;
-  await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
+  const event = await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
   const input = configSchema.parse(req.body || {});
+  const eventCurrency = (event.defaultCurrency || 'USD').toUpperCase();
 
   const config = await prisma.votingEventConfig.upsert({
     where: { eventId },
@@ -220,7 +273,7 @@ router.put('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
       allowPublicNominations: input.allowPublicNominations ?? undefined,
       requireOtpForElection: input.requireOtpForElection ?? undefined,
       voteUnitPrice: input.voteUnitPrice ?? undefined,
-      currency: input.currency?.toUpperCase() ?? undefined,
+      currency: eventCurrency,
       maxVotesPerPurchase: input.maxVotesPerPurchase ?? undefined,
       freeVoteLabel: input.freeVoteLabel === undefined ? undefined : input.freeVoteLabel,
       paidVoteLabel: input.paidVoteLabel === undefined ? undefined : input.paidVoteLabel,
@@ -240,7 +293,7 @@ router.put('/events/:eventId/voting/config', asyncHandler(async (req, res) => {
       allowPublicNominations: input.allowPublicNominations ?? false,
       requireOtpForElection: input.requireOtpForElection ?? true,
       voteUnitPrice: input.voteUnitPrice ?? 1,
-      currency: input.currency?.toUpperCase() || 'USD',
+      currency: eventCurrency,
       maxVotesPerPurchase: input.maxVotesPerPurchase ?? 100,
       freeVoteLabel: input.freeVoteLabel ?? null,
       paidVoteLabel: input.paidVoteLabel ?? null,
@@ -285,6 +338,10 @@ router.get('/events/:eventId/voting/contests', asyncHandler(async (req, res) => 
 
   const contestsWithParsedFields = contests.map((contest) => ({
     ...contest,
+    options: contest.options.map((option) => ({
+      ...option,
+      imageUrl: resolveMediaUrl(option.imagePath),
+    })),
     nominationFormFields: parseJson<any[]>(contest.nominationFormFieldsJson, []),
   }));
 
@@ -394,7 +451,13 @@ router.get('/events/:eventId/voting/contests/:contestId/options', asyncHandler(a
     where: { contestId: contest.id, eventId },
     orderBy: { sortOrder: 'asc' },
   });
-  res.json({ contest, options });
+  res.json({
+    contest,
+    options: options.map((option) => ({
+      ...option,
+      imageUrl: resolveMediaUrl(option.imagePath),
+    })),
+  });
 }));
 
 router.post('/events/:eventId/voting/contests/:contestId/options', asyncHandler(async (req, res) => {
@@ -422,7 +485,12 @@ router.post('/events/:eventId/voting/contests/:contestId/options', asyncHandler(
     },
   });
 
-  res.status(201).json({ option });
+  res.status(201).json({
+    option: {
+      ...option,
+      imageUrl: resolveMediaUrl(option.imagePath),
+    },
+  });
 }));
 
 router.patch('/events/:eventId/voting/options/:optionId', asyncHandler(async (req, res) => {
@@ -454,7 +522,12 @@ router.patch('/events/:eventId/voting/options/:optionId', asyncHandler(async (re
     },
   });
 
-  res.json({ option: updated });
+  res.json({
+    option: {
+      ...updated,
+      imageUrl: resolveMediaUrl(updated.imagePath),
+    },
+  });
 }));
 
 router.delete('/events/:eventId/voting/options/:optionId', asyncHandler(async (req, res) => {
@@ -507,8 +580,13 @@ router.get('/events/:eventId/voting/nominations', asyncHandler(async (req, res) 
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
+  const enriched = nominations.map((nomination) => ({
+    ...nomination,
+    nomineeImagePath: extractNominationPhotoPath(nomination.customFieldsJson),
+    nomineeImageUrl: resolveMediaUrl(extractNominationPhotoPath(nomination.customFieldsJson)),
+  }));
 
-  res.json({ nominations });
+  res.json({ nominations: enriched });
 }));
 
 router.patch('/events/:eventId/voting/nominations/:nominationId/review', asyncHandler(async (req, res) => {
@@ -527,6 +605,7 @@ router.patch('/events/:eventId/voting/nominations/:nominationId/review', asyncHa
 
   const reviewed = await prisma.$transaction(async (tx) => {
     let approvedOptionId: string | null = null;
+    const nomineeImagePath = extractNominationPhotoPath(nomination.customFieldsJson);
     if (input.status === 'APPROVED' && input.createNomineeOnApprove !== false) {
       const createdOption = await tx.votingOption.create({
         data: {
@@ -534,6 +613,7 @@ router.patch('/events/:eventId/voting/nominations/:nominationId/review', asyncHa
           contestId: nomination.contestId,
           name: nomination.nomineeName,
           description: nomination.nomineeDescription || undefined,
+          imagePath: nomineeImagePath || undefined,
           isActive: true,
           metadataJson: JSON.stringify({
             source: 'PUBLIC_NOMINATION',

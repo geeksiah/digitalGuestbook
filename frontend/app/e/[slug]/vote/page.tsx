@@ -23,6 +23,7 @@ type VotingOption = {
   name: string;
   description: string | null;
   imagePath: string | null;
+  imageUrl?: string | null;
   totalVotes: number;
   freeVotes: number;
   paidVotes: number;
@@ -128,6 +129,8 @@ export default function VotePage() {
         share: total > 0 ? (Number(option.totalVotes || 0) / total) * 100 : 0,
       }));
   }, [selectedContest]);
+
+  const resolveNomineeImage = (option: VotingOption) => option.imageUrl || option.imagePath || '';
 
   const fetchVoteData = async () => {
     if (!slug) return;
@@ -438,7 +441,7 @@ export default function VotePage() {
         <div className="space-y-4">
           {config && electionMode ? (
             <section className="dashboard-canvas p-4 space-y-3">
-              <h2 className="text-base font-semibold text-brand-900">Election Verification</h2>
+              <h2 className="text-base font-semibold text-brand-900">Election verification</h2>
               <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto,auto] gap-2">
                 <input
                   className="input"
@@ -459,7 +462,7 @@ export default function VotePage() {
                   Verify
                 </button>
               </div>
-              <p className="text-xs text-surface-600">Status: {otpVerified ? 'Verified' : 'Not verified'}</p>
+              <p className="text-xs text-surface-600">{otpVerified ? 'Phone verified' : 'Verify phone to continue voting'}</p>
             </section>
           ) : null}
 
@@ -518,12 +521,6 @@ export default function VotePage() {
             </div>
             <div className="space-y-2">
               {rankedOptions.map((option) => {
-                const initials = option.name
-                  .split(' ')
-                  .map((part) => part[0])
-                  .join('')
-                  .slice(0, 2)
-                  .toUpperCase();
                 const selected = selectedOptionId === option.id;
                 return (
                   <article
@@ -533,9 +530,15 @@ export default function VotePage() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-surface-100 border border-surface-200 flex items-center justify-center text-xs font-semibold text-brand-900">
-                        {initials}
-                      </div>
+                      {resolveNomineeImage(option) ? (
+                        <img
+                          src={resolveNomineeImage(option)}
+                          alt={option.name}
+                          className="h-10 w-10 rounded-full border border-surface-200 object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-surface-100 border border-surface-200" />
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-brand-900 truncate">{option.name}</p>

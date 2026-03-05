@@ -21,8 +21,18 @@ interface Event {
   currentPhase: string;
   invitationOnly: boolean;
   strictInviteOnly?: boolean;
+  invitationEnabled?: boolean;
+  rsvpEnabled?: boolean;
+  guestbookEnabled?: boolean;
+  checkInEnabled?: boolean;
+  ticketingEnabled?: boolean;
+  rsvpMode?: 'free' | 'paid';
   itineraryEnabled?: boolean;
   giftingEnabled?: boolean;
+  votingPageTemplateId?: string | null;
+  nominationPageTemplateId?: string | null;
+  nomineesPageTemplateId?: string | null;
+  leaderboardPageTemplateId?: string | null;
   _count: {
     rsvps: number;
     invitations: number;
@@ -238,6 +248,7 @@ export default function OwnerEventDetailPage() {
   const [domainHost, setDomainHost] = useState('');
   const [savingDomain, setSavingDomain] = useState(false);
   const [giftOrders, setGiftOrders] = useState<GiftOrder[]>([]);
+  const [votingEnabled, setVotingEnabled] = useState(false);
   const [loadingGifts, setLoadingGifts] = useState(false);
   const [invites, setInvites] = useState<RsvpInvite[]>([]);
   const [loadingInvites, setLoadingInvites] = useState(false);
@@ -286,7 +297,21 @@ export default function OwnerEventDetailPage() {
   const fetchEvent = async () => {
     try {
       const r = await ownerDashboardApi.getEvent(eventId);
-      setEvent(r.data.event);
+      const nextEvent = r.data.event;
+      setEvent(nextEvent);
+
+      const templateBasedVoting = Boolean(
+        nextEvent?.votingPageTemplateId
+          || nextEvent?.nominationPageTemplateId
+          || nextEvent?.nomineesPageTemplateId
+          || nextEvent?.leaderboardPageTemplateId
+      );
+      try {
+        const votingResponse = await ownerDashboardApi.getVotingConfig(eventId);
+        setVotingEnabled(Boolean(votingResponse.data?.config?.isEnabled) || templateBasedVoting);
+      } catch {
+        setVotingEnabled(templateBasedVoting);
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to load event');
       router.push('/owner/events');
@@ -1089,18 +1114,52 @@ export default function OwnerEventDetailPage() {
     );
   }
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'rsvps', label: 'RSVPs', count: event._count.rsvps },
-    { id: 'checkin', label: 'Check-In', count: event._count.checkIns },
-    { id: 'media', label: 'Media', count: event._count.mediaAssets },
-    { id: 'tickets', label: 'Tickets', count: event.ticketTypes?.reduce((sum, t) => sum + t.quantitySold, 0) || 0 },
-    { id: 'itinerary', label: 'Itinerary', count: itineraryItems.length || undefined },
-    { id: 'invites', label: 'Invites', count: invites.length },
-    { id: 'domains', label: 'Domains', count: domains.length },
-    { id: 'voting', label: 'Voting' },
-    { id: 'gifts', label: 'Gifts', count: event._count.giftOrders || 0 },
-  ];
+  const tabs: { id: Tab; label: string; count?: number }[] = useMemo(() => {
+    const rsvpEnabled = event.rsvpEnabled !== false;
+    const checkInEnabled = event.checkInEnabled !== false;
+    const guestbookEnabled = event.guestbookEnabled !== false;
+    const itineraryEnabled = Boolean(event.itineraryEnabled);
+    const giftingEnabled = Boolean(event.giftingEnabled);
+    const ticketingEnabled = Boolean(event.ticketingEnabled) || (rsvpEnabled && event.rsvpMode === 'paid');
+
+    return [
+      { id: 'overview', label: 'Overview' },
+      ...(rsvpEnabled ? [{ id: 'rsvps' as Tab, label: 'RSVPs', count: event._count.rsvps }] : []),
+      ...(checkInEnabled ? [{ id: 'checkin' as Tab, label: 'Check-In', count: event._count.checkIns }] : []),
+      ...(guestbookEnabled ? [{ id: 'media' as Tab, label: 'Media', count: event._count.mediaAssets }] : []),
+      ...(ticketingEnabled
+        ? [{ id: 'tickets' as Tab, label: 'Tickets', count: event.ticketTypes?.reduce((sum, t) => sum + t.quantitySold, 0) || 0 }]
+        : []),
+      ...(itineraryEnabled ? [{ id: 'itinerary' as Tab, label: 'Itinerary', count: itineraryItems.length || undefined }] : []),
+      ...(rsvpEnabled ? [{ id: 'invites' as Tab, label: 'Invites', count: invites.length }] : []),
+      { id: 'domains', label: 'Domains', count: domains.length },
+      ...(votingEnabled ? [{ id: 'voting' as Tab, label: 'Voting' }] : []),
+      ...(giftingEnabled ? [{ id: 'gifts' as Tab, label: 'Gifts', count: event._count.giftOrders || 0 }] : []),
+    ];
+  }, [
+    event.rsvpEnabled,
+    event.checkInEnabled,
+    event.guestbookEnabled,
+    event.ticketingEnabled,
+    event.rsvpMode,
+    event.itineraryEnabled,
+    event.giftingEnabled,
+    event._count.rsvps,
+    event._count.checkIns,
+    event._count.mediaAssets,
+    event._count.giftOrders,
+    event.ticketTypes,
+    itineraryItems.length,
+    invites.length,
+    domains.length,
+    votingEnabled,
+  ]);
+
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab('overview');
+    }
+  }, [activeTab, tabs]);
 
   return (
     <div className="space-y-7">

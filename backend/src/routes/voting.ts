@@ -1,11 +1,14 @@
 import { createHash, createHmac, randomUUID } from 'crypto';
 import { Router } from 'express';
+import multer from 'multer';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { sendSMS } from '../services/notifications.js';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { createPaymentIntent } from '../services/paymentCore.js';
 import { filterEventGatewaysForOwner, resolveOwnerWalletState } from '../utils/walletPolicy.js';
+import { BUCKETS, buildPublicUrl, getPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
 
@@ -16,6 +19,7 @@ const EMBED_TOKEN_SECRET =
 const SESSION_TTL_SECONDS = Math.max(300, Number(process.env.VOTING_SESSION_TTL_SECONDS || 86400));
 const OTP_TTL_SECONDS = Math.max(60, Number(process.env.VOTING_OTP_TTL_SECONDS || 300));
 const EMBED_TOKEN_TTL_SECONDS = Math.max(60, Number(process.env.VOTING_EMBED_TOKEN_TTL_SECONDS || 300));
+const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
 
 const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
   if (!value) return fallback;
@@ -23,6 +27,24 @@ const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
     return JSON.parse(value) as T;
   } catch {
     return fallback;
+  }
+};
+
+const resolveMediaUrl = (mediaPath: string | null | undefined) => {
+  if (!mediaPath) return null;
+  const normalized = String(mediaPath).trim();
+  if (!normalized) return null;
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    return normalized;
+  }
+  try {
+    return getPublicUrl(BUCKETS.MEDIA, normalized);
+  } catch {
+    try {
+      return buildPublicUrl(BUCKETS.MEDIA, normalized);
+    } catch {
+      return normalized;
+    }
   }
 };
 
@@ -34,6 +56,18 @@ type NominationFieldDefinition = {
   placeholder?: string | null;
   options?: string[];
 };
+
+const nominationPhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!String(file.mimetype || '').startsWith('image/')) {
+      cb(new AppError('Please upload an image file', 400));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 const parseNominationFields = (value: string | null | undefined) =>
   parseJson<NominationFieldDefinition[]>(value, [])
@@ -286,6 +320,10 @@ router.get('/public/:slug', asyncHandler(async (req, res) => {
 
   const contests = contestsWithOptions.map((contest) => ({
     ...contest,
+    options: contest.options.map((option) => ({
+      ...option,
+      imageUrl: resolveMediaUrl(option.imagePath),
+    })),
     nominationFormFields: parseNominationFields(contest.nominationFormFieldsJson),
   }));
 
@@ -333,14 +371,51 @@ router.get('/public/:slug/nomination-form', asyncHandler(async (req, res) => {
       name: event.name,
     },
     enabled: nominationEnabled,
+    supportsPhotoUpload: true,
     contests,
   });
 }));
+
+router.post(
+  '/public/:slug/nominations/photo',
+  nominationPhotoUpload.single('photo'),
+  asyncHandler(async (req, res) => {
+    const { slug } = req.params;
+    const event = await ensureVotingContext(slug);
+    if (!event.votingConfig.allowPublicNominations) {
+      throw new AppError('Public nominations are disabled for this event', 400);
+    }
+    const file = req.file;
+    if (!file) throw new AppError('Photo file is required', 400);
+
+    const optimized = await sharp(file.buffer)
+      .rotate()
+      .resize(1400, 1400, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 84 })
+      .toBuffer();
+
+    const assetPath = `events/${event.id}/voting/nominations/${Date.now()}-${randomUUID()}.webp`;
+    const uploaded = await uploadToSupabase(BUCKETS.MEDIA, assetPath, optimized, {
+      contentType: 'image/webp',
+      cacheControl: '31536000, immutable',
+      metadata: {
+        eventId: event.id,
+        purpose: 'voting_nomination_photo',
+      },
+    });
+
+    res.status(201).json({
+      imagePath: uploaded.path,
+      imageUrl: uploaded.publicUrl || resolveMediaUrl(uploaded.path),
+    });
+  })
+);
 
 const submitNominationSchema = z.object({
   contestId: z.string().uuid(),
   nomineeName: z.string().min(2).max(160),
   nomineeDescription: z.string().max(2000).optional().nullable(),
+  nomineeImagePath: z.string().max(1024).optional().nullable(),
   submitterName: z.string().min(2).max(160),
   submitterEmail: z.string().email().optional().nullable(),
   submitterPhone: z.string().max(40).optional().nullable(),
@@ -420,6 +495,11 @@ router.post('/public/:slug/nominations', asyncHandler(async (req, res) => {
     normalizedFields[key] = value;
   }
 
+  const nominationImagePath = String(input.nomineeImagePath || '').trim();
+  if (nominationImagePath) {
+    normalizedFields[NOMINATION_PHOTO_FIELD_KEY] = nominationImagePath;
+  }
+
   const nomination = await prisma.votingNomination.create({
     data: {
       eventId: event.id,
@@ -439,6 +519,7 @@ router.post('/public/:slug/nominations', asyncHandler(async (req, res) => {
     success: true,
     nominationId: nomination.id,
     status: nomination.status,
+    nomineeImagePath: nominationImagePath || null,
     voterSessionToken: token,
     message: 'Nomination submitted successfully and is pending review',
   });
@@ -659,7 +740,7 @@ router.post('/payment-intent', asyncHandler(async (req, res) => {
     eventId: event.id,
     purpose: 'VOTE',
     amount: baseAmount,
-    currency: event.votingConfig.currency || event.defaultCurrency || 'USD',
+    currency: event.defaultCurrency || event.votingConfig.currency || 'USD',
     paymentGatewayId: input.paymentGatewayId,
     metadata: {
       contestId: contest.id,
@@ -815,6 +896,7 @@ router.get('/public/:slug/nominees', asyncHandler(async (req, res) => {
         name: option.name,
         description: option.description,
         imagePath: option.imagePath,
+        imageUrl: resolveMediaUrl(option.imagePath),
         totalVotes: option.totalVotes,
         freeVotes: option.freeVotes,
         paidVotes: option.paidVotes,
@@ -883,6 +965,7 @@ router.get('/public/:slug/leaderboard', asyncHandler(async (req, res) => {
         optionId: option.id,
         name: option.name,
         imagePath: option.imagePath,
+        imageUrl: resolveMediaUrl(option.imagePath),
         rank: index + 1,
         totalVotes: option.totalVotes,
         freeVotes: option.freeVotes,

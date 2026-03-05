@@ -11,6 +11,8 @@ type RankedNominee = {
   rank: number;
   optionId: string;
   name: string;
+  imagePath?: string | null;
+  imageUrl?: string | null;
   totalVotes: number;
   freeVotes: number;
   paidVotes: number;
@@ -152,9 +154,20 @@ export default function LeaderboardPage() {
               {selectedContest.rankings.map((entry) => (
                 <article key={entry.optionId} className="focus-card">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="flex items-center gap-3">
+                      {entry.imageUrl || entry.imagePath ? (
+                        <img
+                          src={entry.imageUrl || entry.imagePath || ''}
+                          alt={entry.name}
+                          className="h-10 w-10 rounded-full border border-surface-200 object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full border border-surface-200 bg-surface-100" />
+                      )}
+                      <div>
                       <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
                       <h3 className="text-base font-semibold text-brand-900">{entry.name}</h3>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-brand-900">{entry.totalVotes.toLocaleString()} votes</p>

@@ -30,6 +30,7 @@ type NominationFormPayload = {
     name: string;
   };
   enabled: boolean;
+  supportsPhotoUpload?: boolean;
   contests: NominationContest[];
 };
 
@@ -57,6 +58,9 @@ export default function NominatePage() {
   const [submitterPhone, setSubmitterPhone] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [sessionToken, setSessionToken] = useState('');
+  const [nomineeImagePath, setNomineeImagePath] = useState('');
+  const [nomineeImagePreview, setNomineeImagePreview] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const selectedContest = useMemo(
     () => contests.find((contest) => contest.id === contestId) || null,
@@ -119,6 +123,7 @@ export default function NominatePage() {
         contestId,
         nomineeName: nomineeName.trim(),
         nomineeDescription: nomineeDescription.trim() || undefined,
+        nomineeImagePath: nomineeImagePath || undefined,
         submitterName: submitterName.trim(),
         submitterEmail: submitterEmail.trim() || undefined,
         submitterPhone: submitterPhone.trim() || undefined,
@@ -139,11 +144,27 @@ export default function NominatePage() {
       setSubmitterEmail('');
       setSubmitterPhone('');
       setCustomFields({});
+      setNomineeImagePath('');
+      setNomineeImagePreview('');
       toast.success('Nomination submitted for review');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to submit nomination');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const uploadNomineePhoto = async (file: File) => {
+    setUploadingPhoto(true);
+    try {
+      const response = await votingApi.uploadNominationPhoto(slug, file);
+      setNomineeImagePath(String(response.data?.imagePath || ''));
+      setNomineeImagePreview(String(response.data?.imageUrl || ''));
+      toast.success('Photo uploaded');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Unable to upload photo');
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -213,9 +234,12 @@ export default function NominatePage() {
             <label className="space-y-1 block">
               <span className="text-xs text-surface-600">Category</span>
               <select className="input" value={contestId} onChange={(event) => setContestId(event.target.value)}>
+                <option value="" disabled>
+                  Select category
+                </option>
                 {contests.map((contest) => (
                   <option key={contest.id} value={contest.id}>
-                    {contest.title} ({contest.mode})
+                    {contest.title} ({contest.mode === 'AWARDS' ? 'Awards' : 'Election'})
                   </option>
                 ))}
               </select>
@@ -229,6 +253,25 @@ export default function NominatePage() {
           <label className="space-y-1 block">
             <span className="text-xs text-surface-600">Nominee Description</span>
             <textarea className="input min-h-[110px]" value={nomineeDescription} onChange={(event) => setNomineeDescription(event.target.value)} />
+          </label>
+
+          <label className="space-y-1 block">
+            <span className="text-xs text-surface-600">Nominee Photo</span>
+            <input
+              className="input !p-2"
+              type="file"
+              accept="image/*"
+              disabled={uploadingPhoto}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                void uploadNomineePhoto(file);
+              }}
+            />
+            {nomineeImagePreview ? (
+              <img src={nomineeImagePreview} alt="Nominee preview" className="mt-2 h-20 w-20 rounded-lg border border-surface-200 object-cover" />
+            ) : null}
+            {uploadingPhoto ? <p className="text-xs text-surface-500">Uploading photo...</p> : null}
           </label>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
