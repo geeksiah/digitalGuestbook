@@ -964,6 +964,7 @@ router.get('/public/:slug/leaderboard', asyncHandler(async (req, res) => {
       return {
         optionId: option.id,
         name: option.name,
+        description: option.description,
         imagePath: option.imagePath,
         imageUrl: resolveMediaUrl(option.imagePath),
         rank: index + 1,

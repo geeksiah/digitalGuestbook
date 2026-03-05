@@ -822,6 +822,7 @@ router.get('/public/:slug/leaderboard', (0, errorHandler_js_1.asyncHandler)(asyn
             return {
                 optionId: option.id,
                 name: option.name,
+                description: option.description,
                 imagePath: option.imagePath,
                 imageUrl: resolveMediaUrl(option.imagePath),
                 rank: index + 1,

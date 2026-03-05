@@ -11,6 +11,7 @@ type RankedNominee = {
   rank: number;
   optionId: string;
   name: string;
+  description?: string | null;
   imagePath?: string | null;
   imageUrl?: string | null;
   totalVotes: number;
@@ -165,8 +166,9 @@ export default function LeaderboardPage() {
                         <div className="h-10 w-10 rounded-full border border-surface-200 bg-surface-100" />
                       )}
                       <div>
-                      <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
-                      <h3 className="text-base font-semibold text-brand-900">{entry.name}</h3>
+                        <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
+                        <h3 className="text-base font-semibold text-brand-900">{entry.name}</h3>
+                        <p className="text-xs text-surface-600 mt-0.5">{entry.description || 'Nominee profile'}</p>
                       </div>
                     </div>
                     <div className="text-right">

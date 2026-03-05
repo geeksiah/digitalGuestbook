@@ -1,9 +1,12 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
+import multer from 'multer';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import prisma from '../utils/prisma.js';
-import { BUCKETS, buildPublicUrl, getPublicUrl } from '../services/supabaseStorage.js';
+import { BUCKETS, buildPublicUrl, getPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
 router.use((req, res, next) => {
@@ -22,6 +25,17 @@ const DEFAULT_VOTING_TEMPLATE_IDS = {
   VOTING_LEADERBOARD: 'default-voting-leaderboard',
 } as const;
 const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
+const nomineeImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!String(file.mimetype || '').startsWith('image/')) {
+      cb(new AppError('Please upload an image file', 400));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
   if (!value) return fallback;
@@ -459,6 +473,39 @@ router.get('/events/:eventId/voting/contests/:contestId/options', asyncHandler(a
     })),
   });
 }));
+
+router.post(
+  '/events/:eventId/voting/options/upload-image',
+  nomineeImageUpload.single('image'),
+  asyncHandler(async (req, res) => {
+    const { ownerId, adminId } = getActorIds(req);
+    const { eventId } = req.params;
+    const event = await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
+    const file = req.file;
+    if (!file) throw new AppError('Image file is required', 400);
+
+    const optimized = await sharp(file.buffer)
+      .rotate()
+      .resize(1400, 1400, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 84 })
+      .toBuffer();
+
+    const assetPath = `events/${event.id}/voting/options/${Date.now()}-${randomUUID()}.webp`;
+    const uploaded = await uploadToSupabase(BUCKETS.MEDIA, assetPath, optimized, {
+      contentType: 'image/webp',
+      cacheControl: '31536000, immutable',
+      metadata: {
+        eventId: event.id,
+        purpose: 'voting_nominee_image',
+      },
+    });
+
+    res.status(201).json({
+      imagePath: uploaded.path,
+      imageUrl: uploaded.publicUrl || resolveMediaUrl(uploaded.path),
+    });
+  })
+);
 
 router.post('/events/:eventId/voting/contests/:contestId/options', asyncHandler(async (req, res) => {
   const { ownerId, adminId } = getActorIds(req);

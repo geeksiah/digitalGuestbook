@@ -670,6 +670,16 @@ export const ownerDashboardApi = {
     axios.get(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, {
       headers: ownerHeaders(),
     }),
+  uploadVotingOptionImage: (eventId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/options/upload-image`, formData, {
+      headers: {
+        ...ownerHeaders(),
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   createVotingOption: (eventId: string, contestId: string, data: any) =>
     axios.post(`${API_BASE_URL}/api/owner-dashboard/events/${eventId}/voting/contests/${contestId}/options`, data, {
       headers: ownerHeaders(),
@@ -831,6 +841,13 @@ export const adminVotingApi = {
     api.delete(`/admin-voting/events/${eventId}/voting/contests/${contestId}`),
   getVotingOptions: (eventId: string, contestId: string) =>
     api.get(`/admin-voting/events/${eventId}/voting/contests/${contestId}/options`),
+  uploadVotingOptionImage: (eventId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return api.post(`/admin-voting/events/${eventId}/voting/options/upload-image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   createVotingOption: (eventId: string, contestId: string, data: any) =>
     api.post(`/admin-voting/events/${eventId}/voting/contests/${contestId}/options`, data),
   updateVotingOption: (eventId: string, optionId: string, data: any) =>

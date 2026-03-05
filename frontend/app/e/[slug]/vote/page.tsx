@@ -579,9 +579,21 @@ export default function VotePage() {
               topRankings.map((entry: any) => (
                 <article key={entry.optionId} className="rounded-xl border border-surface-200 bg-white p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
-                      <p className="font-semibold text-brand-900">{entry.name}</p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {entry.imageUrl || entry.imagePath ? (
+                        <img
+                          src={entry.imageUrl || entry.imagePath}
+                          alt={entry.name}
+                          className="h-9 w-9 rounded-full border border-surface-200 object-cover"
+                        />
+                      ) : (
+                        <div className="h-9 w-9 rounded-full border border-surface-200 bg-surface-100" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
+                        <p className="font-semibold text-brand-900 truncate">{entry.name}</p>
+                        <p className="text-xs text-surface-600 truncate">{entry.description || 'Nominee profile'}</p>
+                      </div>
                     </div>
                     <button
                       type="button"

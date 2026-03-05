@@ -3,7 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const crypto_1 = require("crypto");
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
+const sharp_1 = __importDefault(require("sharp"));
 const zod_1 = require("zod");
 const auth_js_1 = require("../middleware/auth.js");
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
@@ -26,6 +29,17 @@ const DEFAULT_VOTING_TEMPLATE_IDS = {
     VOTING_LEADERBOARD: 'default-voting-leaderboard',
 };
 const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
+const nomineeImageUpload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 8 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        if (!String(file.mimetype || '').startsWith('image/')) {
+            cb(new errorHandler_js_1.AppError('Please upload an image file', 400));
+            return;
+        }
+        cb(null, true);
+    },
+});
 const parseJson = (value, fallback) => {
     if (!value)
         return fallback;
@@ -424,6 +438,32 @@ router.get('/events/:eventId/voting/contests/:contestId/options', (0, errorHandl
             ...option,
             imageUrl: resolveMediaUrl(option.imagePath),
         })),
+    });
+}));
+router.post('/events/:eventId/voting/options/upload-image', nomineeImageUpload.single('image'), (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { ownerId, adminId } = getActorIds(req);
+    const { eventId } = req.params;
+    const event = await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
+    const file = req.file;
+    if (!file)
+        throw new errorHandler_js_1.AppError('Image file is required', 400);
+    const optimized = await (0, sharp_1.default)(file.buffer)
+        .rotate()
+        .resize(1400, 1400, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 84 })
+        .toBuffer();
+    const assetPath = `events/${event.id}/voting/options/${Date.now()}-${(0, crypto_1.randomUUID)()}.webp`;
+    const uploaded = await (0, supabaseStorage_js_1.uploadToSupabase)(supabaseStorage_js_1.BUCKETS.MEDIA, assetPath, optimized, {
+        contentType: 'image/webp',
+        cacheControl: '31536000, immutable',
+        metadata: {
+            eventId: event.id,
+            purpose: 'voting_nominee_image',
+        },
+    });
+    res.status(201).json({
+        imagePath: uploaded.path,
+        imageUrl: uploaded.publicUrl || resolveMediaUrl(uploaded.path),
     });
 }));
 router.post('/events/:eventId/voting/contests/:contestId/options', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -173,6 +173,7 @@ export default function AdminVotingPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingContest, setSavingContest] = useState(false);
   const [savingOption, setSavingOption] = useState(false);
+  const [uploadingOptionImage, setUploadingOptionImage] = useState(false);
   const [savingNominationRule, setSavingNominationRule] = useState(false);
   const [reviewingNominationId, setReviewingNominationId] = useState('');
 
@@ -189,6 +190,8 @@ export default function AdminVotingPage() {
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionDescription, setNewOptionDescription] = useState('');
   const [newOptionImagePath, setNewOptionImagePath] = useState('');
+  const [newOptionImagePreview, setNewOptionImagePreview] = useState('');
+  const newOptionImageInputRef = useRef<HTMLInputElement | null>(null);
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldType, setNewFieldType] = useState<NominationField['type']>('text');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
@@ -414,12 +417,37 @@ export default function AdminVotingPage() {
       setNewOptionName('');
       setNewOptionDescription('');
       setNewOptionImagePath('');
+      setNewOptionImagePreview('');
+      if (newOptionImageInputRef.current) {
+        newOptionImageInputRef.current.value = '';
+      }
       await Promise.all([loadOptions(selectedContestId), loadContests(), loadAnalytics()]);
       toast.success('Nominee added');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to add nominee');
     } finally {
       setSavingOption(false);
+    }
+  };
+
+  const uploadNomineeImage = async (file: File) => {
+    if (!selectedContestId) {
+      toast.error('Select a contest first');
+      return;
+    }
+    setUploadingOptionImage(true);
+    try {
+      const response = await adminVotingApi.uploadVotingOptionImage(eventId, file);
+      const imagePath = String(response.data?.imagePath || '');
+      const imageUrl = String(response.data?.imageUrl || imagePath);
+      if (!imagePath) throw new Error('Image upload failed');
+      setNewOptionImagePath(imagePath);
+      setNewOptionImagePreview(imageUrl);
+      toast.success('Nominee photo uploaded');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || error?.message || 'Failed to upload nominee photo');
+    } finally {
+      setUploadingOptionImage(false);
     }
   };
 
@@ -793,13 +821,57 @@ export default function AdminVotingPage() {
               onChange={(event) => setNewOptionDescription(event.target.value)}
               disabled={!selectedContestId}
             />
-            <input
-              className="input"
-              placeholder="Nominee photo URL (optional)"
-              value={newOptionImagePath}
-              onChange={(event) => setNewOptionImagePath(event.target.value)}
-              disabled={!selectedContestId}
-            />
+            <div className="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-3 space-y-2">
+              <p className="text-xs font-medium text-surface-700">Nominee photo</p>
+              <input
+                ref={newOptionImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void uploadNomineeImage(file);
+                  }
+                }}
+              />
+              {newOptionImagePreview ? (
+                <img
+                  src={newOptionImagePreview}
+                  alt="Nominee preview"
+                  className="h-36 w-full rounded-lg border border-surface-200 object-cover"
+                />
+              ) : (
+                <div className="h-24 w-full rounded-lg border border-surface-200 bg-white flex items-center justify-center text-xs text-surface-500">
+                  Upload nominee photo to preview
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-outline text-xs"
+                  disabled={!selectedContestId || uploadingOptionImage}
+                  onClick={() => newOptionImageInputRef.current?.click()}
+                >
+                  {uploadingOptionImage ? 'Uploading...' : newOptionImagePath ? 'Replace photo' : 'Upload photo'}
+                </button>
+                {newOptionImagePath ? (
+                  <button
+                    type="button"
+                    className="btn-ghost text-xs"
+                    onClick={() => {
+                      setNewOptionImagePath('');
+                      setNewOptionImagePreview('');
+                      if (newOptionImageInputRef.current) {
+                        newOptionImageInputRef.current.value = '';
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <button className="btn-primary w-full" onClick={createNominee} disabled={!selectedContestId || savingOption}>
               Add Nominee
             </button>
@@ -1008,11 +1080,10 @@ export default function AdminVotingPage() {
                         <div className="h-11 w-11 rounded-lg border border-surface-200 bg-surface-100" />
                       )}
                       <div className="min-w-0">
-                      <p className="text-sm font-semibold text-brand-900">{option.name}</p>
-                      <p className="text-xs text-surface-600 mt-0.5">
-                        Total {option.totalVotes} • Free {option.freeVotes} • Paid {option.paidVotes}
-                      </p>
-                      </div>
+  <p className="text-sm font-semibold text-brand-900">{option.name}</p>
+  <p className="text-xs text-surface-600 mt-0.5">{option.description || 'Nominee profile'}</p>
+  <p className="text-xs text-surface-500 mt-0.5">Total {option.totalVotes} / Free {option.freeVotes} / Paid {option.paidVotes}</p>
+</div>
                     </div>
                     <div className="flex gap-1">
                       <button className="btn-outline text-xs" onClick={() => renameNominee(option)}>Rename</button>
@@ -1218,4 +1289,5 @@ export default function AdminVotingPage() {
     </div>
   );
 }
+
 
