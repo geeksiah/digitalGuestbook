@@ -827,6 +827,25 @@ export const votingApi = {
   ) => axios.post(`${API_BASE_URL}/api/voting/public/${slug}/nominations`, data),
 };
 
+export const ussdApi = {
+  listChannels: () => api.get('/channels/ussd/channels'),
+  createChannel: (data: {
+    codeLabel: string;
+    shortcode?: string | null;
+    ownerId?: string | null;
+    status?: 'ACTIVE' | 'INACTIVE';
+  }) => api.post('/channels/ussd/channels', data),
+  bindChannel: (data: { ussdChannelId: string; eventId: string; isActive?: boolean }) =>
+    api.post('/channels/ussd/bindings', data),
+  toggleBinding: (bindingId: string, isActive: boolean) =>
+    api.patch(`/channels/ussd/bindings/${bindingId}`, { isActive }),
+  getEventWallet: (eventId: string) => api.get(`/channels/ussd/wallets/${eventId}`),
+  topupEventWalletManual: (
+    eventId: string,
+    data: { units: number; reference: string; note?: string | null }
+  ) => api.post(`/channels/ussd/wallets/${eventId}/topups/manual`, data),
+};
+
 export const adminVotingApi = {
   getVotingContests: (eventId: string) =>
     api.get(`/v2/admin-voting/events/${eventId}/contests`),

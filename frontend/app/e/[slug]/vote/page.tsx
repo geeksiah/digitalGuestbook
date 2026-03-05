@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type VotingConfig = {
   mode: 'AWARDS' | 'ELECTION';
@@ -59,22 +60,6 @@ type VotingEventPayload = {
   };
 };
 
-type LeaderboardContest = {
-  contestId: string;
-  rankings?: Array<{
-    optionId: string;
-    name: string;
-    description?: string | null;
-    imagePath?: string | null;
-    imageUrl?: string | null;
-    rank?: number;
-    totalVotes?: number;
-    freeVotes?: number;
-    paidVotes?: number;
-    voteSharePercent?: number;
-  }>;
-};
-
 const formatMoney = (currency: string, amount: number) => {
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
@@ -99,7 +84,6 @@ export default function VotePage() {
   const [eventName, setEventName] = useState('');
   const [config, setConfig] = useState<VotingConfig | null>(null);
   const [contests, setContests] = useState<VotingContest[]>([]);
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
   const [selectedContestId, setSelectedContestId] = useState('');
   const [selectedOptionId, setSelectedOptionId] = useState('');
@@ -128,20 +112,13 @@ export default function VotePage() {
     return Number((voteCount * config.voteUnitPrice).toFixed(2));
   }, [config, voteCount]);
 
-  const topRankings = useMemo(() => {
-    const contest = (leaderboard as LeaderboardContest[]).find((item) => item.contestId === selectedContestId) || (leaderboard as LeaderboardContest[])[0];
-    return (contest?.rankings || []).slice(0, 3);
-  }, [leaderboard, selectedContestId]);
-
   const rankedOptions = useMemo(() => {
     const options = selectedContest?.options || [];
-    const total = options.reduce((sum, option) => sum + Number(option.totalVotes || 0), 0);
     return [...options]
       .sort((a, b) => Number(b.totalVotes || 0) - Number(a.totalVotes || 0))
       .map((option, index) => ({
         ...option,
         rank: index + 1,
-        share: total > 0 ? (Number(option.totalVotes || 0) / total) * 100 : 0,
       }));
   }, [selectedContest]);
 
@@ -166,10 +143,7 @@ export default function VotePage() {
     setLoading(true);
     try {
       const persisted = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
-      const [publicResponse, leaderboardResponse] = await Promise.all([
-        votingApi.getPublicVoting(slug, persisted || undefined, embedToken || undefined),
-        votingApi.leaderboard(slug),
-      ]);
+      const publicResponse = await votingApi.getPublicVoting(slug, persisted || undefined, embedToken || undefined);
 
       const payload = ((publicResponse.data as any)?.data || publicResponse.data || {}) as Partial<VotingEventPayload>;
       const rawContests = Array.isArray(payload.contests) ? payload.contests : [];
@@ -204,14 +178,11 @@ export default function VotePage() {
           }
         : null;
 
-      const leaderboardPayload = ((leaderboardResponse.data as any)?.data || leaderboardResponse.data || {}) as any;
-      const normalizedLeaderboard = Array.isArray(leaderboardPayload?.contests) ? leaderboardPayload.contests : [];
       const gateways = (Array.isArray(payload.paymentGateways) ? payload.paymentGateways : []) as PaymentGateway[];
 
       setEventName(String(payload?.event?.name || slug));
       setConfig(normalizedConfig);
       setContests(normalizedContests);
-      setLeaderboard(normalizedLeaderboard);
       setPaymentGateways(gateways);
       if (gateways.length > 0) {
         setSelectedGatewayId((current) => current || gateways[0].id);
@@ -434,64 +405,87 @@ export default function VotePage() {
     );
   }
 
+  const copyDirectVoteLink = async (optionId: string) => {
+    if (!selectedContest) return;
+    const url = `${window.location.origin}/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.id)}&optionId=${encodeURIComponent(optionId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Direct vote link copied');
+    } catch {
+      toast.error('Unable to copy vote link');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-surface-50 pb-10">
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 grid gap-5 xl:grid-cols-[430px_1fr]">
-        <section className="phone-stage p-4 xl:sticky xl:top-20 xl:self-start">
-          <div className="phone-notch mb-4" />
-          <div className="flex items-center justify-between gap-2">
+    <VotingPublicLayout
+      slug={slug}
+      eventName={eventName}
+      activeTab="vote"
+      contestId={selectedContestId}
+      showNominateCta={Boolean(config?.allowPublicNominations)}
+    >
+      <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
+        <section className="dashboard-canvas p-4 lg:sticky lg:top-20 lg:self-start">
+          <div className="rounded-2xl border border-surface-200 bg-white p-4 space-y-3">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Live Voting</p>
-              <h1 className="text-xl font-bold text-brand-900 mt-1 leading-tight">{eventName}</h1>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-red-600">Category</p>
+              <p className="mt-1 text-lg font-semibold text-brand-900">
+                {selectedContest?.title || 'Choose a category'}
+              </p>
+              <p className="text-xs text-surface-600 mt-1">
+                {(selectedContest?.options.length || 0).toLocaleString()} nominees
+                {config?.allowPaidVotes
+                  ? ` • ${formatMoney(config.currency, config.voteUnitPrice)} per vote`
+                  : ''}
+              </p>
             </div>
-            <span className="pill-accent">Open</span>
-          </div>
-
-          <div className="mt-4 segmented w-full">
-            <span className="segmented-item segmented-item-active text-center">Vote</span>
-            <Link
-              href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="segmented-item text-center hover:text-brand-900"
-            >
-              Nominees
-            </Link>
-            <Link
-              href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="segmented-item text-center hover:text-brand-900"
-            >
-              Results
-            </Link>
-          </div>
-
-          <div className="mt-4 rounded-3xl border border-red-200 bg-[#fff7f5] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-red-600">Selected Category</p>
-            <p className="mt-1 text-lg font-semibold text-brand-900">{selectedContest?.title || 'Choose a category below'}</p>
-            <p className="text-xs text-surface-600 mt-1">
-              {(selectedContest?.options.length || 0).toLocaleString()} nominees
-              {config?.allowPaidVotes ? ' - ' + formatMoney(config.currency, config.voteUnitPrice) + ' per vote' : ''}
-            </p>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
-                <p className="text-[11px] text-surface-500">Nominees</p>
-                <p className="text-base font-semibold text-brand-900">{selectedContest?.options.length || 0}</p>
-              </div>
-              <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
-                <p className="text-[11px] text-surface-500">Mode</p>
-                <p className="text-base font-semibold text-brand-900">{selectedContest?.mode || config?.mode || 'AWARDS'}</p>
-              </div>
-              <div className="rounded-xl border border-surface-200 bg-white px-2 py-2">
-                <p className="text-[11px] text-surface-500">Verification</p>
-                <p className="text-base font-semibold text-brand-900">{electionMode ? (otpVerified ? 'Complete' : 'Required') : 'Not required'}</p>
-              </div>
+            <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+              <p className="text-xs text-surface-500">Selected nominee</p>
+              <p className="text-sm font-semibold text-brand-900 mt-0.5">
+                {selectedOption?.name || 'Pick a nominee below'}
+              </p>
+              <p className="text-xs text-surface-600 mt-1">
+                {selectedOption ? `${selectedOption.totalVotes.toLocaleString()} total votes` : 'No nominee selected yet.'}
+              </p>
             </div>
-            {config?.allowPublicNominations ? (
-              <div className="mt-3">
-                <Link
-                  href={`/e/${slug}/nominate${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-                  className="btn-accent w-full"
-                >
-                  Nominate A Person
-                </Link>
+            {config?.allowFreeVotes ? (
+              <button
+                className="btn-outline w-full"
+                onClick={() => {
+                  void castFreeVote();
+                }}
+                disabled={submitting || !hasContests}
+              >
+                Cast Free Vote
+              </button>
+            ) : null}
+            {config?.allowPaidVotes ? (
+              <button
+                className="btn-accent w-full"
+                onClick={() => {
+                  void createPaidIntent();
+                }}
+                disabled={submitting || !canUsePaidVoting || !hasContests}
+              >
+                Pay & Vote
+              </button>
+            ) : null}
+            {config?.allowPaidVotes && !hasGateways ? (
+              <p className="text-xs text-surface-600">
+                Paid voting is enabled but no payment gateway is available for this event.
+              </p>
+            ) : null}
+            {!hasContests ? (
+              <p className="text-xs text-surface-600">
+                This event has no published nominees yet. Check back soon.
+              </p>
+            ) : null}
+            {optionQuery && selectedOption ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs font-semibold text-emerald-700">Direct Vote Link Opened</p>
+                <p className="text-sm text-emerald-800 mt-0.5">
+                  You are ready to vote for {selectedOption.name}.
+                </p>
               </div>
             ) : null}
           </div>
@@ -527,9 +521,9 @@ export default function VotePage() {
           ) : null}
 
           <section className="dashboard-canvas p-4 space-y-3">
-            <h2 className="text-base font-semibold text-brand-900">Vote Setup</h2>
-            <p className="text-xs text-surface-600">Choose a category, set vote quantity, then vote for your preferred nominee.</p>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr,130px,1fr,auto] gap-2">
+            <h2 className="text-base font-semibold text-brand-900">Quick Vote Setup</h2>
+            <p className="text-xs text-surface-600">Choose category, quantity, and payment method.</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[1fr,130px,1fr,auto]">
               <select
                 className="input"
                 value={selectedContestId}
@@ -577,21 +571,10 @@ export default function VotePage() {
                   </option>
                 ))}
               </select>
-              <button className="btn-accent" onClick={() => { void createPaidIntent(); }} disabled={submitting || !canUsePaidVoting || !hasContests}>
+              <button className="btn-accent w-full" onClick={() => { void createPaidIntent(); }} disabled={submitting || !canUsePaidVoting || !hasContests}>
                 Pay & Vote
               </button>
             </div>
-            {!hasContests ? (
-              <p className="text-xs text-surface-600">This event has no published nominees yet. Check back soon.</p>
-            ) : null}
-            {config?.allowPaidVotes && !hasGateways ? (
-              <p className="text-xs text-surface-600">Paid voting is enabled but no payment gateway is currently available for this event.</p>
-            ) : null}
-            {config?.allowFreeVotes ? (
-              <button className="btn-outline w-full md:w-auto" onClick={() => { void castFreeVote(); }} disabled={submitting || !hasContests}>
-                Cast Free Vote
-              </button>
-            ) : null}
           </section>
 
           <section className="dashboard-canvas p-4 space-y-3">
@@ -635,82 +618,42 @@ export default function VotePage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-brand-900 truncate">{option.name}</p>
-                          <p className="text-xs text-surface-500">#{option.rank}</p>
+                          <p className="text-xs text-surface-500">{option.totalVotes.toLocaleString()} votes</p>
                         </div>
-                        <p className="text-xs text-surface-600 truncate">{option.description || 'Tap vote to support this nominee.'}</p>
+                        <p className="text-xs text-surface-600 truncate">{option.description || 'Vote now to support this nominee.'}</p>
                       </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <button
                         type="button"
                         onClick={() => quickVoteForOption(option.id)}
                         disabled={submitting}
-                        className="btn-accent !min-h-[36px] !px-3 !py-1.5 !text-xs !rounded-full"
+                        className="btn-accent w-full !min-h-[38px] !px-3 !py-2 !text-xs !rounded-full"
                       >
                         {config?.allowPaidVotes ? `Vote ${formatMoney(config.currency, config.voteUnitPrice)}` : 'Vote'}
                       </button>
+                      <Link
+                        href={`/e/${slug}/nominee/${encodeURIComponent(option.id)}?contestId=${encodeURIComponent(selectedContest?.id || '')}`}
+                        className="btn-outline w-full !min-h-[38px] !px-3 !py-2 !text-xs !rounded-full text-center"
+                      >
+                        View Profile
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => copyDirectVoteLink(option.id)}
+                        className="btn-outline w-full !min-h-[38px] !px-3 !py-2 !text-xs !rounded-full"
+                      >
+                        Copy Vote Link
+                      </button>
                     </div>
-                    <div className="mt-2 h-1.5 rounded-full bg-surface-100 overflow-hidden">
-                      <div className="h-1.5 rounded-full bg-[#ff3b30]" style={{ width: `${Math.min(100, Math.max(0, option.share))}%` }} />
-                    </div>
-                    <p className="mt-1.5 text-xs text-surface-500">{option.totalVotes.toLocaleString()} votes</p>
                   </article>
                 );
               })}
             </div>
           </section>
-
-          <section className="dashboard-canvas p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-brand-900">Current Leaders</h2>
-              <Link
-                href={`/e/${slug}/leaderboard${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-                className="text-xs font-semibold text-red-700 hover:text-red-800"
-              >
-                Full leaderboard
-              </Link>
-            </div>
-            {topRankings.length ? (
-              topRankings.map((entry: any) => (
-                <article key={entry.optionId} className="rounded-xl border border-surface-200 bg-white p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {entry.imageUrl || entry.imagePath ? (
-                        <img
-                          src={entry.imageUrl || entry.imagePath}
-                          alt={entry.name}
-                          className="h-9 w-9 rounded-full border border-surface-200 object-cover"
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-full border border-surface-200 bg-surface-100" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
-                        <p className="font-semibold text-brand-900 truncate">{entry.name}</p>
-                        <p className="text-xs text-surface-600 truncate">{entry.description || 'Top performing nominee'}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const contest = contests.find((item) => item.id === selectedContestId) || contests[0];
-                        if (contest) {
-                          setSelectedContestId(contest.id);
-                          setSelectedOptionId(entry.optionId);
-                        }
-                      }}
-                      className="btn-accent !min-h-[36px] !py-1.5 !text-xs !rounded-full"
-                    >
-                      Vote
-                    </button>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="text-sm text-surface-600">Results will appear here once voting starts.</p>
-            )}
-          </section>
         </div>
       </div>
-    </div>
+    </VotingPublicLayout>
   );
 }
 

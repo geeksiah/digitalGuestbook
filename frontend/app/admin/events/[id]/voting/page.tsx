@@ -91,6 +91,7 @@ type FieldDraft = {
 };
 
 const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
+type VotingTab = 'setup' | 'categories' | 'nominees' | 'nominations' | 'results';
 
 type VotingAnalytics = {
   totals: {
@@ -184,6 +185,8 @@ export default function AdminVotingPage() {
   const [nominations, setNominations] = useState<VotingNomination[]>([]);
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
   const [selectedContestId, setSelectedContestId] = useState('');
+  const [activeTab, setActiveTab] = useState<VotingTab>('setup');
+  const [selectedNomineeContestIds, setSelectedNomineeContestIds] = useState<string[]>([]);
 
   const [newContestTitle, setNewContestTitle] = useState('');
   const [newContestMode, setNewContestMode] = useState<VoteMode>('AWARDS');
@@ -251,7 +254,16 @@ export default function AdminVotingPage() {
     const response = await adminVotingApi.getVotingContests(eventId);
     const dataContests = (response.data?.contests || []) as VotingContest[];
     setContests(dataContests);
-    setSelectedContestId((current) => current || dataContests[0]?.id || '');
+    setSelectedContestId((current) =>
+      current && dataContests.some((contest) => contest.id === current)
+        ? current
+        : dataContests[0]?.id || ''
+    );
+    setSelectedNomineeContestIds((current) => {
+      const valid = current.filter((id) => dataContests.some((contest) => contest.id === id));
+      if (valid.length > 0) return valid;
+      return dataContests[0]?.id ? [dataContests[0].id] : [];
+    });
   };
 
   const loadAnalytics = async () => {
@@ -307,6 +319,15 @@ export default function AdminVotingPage() {
     void loadOptions(selectedContestId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedContestId]);
+
+  useEffect(() => {
+    if (!selectedContestId) return;
+    setSelectedNomineeContestIds((current) => {
+      const valid = current.filter((id) => contests.some((contest) => contest.id === id));
+      if (valid.includes(selectedContestId)) return valid;
+      return [selectedContestId, ...valid];
+    });
+  }, [selectedContestId, contests]);
 
   const saveConfig = async () => {
     if (!config) return;
@@ -399,21 +420,33 @@ export default function AdminVotingPage() {
   };
 
   const createNominee = async () => {
-    if (!selectedContestId) {
-      toast.error('Select a contest first');
-      return;
-    }
     if (!newOptionName.trim()) {
       toast.error('Enter nominee name');
       return;
     }
+    const targetContestIds = selectedNomineeContestIds.filter((contestId) =>
+      contests.some((contest) => contest.id === contestId)
+    );
+    if (targetContestIds.length === 0) {
+      toast.error('Select at least one category');
+      return;
+    }
     setSavingOption(true);
     try {
-      await adminVotingApi.createVotingOption(eventId, selectedContestId, {
-        name: newOptionName.trim(),
-        description: newOptionDescription.trim() || undefined,
-        imagePath: newOptionImagePath.trim() || undefined,
-      });
+      const results = await Promise.allSettled(
+        targetContestIds.map((contestId) =>
+          adminVotingApi.createVotingOption(eventId, contestId, {
+            name: newOptionName.trim(),
+            description: newOptionDescription.trim() || undefined,
+            imagePath: newOptionImagePath.trim() || undefined,
+          })
+        )
+      );
+      const succeeded = results.filter((result) => result.status === 'fulfilled').length;
+      if (succeeded === 0) {
+        const firstRejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined;
+        throw firstRejected?.reason;
+      }
       setNewOptionName('');
       setNewOptionDescription('');
       setNewOptionImagePath('');
@@ -422,7 +455,13 @@ export default function AdminVotingPage() {
         newOptionImageInputRef.current.value = '';
       }
       await Promise.all([loadOptions(selectedContestId), loadContests(), loadAnalytics()]);
-      toast.success('Nominee added');
+      toast.success(
+        succeeded === targetContestIds.length
+          ? succeeded === 1
+            ? 'Nominee added'
+            : `Nominee added to ${succeeded} categories`
+          : `Nominee added to ${succeeded} of ${targetContestIds.length} categories`
+      );
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to add nominee');
     } finally {
@@ -431,10 +470,6 @@ export default function AdminVotingPage() {
   };
 
   const uploadNomineeImage = async (file: File) => {
-    if (!selectedContestId) {
-      toast.error('Select a contest first');
-      return;
-    }
     setUploadingOptionImage(true);
     try {
       const response = await adminVotingApi.uploadVotingOptionImage(eventId, file);
@@ -599,6 +634,16 @@ export default function AdminVotingPage() {
     }
   };
 
+  const toggleNomineeTargetContest = (contestId: string, checked: boolean) => {
+    setSelectedNomineeContestIds((current) => {
+      if (checked) {
+        if (current.includes(contestId)) return current;
+        return [...current, contestId];
+      }
+      return current.filter((id) => id !== contestId);
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
@@ -621,6 +666,9 @@ export default function AdminVotingPage() {
         </div>
         {event?.slug ? (
           <div className="flex flex-wrap gap-2">
+            <Link href="/admin/ussd" className="btn-outline">
+              USSD Controls
+            </Link>
             <Link href={`/e/${event.slug}/vote`} className="btn-outline" target="_blank">
               Open Public Voting Page
             </Link>
@@ -637,6 +685,25 @@ export default function AdminVotingPage() {
         ) : null}
       </div>
 
+      <div className="segmented max-w-2xl">
+        <button type="button" className={`segmented-item ${activeTab === 'setup' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('setup')}>
+          Setup
+        </button>
+        <button type="button" className={`segmented-item ${activeTab === 'categories' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('categories')}>
+          Categories
+        </button>
+        <button type="button" className={`segmented-item ${activeTab === 'nominees' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('nominees')}>
+          Nominees
+        </button>
+        <button type="button" className={`segmented-item ${activeTab === 'nominations' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('nominations')}>
+          Nominations
+        </button>
+        <button type="button" className={`segmented-item ${activeTab === 'results' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('results')}>
+          Results
+        </button>
+      </div>
+
+      {activeTab === 'setup' ? (
       <section className="card-premium p-4 space-y-4">
         <h2 className="text-lg font-semibold text-brand-900">Voting Setup</h2>
         <p className="text-sm text-surface-600">Control how guests can vote and nominate.</p>
@@ -692,56 +759,65 @@ export default function AdminVotingPage() {
                 />
               </label>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-              <button
-                type="button"
-                className={`btn-outline ${config.isEnabled ? 'border-emerald-300 text-emerald-700' : ''}`}
-                onClick={() => setConfig((current) => (current ? { ...current, isEnabled: !current.isEnabled } : current))}
-              >
-                Voting page {config.isEnabled ? 'live' : 'hidden'}
-              </button>
-              <button
-                type="button"
-                className={`btn-outline ${config.allowFreeVotes ? 'border-emerald-300 text-emerald-700' : ''}`}
-                onClick={() =>
-                  setConfig((current) => (current ? { ...current, allowFreeVotes: !current.allowFreeVotes } : current))
-                }
-              >
-                Free votes {config.allowFreeVotes ? 'on' : 'off'}
-              </button>
-              <button
-                type="button"
-                className={`btn-outline ${config.allowPaidVotes ? 'border-emerald-300 text-emerald-700' : ''}`}
-                onClick={() =>
-                  setConfig((current) => (current ? { ...current, allowPaidVotes: !current.allowPaidVotes } : current))
-                }
-              >
-                Paid votes {config.allowPaidVotes ? 'on' : 'off'}
-              </button>
-              <button
-                type="button"
-                className={`btn-outline ${config.requireOtpForElection ? 'border-emerald-300 text-emerald-700' : ''}`}
-                onClick={() =>
-                  setConfig((current) =>
-                    current ? { ...current, requireOtpForElection: !current.requireOtpForElection } : current
-                  )
-                }
-              >
-                OTP checks {config.requireOtpForElection ? 'on' : 'off'}
-              </button>
-              <button
-                type="button"
-                className={`btn-outline ${config.allowPublicNominations ? 'border-emerald-300 text-emerald-700' : ''}`}
-                onClick={() =>
-                  setConfig((current) =>
-                    current ? { ...current, allowPublicNominations: !current.allowPublicNominations } : current
-                  )
-                }
-              >
-                Public nominations {config.allowPublicNominations ? 'open' : 'closed'}
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+                <input
+                  type="checkbox"
+                  checked={config.isEnabled}
+                  onChange={(event) =>
+                    setConfig((current) => (current ? { ...current, isEnabled: event.target.checked } : current))
+                  }
+                />
+                Open Voting
+              </label>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+                <input
+                  type="checkbox"
+                  checked={config.allowFreeVotes}
+                  onChange={(event) =>
+                    setConfig((current) => (current ? { ...current, allowFreeVotes: event.target.checked } : current))
+                  }
+                />
+                Free Votes
+              </label>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+                <input
+                  type="checkbox"
+                  checked={config.allowPaidVotes}
+                  onChange={(event) =>
+                    setConfig((current) => (current ? { ...current, allowPaidVotes: event.target.checked } : current))
+                  }
+                />
+                Paid Votes
+              </label>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+                <input
+                  type="checkbox"
+                  checked={config.requireOtpForElection}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      current ? { ...current, requireOtpForElection: event.target.checked } : current
+                    )
+                  }
+                />
+                OTP Verification
+              </label>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={Boolean(config.allowPublicNominations)}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      current ? { ...current, allowPublicNominations: event.target.checked } : current
+                    )
+                  }
+                />
+                Allow Public Nominations
+              </label>
+            </div>
+            <div className="flex justify-end">
               <button className="btn-primary" onClick={saveConfig} disabled={savingConfig}>
-                {savingConfig ? 'Saving...' : 'Save Changes'}
+                {savingConfig ? 'Saving...' : 'Save Settings'}
               </button>
             </div>
           </>
@@ -749,8 +825,11 @@ export default function AdminVotingPage() {
           <p className="text-sm text-surface-500">Voting setup is not available for this event yet.</p>
         )}
       </section>
+      ) : null}
 
+      {activeTab === 'categories' || activeTab === 'nominees' ? (
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {activeTab === 'categories' ? (
         <div className="card-premium p-4 space-y-3">
           <h2 className="text-lg font-semibold text-brand-900">Contests</h2>
           <div className="grid grid-cols-1 md:grid-cols-[1fr,160px,auto] gap-2">
@@ -801,12 +880,29 @@ export default function AdminVotingPage() {
             )}
           </div>
         </div>
+        ) : null}
 
+        {activeTab === 'nominees' ? (
         <div className="card-premium p-4 space-y-3">
           <h2 className="text-lg font-semibold text-brand-900">Nominees</h2>
           <p className="text-xs text-surface-600">
             {selectedContest ? `Contest: ${selectedContest.title}` : 'Select a contest to manage nominees.'}
           </p>
+          <div className="rounded-lg border border-surface-200 bg-surface-50 p-3 space-y-2">
+            <p className="text-xs font-medium text-surface-700">Assign nominee to categories</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[120px] overflow-auto">
+              {contests.map((contest) => (
+                <label key={contest.id} className="inline-flex items-center gap-2 text-sm text-brand-900">
+                  <input
+                    type="checkbox"
+                    checked={selectedNomineeContestIds.includes(contest.id)}
+                    onChange={(event) => toggleNomineeTargetContest(contest.id, event.target.checked)}
+                  />
+                  <span>{contest.title}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2">
             <input
               className="input"
@@ -851,7 +947,7 @@ export default function AdminVotingPage() {
                 <button
                   type="button"
                   className="btn-outline text-xs"
-                  disabled={!selectedContestId || uploadingOptionImage}
+                  disabled={selectedNomineeContestIds.length === 0 || uploadingOptionImage}
                   onClick={() => newOptionImageInputRef.current?.click()}
                 >
                   {uploadingOptionImage ? 'Uploading...' : newOptionImagePath ? 'Replace photo' : 'Upload photo'}
@@ -873,7 +969,7 @@ export default function AdminVotingPage() {
                 ) : null}
               </div>
             </div>
-            <button className="btn-primary w-full" onClick={createNominee} disabled={!selectedContestId || savingOption}>
+            <button className="btn-primary w-full" onClick={createNominee} disabled={selectedNomineeContestIds.length === 0 || savingOption}>
               Add Nominee
             </button>
           </div>
@@ -1099,8 +1195,11 @@ export default function AdminVotingPage() {
             )}
           </div>
         </div>
+        ) : null}
       </section>
+      ) : null}
 
+      {activeTab === 'nominations' ? (
       <section className="card-premium p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-brand-900">Public Nominations</h2>
@@ -1189,7 +1288,9 @@ export default function AdminVotingPage() {
           </div>
         )}
       </section>
+      ) : null}
 
+      {activeTab === 'results' ? (
       <section className="card-premium p-4 space-y-4">
         <h2 className="text-lg font-semibold text-brand-900">Voting Analytics</h2>
         {analytics ? (
@@ -1287,6 +1388,7 @@ export default function AdminVotingPage() {
           <p className="text-sm text-surface-500">Analytics unavailable.</p>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

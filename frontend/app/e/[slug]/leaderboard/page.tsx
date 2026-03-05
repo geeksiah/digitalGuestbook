@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type RankedNominee = {
   rank: number;
@@ -48,7 +49,6 @@ export default function LeaderboardPage() {
   const [contests, setContests] = useState<LeaderboardContest[]>([]);
   const [selectedContestId, setSelectedContestId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [modeFilter, setModeFilter] = useState<'ALL' | 'AWARDS' | 'ELECTION'>('ALL');
 
   const selectedContest = useMemo(
     () => contests.find((contest) => contest.contestId === selectedContestId) || null,
@@ -59,13 +59,11 @@ export default function LeaderboardPage() {
     if (!selectedContest) return [];
     const query = searchQuery.trim().toLowerCase();
     return selectedContest.rankings.filter((entry) => {
-      if (modeFilter !== 'ALL' && selectedContest.mode !== modeFilter) return false;
       if (!query) return true;
       const name = String(entry.name || '').toLowerCase();
-      const description = String(entry.description || '').toLowerCase();
-      return name.includes(query) || description.includes(query);
+      return name.includes(query);
     });
-  }, [selectedContest, searchQuery, modeFilter]);
+  }, [selectedContest, searchQuery]);
 
   useEffect(() => {
     if (!slug) return;
@@ -121,31 +119,13 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 py-6 px-4">
-      <div className="mx-auto max-w-5xl space-y-4">
-        <section className="phone-stage p-6">
-          <div className="phone-notch mb-4" />
-          <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Leaderboard</p>
-          <h1 className="text-3xl font-bold mt-2 text-brand-900">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-1">Live rankings by category with transparent vote totals.</p>
-          <div className="mt-4 segmented w-full max-w-md">
-            <Link
-              href={`/e/${slug}/nominees${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="segmented-item text-center hover:text-brand-900"
-            >
-              Nominees
-            </Link>
-            <Link
-              href={`/e/${slug}/vote${selectedContestId ? `?contestId=${encodeURIComponent(selectedContestId)}` : ''}`}
-              className="segmented-item text-center hover:text-brand-900"
-            >
-              Vote
-            </Link>
-            <span className="segmented-item segmented-item-active text-center">Results</span>
-          </div>
-        </section>
-
-        <section className="dashboard-canvas p-5">
+    <VotingPublicLayout
+      slug={slug}
+      eventName={eventName}
+      activeTab="results"
+      contestId={selectedContestId}
+    >
+      <section className="dashboard-canvas p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-brand-900">Category Rankings</h2>
             <div className="flex flex-wrap gap-2">
@@ -155,11 +135,6 @@ export default function LeaderboardPage() {
                     {contest.title} ({contest.mode})
                   </option>
                 ))}
-              </select>
-              <select className="input max-w-[150px]" value={modeFilter} onChange={(event) => setModeFilter(event.target.value as 'ALL' | 'AWARDS' | 'ELECTION')}>
-                <option value="ALL">All modes</option>
-                <option value="AWARDS">Awards</option>
-                <option value="ELECTION">Election</option>
               </select>
             </div>
           </div>
@@ -197,7 +172,10 @@ export default function LeaderboardPage() {
               {visibleRankings.map((entry) => (
                 <article key={entry.optionId} className="focus-card">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-full bg-surface-100 border border-surface-200 flex items-center justify-center text-xs font-semibold text-brand-900">
+                        {entry.rank}
+                      </div>
                       {entry.imageUrl || entry.imagePath ? (
                         <img
                           src={entry.imageUrl || entry.imagePath || ''}
@@ -207,19 +185,15 @@ export default function LeaderboardPage() {
                       ) : (
                         <div className="h-10 w-10 rounded-full border border-surface-200 bg-surface-100" />
                       )}
-                      <div>
-                        <p className="text-xs text-surface-500">Rank #{entry.rank}</p>
-                        <h3 className="text-base font-semibold text-brand-900">{entry.name}</h3>
-                        <p className="text-xs text-surface-600 mt-0.5">{entry.description || 'Track live standing and vote from this row.'}</p>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold text-brand-900 truncate">{entry.name}</h3>
+                        <p className="text-xs text-surface-500">Category: {selectedContest.title}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-brand-900">{entry.totalVotes.toLocaleString()} votes</p>
-                      <p className="text-xs text-surface-500">{entry.voteSharePercent.toFixed(1)}% share</p>
+                      <p className="text-xs text-surface-500">Free {entry.freeVotes} • Paid {entry.paidVotes}</p>
                     </div>
-                  </div>
-                  <div className="mt-3 h-2 rounded-full bg-surface-100 overflow-hidden">
-                    <div className="h-2 rounded-full bg-[#ff3b30]" style={{ width: `${Math.min(100, Math.max(0, entry.voteSharePercent))}%` }} />
                   </div>
                   <div className="mt-3 flex justify-end">
                     <Link
@@ -233,8 +207,7 @@ export default function LeaderboardPage() {
               ))}
             </div>
           )}
-        </section>
-      </div>
-    </div>
+      </section>
+    </VotingPublicLayout>
   );
 }

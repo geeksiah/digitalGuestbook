@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type NominationField = {
   id: string;
@@ -36,6 +37,25 @@ type NominationFormPayload = {
   enabled: boolean;
   supportsPhotoUpload?: boolean;
   contests: NominationContest[];
+};
+
+type PublicVotingFallbackPayload = {
+  contests: Array<{
+    id: string;
+    title?: string;
+    name?: string;
+    mode?: 'AWARDS' | 'ELECTION';
+  }>;
+};
+
+type NomineesFallbackPayload = {
+  categories: Array<{
+    contestId?: string;
+    id?: string;
+    title?: string;
+    name?: string;
+    mode?: 'AWARDS' | 'ELECTION';
+  }>;
 };
 
 const SESSION_STORAGE_KEY_PREFIX = 'vote_session_token:';
@@ -77,13 +97,37 @@ export default function NominatePage() {
     try {
       const response = await votingApi.getNominationForm(slug);
       const payload = ((response.data as any)?.data || response.data || {}) as Partial<NominationFormPayload>;
-      const normalizedContests: NominationContest[] = (Array.isArray(payload.contests) ? payload.contests : []).map((contest: any) => ({
+      let normalizedContests: NominationContest[] = (Array.isArray(payload.contests) ? payload.contests : []).map((contest: any) => ({
         id: String(contest?.id || ''),
         title: String(contest?.title || contest?.name || 'Untitled category'),
         mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
         nominationFormFields: Array.isArray(contest?.nominationFormFields) ? contest.nominationFormFields : [],
         categories: Array.isArray(contest?.categories) ? contest.categories : [],
       })).filter((contest) => contest.id);
+
+      if (Boolean(payload.enabled) && normalizedContests.length === 0) {
+        const fallbackResponse = await votingApi.getPublicVoting(slug);
+        const fallbackPayload = ((fallbackResponse.data as any)?.data || fallbackResponse.data || {}) as Partial<PublicVotingFallbackPayload>;
+        normalizedContests = (Array.isArray(fallbackPayload.contests) ? fallbackPayload.contests : []).map((contest: any) => ({
+          id: String(contest?.id || ''),
+          title: String(contest?.title || contest?.name || 'Untitled category'),
+          mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+          nominationFormFields: [],
+          categories: [],
+        })).filter((contest) => contest.id);
+      }
+
+      if (Boolean(payload.enabled) && normalizedContests.length === 0) {
+        const nomineesResponse = await votingApi.nominees(slug);
+        const nomineesPayload = ((nomineesResponse.data as any)?.data || nomineesResponse.data || {}) as Partial<NomineesFallbackPayload>;
+        normalizedContests = (Array.isArray(nomineesPayload.categories) ? nomineesPayload.categories : []).map((contest: any) => ({
+          id: String(contest?.contestId || contest?.id || ''),
+          title: String(contest?.title || contest?.name || 'Untitled category'),
+          mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+          nominationFormFields: [],
+          categories: [],
+        })).filter((contest) => contest.id);
+      }
 
       setEnabled(Boolean(payload.enabled));
       setEventName(String(payload.event?.name || slug));
@@ -232,7 +276,7 @@ export default function NominatePage() {
       <div className="min-h-screen bg-surface-50 p-6">
         <div className="mx-auto max-w-xl card-premium p-6 space-y-3">
           <h1 className="text-xl font-semibold text-brand-900">Nominations Are Not Ready Yet</h1>
-          <p className="text-sm text-surface-600">This event has no nomination categories published right now.</p>
+          <p className="text-sm text-surface-600">Nominations are open, but categories are not available right now. Please try again shortly.</p>
           <Link className="btn-outline inline-flex" href={`/e/${slug}/vote`}>
             Back To Voting
           </Link>
@@ -242,33 +286,18 @@ export default function NominatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 py-6 px-4">
-      <div className="mx-auto max-w-4xl space-y-4">
-        <section className="phone-stage p-5">
-          <div className="phone-notch mb-4" />
-          <p className="text-[11px] uppercase tracking-[0.18em] text-red-500 font-semibold">Public Nomination</p>
-          <h1 className="text-2xl font-bold mt-2 text-brand-900">{eventName}</h1>
-          <p className="text-sm text-surface-600 mt-1">
-            Submit a nominee for review. Approved nominees appear automatically on the public list.
-          </p>
-          <div className="mt-4 segmented w-full max-w-md">
-            <span className="segmented-item segmented-item-active text-center">Nominate</span>
-            <Link
-              href={`/e/${slug}/nominees${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
-              className="segmented-item text-center hover:text-brand-900"
-            >
-              Nominees
-            </Link>
-            <Link
-              href={`/e/${slug}/leaderboard${contestId ? `?contestId=${encodeURIComponent(contestId)}` : ''}`}
-              className="segmented-item text-center hover:text-brand-900"
-            >
-              Results
-            </Link>
+    <VotingPublicLayout
+      slug={slug}
+      eventName={eventName}
+      activeTab="nominate"
+      contestId={contestId}
+      showNominateCta={false}
+    >
+      <section className="dashboard-canvas p-5 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-brand-900">Nominate Someone</h2>
+            <p className="text-sm text-surface-600 mt-1">Submit a nominee for review. Approved nominees appear automatically on the public list.</p>
           </div>
-        </section>
-
-        <section className="dashboard-canvas p-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1 block">
               <span className="text-xs text-surface-600">Voting Category</span>
@@ -398,8 +427,7 @@ export default function NominatePage() {
               Go To Voting
             </Link>
           </div>
-        </section>
-      </div>
-    </div>
+      </section>
+    </VotingPublicLayout>
   );
 }
