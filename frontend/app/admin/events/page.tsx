@@ -7,7 +7,6 @@ import { formatDate, getPhaseLabel, cn } from '@/lib/utils';
 import {
   DashboardHeroHeader,
   DashboardSection,
-  EntityListRow,
   InsightPanel,
   MetricStrip,
   DashboardKpiCard,
@@ -135,7 +134,6 @@ export default function EventsPage() {
         eyebrow="Admin events"
         title="Event management"
         subtitle="Review approvals, monitor live activity, and move quickly into each event workspace."
-        action={<Link href="/admin/events/new" className="btn-primary">New Event</Link>}
       />
 
       <MetricStrip>
@@ -174,52 +172,98 @@ export default function EventsPage() {
                 {events.map((event) => {
                   const cover = resolveEventCover(event);
                   return (
-                    <EntityListRow
+                    <article
                       key={event.id}
-                      media={(
-                        <div className="h-16 w-24 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100">
-                          {cover ? <img src={cover} alt={event.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />}
+                      className="rounded-[28px] border border-surface-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-all hover:border-brand-200 sm:p-5"
+                    >
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.72fr)_auto] xl:items-center">
+                        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
+                          <div className="h-24 w-full shrink-0 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100 sm:h-20 sm:w-28">
+                            {cover ? (
+                              <img src={cover} alt={event.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-semibold tracking-tight text-brand-900">{event.name}</h3>
+                              <span
+                                className={cn(
+                                  'rounded-full px-2.5 py-1 text-xs font-semibold',
+                                  event.currentPhase === 'LIVE'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : event.currentPhase === 'PRE_EVENT'
+                                    ? 'bg-sky-50 text-sky-700'
+                                    : 'bg-surface-100 text-surface-600'
+                                )}
+                              >
+                                {getPhaseLabel(event.currentPhase)}
+                              </span>
+                              {event.invitationOnly ? (
+                                <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">
+                                  Invite only
+                                </span>
+                              ) : null}
+                              {event.isArchived ? (
+                                <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">
+                                  Archived
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-500">
+                              <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
+                              {event.venue ? <span>{event.venue}</span> : null}
+                              <span className="font-mono text-xs text-surface-400">/{event.slug}</span>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-3 gap-2 sm:max-w-[360px]">
+                              <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVPs</p>
+                                <p className="mt-1 text-base font-semibold text-brand-900">{event._count.rsvps}</p>
+                              </div>
+                              <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Check-ins</p>
+                                <p className="mt-1 text-base font-semibold text-brand-900">{event._count.checkIns}</p>
+                              </div>
+                              <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Media</p>
+                                <p className="mt-1 text-base font-semibold text-brand-900">{event._count.mediaAssets}</p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      title={event.name}
-                      meta={(
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={cn(
-                            'rounded-full px-2.5 py-1 text-xs font-semibold',
-                            event.currentPhase === 'LIVE' ? 'bg-emerald-50 text-emerald-700' :
-                            event.currentPhase === 'PRE_EVENT' ? 'bg-sky-50 text-sky-700' :
-                            'bg-surface-100 text-surface-600'
-                          )}>
-                            {getPhaseLabel(event.currentPhase)}
-                          </span>
-                          {event.invitationOnly ? <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Invite only</span> : null}
-                          {event.isArchived ? <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">Archived</span> : null}
+
+                        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-3 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Invitations</p>
+                            <p className="mt-1 text-base font-semibold text-brand-900">{event._count.invitations}</p>
+                          </div>
+                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-3 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVP flow</p>
+                            <p className="mt-1 text-sm font-medium text-surface-600">{event.rsvpEnabled ? 'Enabled' : 'Disabled'}</p>
+                          </div>
+                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-3 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Guestbook</p>
+                            <p className="mt-1 text-sm font-medium text-surface-600">{event.guestbookEnabled ? 'Enabled' : 'Disabled'}</p>
+                          </div>
                         </div>
-                      )}
-                      subtitle={(
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                          <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
-                          {event.venue ? <span>{event.venue}</span> : null}
-                          <span className="font-mono text-xs text-surface-400">/{event.slug}</span>
-                        </div>
-                      )}
-                      stats={(
-                        <>
-                          <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</div>
-                          <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</div>
-                          <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.mediaAssets}</span> Media</div>
-                        </>
-                      )}
-                      actions={(
-                        <>
-                          <Link href={`/admin/events/${event.id}`} className="btn-primary">Manage</Link>
-                          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">Public page</Link>
-                          <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost">
+
+                        <div className="flex flex-col gap-2 xl:min-w-[150px]">
+                          <Link href={`/admin/events/${event.id}`} className="btn-primary w-full justify-center">
+                            Manage
+                          </Link>
+                          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline w-full justify-center">
+                            Public Page
+                          </Link>
+                          <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost w-full justify-center">
                             {event.isArchived ? 'Restore' : 'Archive'}
                           </button>
-                        </>
-                      )}
-                    />
+                        </div>
+                      </div>
+                    </article>
                   );
                 })}
               </div>

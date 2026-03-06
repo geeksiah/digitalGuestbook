@@ -2927,6 +2927,20 @@ export default function EventDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-surface-200 p-6">
+            <PaymentGatewaySelector
+              eventId={eventId}
+              onUpdate={() => {
+                fetchEventGatewayCurrencies();
+              }}
+              title="Payment Methods For Paid Voting"
+              description="Choose which admin-configured gateways this event can use for paid voting. These same event gateways can also power gifting and paid checkout where applicable."
+            />
+            <div className="mt-4 rounded-xl border border-surface-200 bg-surface-50 px-4 py-3 text-sm text-surface-600">
+              Paid voting will only appear on the public voting page when this event has at least one enabled gateway that remains publicly available under the current wallet rules.
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-surface-200 p-6">
             <h4 className="text-base font-semibold text-brand-900">USSD Credits And Analytics</h4>
             <p className="mt-1 text-sm text-surface-600">
               Manage channels and wallet credits in USSD Controls. Open the voting workspace to review results and live performance in the Results tab.
