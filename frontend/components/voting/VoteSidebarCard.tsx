@@ -43,7 +43,7 @@ export default function VoteSidebarCard({
         </div>
 
         <div className="grid gap-2">
-          {canPaidVote ? (
+          {canPaidVote && !showNoGatewayMessage ? (
             <button className="btn-primary w-full" onClick={onPaidVote} disabled={!canVote}>
               Continue To Payment
             </button>

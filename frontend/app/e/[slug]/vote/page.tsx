@@ -337,12 +337,16 @@ export default function VotePage() {
 
   const quickVoteForOption = async (optionId: string) => {
     setSelectedOptionId(optionId);
-    if (config?.allowPaidVotes) {
+    if (config?.allowPaidVotes && canUsePaidVoting) {
       await createPaidIntent(optionId);
       return;
     }
     if (config?.allowFreeVotes) {
       await castFreeVote(optionId);
+      return;
+    }
+    if (config?.allowPaidVotes && !canUsePaidVoting) {
+      toast.error('Paid voting is unavailable until a payment method is connected');
       return;
     }
     toast.error('Voting is currently unavailable');
@@ -436,7 +440,7 @@ export default function VotePage() {
             </p>
             <p className="mt-1 text-sm text-surface-500">
               {(selectedContest?.options.length || 0).toLocaleString()} nominees
-              {config?.allowPaidVotes ? ` · ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
+              {config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
             </p>
           </div>
           {config ? (
@@ -477,7 +481,7 @@ export default function VotePage() {
             <VoteSidebarCard
               categoryTitle={selectedContest?.title || 'Choose a category'}
               nomineeCountLabel={`${(selectedContest?.options.length || 0).toLocaleString()} nominees${
-                config?.allowPaidVotes ? ` · ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''
+                config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''
               }`}
               selectedNomineeName={selectedOption?.name || 'Pick a nominee below'}
               selectedNomineeVotesLabel={
@@ -486,8 +490,8 @@ export default function VotePage() {
                   : 'No nominee selected yet.'
               }
               canFreeVote={Boolean(config?.allowFreeVotes)}
-              canPaidVote={Boolean(config?.allowPaidVotes)}
-              canVote={!submitting && hasContests && (!config?.allowPaidVotes || canUsePaidVoting)}
+              canPaidVote={Boolean(canUsePaidVoting)}
+              canVote={!submitting && hasContests}
               showNoGatewayMessage={Boolean(config?.allowPaidVotes && !hasGateways)}
               showNoContestMessage={!hasContests}
               directVoteNotice={optionQuery && selectedOption ? `You are ready to vote for ${selectedOption.name}.` : undefined}
@@ -516,7 +520,7 @@ export default function VotePage() {
               />
             ) : null}
 
-            {config?.allowPaidVotes ? (
+            {config?.allowPaidVotes && canUsePaidVoting ? (
               <VoteSetupPanel
                 title="Buy extra votes"
                 helperText="Choose quantity and payment method, then continue to checkout."
@@ -586,7 +590,7 @@ export default function VotePage() {
                       votesLabel={`${option.totalVotes.toLocaleString()} votes`}
                       selected={selected}
                       voteButtonLabel={
-                        config?.allowPaidVotes ? `Vote ${formatMoney(config.currency, config.voteUnitPrice)}` : 'Vote'
+                        canUsePaidVoting && config ? `Vote ${formatMoney(config.currency, config.voteUnitPrice)}` : 'Vote'
                       }
                       profileHref={`/e/${slug}/nominee/${encodeURIComponent(option.id)}?contestId=${encodeURIComponent(selectedContest?.id || '')}`}
                       onVote={() => {
@@ -607,4 +611,5 @@ export default function VotePage() {
     </VotingPublicLayout>
   );
 }
+
 

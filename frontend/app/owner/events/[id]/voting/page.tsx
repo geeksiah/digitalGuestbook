@@ -6,6 +6,11 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import VotingWorkspaceHeader from '@/components/voting/VotingWorkspaceHeader';
 import VotingWorkspaceTabs from '@/components/voting/VotingWorkspaceTabs';
+import {
+  VotingCategoryPanel,
+  VotingNomineePanel,
+  VotingNominationsPanel,
+} from '@/components/voting/VotingManagementPanels';
 import VotingResultsPanel from '@/components/voting/VotingResultsPanel';
 import VotingSetupPanel from '@/components/voting/VotingSetupPanel';
 import { ownerDashboardApi } from '@/lib/api';
@@ -708,480 +713,92 @@ export default function AdminVotingPage() {
         />
       ) : null}
 
-      {activeTab === 'categories' || activeTab === 'nominees' ? (
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        {activeTab === 'categories' ? (
-        <div className="detail-card space-y-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Categories</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">Create and organize categories</h2>
-            <p className="mt-1 text-sm leading-6 text-surface-500">Use one category per award, race, or election group. Enable or pause categories as the event evolves.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr,160px,auto] gap-2">
-            <input
-              className="input"
-              placeholder="Contest title"
-              value={newContestTitle}
-              onChange={(event) => setNewContestTitle(event.target.value)}
-            />
-            <select className="input" value={newContestMode} onChange={(event) => setNewContestMode(event.target.value as VoteMode)}>
-              <option value="AWARDS">Awards</option>
-              <option value="ELECTION">Election</option>
-            </select>
-            <button className="btn-primary" onClick={createContest} disabled={savingContest}>
-              Add
-            </button>
-          </div>
-          <div className="space-y-3 max-h-[520px] overflow-auto pr-1">
-            {contests.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-8 text-sm text-surface-500">No categories yet. Add your first one to get started.</div>
-            ) : (
-              contests.map((contest) => (
-                <div
-                  key={contest.id}
-                  className={`rounded-2xl border p-4 ${selectedContestId === contest.id ? 'border-brand-300 bg-brand-50/30' : 'border-surface-200 bg-white'}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedContestId(contest.id)}
-                      className="text-left flex-1"
-                    >
-                      <p className="text-sm font-semibold text-brand-900">{contest.title}</p>
-                      <p className="text-xs text-surface-600 mt-0.5">
-                        {contest.mode} - {contest.options?.length || 0} nominees - {contest.isActive ? 'Active' : 'Inactive'}
-                      </p>
-                    </button>
-                    <div className="flex gap-1">
-                      <button className="btn-outline text-xs" onClick={() => renameContest(contest)}>Rename</button>
-                      <button className="btn-outline text-xs" onClick={() => toggleContestStatus(contest)}>
-                        {contest.isActive ? 'Disable' : 'Enable'}
-                      </button>
-                      <button className="btn-outline text-xs text-rose-700 border-rose-200" onClick={() => deleteContest(contest)}>Delete</button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        ) : null}
+      {activeTab === 'categories' ? (
+        <VotingCategoryPanel
+          contests={contests}
+          selectedContestId={selectedContestId}
+          newContestTitle={newContestTitle}
+          newContestMode={newContestMode}
+          savingContest={savingContest}
+          onContestTitleChange={setNewContestTitle}
+          onContestModeChange={setNewContestMode}
+          onCreateContest={createContest}
+          onSelectContest={setSelectedContestId}
+          onRenameContest={renameContest}
+          onToggleContestStatus={toggleContestStatus}
+          onDeleteContest={deleteContest}
+        />
+      ) : null}
 
-        {activeTab === 'nominees' ? (
-        <div className="detail-card space-y-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominees</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">Add nominees and assign categories</h2>
-            <p className="mt-1 text-sm leading-6 text-surface-500">
-            {selectedContest ? `Currently working in ${selectedContest.title}. A nominee can appear in more than one category.` : 'Select a category first, then add nominees with photo and profile details.'}
-            </p>
-          </div>
-          <p className="text-xs text-surface-600">
-            {selectedContest ? `Contest: ${selectedContest.title}` : 'Select a contest to manage nominees.'}
-          </p>
-          <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4 space-y-2">
-            <p className="text-xs font-medium text-surface-700">Assign nominee to categories</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[120px] overflow-auto">
-              {contests.map((contest) => (
-                <label key={contest.id} className="inline-flex items-center gap-2 text-sm text-brand-900">
-                  <input
-                    type="checkbox"
-                    checked={selectedNomineeContestIds.includes(contest.id)}
-                    onChange={(event) => toggleNomineeTargetContest(contest.id, event.target.checked)}
-                  />
-                  <span>{contest.title}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <input
-              className="input"
-              placeholder="Nominee name"
-              value={newOptionName}
-              onChange={(event) => setNewOptionName(event.target.value)}
-              disabled={!selectedContestId}
-            />
-            <input
-              className="input"
-              placeholder="Nominee description (optional)"
-              value={newOptionDescription}
-              onChange={(event) => setNewOptionDescription(event.target.value)}
-              disabled={!selectedContestId}
-            />
-            <div className="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-3 space-y-2">
-              <p className="text-xs font-medium text-surface-700">Nominee photo</p>
-              <input
-                ref={newOptionImageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                    void uploadNomineeImage(file);
-                  }
-                }}
-              />
-              {newOptionImagePreview ? (
-                <img
-                  src={newOptionImagePreview}
-                  alt="Nominee preview"
-                  className="h-36 w-full rounded-lg border border-surface-200 object-cover"
-                />
-              ) : (
-                <div className="h-24 w-full rounded-lg border border-surface-200 bg-white flex items-center justify-center text-xs text-surface-500">
-                  Upload nominee photo to preview
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn-outline text-xs"
-                  disabled={selectedNomineeContestIds.length === 0 || uploadingOptionImage}
-                  onClick={() => newOptionImageInputRef.current?.click()}
-                >
-                  {uploadingOptionImage ? 'Uploading...' : newOptionImagePath ? 'Replace photo' : 'Upload photo'}
-                </button>
-                {newOptionImagePath ? (
-                  <button
-                    type="button"
-                    className="btn-ghost text-xs"
-                    onClick={() => {
-                      setNewOptionImagePath('');
-                      setNewOptionImagePreview('');
-                      if (newOptionImageInputRef.current) {
-                        newOptionImageInputRef.current.value = '';
-                      }
-                    }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <button className="btn-primary w-full" onClick={createNominee} disabled={selectedNomineeContestIds.length === 0 || savingOption}>
-              Add Nominee
-            </button>
-          </div>
-          <div className="rounded-2xl border border-surface-200 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-brand-900">Public Nomination Rules</p>
-              <button
-                className="btn-outline text-xs"
-                disabled={!selectedContest || savingNominationRule}
-                onClick={() =>
-                  selectedContest &&
-                  updateSelectedContestNominationRules({
-                    allowPublicNominations: !Boolean(selectedContest.allowPublicNominations),
-                  })
-                }
-              >
-                {selectedContest?.allowPublicNominations ? 'Close Public Nominations' : 'Open Public Nominations'}
-              </button>
-            </div>
-            <p className="text-xs text-surface-600">
-              Category-level setting for public nominee submissions. Global control is in Voting Setup.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <input
-                className="input"
-                placeholder="Custom field label"
-                value={newFieldLabel}
-                onChange={(event) => setNewFieldLabel(event.target.value)}
-                disabled={!selectedContest}
-              />
-              <select
-                className="input"
-                value={newFieldType}
-                onChange={(event) => setNewFieldType(event.target.value as NominationField['type'])}
-                disabled={!selectedContest}
-              >
-                <option value="text">text</option>
-                <option value="textarea">textarea</option>
-                <option value="email">email</option>
-                <option value="phone">phone</option>
-                <option value="number">number</option>
-                <option value="select">select</option>
-              </select>
-            </div>
-            <input
-              className="input"
-              placeholder="Field placeholder (optional)"
-              value={newFieldPlaceholder}
-              onChange={(event) => setNewFieldPlaceholder(event.target.value)}
-              disabled={!selectedContest}
-            />
-            {newFieldType === 'select' ? (
-              <input
-                className="input"
-                placeholder="Select options (comma separated)"
-                value={newFieldOptions}
-                onChange={(event) => setNewFieldOptions(event.target.value)}
-                disabled={!selectedContest}
-              />
-            ) : null}
-            <div className="flex items-center justify-between">
-              <label className="inline-flex items-center gap-2 text-xs text-surface-700">
-                <input
-                  type="checkbox"
-                  checked={newFieldRequired}
-                  onChange={(event) => setNewFieldRequired(event.target.checked)}
-                  disabled={!selectedContest}
-                />
-                Required
-              </label>
-              <button className="btn-outline text-xs" onClick={addNominationField} disabled={!selectedContest || savingNominationRule}>
-                Add Custom Field
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              {selectedNominationFields.length === 0 ? (
-                <p className="text-xs text-surface-500">No custom fields configured.</p>
-              ) : (
-                selectedNominationFields.map((field) => {
-                  const isEditing = editingFieldId === field.id && editingFieldDraft;
-                  return (
-                    <div key={field.id} className="rounded border border-surface-200 p-2 text-xs space-y-2">
-                      {isEditing ? (
-                        <>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input
-                              className="input"
-                              value={editingFieldDraft.label}
-                              onChange={(event) =>
-                                setEditingFieldDraft((current) =>
-                                  current ? { ...current, label: event.target.value } : current
-                                )
-                              }
-                            />
-                            <select
-                              className="input"
-                              value={editingFieldDraft.type}
-                              onChange={(event) =>
-                                setEditingFieldDraft((current) =>
-                                  current ? { ...current, type: event.target.value as NominationField['type'] } : current
-                                )
-                              }
-                            >
-                              <option value="text">text</option>
-                              <option value="textarea">textarea</option>
-                              <option value="email">email</option>
-                              <option value="phone">phone</option>
-                              <option value="number">number</option>
-                              <option value="select">select</option>
-                            </select>
-                          </div>
-                          <input
-                            className="input"
-                            placeholder="Field placeholder (optional)"
-                            value={editingFieldDraft.placeholder}
-                            onChange={(event) =>
-                              setEditingFieldDraft((current) =>
-                                current ? { ...current, placeholder: event.target.value } : current
-                              )
-                            }
-                          />
-                          {editingFieldDraft.type === 'select' ? (
-                            <input
-                              className="input"
-                              placeholder="Select options (comma separated)"
-                              value={editingFieldDraft.options}
-                              onChange={(event) =>
-                                setEditingFieldDraft((current) =>
-                                  current ? { ...current, options: event.target.value } : current
-                                )
-                              }
-                            />
-                          ) : null}
-                          <div className="flex items-center justify-between">
-                            <label className="inline-flex items-center gap-2 text-xs text-surface-700">
-                              <input
-                                type="checkbox"
-                                checked={editingFieldDraft.required}
-                                onChange={(event) =>
-                                  setEditingFieldDraft((current) =>
-                                    current ? { ...current, required: event.target.checked } : current
-                                  )
-                                }
-                              />
-                              Required
-                            </label>
-                            <div className="flex gap-1">
-                              <button className="btn-outline text-xs" onClick={saveFieldEdit} disabled={savingNominationRule}>
-                                Save
-                              </button>
-                              <button
-                                className="btn-outline text-xs"
-                                onClick={() => {
-                                  setEditingFieldId('');
-                                  setEditingFieldDraft(null);
-                                }}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex items-center justify-between rounded border border-surface-200 px-2 py-1.5 text-xs">
-                          <span>
-                            {field.label} ({field.type}){field.required ? ' *' : ''}
-                          </span>
-                          <div className="flex gap-2">
-                            <button className="text-brand-700 hover:text-brand-900" onClick={() => startEditingField(field)}>
-                              Edit
-                            </button>
-                            <button
-                              className="text-rose-700 hover:text-rose-800"
-                              onClick={() => removeNominationField(field.id)}
-                              disabled={savingNominationRule}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-          <div className="space-y-3 max-h-[420px] overflow-auto pr-1">
-            {options.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-8 text-sm text-surface-500">No nominees in this category yet.</div>
-            ) : (
-              options.map((option) => (
-                <div key={option.id} className="rounded-2xl border border-surface-200 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 min-w-0">
-                      {option.imageUrl || option.imagePath ? (
-                        <img
-                          src={option.imageUrl || option.imagePath || ''}
-                          alt={option.name}
-                          className="h-11 w-11 rounded-lg border border-surface-200 object-cover"
-                        />
-                      ) : (
-                        <div className="h-11 w-11 rounded-lg border border-surface-200 bg-surface-100" />
-                      )}
-                      <div className="min-w-0">
-  <p className="text-sm font-semibold text-brand-900">{option.name}</p>
-  <p className="text-xs text-surface-600 mt-0.5">{option.description || 'Nominee profile'}</p>
-  <p className="text-xs text-surface-500 mt-0.5">Votes {option.totalVotes} (free {option.freeVotes}, paid {option.paidVotes})</p>
-</div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button className="btn-outline text-xs" onClick={() => renameNominee(option)}>Rename</button>
-                      <button className="btn-outline text-xs" onClick={() => toggleNomineeStatus(option)}>
-                        {option.isActive ? 'Disable' : 'Enable'}
-                      </button>
-                      <button className="btn-outline text-xs text-rose-700 border-rose-200" onClick={() => deleteNominee(option)}>Delete</button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        ) : null}
-      </section>
+      {activeTab === 'nominees' ? (
+        <VotingNomineePanel
+          contests={contests}
+          selectedContestTitle={selectedContest?.title || ''}
+          selectedContestId={selectedContestId}
+          selectedNomineeContestIds={selectedNomineeContestIds}
+          newOptionName={newOptionName}
+          newOptionDescription={newOptionDescription}
+          newOptionImagePath={newOptionImagePath}
+          newOptionImagePreview={newOptionImagePreview}
+          uploadingOptionImage={uploadingOptionImage}
+          savingOption={savingOption}
+          selectedNominationFields={selectedNominationFields}
+          newFieldLabel={newFieldLabel}
+          newFieldType={newFieldType}
+          newFieldRequired={newFieldRequired}
+          newFieldPlaceholder={newFieldPlaceholder}
+          newFieldOptions={newFieldOptions}
+          editingFieldId={editingFieldId}
+          editingFieldDraft={editingFieldDraft}
+          savingNominationRule={savingNominationRule}
+          selectedContestAllowsPublicNominations={Boolean(selectedContest?.allowPublicNominations)}
+          options={options}
+          onToggleNomineeContest={toggleNomineeTargetContest}
+          onOptionNameChange={setNewOptionName}
+          onOptionDescriptionChange={setNewOptionDescription}
+          onUploadImageClick={() => newOptionImageInputRef.current?.click()}
+          onRemoveImage={() => {
+            setNewOptionImagePath('');
+            setNewOptionImagePreview('');
+            if (newOptionImageInputRef.current) {
+              newOptionImageInputRef.current.value = '';
+            }
+          }}
+          onCreateNominee={createNominee}
+          onTogglePublicNominations={() =>
+            selectedContest &&
+            updateSelectedContestNominationRules({
+              allowPublicNominations: !Boolean(selectedContest.allowPublicNominations),
+            })
+          }
+          onNewFieldLabelChange={setNewFieldLabel}
+          onNewFieldTypeChange={setNewFieldType}
+          onNewFieldRequiredChange={setNewFieldRequired}
+          onNewFieldPlaceholderChange={setNewFieldPlaceholder}
+          onNewFieldOptionsChange={setNewFieldOptions}
+          onAddField={addNominationField}
+          onStartEditingField={startEditingField}
+          onEditingFieldDraftChange={setEditingFieldDraft}
+          onSaveFieldEdit={saveFieldEdit}
+          onCancelFieldEdit={() => {
+            setEditingFieldId('');
+            setEditingFieldDraft(null);
+          }}
+          onRemoveField={removeNominationField}
+          onRenameNominee={renameNominee}
+          onToggleNomineeStatus={toggleNomineeStatus}
+          onDeleteNominee={deleteNominee}
+        />
       ) : null}
 
       {activeTab === 'nominations' ? (
-      <section className="detail-card space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominations</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">Review public submissions</h2>
-          </div>
-          <span className="text-xs text-surface-600">
-            {pendingNominations.length} pending
-          </span>
-        </div>
-        {nominations.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-8 text-sm text-surface-500">No nominations yet.</div>
-        ) : (
-          <div className="space-y-3 max-h-[520px] overflow-auto pr-1">
-            {nominations.map((nomination) => {
-              const view = nominationPresentation(nomination);
-              return (
-                <div key={nomination.id} className="rounded-2xl border border-surface-200 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="flex gap-3 min-w-0">
-                      {view.nomineeImageUrl ? (
-                        <img
-                          src={view.nomineeImageUrl}
-                          alt={nomination.nomineeName}
-                          className="h-14 w-14 rounded-lg border border-surface-200 object-cover"
-                        />
-                      ) : null}
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-brand-900">{nomination.nomineeName}</p>
-                        <p className="text-xs text-surface-600 mt-1">
-                          Category: {nomination.contest?.title || nomination.contestId} - Submitted by {nomination.submitterName}
-                        </p>
-                        {nomination.nomineeDescription ? (
-                          <p className="text-xs text-surface-600 mt-1">{nomination.nomineeDescription}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs border ${
-                        nomination.status === 'PENDING'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : nomination.status === 'APPROVED'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border-rose-200'
-                      }`}
-                    >
-                      {nomination.status === 'PENDING'
-                        ? 'Awaiting review'
-                        : nomination.status === 'APPROVED'
-                        ? 'Approved'
-                        : 'Declined'}
-                    </span>
-                  </div>
-                  {view.customFieldRows.length ? (
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {view.customFieldRows.map((row) => (
-                        <div key={`${nomination.id}:${row.key}`} className="rounded border border-surface-100 bg-surface-50 px-2 py-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-surface-500">{row.label}</p>
-                          <p className="text-xs text-brand-900">{row.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {nomination.status === 'PENDING' ? (
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        className="btn-outline text-xs border-emerald-200 text-emerald-700"
-                        onClick={() => reviewNomination(nomination.id, 'APPROVED')}
-                        disabled={reviewingNominationId === nomination.id}
-                      >
-                        Approve and publish nominee
-                      </button>
-                      <button
-                        className="btn-outline text-xs border-rose-200 text-rose-700"
-                        onClick={() => reviewNomination(nomination.id, 'REJECTED')}
-                        disabled={reviewingNominationId === nomination.id}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : nomination.approvedOption ? (
-                    <p className="text-xs text-emerald-700 mt-2">
-                      Published as: {nomination.approvedOption.name}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+        <VotingNominationsPanel
+          nominations={nominations}
+          pendingCount={pendingNominations.length}
+          reviewingNominationId={reviewingNominationId}
+          nominationPresentation={nominationPresentation}
+          onReviewNomination={reviewNomination}
+        />
       ) : null}
 
       {activeTab === 'results' ? (
