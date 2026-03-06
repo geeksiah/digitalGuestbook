@@ -204,6 +204,14 @@ export default function AdminVotingPage() {
   const [newOptionImagePath, setNewOptionImagePath] = useState('');
   const [newOptionImagePreview, setNewOptionImagePreview] = useState('');
   const newOptionImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [editingOptionId, setEditingOptionId] = useState('');
+  const [editingOptionName, setEditingOptionName] = useState('');
+  const [editingOptionDescription, setEditingOptionDescription] = useState('');
+  const [editingOptionImagePath, setEditingOptionImagePath] = useState('');
+  const [editingOptionImagePreview, setEditingOptionImagePreview] = useState('');
+  const [savingEditingOption, setSavingEditingOption] = useState(false);
+  const [uploadingEditingOptionImage, setUploadingEditingOptionImage] = useState(false);
+  const editingOptionImageInputRef = useRef<HTMLInputElement | null>(null);
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldType, setNewFieldType] = useState<NominationField['type']>('text');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
@@ -496,14 +504,60 @@ export default function AdminVotingPage() {
   };
 
   const renameNominee = async (option: VotingOption) => {
-    const nextName = window.prompt('Update nominee name', option.name);
-    if (!nextName || !nextName.trim()) return;
+    setEditingOptionId(option.id);
+    setEditingOptionName(option.name || '');
+    setEditingOptionDescription(option.description || '');
+    setEditingOptionImagePath(option.imagePath || '');
+    setEditingOptionImagePreview(option.imageUrl || option.imagePath || '');
+  };
+
+  const cancelNomineeEdit = () => {
+    setEditingOptionId('');
+    setEditingOptionName('');
+    setEditingOptionDescription('');
+    setEditingOptionImagePath('');
+    setEditingOptionImagePreview('');
+    if (editingOptionImageInputRef.current) {
+      editingOptionImageInputRef.current.value = '';
+    }
+  };
+
+  const saveEditingNominee = async () => {
+    if (!editingOptionId || !editingOptionName.trim()) {
+      toast.error('Nominee name is required');
+      return;
+    }
+    setSavingEditingOption(true);
     try {
-      await adminVotingApi.updateVotingOption(eventId, option.id, { name: nextName.trim() });
+      await adminVotingApi.updateVotingOption(eventId, editingOptionId, {
+        name: editingOptionName.trim(),
+        description: editingOptionDescription.trim() || null,
+        imagePath: editingOptionImagePath.trim() || null,
+      });
       await Promise.all([loadOptions(selectedContestId), loadContests()]);
+      cancelNomineeEdit();
       toast.success('Nominee updated');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to update nominee');
+    } finally {
+      setSavingEditingOption(false);
+    }
+  };
+
+  const uploadEditingNomineeImage = async (file: File) => {
+    setUploadingEditingOptionImage(true);
+    try {
+      const response = await adminVotingApi.uploadVotingOptionImage(eventId, file);
+      const imagePath = String(response.data?.imagePath || '');
+      const imageUrl = String(response.data?.imageUrl || imagePath);
+      if (!imagePath) throw new Error('Image upload failed');
+      setEditingOptionImagePath(imagePath);
+      setEditingOptionImagePreview(imageUrl);
+      toast.success('Nominee photo uploaded');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || error?.message || 'Failed to upload nominee photo');
+    } finally {
+      setUploadingEditingOptionImage(false);
     }
   };
 
@@ -754,6 +808,13 @@ export default function AdminVotingPage() {
           savingNominationRule={savingNominationRule}
           selectedContestAllowsPublicNominations={Boolean(selectedContest?.allowPublicNominations)}
           options={options}
+          editingOptionId={editingOptionId}
+          editingOptionName={editingOptionName}
+          editingOptionDescription={editingOptionDescription}
+          editingOptionImagePath={editingOptionImagePath}
+          editingOptionImagePreview={editingOptionImagePreview}
+          savingEditingOption={savingEditingOption}
+          uploadingEditingOptionImage={uploadingEditingOptionImage}
           onToggleNomineeContest={toggleNomineeTargetContest}
           onOptionNameChange={setNewOptionName}
           onOptionDescriptionChange={setNewOptionDescription}
@@ -786,7 +847,19 @@ export default function AdminVotingPage() {
             setEditingFieldDraft(null);
           }}
           onRemoveField={removeNominationField}
-          onRenameNominee={renameNominee}
+          onStartEditingNominee={renameNominee}
+          onEditingOptionNameChange={setEditingOptionName}
+          onEditingOptionDescriptionChange={setEditingOptionDescription}
+          onUploadEditingImageClick={() => editingOptionImageInputRef.current?.click()}
+          onRemoveEditingImage={() => {
+            setEditingOptionImagePath('');
+            setEditingOptionImagePreview('');
+            if (editingOptionImageInputRef.current) {
+              editingOptionImageInputRef.current.value = '';
+            }
+          }}
+          onSaveEditingNominee={saveEditingNominee}
+          onCancelEditingNominee={cancelNomineeEdit}
           onToggleNomineeStatus={toggleNomineeStatus}
           onDeleteNominee={deleteNominee}
         />
@@ -810,6 +883,29 @@ export default function AdminVotingPage() {
           containerClassName="card-premium"
         />
       ) : null}
+
+      <input
+        ref={newOptionImageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          void uploadNomineeImage(file);
+        }}
+      />
+      <input
+        ref={editingOptionImageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          void uploadEditingNomineeImage(file);
+        }}
+      />
     </div>
   );
 }

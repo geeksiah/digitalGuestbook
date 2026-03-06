@@ -219,6 +219,13 @@ export function VotingNomineePanel({
   savingNominationRule,
   selectedContestAllowsPublicNominations,
   options,
+  editingOptionId,
+  editingOptionName,
+  editingOptionDescription,
+  editingOptionImagePath,
+  editingOptionImagePreview,
+  savingEditingOption,
+  uploadingEditingOptionImage,
   onToggleNomineeContest,
   onOptionNameChange,
   onOptionDescriptionChange,
@@ -237,7 +244,13 @@ export function VotingNomineePanel({
   onSaveFieldEdit,
   onCancelFieldEdit,
   onRemoveField,
-  onRenameNominee,
+  onStartEditingNominee,
+  onEditingOptionNameChange,
+  onEditingOptionDescriptionChange,
+  onUploadEditingImageClick,
+  onRemoveEditingImage,
+  onSaveEditingNominee,
+  onCancelEditingNominee,
   onToggleNomineeStatus,
   onDeleteNominee,
 }: {
@@ -262,6 +275,13 @@ export function VotingNomineePanel({
   savingNominationRule: boolean;
   selectedContestAllowsPublicNominations: boolean;
   options: VotingOption[];
+  editingOptionId: string;
+  editingOptionName: string;
+  editingOptionDescription: string;
+  editingOptionImagePath: string;
+  editingOptionImagePreview: string;
+  savingEditingOption: boolean;
+  uploadingEditingOptionImage: boolean;
   onToggleNomineeContest: (contestId: string, checked: boolean) => void;
   onOptionNameChange: (value: string) => void;
   onOptionDescriptionChange: (value: string) => void;
@@ -280,7 +300,13 @@ export function VotingNomineePanel({
   onSaveFieldEdit: () => void;
   onCancelFieldEdit: () => void;
   onRemoveField: (fieldId: string) => void;
-  onRenameNominee: (option: any) => void;
+  onStartEditingNominee: (option: any) => void;
+  onEditingOptionNameChange: (value: string) => void;
+  onEditingOptionDescriptionChange: (value: string) => void;
+  onUploadEditingImageClick: () => void;
+  onRemoveEditingImage: () => void;
+  onSaveEditingNominee: () => void;
+  onCancelEditingNominee: () => void;
   onToggleNomineeStatus: (option: any) => void;
   onDeleteNominee: (option: any) => void;
 }) {
@@ -563,9 +589,13 @@ export function VotingNomineePanel({
               <article key={option.id} className="rounded-3xl border border-surface-200 bg-white p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
-                    {option.imageUrl || option.imagePath ? (
+                    {(editingOptionId === option.id ? editingOptionImagePreview || editingOptionImagePath : option.imageUrl || option.imagePath) ? (
                       <img
-                        src={option.imageUrl || option.imagePath || ''}
+                        src={
+                          editingOptionId === option.id
+                            ? editingOptionImagePreview || editingOptionImagePath || ''
+                            : option.imageUrl || option.imagePath || ''
+                        }
                         alt={option.name}
                         className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
                       />
@@ -574,7 +604,9 @@ export function VotingNomineePanel({
                     )}
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold tracking-tight text-brand-900">{option.name}</h3>
+                        <h3 className="text-base font-semibold tracking-tight text-brand-900">
+                          {editingOptionId === option.id ? editingOptionName || option.name : option.name}
+                        </h3>
                         <span
                           className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                             option.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-500'
@@ -583,27 +615,72 @@ export function VotingNomineePanel({
                           {option.isActive ? 'Visible' : 'Hidden'}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-surface-500">{option.description || 'Nominee profile'}</p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Total votes</p>
-                          <p className="mt-1 text-base font-semibold text-brand-900">{option.totalVotes}</p>
+                      {editingOptionId === option.id ? (
+                        <div className="mt-3 space-y-3">
+                          <input
+                            className="input"
+                            value={editingOptionName}
+                            onChange={(event) => onEditingOptionNameChange(event.target.value)}
+                            placeholder="Nominee name"
+                          />
+                          <textarea
+                            className="input min-h-[110px]"
+                            value={editingOptionDescription}
+                            onChange={(event) => onEditingOptionDescriptionChange(event.target.value)}
+                            placeholder="Short description"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="btn-outline text-xs"
+                              onClick={onUploadEditingImageClick}
+                              disabled={uploadingEditingOptionImage}
+                            >
+                              {uploadingEditingOptionImage ? 'Uploading...' : editingOptionImagePath ? 'Replace photo' : 'Upload photo'}
+                            </button>
+                            {editingOptionImagePath ? (
+                              <button type="button" className="btn-ghost text-xs" onClick={onRemoveEditingImage}>
+                                Remove photo
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Free</p>
-                          <p className="mt-1 text-base font-semibold text-brand-900">{option.freeVotes}</p>
-                        </div>
-                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Paid</p>
-                          <p className="mt-1 text-base font-semibold text-brand-900">{option.paidVotes}</p>
-                        </div>
-                      </div>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-sm text-surface-500">{option.description || 'Nominee profile'}</p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Total votes</p>
+                              <p className="mt-1 text-base font-semibold text-brand-900">{option.totalVotes}</p>
+                            </div>
+                            <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Free</p>
+                              <p className="mt-1 text-base font-semibold text-brand-900">{option.freeVotes}</p>
+                            </div>
+                            <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Paid</p>
+                              <p className="mt-1 text-base font-semibold text-brand-900">{option.paidVotes}</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 sm:justify-end">
-                    <button className="btn-outline text-xs" onClick={() => onRenameNominee(option)}>
-                      Rename
-                    </button>
+                    {editingOptionId === option.id ? (
+                      <>
+                        <button className="btn-outline text-xs" onClick={onSaveEditingNominee} disabled={savingEditingOption}>
+                          {savingEditingOption ? 'Saving...' : 'Save'}
+                        </button>
+                        <button className="btn-ghost text-xs" onClick={onCancelEditingNominee}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button className="btn-outline text-xs" onClick={() => onStartEditingNominee(option)}>
+                        Edit
+                      </button>
+                    )}
                     <button className="btn-outline text-xs" onClick={() => onToggleNomineeStatus(option)}>
                       {option.isActive ? 'Hide' : 'Show'}
                     </button>
