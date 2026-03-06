@@ -138,7 +138,7 @@ export function AppShellTopbar({
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-surface-200/80 bg-white/88 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-[1680px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-16 max-w-[1680px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <button
           className="rounded-xl p-2 text-surface-600 transition-colors hover:bg-surface-100 hover:text-brand-900 lg:hidden"
           onClick={onOpenSidebar}
@@ -154,7 +154,7 @@ export function AppShellTopbar({
           {breadcrumb}
         </div>
 
-        {leading ? <div className="hidden items-center gap-3 lg:flex">{leading}</div> : null}
+        {leading ? <div className="hidden min-w-0 items-center gap-3 lg:flex">{leading}</div> : null}
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
     </header>

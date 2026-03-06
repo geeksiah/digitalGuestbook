@@ -174,93 +174,96 @@ export default function EventsPage() {
                   return (
                     <article
                       key={event.id}
-                      className="rounded-[28px] border border-surface-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-all hover:border-brand-200 sm:p-5"
+                      className="rounded-[28px] border border-surface-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-all hover:border-brand-200"
                     >
-                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.72fr)_auto] xl:items-center">
-                        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
-                          <div className="h-24 w-full shrink-0 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100 sm:h-20 sm:w-28">
-                            {cover ? (
-                              <img src={cover} alt={event.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-lg font-semibold tracking-tight text-brand-900">{event.name}</h3>
-                              <span
-                                className={cn(
-                                  'rounded-full px-2.5 py-1 text-xs font-semibold',
-                                  event.currentPhase === 'LIVE'
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : event.currentPhase === 'PRE_EVENT'
-                                    ? 'bg-sky-50 text-sky-700'
-                                    : 'bg-surface-100 text-surface-600'
-                                )}
-                              >
-                                {getPhaseLabel(event.currentPhase)}
-                              </span>
-                              {event.invitationOnly ? (
-                                <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">
-                                  Invite only
-                                </span>
-                              ) : null}
-                              {event.isArchived ? (
-                                <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">
-                                  Archived
-                                </span>
-                              ) : null}
+                      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(260px,0.82fr)]">
+                        <div className="min-w-0 space-y-5">
+                          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
+                            <div className="h-24 w-full shrink-0 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100 sm:h-24 sm:w-32">
+                              {cover ? (
+                                <img src={cover} alt={event.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
+                              )}
                             </div>
 
-                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-500">
-                              <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
-                              {event.venue ? <span>{event.venue}</span> : null}
-                              <span className="font-mono text-xs text-surface-400">/{event.slug}</span>
-                            </div>
+                            <div className="min-w-0 flex-1 space-y-4">
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-[1.85rem] font-semibold tracking-tight text-brand-900">{event.name}</h3>
+                                  <span
+                                    className={cn(
+                                      'rounded-full px-2.5 py-1 text-xs font-semibold',
+                                      event.currentPhase === 'LIVE'
+                                        ? 'bg-emerald-50 text-emerald-700'
+                                        : event.currentPhase === 'PRE_EVENT'
+                                        ? 'bg-sky-50 text-sky-700'
+                                        : 'bg-surface-100 text-surface-600'
+                                    )}
+                                  >
+                                    {getPhaseLabel(event.currentPhase)}
+                                  </span>
+                                  {event.invitationOnly ? (
+                                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">
+                                      Invite only
+                                    </span>
+                                  ) : null}
+                                  {event.isArchived ? (
+                                    <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">
+                                      Archived
+                                    </span>
+                                  ) : null}
+                                </div>
 
-                            <div className="mt-3 grid grid-cols-3 gap-2 sm:max-w-[360px]">
-                              <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVPs</p>
-                                <p className="mt-1 text-base font-semibold text-brand-900">{event._count.rsvps}</p>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-500">
+                                  <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
+                                  {event.venue ? <span>{event.venue}</span> : null}
+                                  <span className="font-mono text-xs text-surface-400">/{event.slug}</span>
+                                </div>
                               </div>
-                              <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Check-ins</p>
-                                <p className="mt-1 text-base font-semibold text-brand-900">{event._count.checkIns}</p>
-                              </div>
-                              <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Media</p>
-                                <p className="mt-1 text-base font-semibold text-brand-900">{event._count.mediaAssets}</p>
+
+                              <div className="grid gap-2 sm:grid-cols-3">
+                                <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVPs</p>
+                                  <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.rsvps}</p>
+                                </div>
+                                <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Check-ins</p>
+                                  <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.checkIns}</p>
+                                </div>
+                                <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Media</p>
+                                  <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.mediaAssets}</p>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
-                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-3 py-3">
+                        <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-1">
+                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-4 py-4">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Invitations</p>
-                            <p className="mt-1 text-base font-semibold text-brand-900">{event._count.invitations}</p>
+                            <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.invitations}</p>
                           </div>
-                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-3 py-3">
+                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-4 py-4">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVP flow</p>
                             <p className="mt-1 text-sm font-medium text-surface-600">{event.rsvpEnabled ? 'Enabled' : 'Disabled'}</p>
                           </div>
-                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-3 py-3">
+                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-4 py-4">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Guestbook</p>
                             <p className="mt-1 text-sm font-medium text-surface-600">{event.guestbookEnabled ? 'Enabled' : 'Disabled'}</p>
                           </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 xl:min-w-[150px]">
-                          <Link href={`/admin/events/${event.id}`} className="btn-primary w-full justify-center">
-                            Manage
-                          </Link>
-                          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline w-full justify-center">
-                            Public Page
-                          </Link>
-                          <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost w-full justify-center">
-                            {event.isArchived ? 'Restore' : 'Archive'}
-                          </button>
+                          <div className="flex flex-col gap-2 lg:col-span-3 xl:col-span-1">
+                            <Link href={`/admin/events/${event.id}`} className="btn-primary w-full justify-center">
+                              Manage
+                            </Link>
+                            <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline w-full justify-center">
+                              Public Page
+                            </Link>
+                            <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost w-full justify-center">
+                              {event.isArchived ? 'Restore' : 'Archive'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -279,7 +282,7 @@ export default function EventsPage() {
                 {pendingApprovals.map((event) => (
                   <div key={event.id} className="rounded-2xl border border-surface-200 bg-surface-50/70 p-4">
                     <p className="font-semibold text-brand-900">{event.name}</p>
-                    <p className="mt-1 text-sm text-surface-500">{event.Owner?.name || 'Unknown owner'}{event.Owner?.email ? ` · ${event.Owner.email}` : ''}</p>
+                    <p className="mt-1 text-sm text-surface-500">{event.Owner?.name || 'Unknown owner'}{event.Owner?.email ? ` - ${event.Owner.email}` : ''}</p>
                     <p className="mt-1 text-sm text-surface-500">{formatDate(event.date, 'MMM d, yyyy')}</p>
                     <div className="mt-4 flex gap-2">
                       <button className="btn-outline flex-1 border-rose-200 text-rose-600 hover:bg-rose-50" disabled={reviewingId === event.id} onClick={() => reviewApproval(event.id, false)}>Reject</button>
@@ -295,3 +298,4 @@ export default function EventsPage() {
     </div>
   );
 }
+

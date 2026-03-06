@@ -6,6 +6,7 @@ export default function PublicNomineeCard({
   description,
   votesLabel,
   badgeLabel,
+  categoryLabel,
   voteHref,
   profileHref,
   onCopyVoteLink,
@@ -15,6 +16,7 @@ export default function PublicNomineeCard({
   description: string;
   votesLabel: string;
   badgeLabel: string;
+  categoryLabel: string;
   voteHref: string;
   profileHref: string;
   onCopyVoteLink: () => void;
@@ -36,6 +38,7 @@ export default function PublicNomineeCard({
             <h4 className="text-base font-semibold tracking-tight text-brand-900">{name}</h4>
             <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">{badgeLabel}</span>
           </div>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{categoryLabel}</p>
           <p className="mt-2 text-sm font-medium text-brand-900">{votesLabel}</p>
           <p className="mt-2 text-sm leading-6 text-surface-500">{description}</p>
         </div>
@@ -43,7 +46,7 @@ export default function PublicNomineeCard({
 
       <div className="grid grid-cols-1 gap-2 border-t border-surface-100 bg-surface-50/70 p-4 sm:grid-cols-3">
         <Link href={voteHref} className="btn-primary w-full text-center">
-          Vote
+          Vote In Category
         </Link>
         <Link href={profileHref} className="btn-outline w-full text-center">
           View Profile

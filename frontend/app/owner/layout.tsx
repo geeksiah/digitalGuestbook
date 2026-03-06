@@ -240,13 +240,13 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             />
           )}
           leading={(
-            <div className="min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-col items-start gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400">Current event</span>
               <select
                 value={selectedEventId || '__all__'}
                 onChange={(e) => handleEventSwitch(e.target.value)}
                 disabled={loadingEvents || ownerEvents.length === 0}
-                className="input h-11 min-w-[240px] py-0"
+                className="input h-11 min-w-[260px] py-0"
               >
                 <option value="__all__">All events</option>
                 {ownerEvents.map((event) => (

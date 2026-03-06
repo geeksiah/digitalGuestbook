@@ -114,6 +114,46 @@ export default function LeaderboardPage() {
     void run();
   }, [slug, contestQuery]);
 
+  useEffect(() => {
+    if (!slug) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void votingApi.leaderboard(slug, selectedContestId || undefined).then((response) => {
+        const payload = ((response.data as any)?.data || response.data || {}) as Partial<LeaderboardPayload>;
+        const rawContests = Array.isArray(payload.contests) ? payload.contests : [];
+        const dataContests: LeaderboardContest[] = rawContests
+          .map((contest: any) => ({
+            contestId: String(contest?.contestId || contest?.id || ''),
+            title: String(contest?.title || contest?.name || 'Untitled category'),
+            mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+            totals: {
+              totalVotes: Number(contest?.totals?.totalVotes || 0),
+              freeVotes: Number(contest?.totals?.freeVotes || 0),
+              paidVotes: Number(contest?.totals?.paidVotes || 0),
+            },
+            rankings: (Array.isArray(contest?.rankings) ? contest.rankings : [])
+              .map((entry: any, index: number) => ({
+                rank: Number(entry?.rank || index + 1),
+                optionId: String(entry?.optionId || entry?.id || ''),
+                name: String(entry?.name || 'Unnamed nominee'),
+                description: entry?.description ? String(entry.description) : null,
+                imagePath: entry?.imagePath ? String(entry.imagePath) : null,
+                imageUrl: entry?.imageUrl ? String(entry.imageUrl) : null,
+                totalVotes: Number(entry?.totalVotes || 0),
+                freeVotes: Number(entry?.freeVotes || 0),
+                paidVotes: Number(entry?.paidVotes || 0),
+                voteSharePercent: Number(entry?.voteSharePercent || 0),
+                trendDelta: Number(entry?.trendDelta || 0),
+              }))
+              .filter((entry: RankedNominee) => Boolean(entry.optionId)),
+          }))
+          .filter((contest) => contest.contestId);
+        setContests(dataContests);
+      }).catch(() => {});
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [slug, selectedContestId]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">

@@ -129,6 +129,41 @@ export default function NomineesPage() {
     void run();
   }, [slug, contestQuery]);
 
+  useEffect(() => {
+    if (!slug) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void votingApi.nominees(slug, selectedCategory || undefined).then((response) => {
+        const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
+        const rawCategories = Array.isArray(payload.categories) ? payload.categories : [];
+        const categoriesData: NomineeCategory[] = rawCategories
+          .map((category: any) => ({
+            contestId: String(category?.contestId || category?.id || ''),
+            title: String(category?.title || category?.name || 'Untitled category'),
+            mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+            totalVotes: Number(category?.totalVotes || 0),
+            nominees: (Array.isArray(category?.nominees) ? category.nominees : [])
+              .map((nominee: any) => ({
+                optionId: String(nominee?.optionId || nominee?.id || ''),
+                name: String(nominee?.name || 'Unnamed nominee'),
+                description: nominee?.description ? String(nominee.description) : null,
+                imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
+                imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
+                totalVotes: Number(nominee?.totalVotes || 0),
+                freeVotes: Number(nominee?.freeVotes || 0),
+                paidVotes: Number(nominee?.paidVotes || 0),
+                voteSharePercent: Number(nominee?.voteSharePercent || 0),
+                approvalStatus: nominee?.approvalStatus === 'APPROVED' ? 'APPROVED' : 'ADMIN_ADDED',
+              }))
+              .filter((nominee: Nominee) => Boolean(nominee.optionId)),
+          }))
+          .filter((category) => category.contestId);
+        setCategories(categoriesData);
+      }).catch(() => {});
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [slug, selectedCategory]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
@@ -227,6 +262,7 @@ export default function NomineesPage() {
                         description={nominee.description || 'Support this nominee with your vote.'}
                         votesLabel={`${nominee.totalVotes.toLocaleString()} votes`}
                         badgeLabel={category.mode}
+                        categoryLabel={category.title}
                         voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(category.contestId)}&optionId=${encodeURIComponent(nominee.optionId)}`}
                         profileHref={`/e/${slug}/nominee/${encodeURIComponent(nominee.optionId)}?contestId=${encodeURIComponent(category.contestId)}`}
                         onCopyVoteLink={() => copyVoteLink(category.contestId, nominee.optionId)}

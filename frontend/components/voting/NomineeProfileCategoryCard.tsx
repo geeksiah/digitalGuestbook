@@ -21,10 +21,13 @@ export default function NomineeProfileCategoryCard({
           <p className="mt-1 text-sm text-surface-500">
             {mode} - {votesLabel}
           </p>
+          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-surface-400">
+            You are voting in this category
+          </p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
           <Link href={voteHref} className="btn-primary w-full text-center">
-            Vote
+            Vote In Category
           </Link>
           <button
             type="button"

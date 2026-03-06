@@ -338,6 +338,20 @@ export default function AdminVotingPage() {
   }, [selectedContestId]);
 
   useEffect(() => {
+    if (!eventId) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void Promise.all([
+        loadAnalytics(),
+        loadContests(),
+        ...(selectedContestId ? [loadOptions(selectedContestId)] : []),
+      ]);
+    }, 15000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, selectedContestId]);
+
+  useEffect(() => {
     if (!selectedContestId) return;
     setSelectedNomineeContestIds((current) => {
       const valid = current.filter((id) => contests.some((contest) => contest.id === id));

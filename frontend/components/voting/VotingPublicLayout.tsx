@@ -74,15 +74,14 @@ export default function VotingPublicLayout({
               </div>
 
               <div className="page-tabs overflow-x-auto scrollbar-hide">
-                <Link href={`/e/${slug}/vote${contestQuery}`} className={tabClass('vote')}>
-                  Vote
-                </Link>
-                <Link href={`/e/${slug}/nominees${contestQuery}`} className={tabClass('nominees')}>
+                <Link href={`/e/${slug}/nominees${contestQuery}`} className={tabClass(activeTab === 'vote' ? 'vote' : 'nominees')}>
                   Nominees
                 </Link>
-                <Link href={`/e/${slug}/leaderboard${contestQuery}`} className={tabClass('results')}>
-                  Results
-                </Link>
+                {showNominateCta ? (
+                  <Link href={`/e/${slug}/nominate${contestQuery}`} className={tabClass('nominate')}>
+                    Nominate
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>
