@@ -4,7 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { API_BASE_URL, ownerDashboardApi } from '@/lib/api';
 import { formatDate, cn } from '@/lib/utils';
-import { DashboardKpiCard, DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
+import {
+  DashboardHeroHeader,
+  DashboardKpiCard,
+  DashboardSection,
+  EntityListRow,
+  InsightPanel,
+  MetricStrip,
+  QuickActionCard,
+  SplitPanelLayout,
+} from '@/components/dashboard/ui';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -34,12 +43,11 @@ interface Stats {
 }
 
 const Icons = {
-  events: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  rsvps: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
-  checkins: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  media: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  revenue: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  arrow: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
+  events: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  rsvps: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  checkins: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  media: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  revenue: <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
 };
 
 const toAbsoluteMediaUrl = (value: string | null | undefined) => {
@@ -68,7 +76,7 @@ export default function OwnerDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
 
   const fetchData = async () => {
@@ -80,7 +88,7 @@ export default function OwnerDashboardPage() {
       ]);
       setEvents(eventsResponse.data.events);
       setStats(statsResponse.data.stats);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -89,137 +97,124 @@ export default function OwnerDashboardPage() {
 
   const getPhaseStyle = (phase: string) => {
     switch (phase) {
-      case 'LIVE': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'PRE_EVENT': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'POST_EVENT': return 'bg-surface-50 text-surface-700 border-surface-200';
-      default: return 'bg-surface-50 text-surface-700 border-surface-200';
-    }
-  };
-
-  const getPhaseLabel = (phase: string) => {
-    switch (phase) {
-      case 'LIVE': return 'Live';
-      case 'PRE_EVENT': return 'Upcoming';
-      case 'POST_EVENT': return 'Past';
-      default: return phase;
+      case 'LIVE': return 'bg-emerald-50 text-emerald-700';
+      case 'PRE_EVENT': return 'bg-blue-50 text-blue-700';
+      case 'POST_EVENT': return 'bg-surface-100 text-surface-700';
+      default: return 'bg-surface-100 text-surface-700';
     }
   };
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-b-2 border-brand-900" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-7">
-      <DashboardPageHeader title="Dashboard" subtitle="Your event operations at a glance" />
+    <div className="mobile-stack-section">
+      <DashboardHeroHeader
+        eyebrow="Owner overview"
+        title="Your event workspace"
+        subtitle="Stay on top of guest activity, revenue, and the events that need your next action."
+        action={<Link href="/owner/events" className="btn-primary">Open events</Link>}
+      />
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <DashboardKpiCard label="Events" value={stats.totalEvents} icon={Icons.events} tone="blue" />
-          <DashboardKpiCard label="RSVPs" value={stats.totalRsvps} icon={Icons.rsvps} tone="emerald" />
-          <DashboardKpiCard label="Check-Ins" value={stats.totalCheckIns} icon={Icons.checkins} tone="violet" />
-          <DashboardKpiCard label="Media" value={stats.totalMedia} icon={Icons.media} tone="rose" />
-        </div>
-      )}
+      {stats ? (
+        <MetricStrip>
+          <DashboardKpiCard label="Events" value={stats.totalEvents} icon={Icons.events} tone="blue" hint="Active and archived events in your workspace" />
+          <DashboardKpiCard label="RSVPs" value={stats.totalRsvps} icon={Icons.rsvps} tone="emerald" hint="Guest responses across your events" />
+          <DashboardKpiCard label="Check-ins" value={stats.totalCheckIns} icon={Icons.checkins} tone="violet" hint="Guests already welcomed on-site" />
+          <DashboardKpiCard label="Media" value={stats.totalMedia} icon={Icons.media} tone="rose" hint="Photos, audio, and video captured by guests" />
+        </MetricStrip>
+      ) : null}
 
-      {/* Revenue Summary */}
-      {stats && Object.keys(stats.revenueByCurrency).length > 0 && (
-        <DashboardSection title="Revenue" subtitle="Net and gross by currency">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
-              <div key={currency} className="rounded-xl border border-surface-200 bg-surface-50/50 p-4">
-                <p className="text-xs uppercase tracking-widest font-semibold text-surface-400 mb-1.5">{currency}</p>
-                <p className="text-2xl sm:text-3xl font-bold text-brand-900">
-                  {new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: currency,
-                  }).format(amounts.net)}
-                </p>
-                <p className="text-sm text-surface-500 mt-1">
-                  Gross: {new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: currency,
-                  }).format(amounts.gross)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </DashboardSection>
-      )}
+      <SplitPanelLayout
+        main={(
+          <div className="space-y-4">
+            {stats && Object.keys(stats.revenueByCurrency).length > 0 ? (
+              <DashboardSection title="Revenue summary" subtitle="Net revenue by currency based on completed transactions.">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {Object.entries(stats.revenueByCurrency).map(([currency, amounts]) => (
+                    <div key={currency} className="detail-card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">{currency}</p>
+                          <p className="mt-2 text-3xl font-bold tracking-tight text-brand-900">
+                            {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amounts.net)}
+                          </p>
+                          <p className="mt-2 text-sm text-surface-500">
+                            Gross {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amounts.gross)}
+                          </p>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-50 text-brand-900">
+                          {Icons.revenue}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </DashboardSection>
+            ) : null}
 
-      {/* Recent Events */}
-      <DashboardSection
-        title="Your Events"
-        subtitle="Open an event to manage it"
-        action={(
-          <Link href="/owner/events" className="text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors px-1">
-            View all
-          </Link>
-        )}
-        contentClassName="p-0"
-      >
-        {events.length === 0 ? (
-          <div className="text-center py-10 px-4">
-            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
-              {Icons.events}
-            </div>
-            <p className="text-base font-medium text-surface-600">No events yet</p>
-            <p className="text-sm text-surface-400 mt-1">Events will appear here once created</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-surface-100">
-            {events.slice(0, 5).map((event) => {
-              const cover = resolveEventCover(event);
-              return (
-                <Link
-                  key={event.id}
-                  href={`/owner/events/${event.id}`}
-                  className="group flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-surface-50 active:bg-surface-100 transition-colors"
-                >
-                  <div className="h-12 w-16 overflow-hidden rounded-lg border border-surface-200 bg-surface-100 flex-shrink-0">
-                    {cover ? (
-                      <img src={cover} alt={event.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
-                      <span
-                        className={cn(
-                          'inline-flex px-2 py-0.5 text-xs font-medium rounded border leading-none',
-                          getPhaseStyle(event.currentPhase)
+            <DashboardSection
+              title="Recent events"
+              subtitle="Open an event to manage invitations, voting, media, and public pages."
+              action={<Link href="/owner/events" className="btn-ghost">View all</Link>}
+            >
+              {events.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-6 py-12 text-center">
+                  <p className="text-base font-semibold text-brand-900">No events yet</p>
+                  <p className="mt-1 text-sm text-surface-500">Create your first event and submit it for review.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {events.slice(0, 5).map((event) => {
+                    const cover = resolveEventCover(event);
+                    return (
+                      <EntityListRow
+                        key={event.id}
+                        media={(
+                          <div className="h-16 w-24 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100">
+                            {cover ? <img src={cover} alt={event.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />}
+                          </div>
                         )}
-                      >
-                        {getPhaseLabel(event.currentPhase)}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-sm text-surface-500">
-                      <span>{formatDate(event.date)}</span>
-                      {event.venue && <span>{event.venue}</span>}
-                    </div>
-                    <div className="flex gap-4 mt-2 text-sm">
-                      <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
-                      <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
-                    </div>
-                  </div>
-                  <div className="text-surface-300 group-hover:text-brand-600 transition-colors flex-shrink-0">
-                    {Icons.arrow}
-                  </div>
-                </Link>
-              );
-            })}
+                        title={event.name}
+                        meta={<span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', getPhaseStyle(event.currentPhase))}>{event.currentPhase === 'PRE_EVENT' ? 'Upcoming' : event.currentPhase === 'POST_EVENT' ? 'Past' : 'Live'}</span>}
+                        subtitle={(
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span>{formatDate(event.date)}</span>
+                            {event.venue ? <span>{event.venue}</span> : null}
+                          </div>
+                        )}
+                        stats={(
+                          <>
+                            <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</div>
+                            <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</div>
+                          </>
+                        )}
+                        actions={<Link href={`/owner/events/${event.id}`} className="btn-primary">Manage</Link>}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </DashboardSection>
           </div>
         )}
-      </DashboardSection>
+        side={(
+          <div className="space-y-4">
+            <InsightPanel title="Quick actions" subtitle="Use the most common workflows without leaving the dashboard.">
+              <div className="space-y-3">
+                <QuickActionCard title="Create an event" description="Start a new event and submit it for admin approval." icon={Icons.events} action={<Link href="/owner/events" className="btn-primary">Go</Link>} />
+                <QuickActionCard title="Review payouts" description="Check revenue and payout summaries for completed orders." icon={Icons.revenue} action={<Link href="/owner/payouts" className="btn-outline">Open</Link>} />
+                <QuickActionCard title="Update account" description="Refresh contact details and account information used across your events." icon={Icons.rsvps} action={<Link href="/owner/account" className="btn-outline">Open</Link>} />
+              </div>
+            </InsightPanel>
+          </div>
+        )}
+      />
     </div>
   );
 }
-
-

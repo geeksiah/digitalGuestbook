@@ -4,6 +4,16 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { eventsApi, ussdApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import {
+  DashboardHeroHeader,
+  DashboardSection,
+  DashboardKpiCard,
+  EntityListRow,
+  InsightPanel,
+  MetricStrip,
+  SplitPanelLayout,
+} from '@/components/dashboard/ui';
 
 type Channel = {
   id: string;
@@ -59,6 +69,8 @@ export default function AdminUssdPage() {
     [events, selectedEventId]
   );
 
+  const activeBindingCount = channels.reduce((sum, channel) => sum + (channel.bindings || []).filter((binding) => binding.isActive).length, 0);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -68,25 +80,16 @@ export default function AdminUssdPage() {
       ]);
       const eventRows = Array.isArray(eventsRes.data?.events) ? eventsRes.data.events : [];
       const channelRows = Array.isArray(channelsRes.data?.channels) ? channelsRes.data.channels : [];
-      setEvents(
-        eventRows.map((event: any) => ({
-          id: String(event.id),
-          name: String(event.name || 'Untitled event'),
-          slug: String(event.slug || ''),
-        }))
-      );
+
+      setEvents(eventRows.map((event: any) => ({
+        id: String(event.id),
+        name: String(event.name || 'Untitled event'),
+        slug: String(event.slug || ''),
+      })));
       setChannels(channelRows as Channel[]);
 
-      setSelectedEventId((current) =>
-        current && eventRows.some((event: any) => event.id === current)
-          ? current
-          : eventRows[0]?.id || ''
-      );
-      setSelectedChannelId((current) =>
-        current && channelRows.some((channel: any) => channel.id === current)
-          ? current
-          : channelRows[0]?.id || ''
-      );
+      setSelectedEventId((current) => current && eventRows.some((event: any) => event.id === current) ? current : eventRows[0]?.id || '');
+      setSelectedChannelId((current) => current && channelRows.some((channel: any) => channel.id === current) ? current : channelRows[0]?.id || '');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to load USSD controls');
     } finally {
@@ -201,174 +204,128 @@ export default function AdminUssdPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-b-2 border-brand-900" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <section className="dashboard-canvas p-4 sm:p-5 space-y-2">
-        <h1 className="text-2xl font-bold text-brand-900">USSD Controls</h1>
-        <p className="text-sm text-surface-600">
-          Manage offline channels, connect channels to events, and handle credit wallets.
-        </p>
-        {selectedEvent ? (
-          <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-3">
-            <Link href={`/admin/events/${selectedEvent.id}/voting`} className="btn-outline text-center">
-              Open Event Voting Workspace
-            </Link>
-            <Link href={`/admin/events/${selectedEvent.id}`} className="btn-outline text-center">
-              Open Event Dashboard
-            </Link>
-            <Link href={`/e/${selectedEvent.slug}/vote`} target="_blank" className="btn-outline text-center">
-              Open Public Vote Page
-            </Link>
-          </div>
-        ) : null}
-      </section>
+    <div className="mobile-stack-section">
+      <DashboardHeroHeader
+        eyebrow="Admin USSD"
+        title="USSD channels and credits"
+        subtitle="Connect offline channels to events, keep balances topped up, and review channel activity without leaving the admin workspace."
+        action={selectedEvent ? (
+          <>
+            <Link href={`/admin/events/${selectedEvent.id}`} className="btn-outline">Event dashboard</Link>
+            <Link href={`/admin/events/${selectedEvent.id}/voting`} className="btn-primary">Voting workspace</Link>
+          </>
+        ) : undefined}
+      />
 
-      <section className="dashboard-canvas p-4 sm:p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-brand-900">Create Offline Channel</h2>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr,220px,auto] gap-2">
-          <input
-            className="input"
-            placeholder="Channel label (provider username)"
-            value={newCodeLabel}
-            onChange={(event) => setNewCodeLabel(event.target.value)}
-          />
-          <input
-            className="input"
-            placeholder="Shortcode (optional)"
-            value={newShortcode}
-            onChange={(event) => setNewShortcode(event.target.value)}
-          />
-          <button className="btn-primary" onClick={createChannel} disabled={saving}>
-            Create
-          </button>
-        </div>
-      </section>
+      <MetricStrip>
+        <DashboardKpiCard label="Channels" value={channels.length} hint="Offline channels registered in EventPeepo" />
+        <DashboardKpiCard label="Active bindings" value={activeBindingCount} tone="emerald" hint="Event and channel connections currently active" />
+        <DashboardKpiCard label="Selected balance" value={walletData?.wallet?.balanceUnits ?? 0} tone="blue" hint="Available units for the selected event" />
+        <DashboardKpiCard label="Recent entries" value={walletData?.ledger?.length ?? 0} tone="violet" hint="Latest wallet ledger activity" />
+      </MetricStrip>
 
-      <section className="dashboard-canvas p-4 sm:p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-brand-900">Connect Channel To Event</h2>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto] gap-2">
-          <select
-            className="input"
-            value={selectedEventId}
-            onChange={(event) => setSelectedEventId(event.target.value)}
-          >
-            {events.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="input"
-            value={selectedChannelId}
-            onChange={(event) => setSelectedChannelId(event.target.value)}
-          >
-            {channels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.codeLabel} ({channel.status})
-              </option>
-            ))}
-          </select>
-          <button className="btn-primary" onClick={bindChannel} disabled={saving}>
-            Connect
-          </button>
-        </div>
-      </section>
+      <SplitPanelLayout
+        main={(
+          <div className="space-y-4">
+            <DashboardSection title="Connect a channel" subtitle="Choose an event, then attach one of the offline channels already created.">
+              <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                <select className="input" value={selectedEventId} onChange={(event) => setSelectedEventId(event.target.value)}>
+                  {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+                </select>
+                <select className="input" value={selectedChannelId} onChange={(event) => setSelectedChannelId(event.target.value)}>
+                  {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.codeLabel} ({channel.status})</option>)}
+                </select>
+                <button className="btn-primary" onClick={bindChannel} disabled={saving}>Connect</button>
+              </div>
+            </DashboardSection>
 
-      <section className="dashboard-canvas p-4 sm:p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-brand-900">Channels</h2>
-        {channels.length === 0 ? (
-          <p className="text-sm text-surface-500">No channels created yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {channels.map((channel) => (
-              <article key={channel.id} className="rounded-lg border border-surface-200 bg-white p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-brand-900">{channel.codeLabel}</p>
-                    <p className="text-xs text-surface-600">
-                      {channel.shortcode || 'No shortcode'} - {channel.status}
-                    </p>
-                  </div>
+            <DashboardSection title="Channel inventory" subtitle="Review channel status and pause or activate event bindings as needed.">
+              {channels.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-6 py-12 text-center text-sm text-surface-500">
+                  No channels created yet.
                 </div>
-                <div className="space-y-1">
-                  {(channel.bindings || []).length === 0 ? (
-                    <p className="text-xs text-surface-500">No active bindings.</p>
-                  ) : (
-                    channel.bindings?.map((binding) => (
-                      <div key={binding.id} className="flex items-center justify-between rounded-md border border-surface-100 px-2 py-1.5">
-                        <p className="text-xs text-surface-700">
-                          {binding.event?.name || binding.eventId} ({binding.isActive ? 'active' : 'paused'})
-                        </p>
-                        <button
-                          className="btn-outline text-xs"
-                          disabled={saving}
-                          onClick={() => toggleBinding(binding.id, !binding.isActive)}
-                        >
-                          {binding.isActive ? 'Pause' : 'Activate'}
-                        </button>
+              ) : (
+                <div className="space-y-3">
+                  {channels.map((channel) => (
+                    <div key={channel.id} className="detail-card p-4">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-base font-semibold text-brand-900">{channel.codeLabel}</p>
+                            <p className="mt-1 text-sm text-surface-500">{channel.shortcode || 'No shortcode'} · {channel.status}</p>
+                          </div>
+                        </div>
+
+                        {(channel.bindings || []).length === 0 ? (
+                          <div className="rounded-2xl bg-surface-50 px-4 py-3 text-sm text-surface-500">No event bindings yet.</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {channel.bindings?.map((binding) => (
+                              <EntityListRow
+                                key={binding.id}
+                                title={binding.event?.name || binding.eventId}
+                                subtitle={<span className="text-sm text-surface-500">/{binding.event?.slug || ''}</span>}
+                                meta={<span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', binding.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-600')}>{binding.isActive ? 'Active' : 'Paused'}</span>}
+                                actions={<button className="btn-outline" disabled={saving} onClick={() => toggleBinding(binding.id, !binding.isActive)}>{binding.isActive ? 'Pause' : 'Activate'}</button>}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
-              </article>
-            ))}
+              )}
+            </DashboardSection>
           </div>
         )}
-      </section>
+        side={(
+          <div className="space-y-4">
+            <InsightPanel title="Create an offline channel" subtitle="Record channels that were purchased or provisioned outside the platform.">
+              <div className="space-y-3">
+                <input className="input" placeholder="Channel label" value={newCodeLabel} onChange={(event) => setNewCodeLabel(event.target.value)} />
+                <input className="input" placeholder="Shortcode (optional)" value={newShortcode} onChange={(event) => setNewShortcode(event.target.value)} />
+                <button className="btn-primary w-full" onClick={createChannel} disabled={saving}>Create channel</button>
+              </div>
+            </InsightPanel>
 
-      <section className="dashboard-canvas p-4 sm:p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-brand-900">USSD Credits Wallet</h2>
-        <p className="text-sm text-surface-600">
-          Event: <span className="font-medium text-brand-900">{selectedEvent?.name || '-'}</span>
-        </p>
-        <p className="text-sm text-surface-600">
-          Balance: <span className="font-semibold text-brand-900">{walletData?.wallet?.balanceUnits ?? 0} units</span>
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-[120px,220px,1fr,auto] gap-2">
-          <input
-            className="input"
-            type="number"
-            min={1}
-            value={topupUnits}
-            onChange={(event) => setTopupUnits(Number(event.target.value || 1))}
-          />
-          <input
-            className="input"
-            placeholder="Reference"
-            value={topupReference}
-            onChange={(event) => setTopupReference(event.target.value)}
-          />
-          <input
-            className="input"
-            placeholder="Note (optional)"
-            value={topupNote}
-            onChange={(event) => setTopupNote(event.target.value)}
-          />
-          <button className="btn-primary" onClick={topupWallet} disabled={saving}>
-            Top Up
-          </button>
-        </div>
-        <div className="space-y-1">
-          {(walletData?.ledger || []).slice(0, 10).map((entry) => (
-            <div key={entry.id} className="flex items-center justify-between rounded-md border border-surface-100 px-2 py-1.5 text-xs">
-              <span className="text-surface-700">
-                {entry.entryType} - {entry.reference}
-              </span>
-              <span className={entry.amountUnits >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
-                {entry.amountUnits >= 0 ? '+' : ''}
-                {entry.amountUnits}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+            <InsightPanel title="Credit wallet" subtitle="Top up the selected event wallet and review recent credit activity.">
+              <div className="space-y-3">
+                <div className="rounded-2xl bg-surface-50 px-4 py-4">
+                  <p className="text-sm text-surface-500">Selected event</p>
+                  <p className="mt-1 font-semibold text-brand-900">{selectedEvent?.name || '-'}</p>
+                  <p className="mt-3 text-sm text-surface-500">Balance</p>
+                  <p className="mt-1 text-2xl font-bold tracking-tight text-brand-900">{walletData?.wallet?.balanceUnits ?? 0} units</p>
+                </div>
+                <input className="input" type="number" min={1} value={topupUnits} onChange={(event) => setTopupUnits(Number(event.target.value || 1))} />
+                <input className="input" placeholder="Reference" value={topupReference} onChange={(event) => setTopupReference(event.target.value)} />
+                <input className="input" placeholder="Note (optional)" value={topupNote} onChange={(event) => setTopupNote(event.target.value)} />
+                <button className="btn-primary w-full" onClick={topupWallet} disabled={saving}>Top up credits</button>
+                <div className="space-y-2">
+                  {(walletData?.ledger || []).slice(0, 8).map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between rounded-2xl border border-surface-200 bg-white px-3 py-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-brand-900">{entry.entryType}</p>
+                        <p className="truncate text-xs text-surface-500">{entry.reference}</p>
+                      </div>
+                      <span className={entry.amountUnits >= 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
+                        {entry.amountUnits >= 0 ? '+' : ''}{entry.amountUnits}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </InsightPanel>
+          </div>
+        )}
+      />
     </div>
   );
 }

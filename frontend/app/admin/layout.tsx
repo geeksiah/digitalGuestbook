@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/lib/store';
 import { authApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { AppShellBreadcrumb, AppShellSidebar, AppShellTopbar } from '@/components/ui/AppShell';
 
 const navigation = [
   {
@@ -158,81 +159,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="fixed inset-0 bg-brand-950/45 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200/80 shadow-soft transform transition-transform duration-300 lg:translate-x-0',
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70">
-            <Link href="/admin" className="flex items-center space-x-3 min-w-0">
-              <img 
-                src="/img/logo-dark.svg" 
-                alt="EventPeepo" 
-                className="h-8 w-auto"
-                onError={(e) => {
-                  // Fallback to text if logo fails to load
-                  e.currentTarget.style.display = 'none';
-                  const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback');
-                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                }}
-              />
-              <div className="logo-fallback hidden items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-brand-900 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">E</span>
-                </div>
-                <span className="font-semibold text-brand-900 text-lg truncate">EventPeepo</span>
+      <AppShellSidebar
+        brandHref="/admin"
+        navItems={navigation}
+        pathname={pathname}
+        sidebarOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        footer={(
+          <div className="app-shell-panel p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-100">
+                <span className="text-sm font-semibold text-brand-900">{admin?.name?.charAt(0).toUpperCase() || 'A'}</span>
               </div>
-            </Link>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    'flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 border',
-                    isActive
-                      ? 'bg-brand-50 text-brand-900 border-brand-100 shadow-sm'
-                      : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
-                  )}
-                >
-                  <span className={cn(isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
-                  <span className="ml-3 font-medium">{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* User section */}
-          <div className="p-4 border-t border-surface-200/70">
-            <div className="flex items-center rounded-xl border border-surface-200 bg-surface-50 px-3 py-2.5">
-              <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center">
-                <span className="text-brand-900 font-semibold text-sm">
-                  {admin?.name?.charAt(0).toUpperCase() || 'A'}
-                </span>
-              </div>
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-brand-900 truncate">{admin?.name || 'Admin'}</p>
-                <p className="text-xs text-surface-500 truncate">{admin?.email}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-brand-900">{admin?.name || 'Admin'}</p>
+                <p className="truncate text-xs text-surface-500">{admin?.email}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-surface-500 hover:text-brand-900 hover:bg-white rounded-lg transition-colors"
+                className="rounded-xl p-2 text-surface-500 transition-colors hover:bg-white hover:text-brand-900"
                 title="Sign out"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -241,49 +186,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </button>
             </div>
           </div>
-        </div>
-      </aside>
+        )}
+      />
 
       {/* Main content */}
-      <div className="lg:pl-[272px]">
-        {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-surface-200/80">
-          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
-            {/* Mobile menu button */}
-            <button
-              className="lg:hidden p-2 -ml-2 text-surface-500 hover:text-brand-900 hover:bg-surface-100 rounded-lg transition-colors"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-
-            <div className="flex-1 min-w-0 ml-2 lg:ml-0">
-              <div className="hidden md:flex items-center gap-2 text-sm">
-                <span className="text-surface-500 font-medium">Admin Workspace</span>
-                <span className="text-surface-300">/</span>
-                <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
-              </div>
-            </div>
-
-            {/* Quick actions */}
-            <div className="flex items-center space-x-2">
+      <div className="lg:pl-[284px]">
+        <AppShellTopbar
+          title={currentSection}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          breadcrumb={(
+            <AppShellBreadcrumb
+              items={[
+                { label: 'Admin Workspace', href: '/admin' },
+                { label: currentSection },
+              ]}
+            />
+          )}
+          actions={(
+            <>
               <Link href="/admin/events/new" className="btn-primary">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                New Event
+                <span className="hidden sm:inline">New Event</span>
+                <span className="sm:hidden">New</span>
               </Link>
-              <div className="hidden sm:flex items-center justify-center w-9 h-9 rounded-full bg-brand-100 text-brand-900 text-sm font-semibold">
+              <div className="hidden h-10 w-10 items-center justify-center rounded-2xl bg-brand-100 text-sm font-semibold text-brand-900 sm:flex">
                 {admin?.name?.charAt(0).toUpperCase() || 'A'}
               </div>
-            </div>
-          </div>
-        </header>
+            </>
+          )}
+        />
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-7">{children}</main>
+        <main className="mx-auto max-w-[1680px] p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

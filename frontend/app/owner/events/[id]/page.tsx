@@ -1168,20 +1168,21 @@ export default function OwnerEventDetailPage() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <div className="dashboard-canvas px-4 sm:px-5 py-3.5 sm:py-4">
+      <div className="app-hero">
         <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
           {Icons.back}
           <span className="ml-1">Back to events</span>
         </Link>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
-            <p className="text-sm text-surface-600 mt-1">Track your event performance and guest activity in one place.</p>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-700">Event workspace</p>
+            <h1 className="mt-1 text-3xl font-display font-bold tracking-tight text-brand-900 truncate">{event.name}</h1>
+            <p className="text-sm leading-6 text-surface-600 mt-2">Track guest activity, open your public pages, and manage voting, invites, and media from one place.</p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
               <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', getPhaseStyle(event.currentPhase))}>
                 {getPhaseLabel(event.currentPhase)}
               </span>
-              {event.invitationOnly && <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded border bg-blue-50 text-blue-700 border-blue-200">Invite Only</span>}
+              {event.invitationOnly && <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Invite Only</span>}
               <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
             </div>
           </div>
@@ -1193,22 +1194,22 @@ export default function OwnerEventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="dashboard-canvas p-1.5 -mx-4 sm:mx-0">
-        <nav className="flex gap-1 overflow-x-auto scrollbar-hide px-2.5 sm:px-0.5">
+      <div className="overflow-x-auto scrollbar-hide">
+        <nav className="page-tabs min-w-max">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium rounded-lg transition-all border whitespace-nowrap flex-shrink-0',
+                'page-tabs-item whitespace-nowrap flex-shrink-0',
                 activeTab === tab.id
-                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-primary-100'
-                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
+                  ? 'page-tabs-item-active'
+                  : ''
               )}
             >
               {tab.label}
               {tab.count !== undefined && (
-                <span className={cn('ml-1.5 px-1.5 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>
+                <span className={cn('ml-1.5 px-1.5 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-brand-50 text-brand-700' : 'bg-surface-100 text-surface-600')}>
                   {tab.count}
                 </span>
               )}
@@ -1223,25 +1224,25 @@ export default function OwnerEventDetailPage() {
         {activeTab === 'overview' && (
           <div className="space-y-5">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+              <div className="metric-card">
                 <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Responses</p>
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.rsvps}</p>
               </div>
-              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+              <div className="metric-card">
                 <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Arrivals</p>
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.checkIns}</p>
               </div>
-              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+              <div className="metric-card">
                 <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Guest Media</p>
                 <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.mediaAssets}</p>
               </div>
-              <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft p-4">
+              <div className="metric-card">
                 <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Date</p>
                 <p className="text-sm font-semibold text-brand-900 mt-1">{formatDate(event.date)}</p>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg border border-surface-200 p-6">
+            <div className="detail-card">
               <h3 className="text-lg font-semibold text-brand-900 mb-4">Approval</h3>
               {loadingApproval ? (
                 <div className="flex items-center gap-3 text-sm text-surface-500">
@@ -1292,7 +1293,7 @@ export default function OwnerEventDetailPage() {
               )}
             </div>
 
-            <div className="bg-white rounded-lg border border-surface-200 p-6">
+            <div className="detail-card">
               <h3 className="text-lg font-semibold text-brand-900 mb-4">Event Summary</h3>
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

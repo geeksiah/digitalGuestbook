@@ -4,7 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ownerDashboardApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, cn, slugify } from '@/lib/utils';
-import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
+import {
+  DashboardHeroHeader,
+  DashboardSection,
+  EntityListRow,
+  InsightPanel,
+  MetricStrip,
+  DashboardKpiCard,
+  SplitPanelLayout,
+} from '@/components/dashboard/ui';
+import { AppShellSectionNav } from '@/components/ui/AppShell';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -47,12 +56,6 @@ const toAbsoluteMediaUrl = (value: string | null | undefined) => {
 const resolveEventCover = (event: Event) =>
   toAbsoluteMediaUrl(event.coverImageUrl) || toAbsoluteMediaUrl(event.coverImagePath);
 
-const Icons = {
-  calendar: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  location: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>,
-  arrow: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
-};
-
 export default function OwnerEventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +75,7 @@ export default function OwnerEventsPage() {
   });
 
   useEffect(() => {
-    fetchEvents();
+    void fetchEvents();
   }, []);
 
   const fetchEvents = async () => {
@@ -80,34 +83,16 @@ export default function OwnerEventsPage() {
       setLoading(true);
       const response = await ownerDashboardApi.getEvents();
       setEvents(response.data.events);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load events');
     } finally {
       setLoading(false);
     }
   };
 
-  const getPhaseStyle = (phase: string) => {
-    switch (phase) {
-      case 'LIVE': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'PRE_EVENT': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'POST_EVENT': return 'bg-surface-50 text-surface-700 border-surface-200';
-      default: return 'bg-surface-50 text-surface-700 border-surface-200';
-    }
-  };
-
-  const getPhaseLabel = (phase: string) => {
-    switch (phase) {
-      case 'LIVE': return 'Live';
-      case 'PRE_EVENT': return 'Upcoming';
-      case 'POST_EVENT': return 'Past';
-      default: return phase;
-    }
-  };
-
   const filteredEvents = filter === 'all'
     ? events
-    : events.filter(e => {
+    : events.filter((e) => {
         if (filter === 'pre') return e.currentPhase === 'PRE_EVENT';
         if (filter === 'live') return e.currentPhase === 'LIVE';
         if (filter === 'post') return e.currentPhase === 'POST_EVENT';
@@ -133,9 +118,7 @@ export default function OwnerEventsPage() {
   const handleNameChange = (value: string) => {
     setCreateData((prev) => {
       const next = { ...prev, name: value };
-      if (!slugManuallyEdited) {
-        next.slug = slugify(value);
-      }
+      if (!slugManuallyEdited) next.slug = slugify(value);
       return next;
     });
   };
@@ -151,6 +134,7 @@ export default function OwnerEventsPage() {
       toast.error('Name, slug and date are required');
       return;
     }
+
     const normalizedSlug = createData.slug.trim().toLowerCase().replace(/\s+/g, '-');
     try {
       const slugCheck = await ownerDashboardApi.checkSlugAvailability(normalizedSlug);
@@ -187,186 +171,165 @@ export default function OwnerEventsPage() {
     }
   };
 
+  const liveCount = events.filter((e) => e.currentPhase === 'LIVE').length;
+  const pendingCount = events.filter((e) => e.approvalStatus && e.approvalStatus !== 'APPROVED').length;
+
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-b-2 border-brand-900" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-7">
-      <DashboardPageHeader
-        title="Events"
-        subtitle="Manage your events and guest experiences"
-        action={(
-          <button className="btn-outline text-sm" onClick={() => setShowCreate((prev) => !prev)}>
-            {showCreate ? 'Cancel' : '+ New Event'}
-          </button>
-        )}
+    <div className="mobile-stack-section">
+      <DashboardHeroHeader
+        eyebrow="Owner events"
+        title="Manage your events"
+        subtitle="Create new events, monitor approvals, and jump back into the event workspaces your guests are already using."
+        action={<button className="btn-primary" onClick={() => setShowCreate((prev) => !prev)}>{showCreate ? 'Close' : 'New Event'}</button>}
       />
 
-      {/* Quick Create */}
-      {showCreate && (
-        <DashboardSection title="Create Event" subtitle="Admin approval is required before activation">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              className="input"
-              placeholder="Event name"
-              value={createData.name}
-              onChange={(event) => handleNameChange(event.target.value)}
-            />
-            <div className="relative">
-              <input
-                className={cn(
-                  'input pr-8',
-                  slugAvailable === true && 'border-emerald-400 focus:border-emerald-500',
-                  slugAvailable === false && 'border-red-400 focus:border-red-500'
-                )}
-                placeholder="event-slug"
-                value={createData.slug}
-                onChange={(event) => handleSlugChange(event.target.value)}
-                onBlur={() => checkSlug(createData.slug)}
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs">
-                {slugChecking && <span className="text-surface-400">...</span>}
-                {!slugChecking && slugAvailable === true && <span className="text-emerald-600">&#10003;</span>}
-                {!slugChecking && slugAvailable === false && <span className="text-red-500">taken</span>}
-              </span>
-            </div>
-            <input
-              className="input"
-              type="datetime-local"
-              value={createData.date}
-              onChange={(event) => setCreateData((prev) => ({ ...prev, date: event.target.value }))}
-            />
-            <select
-              className="input"
-              value={createData.defaultCurrency}
-              onChange={(event) => setCreateData((prev) => ({ ...prev, defaultCurrency: event.target.value }))}
-            >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="GHS">GHS</option>
-              <option value="KES">KES</option>
-              <option value="NGN">NGN</option>
-            </select>
-            <input
-              className="input sm:col-span-2"
-              placeholder="Venue (optional)"
-              value={createData.venue}
-              onChange={(event) => setCreateData((prev) => ({ ...prev, venue: event.target.value }))}
-            />
-            <div className="sm:col-span-2 flex justify-end">
-              <button className="btn-primary w-full sm:w-auto" onClick={createEvent} disabled={creating}>
-                {creating ? 'Creating...' : 'Create Event'}
-              </button>
-            </div>
-          </div>
-        </DashboardSection>
-      )}
+      <MetricStrip>
+        <DashboardKpiCard label="All events" value={events.length} hint="Every event in your workspace" />
+        <DashboardKpiCard label="Live" value={liveCount} tone="emerald" hint="Events guests can currently interact with" />
+        <DashboardKpiCard label="Awaiting review" value={pendingCount} tone="blue" hint="Events pending admin approval or changes" />
+        <DashboardKpiCard label="Filtered view" value={filteredEvents.length} tone="violet" hint="Events shown in the list below" />
+      </MetricStrip>
 
-      {/* Filter + Count */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-wrap gap-1 bg-surface-100 p-1.5 rounded-xl">
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'pre', label: 'Upcoming' },
-            { key: 'live', label: 'Live' },
-            { key: 'post', label: 'Past' },
-          ].map((option) => (
-            <button
-              key={option.key}
-              onClick={() => setFilter(option.key as 'all' | 'pre' | 'live' | 'post')}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px]',
-                filter === option.key
-                  ? 'bg-white text-brand-900 shadow-sm'
-                  : 'text-surface-600 hover:text-brand-900'
+      <SplitPanelLayout
+        main={(
+          <div className="space-y-4">
+            {showCreate ? (
+              <DashboardSection title="Create an event" subtitle="Fill the basics first. You can refine the full experience inside the event workspace after approval.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input className="input" placeholder="Event name" value={createData.name} onChange={(event) => handleNameChange(event.target.value)} />
+                  <div className="relative">
+                    <input
+                      className={cn(
+                        'input pr-16',
+                        slugAvailable === true && 'border-emerald-400 focus:border-emerald-500',
+                        slugAvailable === false && 'border-red-400 focus:border-red-500'
+                      )}
+                      placeholder="event-slug"
+                      value={createData.slug}
+                      onChange={(event) => handleSlugChange(event.target.value)}
+                      onBlur={() => checkSlug(createData.slug)}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold">
+                      {slugChecking ? <span className="text-surface-400">...</span> : null}
+                      {!slugChecking && slugAvailable === true ? <span className="text-emerald-600">OK</span> : null}
+                      {!slugChecking && slugAvailable === false ? <span className="text-red-500">Taken</span> : null}
+                    </span>
+                  </div>
+                  <input className="input" type="datetime-local" value={createData.date} onChange={(event) => setCreateData((prev) => ({ ...prev, date: event.target.value }))} />
+                  <select className="input" value={createData.defaultCurrency} onChange={(event) => setCreateData((prev) => ({ ...prev, defaultCurrency: event.target.value }))}>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="GHS">GHS</option>
+                    <option value="KES">KES</option>
+                    <option value="NGN">NGN</option>
+                  </select>
+                  <input className="input md:col-span-2" placeholder="Venue (optional)" value={createData.venue} onChange={(event) => setCreateData((prev) => ({ ...prev, venue: event.target.value }))} />
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button className="btn-primary w-full sm:w-auto" onClick={createEvent} disabled={creating}>
+                    {creating ? 'Creating...' : 'Create Event'}
+                  </button>
+                </div>
+              </DashboardSection>
+            ) : null}
+
+            <DashboardSection
+              title="Your events"
+              subtitle="Open any event to manage the guest journey, content, and voting setup."
+              action={(
+                <AppShellSectionNav
+                  items={[
+                    { label: 'All', active: filter === 'all', onClick: () => setFilter('all') },
+                    { label: 'Upcoming', active: filter === 'pre', onClick: () => setFilter('pre') },
+                    { label: 'Live', active: filter === 'live', onClick: () => setFilter('live') },
+                    { label: 'Past', active: filter === 'post', onClick: () => setFilter('post') },
+                  ]}
+                />
               )}
             >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-sm text-surface-500 tabular-nums">
-          {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
-        </p>
-      </div>
-
-      {/* Event List */}
-      <DashboardSection contentClassName="p-0">
-        {filteredEvents.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-3">
-              {Icons.calendar}
-            </div>
-            <p className="text-base font-medium text-surface-600">No events found</p>
-            <p className="text-sm text-surface-400 mt-1">
-              {filter === 'all' ? 'Create your first event to get started' : `No ${filter === 'pre' ? 'upcoming' : filter === 'live' ? 'live' : 'past'} events`}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-surface-100">
-            {filteredEvents.map((event) => (
-              <Link
-                key={event.id}
-                href={`/owner/events/${event.id}`}
-                className="group flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-surface-50 active:bg-surface-100 transition-colors"
-              >
-                <div className="h-14 w-20 overflow-hidden rounded-lg border border-surface-200 bg-surface-100 flex-shrink-0">
-                  {resolveEventCover(event) ? (
-                    <img src={resolveEventCover(event)!} alt={event.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
-                  )}
+              {filteredEvents.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-6 py-12 text-center">
+                  <p className="text-base font-semibold text-brand-900">No events found</p>
+                  <p className="mt-1 text-sm text-surface-500">
+                    {filter === 'all' ? 'Create your first event to get started.' : 'No events match this view right now.'}
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold text-brand-900 truncate">{event.name}</h3>
-                    <span
-                      className={cn(
-                        'inline-flex px-2 py-0.5 text-xs font-medium rounded border',
-                        getPhaseStyle(event.currentPhase)
-                      )}
-                    >
-                      {getPhaseLabel(event.currentPhase)}
-                    </span>
-                    {event.approvalStatus && event.approvalStatus !== 'APPROVED' && (
-                      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded border bg-amber-50 text-amber-700 border-amber-200">
-                        {event.approvalStatus.replace(/_/g, ' ')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-sm text-surface-500">
-                    <span className="flex items-center gap-1">
-                      {Icons.calendar}
-                      {formatDate(event.date)}
-                    </span>
-                    {event.venue && (
-                      <span className="flex items-center gap-1">
-                        {Icons.location}
-                        {event.venue}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</span>
-                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</span>
-                    <span className="text-surface-500"><span className="font-semibold text-brand-900">{event._count.mediaAssets}</span> Media</span>
-                  </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredEvents.map((event) => {
+                    const cover = resolveEventCover(event);
+                    return (
+                      <EntityListRow
+                        key={event.id}
+                        media={(
+                          <div className="h-16 w-24 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100">
+                            {cover ? <img src={cover} alt={event.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />}
+                          </div>
+                        )}
+                        title={event.name}
+                        meta={(
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={cn(
+                              'rounded-full px-2.5 py-1 text-xs font-semibold',
+                              event.currentPhase === 'LIVE' ? 'bg-emerald-50 text-emerald-700' :
+                              event.currentPhase === 'PRE_EVENT' ? 'bg-blue-50 text-blue-700' :
+                              'bg-surface-100 text-surface-700'
+                            )}>
+                              {event.currentPhase === 'PRE_EVENT' ? 'Upcoming' : event.currentPhase === 'POST_EVENT' ? 'Past' : 'Live'}
+                            </span>
+                            {event.approvalStatus && event.approvalStatus !== 'APPROVED' ? (
+                              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                                {event.approvalStatus.replace(/_/g, ' ')}
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                        subtitle={(
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span>{formatDate(event.date)}</span>
+                            {event.venue ? <span>{event.venue}</span> : null}
+                          </div>
+                        )}
+                        stats={(
+                          <>
+                            <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</div>
+                            <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</div>
+                            <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.mediaAssets}</span> Media</div>
+                          </>
+                        )}
+                        actions={<Link href={`/owner/events/${event.id}`} className="btn-primary">Manage</Link>}
+                      />
+                    );
+                  })}
                 </div>
-                <div className="text-surface-300 group-hover:text-brand-600 transition-colors flex-shrink-0">
-                  {Icons.arrow}
-                </div>
-              </Link>
-            ))}
+              )}
+            </DashboardSection>
           </div>
         )}
-      </DashboardSection>
+        side={(
+          <InsightPanel title="What to do next" subtitle="Keep the most important owner actions clear and close by.">
+            <div className="space-y-3 text-sm text-surface-600">
+              <div className="rounded-2xl bg-surface-50 px-4 py-4">
+                <p className="font-semibold text-brand-900">Need a public page fast?</p>
+                <p className="mt-1">Open any event and use the public links section to preview the guest-facing pages.</p>
+              </div>
+              <div className="rounded-2xl bg-surface-50 px-4 py-4">
+                <p className="font-semibold text-brand-900">Waiting on approval?</p>
+                <p className="mt-1">Events marked pending remain visible here so you can keep preparing content and details.</p>
+              </div>
+            </div>
+          </InsightPanel>
+        )}
+      />
     </div>
   );
 }
-

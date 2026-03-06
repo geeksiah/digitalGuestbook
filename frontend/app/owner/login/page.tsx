@@ -124,7 +124,7 @@ export default function OwnerLoginPage() {
   return (
     <div className="min-h-screen soft-grid-bg px-4 py-8 sm:px-6">
       <div className="mx-auto flex min-h-screen max-w-md items-center">
-        <section className="w-full rounded-3xl border border-surface-200 bg-white p-6 sm:p-8">
+        <section className="app-shell-panel w-full p-6 sm:p-8">
           <Link href="/" className="inline-flex items-center text-sm text-surface-600 transition-colors hover:text-brand-900">
             <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -132,10 +132,10 @@ export default function OwnerLoginPage() {
             Back to home
           </Link>
 
-          <div className="mt-6">
+          <div className="mt-6 rounded-3xl bg-surface-50 px-5 py-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">EventPeepo</p>
-            <h1 className="mt-2 text-3xl font-bold text-brand-900">{pageTitle}</h1>
-            <p className="mt-1 text-sm text-surface-600">{pageSubtitle}</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-brand-900">{pageTitle}</h1>
+            <p className="mt-2 text-sm leading-6 text-surface-600">{pageSubtitle}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">

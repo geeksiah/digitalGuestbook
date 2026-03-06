@@ -4,7 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { adminApi, eventsApi, API_BASE_URL } from '@/lib/api';
 import { formatDate, getPhaseLabel, cn } from '@/lib/utils';
-import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
+import {
+  DashboardHeroHeader,
+  DashboardSection,
+  EntityListRow,
+  InsightPanel,
+  MetricStrip,
+  DashboardKpiCard,
+  SplitPanelLayout,
+} from '@/components/dashboard/ui';
+import { AppShellSectionNav } from '@/components/ui/AppShell';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -51,15 +60,6 @@ const toAbsoluteMediaUrl = (value: string | null | undefined) => {
 const resolveEventCover = (event: Event) =>
   toAbsoluteMediaUrl(event.coverImageUrl) || toAbsoluteMediaUrl(event.coverImagePath);
 
-// Monochrome icons
-const Icons = {
-  plus: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
-  calendar: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  location: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>,
-  external: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>,
-  archive: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
-};
-
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,21 +68,23 @@ export default function EventsPage() {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchEvents();
+    void fetchEvents();
   }, [filter]);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: Record<string, boolean> = {};
       if (filter === 'active') params.archived = false;
       if (filter === 'archived') params.archived = true;
-      
-      const response = await eventsApi.list(params);
+
+      const [response, pending] = await Promise.all([
+        eventsApi.list(params),
+        adminApi.getPendingApprovals(),
+      ]);
       setEvents(response.data.events);
-      const pending = await adminApi.getPendingApprovals();
       setPendingApprovals(pending.data?.events || []);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load events');
     } finally {
       setLoading(false);
@@ -118,18 +120,9 @@ export default function EventsPage() {
         await eventsApi.unarchive(id);
         toast.success('Event restored');
       }
-      fetchEvents();
-    } catch (error) {
+      await fetchEvents();
+    } catch {
       toast.error('Action failed');
-    }
-  };
-
-  const getPhaseStyle = (phase: string) => {
-    switch (phase) {
-      case 'LIVE': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'PRE_EVENT': return 'bg-sky-50 text-sky-700 border-sky-200';
-      case 'POST_EVENT': return 'bg-surface-100 text-surface-600 border-surface-200';
-      default: return 'bg-surface-100 text-surface-600 border-surface-200';
     }
   };
 
@@ -137,189 +130,124 @@ export default function EventsPage() {
   const archivedCount = events.filter((event) => event.isArchived).length;
 
   return (
-    <div className="space-y-7">
-      <DashboardPageHeader
-        title="Events"
-        subtitle="Manage lifecycle, status, and experience settings across all events"
-        action={(
-          <Link href="/admin/events/new" className="btn-primary">
-            {Icons.plus}
-            <span className="ml-2">New Event</span>
-          </Link>
-        )}
+    <div className="mobile-stack-section">
+      <DashboardHeroHeader
+        eyebrow="Admin events"
+        title="Event management"
+        subtitle="Review approvals, monitor live activity, and move quickly into each event workspace."
+        action={<Link href="/admin/events/new" className="btn-primary">New Event</Link>}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Showing</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{events.length}</p>
-        </div>
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Live In View</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{liveCount}</p>
-        </div>
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Archived In View</p>
-          <p className="text-2xl font-bold text-brand-900 mt-1">{archivedCount}</p>
-        </div>
-        <div className="card py-4">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-surface-500 font-semibold">Filter</p>
-          <p className="text-lg font-semibold text-brand-900 mt-1 capitalize">{filter}</p>
-        </div>
-      </div>
+      <MetricStrip>
+        <DashboardKpiCard label="In view" value={events.length} hint="Events returned by the current filter" />
+        <DashboardKpiCard label="Live" value={liveCount} tone="emerald" hint="Events currently active" />
+        <DashboardKpiCard label="Archived" value={archivedCount} tone="rose" hint="Archived events in this list" />
+        <DashboardKpiCard label="Pending review" value={pendingApprovals.length} tone="blue" hint="Owner-created events awaiting approval" />
+      </MetricStrip>
 
-      <DashboardSection
-        title="Pending Approvals"
-        subtitle="Owner-created events awaiting admin review"
-      >
-        {pendingApprovals.length === 0 ? (
-          <p className="text-sm text-surface-500">No pending owner events.</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingApprovals.map((event) => (
-              <div key={event.id} className="rounded-xl border border-surface-200 bg-white px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-brand-900">{event.name}</p>
-                    <p className="text-xs text-surface-500 mt-1">
-                      Owner: {event.Owner?.name || 'Unknown'} ({event.Owner?.email || 'No email'})
-                    </p>
-                    <p className="text-xs text-surface-500 mt-1">Date: {formatDate(event.date, 'MMM d, yyyy')}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="btn-outline text-rose-600 border-rose-200 hover:bg-rose-50"
-                      disabled={reviewingId === event.id}
-                      onClick={() => reviewApproval(event.id, false)}
-                    >
-                      Reject
-                    </button>
-                    <button
-                      className="btn-primary"
-                      disabled={reviewingId === event.id}
-                      onClick={() => reviewApproval(event.id, true)}
-                    >
-                      Approve
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </DashboardSection>
-
-      <DashboardSection
-        title="Event List"
-        subtitle="Open any event to manage pages, templates, metadata, media, and operations"
-        action={(
-          <div className="flex gap-1 bg-surface-100 p-1 rounded-xl">
-            {(['active', 'archived', 'all'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                  filter === f ? 'bg-white text-brand-900 shadow-sm' : 'text-surface-600 hover:text-brand-900'
-                )}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
-        contentClassName="p-0"
-      >
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
-          </div>
-        ) : events.length === 0 ? (
-          <div className="text-center py-16 px-6">
-            <div className="w-12 h-12 mx-auto rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 mb-4">
-              {Icons.calendar}
-            </div>
-            <h3 className="text-lg font-semibold text-brand-900 mb-1">No events found</h3>
-            <p className="text-surface-500 mb-4">
-              {filter === 'archived' ? 'No archived events' : 'Get started by creating your first event'}
-            </p>
-            {filter !== 'archived' && (
-              <Link href="/admin/events/new" className="btn-primary">Create Event</Link>
+      <SplitPanelLayout
+        main={(
+          <DashboardSection
+            title="All events"
+            subtitle="Open any event to manage templates, settings, public pages, or voting."
+            action={(
+              <AppShellSectionNav
+                items={[
+                  { label: 'Active', active: filter === 'active', onClick: () => setFilter('active') },
+                  { label: 'Archived', active: filter === 'archived', onClick: () => setFilter('archived') },
+                  { label: 'All', active: filter === 'all', onClick: () => setFilter('all') },
+                ]}
+              />
             )}
-          </div>
-        ) : (
-          <div className="space-y-3 p-4">
-            {events.map((event) => (
-              <div key={event.id} className="rounded-2xl border border-surface-200 bg-white px-5 py-4 shadow-soft hover:border-brand-200 hover:-translate-y-0.5 transition-all">
-                <div className="flex flex-col xl:flex-row xl:items-center gap-4">
-                  <div className="flex-1 min-w-0 flex items-start gap-3">
-                    <div className="h-14 w-20 overflow-hidden rounded-lg border border-surface-200 bg-surface-100 flex-shrink-0">
-                      {resolveEventCover(event) ? (
-                        <img src={resolveEventCover(event)!} alt={event.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <h3 className="text-lg font-semibold text-brand-900">{event.name}</h3>
-                      <span className={cn('px-2 py-0.5 rounded border text-xs font-medium', getPhaseStyle(event.currentPhase))}>
-                        {event.currentPhase === 'LIVE' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />}
-                        {getPhaseLabel(event.currentPhase)}
-                      </span>
-                      {event.invitationOnly && (
-                        <span className="px-2 py-0.5 rounded border text-xs font-medium bg-sky-50 text-sky-700 border-sky-200">Invite Only</span>
-                      )}
-                      {event.isArchived && (
-                        <span className="px-2 py-0.5 rounded border text-xs font-medium bg-surface-100 text-surface-500 border-surface-200">Archived</span>
-                      )}
-                    </div>
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-surface-500">
-                        <span className="flex items-center gap-1.5">
-                          {Icons.calendar}
-                          {formatDate(event.date, 'MMM d, yyyy')}
-                        </span>
-                        {event.venue && (
-                          <span className="flex items-center gap-1.5">
-                            {Icons.location}
-                            {event.venue}
-                          </span>
-                        )}
-                        <span className="text-surface-400 font-mono text-xs">/{event.slug}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-5 text-sm xl:border-l xl:border-surface-100 xl:pl-5">
-                    <div className="text-center">
-                      <p className="text-lg font-bold text-brand-900">{event._count.rsvps}</p>
-                      <p className="text-surface-500 text-xs">RSVPs</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-lg font-bold text-brand-900">{event._count.checkIns}</p>
-                      <p className="text-surface-500 text-xs">Check-ins</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-lg font-bold text-brand-900">{event._count.mediaAssets}</p>
-                      <p className="text-surface-500 text-xs">Media</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Link href={`/admin/events/${event.id}`} className="btn-primary">Manage</Link>
-                    <Link href={`/e/${event.slug}`} target="_blank" className="btn-ghost hover:text-brand-900" title="View public page">
-                      {Icons.external}
-                    </Link>
-                    <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost hover:text-brand-900" title={event.isArchived ? 'Restore' : 'Archive'}>
-                      {Icons.archive}
-                    </button>
-                  </div>
-                </div>
+          >
+            {loading ? (
+              <div className="flex min-h-[240px] items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-900" />
               </div>
-            ))}
-          </div>
+            ) : events.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-6 py-12 text-center">
+                <p className="text-base font-semibold text-brand-900">No events found</p>
+                <p className="mt-1 text-sm text-surface-500">{filter === 'archived' ? 'There are no archived events yet.' : 'Create a new event to get started.'}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {events.map((event) => {
+                  const cover = resolveEventCover(event);
+                  return (
+                    <EntityListRow
+                      key={event.id}
+                      media={(
+                        <div className="h-16 w-24 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100">
+                          {cover ? <img src={cover} alt={event.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />}
+                        </div>
+                      )}
+                      title={event.name}
+                      meta={(
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={cn(
+                            'rounded-full px-2.5 py-1 text-xs font-semibold',
+                            event.currentPhase === 'LIVE' ? 'bg-emerald-50 text-emerald-700' :
+                            event.currentPhase === 'PRE_EVENT' ? 'bg-sky-50 text-sky-700' :
+                            'bg-surface-100 text-surface-600'
+                          )}>
+                            {getPhaseLabel(event.currentPhase)}
+                          </span>
+                          {event.invitationOnly ? <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Invite only</span> : null}
+                          {event.isArchived ? <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">Archived</span> : null}
+                        </div>
+                      )}
+                      subtitle={(
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
+                          {event.venue ? <span>{event.venue}</span> : null}
+                          <span className="font-mono text-xs text-surface-400">/{event.slug}</span>
+                        </div>
+                      )}
+                      stats={(
+                        <>
+                          <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.rsvps}</span> RSVPs</div>
+                          <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.checkIns}</span> Check-ins</div>
+                          <div className="text-sm text-surface-500"><span className="font-semibold text-brand-900">{event._count.mediaAssets}</span> Media</div>
+                        </>
+                      )}
+                      actions={(
+                        <>
+                          <Link href={`/admin/events/${event.id}`} className="btn-primary">Manage</Link>
+                          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">Public page</Link>
+                          <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost">
+                            {event.isArchived ? 'Restore' : 'Archive'}
+                          </button>
+                        </>
+                      )}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </DashboardSection>
         )}
-      </DashboardSection>
+        side={(
+          <InsightPanel title="Pending approvals" subtitle="Review owner-submitted events before they go live.">
+            {pendingApprovals.length === 0 ? (
+              <div className="rounded-2xl bg-surface-50 px-4 py-6 text-sm text-surface-500">No pending owner events right now.</div>
+            ) : (
+              <div className="space-y-3">
+                {pendingApprovals.map((event) => (
+                  <div key={event.id} className="rounded-2xl border border-surface-200 bg-surface-50/70 p-4">
+                    <p className="font-semibold text-brand-900">{event.name}</p>
+                    <p className="mt-1 text-sm text-surface-500">{event.Owner?.name || 'Unknown owner'}{event.Owner?.email ? ` · ${event.Owner.email}` : ''}</p>
+                    <p className="mt-1 text-sm text-surface-500">{formatDate(event.date, 'MMM d, yyyy')}</p>
+                    <div className="mt-4 flex gap-2">
+                      <button className="btn-outline flex-1 border-rose-200 text-rose-600 hover:bg-rose-50" disabled={reviewingId === event.id} onClick={() => reviewApproval(event.id, false)}>Reject</button>
+                      <button className="btn-primary flex-1" disabled={reviewingId === event.id} onClick={() => reviewApproval(event.id, true)}>Approve</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </InsightPanel>
+        )}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useOwnerAuthStore } from '@/lib/store';
 import { ownerAuthApi, ownerDashboardApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { AppShellBreadcrumb, AppShellSidebar, AppShellTopbar } from '@/components/ui/AppShell';
 
 const navigation = [
   {
@@ -193,140 +194,73 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 w-[272px] bg-white border-r border-surface-200/80 shadow-soft transform transition-transform duration-200 ease-in-out lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        )}
-      >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-surface-200/70">
-            <div className="flex items-center">
-              <img 
-                src="/img/logo-dark.svg" 
-                alt="EventPeepo" 
-                className="h-8 w-auto"
-                onError={(e) => {
-                  // Fallback to text if logo fails to load
-                  e.currentTarget.style.display = 'none';
-                  const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback');
-                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                }}
-              />
-              <div className="logo-fallback hidden items-center ml-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-900 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">E</span>
+      <AppShellSidebar
+        brandHref="/owner"
+        navItems={navigation}
+        pathname={pathname}
+        sidebarOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        footer={(
+          <div className="space-y-2">
+            <div className="app-shell-panel p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-100">
+                  <span className="font-semibold text-brand-900">{owner?.name?.charAt(0).toUpperCase() || 'O'}</span>
                 </div>
-                <span className="ml-3 text-lg font-semibold text-brand-900">EventPeepo</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-900 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = isNavActive(item.href);
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    'flex items-center px-3 py-2.5 text-sm font-medium rounded-xl border transition-all',
-                    isActive
-                      ? 'bg-brand-50 text-brand-900 border-brand-100 shadow-sm'
-                      : 'text-surface-700 border-transparent hover:bg-surface-50 hover:text-brand-900 hover:border-surface-200'
-                  )}
-                >
-                  <span className={cn('mr-3', isActive ? 'text-brand-700' : 'text-surface-400')}>{item.icon}</span>
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* User section */}
-          <div className="p-4 border-t border-surface-200/70">
-            <div className="flex items-center px-3 py-2.5 rounded-xl border border-surface-200 bg-surface-50">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
-                <span className="text-brand-900 font-semibold">
-                  {owner?.name?.charAt(0).toUpperCase() || 'O'}
-                </span>
-              </div>
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-brand-900 truncate">{owner?.name}</p>
-                <p className="text-xs text-surface-500 truncate">{owner?.email}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-brand-900">{owner?.name}</p>
+                  <p className="truncate text-xs text-surface-500">{owner?.email}</p>
+                </div>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full mt-2 flex items-center px-3 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 rounded-lg transition-colors"
+              className="btn-outline w-full justify-start"
             >
-              <svg className="w-4 h-4 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
               Sign Out
             </button>
           </div>
-        </div>
-      </aside>
+        )}
+      />
 
       {/* Main content */}
-      <div className="lg:pl-[272px] min-h-screen flex flex-col">
-        {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-surface-200/80">
-          <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 lg:px-8 gap-3">
-            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden flex-shrink-0 p-2.5 -ml-2 rounded-xl text-surface-600 hover:bg-surface-100 hover:text-brand-900 active:bg-surface-200 transition-colors"
-                aria-label="Open menu"
+      <div className="min-h-screen flex flex-col lg:pl-[284px]">
+        <AppShellTopbar
+          title={currentSection}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          breadcrumb={(
+            <AppShellBreadcrumb
+              items={[
+                { label: 'Owner Workspace', href: '/owner' },
+                { label: currentSection },
+              ]}
+            />
+          )}
+          leading={(
+            <div className="min-w-0 items-center gap-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400">Current event</span>
+              <select
+                value={selectedEventId || '__all__'}
+                onChange={(e) => handleEventSwitch(e.target.value)}
+                disabled={loadingEvents || ownerEvents.length === 0}
+                className="input h-11 min-w-[240px] py-0"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-
-              <div className="min-w-0 flex items-center gap-2 flex-1">
-                <span className="hidden xl:inline-block flex-shrink-0 text-[10px] font-semibold uppercase tracking-widest text-surface-400">
-                  Current Event
-                </span>
-                <select
-                  value={selectedEventId || '__all__'}
-                  onChange={(e) => handleEventSwitch(e.target.value)}
-                  disabled={loadingEvents || ownerEvents.length === 0}
-                  className="h-9 sm:h-10 w-full max-w-[320px] rounded-lg border border-surface-200 bg-white px-3 text-sm font-medium text-brand-900 focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/15 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <option value="__all__">All events</option>
-                  {ownerEvents.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <option value="__all__">All events</option>
+                {ownerEvents.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
             </div>
-
-            <div className="hidden sm:flex items-center gap-2 text-sm flex-shrink-0">
-              <span className="text-surface-400 text-xs font-medium">Workspace</span>
-              <span className="text-surface-300">/</span>
-              <span className="font-semibold text-brand-900 truncate">{currentSection}</span>
-            </div>
-          </div>
-        </header>
+          )}
+        />
 
         {/* Page content */}
-        <main className="flex-1 p-4 pb-28 sm:p-6 sm:pb-32 lg:p-7 lg:pb-7">
+        <main className="mx-auto flex-1 max-w-[1680px] p-4 pb-28 sm:p-6 sm:pb-32 lg:p-8 lg:pb-8">
           {children}
         </main>
 

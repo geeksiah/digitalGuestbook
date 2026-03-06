@@ -1189,23 +1189,24 @@ export default function EventDetailPage() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <div className="dashboard-canvas px-5 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="app-hero flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Link href="/admin/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
             {Icons.back}
             <span className="ml-1">Back to Events</span>
           </Link>
-          <h1 className="text-2xl font-display font-bold text-brand-900 truncate">{event.name}</h1>
-          <p className="text-sm text-surface-600 mt-1">Manage content, guest flow, and operations from one workspace.</p>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-700">Event workspace</p>
+          <h1 className="mt-1 text-3xl font-display font-bold tracking-tight text-brand-900 truncate">{event.name}</h1>
+          <p className="text-sm leading-6 text-surface-600 mt-2">Manage content, guest flow, domains, tickets, gifting, and voting from one workspace.</p>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className={getStatusColor(event.currentPhase)}>{getPhaseLabel(event.currentPhase)}</span>
             {event.phaseOverride && <span className="text-xs text-surface-500">(Override)</span>}
-            {event.invitationOnly && <span className="badge-info">Invite Only</span>}
-            {event.reelEnabled && <span className="px-2 py-0.5 rounded text-xs bg-surface-100 text-surface-600 border border-surface-200">Reel Enabled</span>}
+            {event.invitationOnly && <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Invite Only</span>}
+            {event.reelEnabled && <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">Reel Enabled</span>}
             <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">
             {Icons.external}
             <span className="ml-2">View Public Page</span>
@@ -1214,21 +1215,21 @@ export default function EventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="overflow-x-auto dashboard-canvas p-2">
-        <nav className="flex gap-1 min-w-max">
+      <div className="overflow-x-auto scrollbar-hide">
+        <nav className="page-tabs min-w-max">
           {tabs.map(tab => (
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id)} 
               className={cn(
-                'px-4 py-2.5 text-sm font-medium rounded-xl transition-all border whitespace-nowrap',
+                'page-tabs-item whitespace-nowrap',
                 activeTab === tab.id 
-                  ? 'bg-white border-surface-200 text-brand-900 shadow-sm ring-1 ring-primary-100' 
-                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-200'
+                  ? 'page-tabs-item-active' 
+                  : ''
               )}
             >
               {tab.label}
-              {tab.count !== undefined && <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white text-brand-700 border border-brand-100' : 'bg-surface-100 text-surface-600')}>{tab.count}</span>}
+              {tab.count !== undefined && <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-brand-50 text-brand-700' : 'bg-surface-100 text-surface-600')}>{tab.count}</span>}
             </button>
           ))}
         </nav>
@@ -1244,13 +1245,13 @@ export default function EventDetailPage() {
               { l: 'Arrivals', v: event._count.checkIns, icon: Icons.check },
               { l: 'Guest Media', v: event._count.mediaAssets, icon: Icons.video },
             ].map(s => (
-              <div key={s.l} className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 transition-colors">
+              <div key={s.l} className="metric-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-surface-500 mb-1">{s.l}</p>
-                    <p className="text-3xl font-bold text-brand-900">{s.v}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 mb-1">{s.l}</p>
+                    <p className="text-3xl font-bold tracking-tight text-brand-900">{s.v}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-500">
+                  <div className="w-11 h-11 rounded-2xl bg-surface-100 flex items-center justify-center text-surface-500">
                     {s.icon}
                   </div>
                 </div>
@@ -1258,7 +1259,7 @@ export default function EventDetailPage() {
             ))}
           </div>
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-surface-200 p-5">
+            <div className="detail-card">
               <h3 className="font-semibold text-brand-900 mb-4">Event Stage</h3>
               <div className="space-y-2">
                 {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map(p => (
@@ -1278,7 +1279,7 @@ export default function EventDetailPage() {
                 ))}
               </div>
             </div>
-            <div className="card-premium p-5">
+            <div className="detail-card">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-brand-900">Voting Hub</h3>
@@ -1286,10 +1287,10 @@ export default function EventDetailPage() {
                     Manage categories, nominees, nominations, and live rankings.
                   </p>
                 </div>
-                <span className="chip-accent text-xs">Voting</span>
+                <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Voting</span>
               </div>
               <div className="mt-4">
-                <Link href={`/admin/events/${event.id}/voting`} className="btn-accent w-full justify-center">
+                <Link href={`/admin/events/${event.id}/voting`} className="btn-primary w-full justify-center">
                   Open Voting Dashboard
                 </Link>
               </div>

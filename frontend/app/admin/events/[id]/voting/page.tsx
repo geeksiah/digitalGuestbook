@@ -673,6 +673,29 @@ export default function AdminVotingPage() {
 
       <VotingWorkspaceTabs activeTab={activeTab} onChange={setActiveTab} />
 
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="metric-card">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Voting mode</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{config?.mode === 'ELECTION' ? 'Election' : 'Awards'}</p>
+          <p className="mt-2 text-sm text-surface-500">{config?.isEnabled ? 'Voting is open to guests.' : 'Voting is currently paused.'}</p>
+        </div>
+        <div className="metric-card">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Categories</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{contests.length}</p>
+          <p className="mt-2 text-sm text-surface-500">Published and draft categories for this event.</p>
+        </div>
+        <div className="metric-card">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominees</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{options.length}</p>
+          <p className="mt-2 text-sm text-surface-500">Total nominees across all categories.</p>
+        </div>
+        <div className="metric-card">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Pending nominations</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{pendingNominations.length}</p>
+          <p className="mt-2 text-sm text-surface-500">Submissions waiting for review.</p>
+        </div>
+      </section>
+
       {activeTab === 'setup' ? (
         <VotingSetupPanel
           config={config}
@@ -687,10 +710,14 @@ export default function AdminVotingPage() {
       ) : null}
 
       {activeTab === 'categories' || activeTab === 'nominees' ? (
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         {activeTab === 'categories' ? (
-        <div className="card-premium p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-brand-900">Contests</h2>
+        <div className="detail-card space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Categories</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">Create and organize categories</h2>
+            <p className="mt-1 text-sm leading-6 text-surface-500">Use one category per award, race, or election group. Enable or pause categories as the event evolves.</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-[1fr,160px,auto] gap-2">
             <input
               className="input"
@@ -706,14 +733,14 @@ export default function AdminVotingPage() {
               Add
             </button>
           </div>
-          <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-auto pr-1">
             {contests.length === 0 ? (
-              <p className="text-sm text-surface-500">No categories yet. Add your first one to get started.</p>
+              <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-8 text-sm text-surface-500">No categories yet. Add your first one to get started.</div>
             ) : (
               contests.map((contest) => (
                 <div
                   key={contest.id}
-                  className={`rounded-lg border p-3 ${selectedContestId === contest.id ? 'border-brand-300 bg-brand-50/30' : 'border-surface-200'}`}
+                  className={`rounded-2xl border p-4 ${selectedContestId === contest.id ? 'border-brand-300 bg-brand-50/30' : 'border-surface-200 bg-white'}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <button
@@ -742,12 +769,18 @@ export default function AdminVotingPage() {
         ) : null}
 
         {activeTab === 'nominees' ? (
-        <div className="card-premium p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-brand-900">Nominees</h2>
+        <div className="detail-card space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominees</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">Add nominees and assign categories</h2>
+            <p className="mt-1 text-sm leading-6 text-surface-500">
+            {selectedContest ? `Currently working in ${selectedContest.title}. A nominee can appear in more than one category.` : 'Select a category first, then add nominees with photo and profile details.'}
+            </p>
+          </div>
           <p className="text-xs text-surface-600">
             {selectedContest ? `Contest: ${selectedContest.title}` : 'Select a contest to manage nominees.'}
           </p>
-          <div className="rounded-lg border border-surface-200 bg-surface-50 p-3 space-y-2">
+          <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4 space-y-2">
             <p className="text-xs font-medium text-surface-700">Assign nominee to categories</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[120px] overflow-auto">
               {contests.map((contest) => (
@@ -832,7 +865,7 @@ export default function AdminVotingPage() {
               Add Nominee
             </button>
           </div>
-          <div className="rounded-lg border border-surface-200 p-3 space-y-2">
+          <div className="rounded-2xl border border-surface-200 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-brand-900">Public Nomination Rules</p>
               <button
@@ -1018,12 +1051,12 @@ export default function AdminVotingPage() {
               )}
             </div>
           </div>
-          <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
+          <div className="space-y-3 max-h-[420px] overflow-auto pr-1">
             {options.length === 0 ? (
-              <p className="text-sm text-surface-500">No nominees in this category yet.</p>
+              <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-8 text-sm text-surface-500">No nominees in this category yet.</div>
             ) : (
               options.map((option) => (
-                <div key={option.id} className="rounded-lg border border-surface-200 p-3">
+                <div key={option.id} className="rounded-2xl border border-surface-200 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 min-w-0">
                       {option.imageUrl || option.imagePath ? (
@@ -1059,21 +1092,24 @@ export default function AdminVotingPage() {
       ) : null}
 
       {activeTab === 'nominations' ? (
-      <section className="card-premium p-4 space-y-3">
+      <section className="detail-card space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-brand-900">Public Nominations</h2>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominations</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">Review public submissions</h2>
+          </div>
           <span className="text-xs text-surface-600">
             {pendingNominations.length} pending
           </span>
         </div>
         {nominations.length === 0 ? (
-          <p className="text-sm text-surface-500">No nominations yet.</p>
+          <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-8 text-sm text-surface-500">No nominations yet.</div>
         ) : (
-          <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-auto pr-1">
             {nominations.map((nomination) => {
               const view = nominationPresentation(nomination);
               return (
-                <div key={nomination.id} className="rounded-lg border border-surface-200 p-3">
+                <div key={nomination.id} className="rounded-2xl border border-surface-200 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="flex gap-3 min-w-0">
                       {view.nomineeImageUrl ? (

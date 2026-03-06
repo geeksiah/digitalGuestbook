@@ -22,9 +22,9 @@
   body {
     @apply bg-surface-50 text-navy-900 antialiased;
     background-image:
-      radial-gradient(circle at 5% 0%, rgba(6, 57, 50, 0.10), transparent 40%),
-      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.08), transparent 32%),
-      radial-gradient(circle at 50% 100%, rgba(6, 57, 50, 0.04), transparent 50%);
+      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.12), transparent 28%),
+      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.07), transparent 34%),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.96), rgba(247, 250, 249, 1));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
@@ -59,11 +59,11 @@
 @layer components {
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2.5 min-h-[44px] text-sm font-semibold tracking-tight transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-semibold tracking-tight transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-primary {
-    @apply btn bg-brand-900 text-white hover:bg-brand-800 active:bg-brand-950 focus:ring-brand-500;
+    @apply btn bg-brand-900 text-white shadow-[0_10px_24px_rgba(6,57,50,0.12)] hover:bg-brand-800 active:bg-brand-950 focus:ring-brand-500;
   }
 
   .btn-accent {
@@ -75,7 +75,7 @@
   }
 
   .btn-outline {
-    @apply btn border border-surface-300 bg-white text-navy-900 hover:bg-surface-50 hover:border-surface-400 active:bg-surface-100 focus:ring-surface-400;
+    @apply btn border border-surface-300 bg-white text-navy-900 hover:bg-surface-50 hover:border-brand-200 active:bg-surface-100 focus:ring-surface-400;
   }
 
   .btn-ghost {
@@ -88,7 +88,7 @@
 
   /* Inputs */
   .input {
-    @apply w-full rounded-lg border border-surface-300 bg-white px-3.5 py-2.5 min-h-[44px] text-base sm:text-sm text-navy-900 placeholder-surface-400 transition-all duration-150 focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/10;
+    @apply w-full rounded-xl border border-surface-300 bg-white px-3.5 py-2.5 min-h-[44px] text-base sm:text-sm text-navy-900 placeholder-surface-400 transition-all duration-150 focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/10;
   }
 
   .input:hover:not(:focus) {
@@ -109,7 +109,7 @@
 
   /* Cards */
   .card {
-    @apply bg-white rounded-xl border border-surface-200/80 p-5 sm:p-6 shadow-soft transition-all duration-150;
+    @apply bg-white rounded-2xl border border-surface-200/80 p-5 sm:p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-all duration-150;
   }
 
   .card-hover {
@@ -117,11 +117,11 @@
   }
 
   .card-premium {
-    @apply bg-white rounded-2xl border border-surface-200 shadow-soft;
+    @apply bg-white rounded-3xl border border-surface-200 shadow-[0_12px_40px_rgba(15,23,42,0.06)];
   }
 
   .dashboard-canvas {
-    @apply bg-white rounded-2xl border border-surface-200 shadow-soft;
+    @apply bg-white rounded-[28px] border border-surface-200/90 shadow-[0_12px_40px_rgba(15,23,42,0.06)];
   }
 
   .phone-stage {
@@ -133,11 +133,11 @@
   }
 
   .segmented {
-    @apply inline-grid grid-cols-3 rounded-full border border-surface-200 bg-surface-100 p-1 gap-1;
+    @apply inline-grid grid-cols-3 rounded-2xl border border-surface-200 bg-surface-100 p-1 gap-1;
   }
 
   .segmented-item {
-    @apply rounded-full px-3 py-1.5 text-sm font-semibold text-surface-600 transition-colors;
+    @apply rounded-xl px-3 py-2 text-sm font-semibold text-surface-600 transition-colors;
   }
 
   .segmented-item-active {
@@ -149,19 +149,77 @@
   }
 
   .focus-card {
-    @apply rounded-2xl border border-surface-200 bg-white p-4 shadow-sm;
+    @apply rounded-2xl border border-surface-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)];
   }
 
   .kpi-tile {
-    @apply rounded-xl border border-surface-200 bg-surface-50;
+    @apply rounded-2xl border border-surface-200 bg-surface-50/80;
   }
 
   .soft-grid-bg {
     background-image:
-      linear-gradient(to right, rgba(6, 57, 50, 0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(6, 57, 50, 0.04) 1px, transparent 1px);
-    background-size: 28px 28px;
-    background-color: #f8fbfa;
+      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.10), transparent 22%),
+      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.08), transparent 26%),
+      linear-gradient(to bottom, rgba(248, 251, 250, 1), rgba(255, 255, 255, 1));
+  }
+
+  .app-shell-panel {
+    @apply rounded-[28px] border border-surface-200/80 bg-white/95 shadow-[0_14px_40px_rgba(15,23,42,0.06)];
+  }
+
+  .app-shell-nav-item {
+    @apply flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-sm font-medium transition-all;
+  }
+
+  .app-shell-nav-item-active {
+    @apply border-brand-100 bg-brand-50 text-brand-900 shadow-[0_8px_20px_rgba(6,57,50,0.06)];
+  }
+
+  .app-shell-nav-item-inactive {
+    @apply border-transparent text-surface-700 hover:border-surface-200 hover:bg-surface-50 hover:text-brand-900;
+  }
+
+  .app-hero {
+    @apply rounded-[28px] border border-surface-200/80 bg-white px-5 py-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)] sm:px-7 sm:py-7;
+    background-image:
+      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.10), transparent 26%),
+      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.06), transparent 22%);
+  }
+
+  .metric-card {
+    @apply rounded-3xl border border-surface-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)];
+  }
+
+  .action-list-card {
+    @apply rounded-3xl border border-surface-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)];
+  }
+
+  .table-card {
+    @apply overflow-hidden rounded-[28px] border border-surface-200/80 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)];
+  }
+
+  .detail-card {
+    @apply rounded-3xl border border-surface-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)];
+  }
+
+  .mobile-stack-section {
+    @apply space-y-4 sm:space-y-5 lg:space-y-6;
+  }
+
+  .page-tabs {
+    @apply inline-flex min-w-full gap-1 rounded-2xl border border-surface-200 bg-surface-100 p-1 md:min-w-0;
+  }
+
+  .page-tabs-item {
+    @apply min-w-fit rounded-xl px-4 py-2.5 text-sm font-semibold text-surface-600 transition-colors hover:text-brand-900;
+  }
+
+  .page-tabs-item-active {
+    @apply bg-white text-brand-900 shadow-sm;
+  }
+
+  .subtle-toolbar {
+    @apply flex flex-col gap-3 rounded-2xl border border-surface-200 bg-white/85 p-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between;
   }
 
   /* Badges */

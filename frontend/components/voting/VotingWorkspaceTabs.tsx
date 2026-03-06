@@ -16,12 +16,12 @@ export default function VotingWorkspaceTabs({
   onChange: (tab: VotingWorkspaceTab) => void;
 }) {
   return (
-    <div className="segmented max-w-2xl">
+    <div className="page-tabs overflow-x-auto scrollbar-hide">
       {TABS.map((tab) => (
         <button
           key={tab.id}
           type="button"
-          className={`segmented-item ${activeTab === tab.id ? 'segmented-item-active' : ''}`}
+          className={`page-tabs-item ${activeTab === tab.id ? 'page-tabs-item-active' : ''}`}
           onClick={() => onChange(tab.id)}
         >
           {tab.label}
