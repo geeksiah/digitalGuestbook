@@ -25,41 +25,45 @@ export default function PublicVoteOptionCard({
 }: PublicVoteOptionCardProps) {
   return (
     <article
-      className={`rounded-2xl border px-3 py-3 transition-all ${
-        selected ? 'border-red-300 bg-red-50/60' : 'border-surface-200 bg-white hover:border-red-200'
+      className={`detail-card p-4 transition-all ${
+        selected ? 'border-brand-300 bg-brand-50/20' : 'hover:border-brand-200'
       }`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-4">
         {imageSrc ? (
-          <img src={imageSrc} alt={name} className="h-10 w-10 rounded-full border border-surface-200 object-cover" />
+          <img src={imageSrc} alt={name} className="h-16 w-16 rounded-2xl border border-surface-200 object-cover" />
         ) : (
-          <div className="h-10 w-10 rounded-full border border-surface-200 bg-surface-100" />
+          <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-semibold text-brand-900">{name}</p>
-            <p className="text-xs text-surface-500">{votesLabel}</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="text-base font-semibold tracking-tight text-brand-900">{name}</p>
+            <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">{votesLabel}</span>
           </div>
-          <p className="truncate text-xs text-surface-600">{description}</p>
+          <p className="mt-2 text-sm leading-6 text-surface-500">{description}</p>
+          {selected ? (
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Selected nominee</p>
+          ) : null}
         </div>
       </div>
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <button
           type="button"
           onClick={onVote}
-          className="btn-accent w-full !min-h-[38px] !rounded-full !px-3 !py-2 !text-xs"
+          className="btn-primary w-full"
         >
           {voteButtonLabel}
         </button>
-        <Link href={profileHref} className="btn-outline w-full !min-h-[38px] !rounded-full !px-3 !py-2 text-center !text-xs">
+        <Link href={profileHref} className="btn-outline w-full text-center">
           View Profile
         </Link>
         <button
           type="button"
           onClick={onCopyVoteLink}
-          className="btn-outline w-full !min-h-[38px] !rounded-full !px-3 !py-2 !text-xs"
+          className="btn-outline w-full"
         >
-          Copy Vote Link
+          Copy Link
         </button>
       </div>
     </article>

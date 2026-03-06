@@ -18,33 +18,33 @@ export default function PublicLeaderboardEntry({
   voteHref: string;
 }) {
   return (
-    <article className="focus-card">
+    <article className="detail-card p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-surface-200 bg-surface-100 text-xs font-semibold text-brand-900">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-surface-200 bg-surface-50 text-sm font-semibold text-brand-900">
             {rank}
           </div>
           {imageSrc ? (
             <img
               src={imageSrc}
               alt={name}
-              className="h-10 w-10 rounded-full border border-surface-200 object-cover"
+              className="h-12 w-12 rounded-2xl border border-surface-200 object-cover"
             />
           ) : (
-            <div className="h-10 w-10 rounded-full border border-surface-200 bg-surface-100" />
+            <div className="h-12 w-12 rounded-2xl border border-surface-200 bg-surface-100" />
           )}
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-brand-900">{name}</h3>
-            <p className="text-xs text-surface-500">{categoryLabel}</p>
+            <p className="mt-0.5 text-sm text-surface-500">{categoryLabel}</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-sm font-semibold text-brand-900">{votesLabel}</p>
-          <p className="text-xs text-surface-500">{breakdownLabel}</p>
+          <p className="text-base font-semibold text-brand-900">{votesLabel}</p>
+          <p className="mt-0.5 text-sm text-surface-500">{breakdownLabel}</p>
         </div>
       </div>
       <div className="mt-3 flex justify-end">
-        <Link href={voteHref} className="btn-accent !min-h-[38px] !rounded-full !py-2 !text-sm">
+        <Link href={voteHref} className="btn-primary">
           Vote
         </Link>
       </div>

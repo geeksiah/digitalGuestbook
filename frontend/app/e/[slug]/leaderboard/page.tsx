@@ -126,38 +126,52 @@ export default function LeaderboardPage() {
       activeTab="results"
       contestId={selectedContestId}
     >
-      <section className="dashboard-canvas p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-brand-900">Category Rankings</h2>
-            <div className="flex flex-wrap gap-2">
-              <select className="input max-w-[320px]" value={selectedContestId} onChange={(event) => setSelectedContestId(event.target.value)}>
+      <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="space-y-4">
+          <section className="detail-card space-y-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Leaderboard</p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">See who is leading</h2>
+              <p className="mt-1 text-sm leading-6 text-surface-500">Switch categories to compare rankings and send supporters straight to the right voting page.</p>
+            </div>
+            <select className="input" value={selectedContestId} onChange={(event) => setSelectedContestId(event.target.value)}>
                 {contests.map((contest) => (
                   <option key={contest.contestId} value={contest.contestId}>
                     {contest.title} ({contest.mode})
                   </option>
                 ))}
-              </select>
-            </div>
-          </div>
-          <input
-            className="input mb-4"
-            placeholder="Search nominee"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-          />
-
-          {!selectedContest ? (
-            <p className="text-surface-600">No leaderboard data yet.</p>
-          ) : (
-            <div className="space-y-3">
+            </select>
+            <input
+              className="input"
+              placeholder="Search nominee"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            {selectedContest ? (
               <div className="grid grid-cols-3 gap-2">
                 <VotingMetricCard label="Total Votes" value={selectedContest.totals.totalVotes.toLocaleString()} />
                 <VotingMetricCard label="Free" value={selectedContest.totals.freeVotes.toLocaleString()} />
                 <VotingMetricCard label="Paid" value={selectedContest.totals.paidVotes.toLocaleString()} />
               </div>
+            ) : null}
+          </section>
+        </aside>
 
+        <section className="detail-card">
+          {!selectedContest ? (
+            <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-10 text-center text-sm text-surface-500">
+              No leaderboard data yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-xl font-semibold tracking-tight text-brand-900">{selectedContest.title}</h3>
+                <p className="mt-1 text-sm text-surface-500">
+                  {selectedContest.mode === 'ELECTION' ? 'Election' : 'Awards'} leaderboard
+                </p>
+              </div>
               {visibleRankings.length === 0 ? (
-                <div className="rounded-xl border border-surface-200 bg-white p-3 text-sm text-surface-600">
+                <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-10 text-center text-sm text-surface-500">
                   No nominees match your filters.
                 </div>
               ) : null}
@@ -175,7 +189,8 @@ export default function LeaderboardPage() {
               ))}
             </div>
           )}
-      </section>
+        </section>
+      </div>
     </VotingPublicLayout>
   );
 }

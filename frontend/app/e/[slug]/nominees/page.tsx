@@ -135,68 +135,76 @@ export default function NomineesPage() {
       activeTab="nominees"
       contestId={selectedCategory}
     >
-      <section className="dashboard-canvas p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-semibold text-brand-900">Nominee Directory</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-          <input
-            className="input"
-            placeholder="Search nominees"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-          />
-          <select className="input" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
-            <option value="">All categories</option>
-            {categories.map((category) => (
-              <option key={category.contestId} value={category.contestId}>
-                {category.title} ({category.mode})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {!visibleCategories.length ? (
-          <p className="text-surface-600">No nominees match your filters.</p>
-        ) : (
-          <div className="space-y-5">
-            {visibleCategories.map((category) => (
-              <div key={category.contestId} className="rounded-3xl border border-surface-200 bg-white p-4">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div>
-                    <h3 className="font-semibold text-brand-900">{category.title}</h3>
-                    <p className="text-xs text-surface-600">
-                      {category.mode} - {category.totalVotes.toLocaleString()} total votes
-                    </p>
-                  </div>
-                  <Link
-                    href={`/e/${slug}/leaderboard?contestId=${encodeURIComponent(category.contestId)}`}
-                    className="text-xs font-semibold text-red-700 hover:text-red-800"
-                  >
-                    Leaderboard
-                  </Link>
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {category.nominees.map((nominee) => (
-                    <PublicNomineeCard
-                      key={nominee.optionId}
-                      imageSrc={nominee.imageUrl || nominee.imagePath || ''}
-                      name={nominee.name}
-                      description={nominee.description || 'Support this nominee with your vote.'}
-                      votesLabel={`${nominee.totalVotes.toLocaleString()} votes`}
-                      badgeLabel={category.mode}
-                      voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(category.contestId)}&optionId=${encodeURIComponent(nominee.optionId)}`}
-                      profileHref={`/e/${slug}/nominee/${encodeURIComponent(nominee.optionId)}?contestId=${encodeURIComponent(category.contestId)}`}
-                      onCopyVoteLink={() => copyVoteLink(category.contestId, nominee.optionId)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+      <div className="space-y-5">
+        <section className="subtle-toolbar">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee directory</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Browse all nominees</h2>
+            <p className="mt-1 text-sm text-surface-500">Search by name, filter by category, then vote directly or open a full profile.</p>
           </div>
-        )}
-      </section>
+        </section>
+
+        <section className="detail-card space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <input
+              className="input"
+              placeholder="Search nominees"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            <select className="input" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+              <option value="">All categories</option>
+              {categories.map((category) => (
+                <option key={category.contestId} value={category.contestId}>
+                  {category.title} ({category.mode})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {!visibleCategories.length ? (
+            <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-10 text-center text-sm text-surface-500">
+              No nominees match your filters.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {visibleCategories.map((category) => (
+                <div key={category.contestId} className="space-y-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h3 className="text-xl font-semibold tracking-tight text-brand-900">{category.title}</h3>
+                      <p className="mt-1 text-sm text-surface-500">
+                        {category.mode === 'ELECTION' ? 'Election' : 'Awards'} · {category.totalVotes.toLocaleString()} total votes
+                      </p>
+                    </div>
+                    <Link
+                      href={`/e/${slug}/leaderboard?contestId=${encodeURIComponent(category.contestId)}`}
+                      className="btn-outline w-full text-center sm:w-auto"
+                    >
+                      View leaderboard
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {category.nominees.map((nominee) => (
+                      <PublicNomineeCard
+                        key={nominee.optionId}
+                        imageSrc={nominee.imageUrl || nominee.imagePath || ''}
+                        name={nominee.name}
+                        description={nominee.description || 'Support this nominee with your vote.'}
+                        votesLabel={`${nominee.totalVotes.toLocaleString()} votes`}
+                        badgeLabel={category.mode}
+                        voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(category.contestId)}&optionId=${encodeURIComponent(nominee.optionId)}`}
+                        profileHref={`/e/${slug}/nominee/${encodeURIComponent(nominee.optionId)}?contestId=${encodeURIComponent(category.contestId)}`}
+                        onCopyVoteLink={() => copyVoteLink(category.contestId, nominee.optionId)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </VotingPublicLayout>
   );
 }

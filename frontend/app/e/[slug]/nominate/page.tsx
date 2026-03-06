@@ -288,11 +288,14 @@ export default function NominatePage() {
       contestId={contestId}
       showNominateCta={false}
     >
-      <section className="dashboard-canvas p-5 space-y-4">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_340px]">
+        <section className="detail-card space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-brand-900">Nominate Someone</h2>
-            <p className="text-sm text-surface-600 mt-1">Submit a nominee for review. Approved nominees appear automatically on the public list.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nomination form</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Nominate someone</h2>
+            <p className="mt-1 text-sm leading-6 text-surface-500">Submit a nominee for review. Approved nominees will appear automatically once the event team approves them.</p>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1 block">
               <span className="text-xs text-surface-600">Voting Category</span>
@@ -308,9 +311,9 @@ export default function NominatePage() {
               </select>
             </label>
           <label className="space-y-1 block">
-            <span className="text-xs text-surface-600">Nominee Name *</span>
-            <input className="input" value={nomineeName} onChange={(event) => setNomineeName(event.target.value)} />
-          </label>
+              <span className="text-xs text-surface-600">Nominee Name *</span>
+              <input className="input" value={nomineeName} onChange={(event) => setNomineeName(event.target.value)} />
+            </label>
           </div>
 
           {selectedContest?.categories?.length ? (
@@ -412,7 +415,7 @@ export default function NominatePage() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <button className="btn-accent flex-1" onClick={submitNomination} disabled={submitting}>
+            <button className="btn-primary flex-1" onClick={submitNomination} disabled={submitting}>
               {submitting ? 'Submitting...' : 'Submit Nomination'}
             </button>
             <Link
@@ -422,7 +425,25 @@ export default function NominatePage() {
               Go To Voting
             </Link>
           </div>
-      </section>
+        </section>
+
+        <aside className="space-y-4">
+          <section className="detail-card">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">What happens next</p>
+            <div className="mt-3 space-y-3 text-sm text-surface-500">
+              <p>1. The event team reviews your submission.</p>
+              <p>2. Approved nominees appear on the public nominee list.</p>
+              <p>3. Fans can then vote directly from the public voting page.</p>
+            </div>
+          </section>
+          <section className="detail-card">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Helpful note</p>
+            <p className="mt-3 text-sm leading-6 text-surface-500">
+              Add a clear description and photo where possible. Better nominee details make it easier for voters to identify the right person quickly.
+            </p>
+          </section>
+        </aside>
+      </div>
     </VotingPublicLayout>
   );
 }

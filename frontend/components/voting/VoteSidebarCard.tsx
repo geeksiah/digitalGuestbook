@@ -28,44 +28,58 @@ export default function VoteSidebarCard({
   onPaidVote,
 }: VoteSidebarCardProps) {
   return (
-    <section className="dashboard-canvas p-4 lg:sticky lg:top-20 lg:self-start">
-      <div className="space-y-3 rounded-2xl border border-surface-200 bg-white p-4">
+    <section className="detail-card lg:sticky lg:top-24 lg:self-start">
+      <div className="space-y-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-red-600">Category</p>
-          <p className="mt-1 text-lg font-semibold text-brand-900">{categoryTitle}</p>
-          <p className="mt-1 text-xs text-surface-600">{nomineeCountLabel}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">{categoryTitle}</h2>
+          <p className="mt-2 text-sm leading-6 text-surface-500">{nomineeCountLabel}</p>
         </div>
-        <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
-          <p className="text-xs text-surface-500">Selected nominee</p>
-          <p className="mt-0.5 text-sm font-semibold text-brand-900">{selectedNomineeName}</p>
-          <p className="mt-1 text-xs text-surface-600">{selectedNomineeVotesLabel}</p>
+
+        <div className="rounded-3xl border border-surface-200 bg-surface-50 px-4 py-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Selected nominee</p>
+          <p className="mt-2 text-lg font-semibold tracking-tight text-brand-900">{selectedNomineeName}</p>
+          <p className="mt-1 text-sm text-surface-500">{selectedNomineeVotesLabel}</p>
         </div>
-        {canFreeVote ? (
-          <button className="btn-outline w-full" onClick={onFreeVote} disabled={!canVote}>
-            Cast Free Vote
-          </button>
-        ) : null}
-        {canPaidVote ? (
-          <button className="btn-accent w-full" onClick={onPaidVote} disabled={!canVote}>
-            Pay & Vote
-          </button>
-        ) : null}
+
+        <div className="grid gap-2">
+          {canPaidVote ? (
+            <button className="btn-primary w-full" onClick={onPaidVote} disabled={!canVote}>
+              Continue To Payment
+            </button>
+          ) : null}
+          {canFreeVote ? (
+            <button className="btn-outline w-full" onClick={onFreeVote} disabled={!canVote}>
+              Submit Free Vote
+            </button>
+          ) : null}
+        </div>
+
         {showNoGatewayMessage ? (
-          <p className="text-xs text-surface-600">
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Paid voting is enabled but no payment gateway is available for this event.
           </p>
         ) : null}
         {showNoContestMessage ? (
-          <p className="text-xs text-surface-600">
+          <p className="rounded-2xl bg-surface-50 px-4 py-3 text-sm text-surface-600">
             This event has no published nominees yet. Check back soon.
           </p>
         ) : null}
         {directVoteNotice ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-xs font-semibold text-emerald-700">Direct Vote Link Opened</p>
-            <p className="mt-0.5 text-sm text-emerald-800">{directVoteNotice}</p>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Direct vote link</p>
+            <p className="mt-1 text-sm text-emerald-800">{directVoteNotice}</p>
           </div>
         ) : null}
+
+        <div className="rounded-2xl border border-surface-200 bg-white px-4 py-4">
+          <p className="text-sm font-semibold text-brand-900">How this works</p>
+          <ol className="mt-3 space-y-2 text-sm text-surface-500">
+            <li>1. Pick a nominee below.</li>
+            <li>2. Review the quantity or payment method if needed.</li>
+            <li>3. Confirm your vote.</li>
+          </ol>
+        </div>
       </div>
     </section>
   );

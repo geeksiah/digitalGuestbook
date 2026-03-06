@@ -428,123 +428,179 @@ export default function VotePage() {
       contestId={selectedContestId}
       showNominateCta={Boolean(config?.allowPublicNominations)}
     >
-      <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
-        <VoteSidebarCard
-          categoryTitle={selectedContest?.title || 'Choose a category'}
-          nomineeCountLabel={`${(selectedContest?.options.length || 0).toLocaleString()} nominees${
-            config?.allowPaidVotes ? ` | ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''
-          }`}
-          selectedNomineeName={selectedOption?.name || 'Pick a nominee below'}
-          selectedNomineeVotesLabel={
-            selectedOption
-              ? `${selectedOption.totalVotes.toLocaleString()} total votes`
-              : 'No nominee selected yet.'
-          }
-          canFreeVote={Boolean(config?.allowFreeVotes)}
-          canPaidVote={Boolean(config?.allowPaidVotes)}
-          canVote={!submitting && hasContests && (!config?.allowPaidVotes || canUsePaidVoting)}
-          showNoGatewayMessage={Boolean(config?.allowPaidVotes && !hasGateways)}
-          showNoContestMessage={!hasContests}
-          directVoteNotice={optionQuery && selectedOption ? `You are ready to vote for ${selectedOption.name}.` : undefined}
-          onFreeVote={() => {
-            void castFreeVote();
-          }}
-          onPaidVote={() => {
-            void createPaidIntent();
-          }}
-        />
+      <div className="space-y-5">
+        <section className="subtle-toolbar">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-brand-900">
+              {selectedContest?.title || 'Choose a category'}
+            </p>
+            <p className="mt-1 text-sm text-surface-500">
+              {(selectedContest?.options.length || 0).toLocaleString()} nominees
+              {config?.allowPaidVotes ? ` · ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
+            </p>
+          </div>
+          {config ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-surface-100 px-3 py-1.5 text-xs font-semibold text-surface-600">
+                {config.mode === 'ELECTION' ? 'Election' : 'Awards'}
+              </span>
+              {config.allowFreeVotes ? (
+                <span className="rounded-full bg-primary-50 px-3 py-1.5 text-xs font-semibold text-brand-900">Free votes</span>
+              ) : null}
+              {config.allowPaidVotes ? (
+                <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-900">Paid votes</span>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
 
-        <div className="space-y-4">
-          {config && electionMode ? (
-            <ElectionOtpPanel
-              otpPhone={otpPhone}
-              otpCode={otpCode}
-              otpVerified={otpVerified}
-              submitting={submitting}
-              onPhoneChange={setOtpPhone}
-              onCodeChange={setOtpCode}
-              onRequestOtp={() => {
-                void requestOtp();
+        {hasContests ? (
+          <div className="page-tabs overflow-x-auto scrollbar-hide">
+            {contests.map((contest) => (
+              <button
+                key={contest.id}
+                type="button"
+                className={`page-tabs-item ${selectedContestId === contest.id ? 'page-tabs-item-active' : ''}`}
+                onClick={() => {
+                  setSelectedContestId(contest.id);
+                  setSelectedOptionId(contest.options?.[0]?.id || '');
+                }}
+              >
+                {contest.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <VoteSidebarCard
+              categoryTitle={selectedContest?.title || 'Choose a category'}
+              nomineeCountLabel={`${(selectedContest?.options.length || 0).toLocaleString()} nominees${
+                config?.allowPaidVotes ? ` · ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''
+              }`}
+              selectedNomineeName={selectedOption?.name || 'Pick a nominee below'}
+              selectedNomineeVotesLabel={
+                selectedOption
+                  ? `${selectedOption.totalVotes.toLocaleString()} total votes`
+                  : 'No nominee selected yet.'
+              }
+              canFreeVote={Boolean(config?.allowFreeVotes)}
+              canPaidVote={Boolean(config?.allowPaidVotes)}
+              canVote={!submitting && hasContests && (!config?.allowPaidVotes || canUsePaidVoting)}
+              showNoGatewayMessage={Boolean(config?.allowPaidVotes && !hasGateways)}
+              showNoContestMessage={!hasContests}
+              directVoteNotice={optionQuery && selectedOption ? `You are ready to vote for ${selectedOption.name}.` : undefined}
+              onFreeVote={() => {
+                void castFreeVote();
               }}
-              onVerifyOtp={() => {
-                void verifyOtp();
+              onPaidVote={() => {
+                void createPaidIntent();
               }}
             />
-          ) : null}
 
-          <VoteSetupPanel
-            title="Quick Vote Setup"
-            helperText="Choose category, quantity, and payment method."
-            selectedContestId={selectedContestId}
-            voteCount={voteCount}
-            selectedGatewayId={selectedGatewayId}
-            hasContests={hasContests}
-            canUsePaidVoting={canUsePaidVoting}
-            maxVotesPerPurchase={config?.maxVotesPerPurchase || 100}
-            contests={contests.map((contest) => ({ id: contest.id, title: contest.title, mode: contest.mode }))}
-            paymentGateways={paymentGateways.map((gateway) => ({
-              id: gateway.id,
-              name: gateway.name,
-              currency: gateway.currency,
-            }))}
-            onContestChange={(nextContestId) => {
-              setSelectedContestId(nextContestId);
-              const contest = contests.find((item) => item.id === nextContestId);
-              const firstOption = contest?.options?.[0];
-              setSelectedOptionId(firstOption?.id || '');
-            }}
-            onVoteCountChange={(value) => setVoteCount(Math.max(1, value))}
-            onGatewayChange={setSelectedGatewayId}
-            onSubmit={() => {
-              void createPaidIntent();
-            }}
-            submitDisabled={submitting || !canUsePaidVoting || !hasContests}
-            paidVotingEnabled={Boolean(config?.allowPaidVotes)}
-          />
+            {config && electionMode ? (
+              <ElectionOtpPanel
+                otpPhone={otpPhone}
+                otpCode={otpCode}
+                otpVerified={otpVerified}
+                submitting={submitting}
+                onPhoneChange={setOtpPhone}
+                onCodeChange={setOtpCode}
+                onRequestOtp={() => {
+                  void requestOtp();
+                }}
+                onVerifyOtp={() => {
+                  void verifyOtp();
+                }}
+              />
+            ) : null}
 
-          <section className="dashboard-canvas p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-brand-900">Nominees</h2>
-              <p className="text-sm font-semibold text-brand-900">
-                {config ? formatMoney(config.currency, voteAmount) : ''}
-              </p>
+            {config?.allowPaidVotes ? (
+              <VoteSetupPanel
+                title="Buy extra votes"
+                helperText="Choose quantity and payment method, then continue to checkout."
+                selectedContestId={selectedContestId}
+                voteCount={voteCount}
+                selectedGatewayId={selectedGatewayId}
+                hasContests={hasContests}
+                canUsePaidVoting={canUsePaidVoting}
+                maxVotesPerPurchase={config?.maxVotesPerPurchase || 100}
+                contests={contests.map((contest) => ({ id: contest.id, title: contest.title, mode: contest.mode }))}
+                paymentGateways={paymentGateways.map((gateway) => ({
+                  id: gateway.id,
+                  name: gateway.name,
+                  currency: gateway.currency,
+                }))}
+                onContestChange={(nextContestId) => {
+                  setSelectedContestId(nextContestId);
+                  const contest = contests.find((item) => item.id === nextContestId);
+                  const firstOption = contest?.options?.[0];
+                  setSelectedOptionId(firstOption?.id || '');
+                }}
+                onVoteCountChange={(value) => setVoteCount(Math.max(1, value))}
+                onGatewayChange={setSelectedGatewayId}
+                onSubmit={() => {
+                  void createPaidIntent();
+                }}
+                submitDisabled={submitting || !canUsePaidVoting || !hasContests}
+                paidVotingEnabled={Boolean(config?.allowPaidVotes)}
+              />
+            ) : null}
+          </div>
+
+          <section className="detail-card space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominees</p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Choose who to support</h2>
+                <p className="mt-1 text-sm text-surface-500">Tap a nominee to vote immediately or open the full profile first.</p>
+              </div>
+              <div className="text-left md:text-right">
+                <p className="text-xs font-medium text-surface-500">Current vote amount</p>
+                <p className="mt-1 text-lg font-semibold text-brand-900">{config ? formatMoney(config.currency, voteAmount) : ''}</p>
+              </div>
             </div>
+
             <input
               className="input"
               placeholder="Search nominee by name or description"
               value={nomineeSearch}
               onChange={(event) => setNomineeSearch(event.target.value)}
             />
-            <div className="space-y-2">
-              {filteredRankedOptions.length === 0 ? (
-                <div className="rounded-xl border border-surface-200 bg-white p-3 text-sm text-surface-600">
-                  No nominees match your search.
-                </div>
-              ) : null}
-              {filteredRankedOptions.map((option) => {
-                const selected = selectedOptionId === option.id;
-                return (
-                  <PublicVoteOptionCard
-                    key={option.id}
-                    imageSrc={resolveNomineeImage(option)}
-                    name={option.name}
-                    description={option.description || 'Vote now to support this nominee.'}
-                    votesLabel={`${option.totalVotes.toLocaleString()} votes`}
-                    selected={selected}
-                    voteButtonLabel={
-                      config?.allowPaidVotes ? `Vote ${formatMoney(config.currency, config.voteUnitPrice)}` : 'Vote'
-                    }
-                    profileHref={`/e/${slug}/nominee/${encodeURIComponent(option.id)}?contestId=${encodeURIComponent(selectedContest?.id || '')}`}
-                    onVote={() => {
-                      void quickVoteForOption(option.id);
-                    }}
-                    onCopyVoteLink={() => {
-                      void copyDirectVoteLink(option.id);
-                    }}
-                  />
-                );
-              })}
-            </div>
+
+            {filteredRankedOptions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-10 text-center text-sm text-surface-500">
+                No nominees match your search.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {filteredRankedOptions.map((option) => {
+                  const selected = selectedOptionId === option.id;
+                  return (
+                    <PublicVoteOptionCard
+                      key={option.id}
+                      imageSrc={resolveNomineeImage(option)}
+                      name={option.name}
+                      description={option.description || 'Vote now to support this nominee.'}
+                      votesLabel={`${option.totalVotes.toLocaleString()} votes`}
+                      selected={selected}
+                      voteButtonLabel={
+                        config?.allowPaidVotes ? `Vote ${formatMoney(config.currency, config.voteUnitPrice)}` : 'Vote'
+                      }
+                      profileHref={`/e/${slug}/nominee/${encodeURIComponent(option.id)}?contestId=${encodeURIComponent(selectedContest?.id || '')}`}
+                      onVote={() => {
+                        setSelectedOptionId(option.id);
+                        void quickVoteForOption(option.id);
+                      }}
+                      onCopyVoteLink={() => {
+                        void copyDirectVoteLink(option.id);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </section>
         </div>
       </div>

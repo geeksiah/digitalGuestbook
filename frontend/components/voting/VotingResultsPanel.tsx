@@ -48,8 +48,11 @@ export default function VotingResultsPanel({
   containerClassName: string;
 }) {
   return (
-    <section className={`${containerClassName} p-4 space-y-4`}>
-      <h2 className="text-lg font-semibold text-brand-900">Voting Analytics</h2>
+    <section className={`${containerClassName} p-5 space-y-5`}>
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Results</p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Voting analytics</h2>
+      </div>
       {analytics ? (
         <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-8">
@@ -63,7 +66,7 @@ export default function VotingResultsPanel({
               label="Intent Conversion"
               value={`${analytics.totals.paidIntentConversionRate}%`}
             />
-            <div className="kpi-tile p-3">
+            <div className="kpi-tile p-3 rounded-2xl">
               <p className="text-xs text-surface-500">Nominations</p>
               <p className="text-lg font-bold text-brand-900">{analytics.totals.nominations?.total || 0}</p>
               <p className="text-[11px] text-surface-600">
@@ -73,7 +76,7 @@ export default function VotingResultsPanel({
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-surface-200 p-3">
+            <div className="rounded-3xl border border-surface-200 p-4">
               <p className="mb-2 text-sm font-semibold text-brand-900">Contest Breakdown</p>
               <div className="space-y-2">
                 {analytics.perContest.map((contest) => (
@@ -86,7 +89,7 @@ export default function VotingResultsPanel({
                 ))}
               </div>
             </div>
-            <div className="rounded-lg border border-surface-200 p-3">
+            <div className="rounded-3xl border border-surface-200 p-4">
               <p className="mb-2 text-sm font-semibold text-brand-900">Leaderboard</p>
               <div className="space-y-2">
                 {analytics.leaderboard.map((entry, index) => (
@@ -104,7 +107,7 @@ export default function VotingResultsPanel({
             </div>
           </div>
 
-          <div className="rounded-lg border border-surface-200 p-3">
+          <div className="rounded-3xl border border-surface-200 p-4">
             <p className="mb-2 text-sm font-semibold text-brand-900">Daily Vote Trend</p>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
               {analytics.timeSeries.byDay.slice(-18).map((day) => (

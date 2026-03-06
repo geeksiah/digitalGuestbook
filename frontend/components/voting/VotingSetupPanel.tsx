@@ -27,9 +27,12 @@ export default function VotingSetupPanel({
   onSave: () => void;
 }) {
   return (
-    <section className={`${containerClassName} p-4 space-y-4`}>
-      <h2 className="text-lg font-semibold text-brand-900">Voting Setup</h2>
-      <p className="text-sm text-surface-600">Control how guests can vote and nominate.</p>
+    <section className={`${containerClassName} p-5 space-y-5`}>
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Setup</p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Voting settings</h2>
+        <p className="mt-1 text-sm leading-6 text-surface-500">Control how guests can vote, nominate, and complete purchases.</p>
+      </div>
       {config ? (
         <>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -72,8 +75,8 @@ export default function VotingSetupPanel({
               />
             </label>
           </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.isEnabled}
@@ -81,7 +84,7 @@ export default function VotingSetupPanel({
               />
               Open Voting
             </label>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.allowFreeVotes}
@@ -89,7 +92,7 @@ export default function VotingSetupPanel({
               />
               Free Votes
             </label>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.allowPaidVotes}
@@ -97,7 +100,7 @@ export default function VotingSetupPanel({
               />
               Paid Votes
             </label>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.requireOtpForElection}
@@ -105,7 +108,7 @@ export default function VotingSetupPanel({
               />
               OTP Verification
             </label>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900 md:col-span-2">
+            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900 md:col-span-2">
               <input
                 type="checkbox"
                 checked={Boolean(config.allowPublicNominations)}

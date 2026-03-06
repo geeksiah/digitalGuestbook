@@ -146,27 +146,33 @@ export default function NomineeProfilePage() {
 
   return (
     <VotingPublicLayout slug={slug} eventName={eventName || slug} activeTab="nominees">
-      <section className="dashboard-canvas p-5">
-        <div className="grid gap-4 md:grid-cols-[120px_1fr]">
-          {selectedNominee.imageUrl || selectedNominee.imagePath ? (
-            <img
-              src={selectedNominee.imageUrl || selectedNominee.imagePath || ''}
-              alt={selectedNominee.name}
-              className="h-28 w-28 rounded-2xl border border-surface-200 object-cover"
-            />
-          ) : (
-            <div className="h-28 w-28 rounded-2xl border border-surface-200 bg-surface-100" />
-          )}
-          <div>
-            <h2 className="text-2xl font-bold text-brand-900">{selectedNominee.name}</h2>
-            <p className="text-sm text-surface-600 mt-2">
-              {selectedNominee.description || 'Support this nominee by voting in one or more categories below.'}
-            </p>
+      <div className="space-y-5">
+        <section className="detail-card">
+          <div className="grid gap-5 md:grid-cols-[160px_1fr]">
+            {selectedNominee.imageUrl || selectedNominee.imagePath ? (
+              <img
+                src={selectedNominee.imageUrl || selectedNominee.imagePath || ''}
+                alt={selectedNominee.name}
+                className="h-40 w-40 rounded-3xl border border-surface-200 object-cover"
+              />
+            ) : (
+              <div className="h-40 w-40 rounded-3xl border border-surface-200 bg-surface-100" />
+            )}
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee profile</p>
+              <h2 className="mt-1 text-3xl font-semibold tracking-tight text-brand-900">{selectedNominee.name}</h2>
+              <p className="mt-3 text-sm leading-6 text-surface-500">
+                {selectedNominee.description || 'Support this nominee by voting in one or more categories below.'}
+              </p>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="mt-5 space-y-3">
-          <h3 className="text-base font-semibold text-brand-900">Categories</h3>
+        <section className="detail-card space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Categories</p>
+            <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Vote in any available category</h3>
+          </div>
           {nomineeCategories.map((entry) => (
             <NomineeProfileCategoryCard
               key={`${entry.contestId}:${entry.optionId}`}
@@ -179,8 +185,8 @@ export default function NomineeProfilePage() {
               }}
             />
           ))}
-        </div>
-      </section>
+        </section>
+      </div>
     </VotingPublicLayout>
   );
 }

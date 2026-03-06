@@ -12,13 +12,16 @@ export default function PublicStateCard({
   actionLabel: string;
 }) {
   return (
-    <div className="min-h-screen bg-surface-50 p-6">
-      <div className="mx-auto max-w-xl space-y-3 card-premium p-6">
-        <h1 className="text-xl font-semibold text-brand-900">{title}</h1>
-        <p className="text-sm text-surface-600">{description}</p>
-        <Link className="btn-outline inline-flex" href={actionHref}>
+    <div className="min-h-screen bg-surface-50 px-4 py-8">
+      <div className="mx-auto max-w-2xl">
+        <div className="app-hero text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-700">Voting update</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-brand-900">{title}</h1>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-surface-500">{description}</p>
+          <Link className="btn-primary mt-6 inline-flex" href={actionHref}>
           {actionLabel}
-        </Link>
+          </Link>
+        </div>
       </div>
     </div>
   );

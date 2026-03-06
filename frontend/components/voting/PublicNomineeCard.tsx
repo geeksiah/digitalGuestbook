@@ -20,39 +20,40 @@ export default function PublicNomineeCard({
   onCopyVoteLink: () => void;
 }) {
   return (
-    <article className="focus-card">
-      <div className="flex items-center gap-3">
+    <article className="detail-card p-4">
+      <div className="flex items-start gap-4">
         {imageSrc ? (
           <img
             src={imageSrc}
             alt={name}
-            className="h-11 w-11 rounded-full border border-surface-200 object-cover"
+            className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
           />
         ) : (
-          <div className="h-11 w-11 rounded-full border border-surface-200 bg-surface-100" />
+          <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
         )}
         <div className="min-w-0 flex-1">
-          <h4 className="truncate font-semibold text-brand-900">{name}</h4>
-          <p className="mt-0.5 text-xs text-surface-500">{votesLabel}</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h4 className="text-base font-semibold tracking-tight text-brand-900">{name}</h4>
+            <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">{badgeLabel}</span>
+          </div>
+          <p className="mt-2 text-sm font-medium text-brand-900">{votesLabel}</p>
+          <p className="mt-2 text-sm leading-6 text-surface-500">{description}</p>
         </div>
-        <span className="rounded-full border border-surface-200 bg-surface-50 px-2 py-1 text-[11px] text-surface-700">
-          {badgeLabel}
-        </span>
       </div>
-      <p className="mt-2 min-h-[40px] text-sm text-surface-600">{description}</p>
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <Link href={voteHref} className="btn-accent w-full !min-h-[38px] !rounded-full !py-2 text-center !text-sm">
+
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <Link href={voteHref} className="btn-primary w-full text-center">
           Vote
         </Link>
-        <Link href={profileHref} className="btn-outline w-full !min-h-[38px] !rounded-full !py-2 text-center !text-sm">
+        <Link href={profileHref} className="btn-outline w-full text-center">
           View Profile
         </Link>
         <button
           type="button"
           onClick={onCopyVoteLink}
-          className="btn-outline w-full !min-h-[38px] !rounded-full !py-2 !text-sm"
+          className="btn-outline w-full"
         >
-          Copy Vote Link
+          Copy Link
         </button>
       </div>
     </article>
