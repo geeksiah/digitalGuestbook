@@ -2926,6 +2926,24 @@ export default function EventDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-surface-200 p-6">
+            <h4 className="text-base font-semibold text-brand-900">USSD Credits And Analytics</h4>
+            <p className="mt-1 text-sm text-surface-600">
+              Manage channels and wallet credits in USSD Controls. Open the voting workspace to review results and live performance in the Results tab.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Link href="/admin/ussd" className="btn-outline text-center">
+                Open USSD Controls
+              </Link>
+              <Link href={`/admin/events/${event.id}/voting`} className="btn-outline text-center">
+                Open Voting Analytics
+              </Link>
+              <Link href={`/e/${event.slug}/leaderboard`} target="_blank" className="btn-outline text-center">
+                Open Public Leaderboard
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-surface-200 p-6">
             <h4 className="text-base font-semibold text-brand-900">Share Voting Links</h4>
             <p className="text-sm text-surface-600 mt-1">
               Share direct links for voting, nominations, and live leaderboard.

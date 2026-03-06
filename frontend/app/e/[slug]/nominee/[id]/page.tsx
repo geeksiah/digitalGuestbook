@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import NomineeProfileCategoryCard from '@/components/voting/NomineeProfileCategoryCard';
+import PublicStateCard from '@/components/voting/PublicStateCard';
 import { votingApi } from '@/lib/api';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
@@ -133,13 +135,12 @@ export default function NomineeProfilePage() {
 
   if (!selectedNominee) {
     return (
-      <VotingPublicLayout slug={slug} eventName={eventName || slug} activeTab="nominees">
-        <section className="dashboard-canvas p-5">
-          <h2 className="text-lg font-semibold text-brand-900">Nominee Not Found</h2>
-          <p className="text-sm text-surface-600 mt-1">This nominee may have been removed or is no longer published.</p>
-          <Link href={`/e/${slug}/nominees`} className="btn-outline mt-4 inline-flex">Back to nominees</Link>
-        </section>
-      </VotingPublicLayout>
+      <PublicStateCard
+        title="Nominee Not Found"
+        description="This nominee may have been removed or is no longer published."
+        actionHref={`/e/${slug}/nominees`}
+        actionLabel="Back to nominees"
+      />
     );
   }
 
@@ -167,35 +168,19 @@ export default function NomineeProfilePage() {
         <div className="mt-5 space-y-3">
           <h3 className="text-base font-semibold text-brand-900">Categories</h3>
           {nomineeCategories.map((entry) => (
-            <article key={`${entry.contestId}:${entry.optionId}`} className="rounded-2xl border border-surface-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-brand-900">{entry.categoryTitle}</p>
-                  <p className="text-xs text-surface-600 mt-0.5">
-                    {entry.mode} - {entry.votes.toLocaleString()} votes
-                  </p>
-                </div>
-                <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-                  <Link
-                    href={`/e/${slug}/vote?contestId=${encodeURIComponent(entry.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
-                    className="btn-accent w-full !min-h-[38px] !py-2 !text-sm !rounded-full text-center"
-                  >
-                    Vote
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => copyVoteLink(entry.contestId, entry.optionId)}
-                    className="btn-outline w-full !min-h-[38px] !py-2 !text-sm !rounded-full"
-                  >
-                    Copy Vote Link
-                  </button>
-                </div>
-              </div>
-            </article>
+            <NomineeProfileCategoryCard
+              key={`${entry.contestId}:${entry.optionId}`}
+              title={entry.categoryTitle}
+              mode={entry.mode}
+              votesLabel={`${entry.votes.toLocaleString()} votes`}
+              voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(entry.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
+              onCopyVoteLink={() => {
+                void copyVoteLink(entry.contestId, entry.optionId);
+              }}
+            />
           ))}
         </div>
       </section>
     </VotingPublicLayout>
   );
 }
-

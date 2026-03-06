@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import PublicStateCard from '@/components/voting/PublicStateCard';
 import { votingApi } from '@/lib/api';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
@@ -259,29 +260,23 @@ export default function NominatePage() {
 
   if (!enabled) {
     return (
-      <div className="min-h-screen bg-surface-50 p-6">
-        <div className="mx-auto max-w-xl card-premium p-6 space-y-3">
-          <h1 className="text-xl font-semibold text-brand-900">Public Nominations Closed</h1>
-          <p className="text-sm text-surface-600">Nominations are currently disabled for this event.</p>
-          <Link className="btn-outline inline-flex" href={`/e/${slug}/vote`}>
-            Back To Voting
-          </Link>
-        </div>
-      </div>
+      <PublicStateCard
+        title="Public Nominations Closed"
+        description="Nominations are currently disabled for this event."
+        actionHref={`/e/${slug}/vote`}
+        actionLabel="Back To Voting"
+      />
     );
   }
 
   if (enabled && contests.length === 0) {
     return (
-      <div className="min-h-screen bg-surface-50 p-6">
-        <div className="mx-auto max-w-xl card-premium p-6 space-y-3">
-          <h1 className="text-xl font-semibold text-brand-900">Nominations Are Not Ready Yet</h1>
-          <p className="text-sm text-surface-600">Nominations are open, but categories are not available right now. Please try again shortly.</p>
-          <Link className="btn-outline inline-flex" href={`/e/${slug}/vote`}>
-            Back To Voting
-          </Link>
-        </div>
-      </div>
+      <PublicStateCard
+        title="Nominations Are Not Ready Yet"
+        description="Nominations are open, but categories are not available right now. Please try again shortly."
+        actionHref={`/e/${slug}/vote`}
+        actionLabel="Back To Voting"
+      />
     );
   }
 

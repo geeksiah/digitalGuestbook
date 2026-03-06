@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import PublicLeaderboardEntry from '@/components/voting/PublicLeaderboardEntry';
+import VotingMetricCard from '@/components/voting/VotingMetricCard';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type RankedNominee = {
@@ -150,18 +151,9 @@ export default function LeaderboardPage() {
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-2">
-                <div className="kpi-tile p-3">
-                  <p className="text-xs text-surface-500">Total Votes</p>
-                  <p className="text-lg font-bold text-brand-900">{selectedContest.totals.totalVotes.toLocaleString()}</p>
-                </div>
-                <div className="kpi-tile p-3">
-                  <p className="text-xs text-surface-500">Free</p>
-                  <p className="text-lg font-bold text-brand-900">{selectedContest.totals.freeVotes.toLocaleString()}</p>
-                </div>
-                <div className="kpi-tile p-3">
-                  <p className="text-xs text-surface-500">Paid</p>
-                  <p className="text-lg font-bold text-brand-900">{selectedContest.totals.paidVotes.toLocaleString()}</p>
-                </div>
+                <VotingMetricCard label="Total Votes" value={selectedContest.totals.totalVotes.toLocaleString()} />
+                <VotingMetricCard label="Free" value={selectedContest.totals.freeVotes.toLocaleString()} />
+                <VotingMetricCard label="Paid" value={selectedContest.totals.paidVotes.toLocaleString()} />
               </div>
 
               {visibleRankings.length === 0 ? (
@@ -170,40 +162,16 @@ export default function LeaderboardPage() {
                 </div>
               ) : null}
               {visibleRankings.map((entry) => (
-                <article key={entry.optionId} className="focus-card">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-8 w-8 rounded-full bg-surface-100 border border-surface-200 flex items-center justify-center text-xs font-semibold text-brand-900">
-                        {entry.rank}
-                      </div>
-                      {entry.imageUrl || entry.imagePath ? (
-                        <img
-                          src={entry.imageUrl || entry.imagePath || ''}
-                          alt={entry.name}
-                          className="h-10 w-10 rounded-full border border-surface-200 object-cover"
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded-full border border-surface-200 bg-surface-100" />
-                      )}
-                      <div className="min-w-0">
-                        <h3 className="text-base font-semibold text-brand-900 truncate">{entry.name}</h3>
-                        <p className="text-xs text-surface-500">Category: {selectedContest.title}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-brand-900">{entry.totalVotes.toLocaleString()} votes</p>
-                      <p className="text-xs text-surface-500">Free {entry.freeVotes} • Paid {entry.paidVotes}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex justify-end">
-                    <Link
-                      href={`/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
-                      className="btn-accent !min-h-[38px] !py-2 !text-sm !rounded-full"
-                    >
-                      Vote
-                    </Link>
-                  </div>
-                </article>
+                <PublicLeaderboardEntry
+                  key={entry.optionId}
+                  rank={entry.rank}
+                  imageSrc={entry.imageUrl || entry.imagePath || ''}
+                  name={entry.name}
+                  categoryLabel={`Category: ${selectedContest.title}`}
+                  votesLabel={`${entry.totalVotes.toLocaleString()} votes`}
+                  breakdownLabel={`Free ${entry.freeVotes} | Paid ${entry.paidVotes}`}
+                  voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
+                />
               ))}
             </div>
           )}

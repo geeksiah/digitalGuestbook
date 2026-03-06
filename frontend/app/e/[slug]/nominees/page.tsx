@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
+import PublicNomineeCard from '@/components/voting/PublicNomineeCard';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type Nominee = {
@@ -178,52 +179,17 @@ export default function NomineesPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {category.nominees.map((nominee) => (
-                    <article key={nominee.optionId} className="focus-card">
-                      <div className="flex items-center gap-3">
-                        {nominee.imageUrl || nominee.imagePath ? (
-                          <img
-                            src={nominee.imageUrl || nominee.imagePath || ''}
-                            alt={nominee.name}
-                            className="h-11 w-11 rounded-full border border-surface-200 object-cover"
-                          />
-                        ) : (
-                          <div className="h-11 w-11 rounded-full border border-surface-200 bg-surface-100" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-semibold text-brand-900 truncate">{nominee.name}</h4>
-                          <p className="text-xs text-surface-500 mt-0.5">
-                            {nominee.totalVotes.toLocaleString()} votes
-                          </p>
-                        </div>
-                        <span className="text-[11px] px-2 py-1 rounded-full border border-surface-200 bg-surface-50 text-surface-700">
-                          {category.mode}
-                        </span>
-                      </div>
-                      <p className="text-sm text-surface-600 mt-2 min-h-[40px]">
-                        {nominee.description || 'Support this nominee with your vote.'}
-                      </p>
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <Link
-                          href={`/e/${slug}/vote?contestId=${encodeURIComponent(category.contestId)}&optionId=${encodeURIComponent(nominee.optionId)}`}
-                          className="btn-accent w-full !min-h-[38px] !py-2 !text-sm !rounded-full text-center"
-                        >
-                          Vote
-                        </Link>
-                        <Link
-                          href={`/e/${slug}/nominee/${encodeURIComponent(nominee.optionId)}?contestId=${encodeURIComponent(category.contestId)}`}
-                          className="btn-outline w-full !min-h-[38px] !py-2 !text-sm !rounded-full text-center"
-                        >
-                          View Profile
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => copyVoteLink(category.contestId, nominee.optionId)}
-                          className="btn-outline w-full !min-h-[38px] !py-2 !text-sm !rounded-full"
-                        >
-                          Copy Vote Link
-                        </button>
-                      </div>
-                    </article>
+                    <PublicNomineeCard
+                      key={nominee.optionId}
+                      imageSrc={nominee.imageUrl || nominee.imagePath || ''}
+                      name={nominee.name}
+                      description={nominee.description || 'Support this nominee with your vote.'}
+                      votesLabel={`${nominee.totalVotes.toLocaleString()} votes`}
+                      badgeLabel={category.mode}
+                      voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(category.contestId)}&optionId=${encodeURIComponent(nominee.optionId)}`}
+                      profileHref={`/e/${slug}/nominee/${encodeURIComponent(nominee.optionId)}?contestId=${encodeURIComponent(category.contestId)}`}
+                      onCopyVoteLink={() => copyVoteLink(category.contestId, nominee.optionId)}
+                    />
                   ))}
                 </div>
               </div>

@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import VotingWorkspaceHeader from '@/components/voting/VotingWorkspaceHeader';
+import VotingWorkspaceTabs from '@/components/voting/VotingWorkspaceTabs';
+import VotingResultsPanel from '@/components/voting/VotingResultsPanel';
+import VotingSetupPanel from '@/components/voting/VotingSetupPanel';
 import { ownerDashboardApi } from '@/lib/api';
 
 type VoteMode = 'AWARDS' | 'ELECTION';
@@ -654,174 +658,31 @@ export default function AdminVotingPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link href={`/owner/events/${eventId}`} className="text-sm text-surface-600 hover:text-brand-900">
-            Back to event
-          </Link>
-          <h1 className="text-2xl font-bold text-brand-900 mt-1">Voting Workspace</h1>
-          <p className="text-sm text-surface-600">
-            {event?.name || 'Event'} {event?.slug ? `- /e/${event.slug}/vote` : ''}
-          </p>
-        </div>
-        {event?.slug ? (
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/e/${event.slug}/vote`} className="btn-outline" target="_blank">
-              Open Public Voting Page
-            </Link>
-            <Link href={`/e/${event.slug}/nominate`} className="btn-outline" target="_blank">
-              Open Public Nomination Page
-            </Link>
-            <Link href={`/e/${event.slug}/nominees`} className="btn-outline" target="_blank">
-              Open Public Nominees Page
-            </Link>
-            <Link href={`/e/${event.slug}/leaderboard`} className="btn-outline" target="_blank">
-              Open Public Leaderboard Page
-            </Link>
-          </div>
-        ) : null}
-      </div>
+      <VotingWorkspaceHeader
+        backHref={`/owner/events/${eventId}`}
+        eventName={event?.name || 'Event'}
+        eventSlug={event?.slug}
+        actions={[
+          { href: `/e/${event?.slug}/vote`, label: 'Open Public Voting Page', external: true },
+          { href: `/e/${event?.slug}/nominate`, label: 'Open Public Nomination Page', external: true },
+          { href: `/e/${event?.slug}/nominees`, label: 'Open Public Nominees Page', external: true },
+          { href: `/e/${event?.slug}/leaderboard`, label: 'Open Public Leaderboard Page', external: true },
+        ]}
+      />
 
-      <div className="segmented max-w-2xl">
-        <button type="button" className={`segmented-item ${activeTab === 'setup' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('setup')}>
-          Setup
-        </button>
-        <button type="button" className={`segmented-item ${activeTab === 'categories' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('categories')}>
-          Categories
-        </button>
-        <button type="button" className={`segmented-item ${activeTab === 'nominees' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('nominees')}>
-          Nominees
-        </button>
-        <button type="button" className={`segmented-item ${activeTab === 'nominations' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('nominations')}>
-          Nominations
-        </button>
-        <button type="button" className={`segmented-item ${activeTab === 'results' ? 'segmented-item-active' : ''}`} onClick={() => setActiveTab('results')}>
-          Results
-        </button>
-      </div>
+      <VotingWorkspaceTabs activeTab={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'setup' ? (
-      <section className="dashboard-canvas p-4 space-y-4">
-        <h2 className="text-lg font-semibold text-brand-900">Voting Setup</h2>
-        <p className="text-sm text-surface-600">Control how guests can vote and nominate.</p>
-        {config ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              <label className="space-y-1">
-                <span className="text-xs text-surface-600">Mode</span>
-                <select
-                  className="input"
-                  value={config.mode}
-                  onChange={(event) =>
-                    setConfig((current) => (current ? { ...current, mode: event.target.value as VoteMode } : current))
-                  }
-                >
-                  <option value="AWARDS">Awards</option>
-                  <option value="ELECTION">Election</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-surface-600">Event Currency</span>
-                <div className="input flex items-center font-semibold text-brand-900 bg-surface-50">
-                  {eventCurrency}
-                </div>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-surface-600">Unit Price</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={config.voteUnitPrice}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      current ? { ...current, voteUnitPrice: Number(event.target.value || 0) } : current
-                    )
-                  }
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-surface-600">Max Votes Per Purchase</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={config.maxVotesPerPurchase}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      current ? { ...current, maxVotesPerPurchase: Math.max(1, Number(event.target.value || 1)) } : current
-                    )
-                  }
-                />
-              </label>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
-                <input
-                  type="checkbox"
-                  checked={config.isEnabled}
-                  onChange={(event) =>
-                    setConfig((current) => (current ? { ...current, isEnabled: event.target.checked } : current))
-                  }
-                />
-                Open Voting
-              </label>
-              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
-                <input
-                  type="checkbox"
-                  checked={config.allowFreeVotes}
-                  onChange={(event) =>
-                    setConfig((current) => (current ? { ...current, allowFreeVotes: event.target.checked } : current))
-                  }
-                />
-                Free Votes
-              </label>
-              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
-                <input
-                  type="checkbox"
-                  checked={config.allowPaidVotes}
-                  onChange={(event) =>
-                    setConfig((current) => (current ? { ...current, allowPaidVotes: event.target.checked } : current))
-                  }
-                />
-                Paid Votes
-              </label>
-              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900">
-                <input
-                  type="checkbox"
-                  checked={config.requireOtpForElection}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      current ? { ...current, requireOtpForElection: event.target.checked } : current
-                    )
-                  }
-                />
-                OTP Verification
-              </label>
-              <label className="inline-flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-brand-900 md:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={Boolean(config.allowPublicNominations)}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      current ? { ...current, allowPublicNominations: event.target.checked } : current
-                    )
-                  }
-                />
-                Allow Public Nominations
-              </label>
-            </div>
-            <div className="flex justify-end">
-              <button className="btn-primary" onClick={saveConfig} disabled={savingConfig}>
-                {savingConfig ? 'Saving...' : 'Save Settings'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-surface-500">Voting setup is not available for this event yet.</p>
-        )}
-      </section>
+        <VotingSetupPanel
+          config={config}
+          eventCurrency={eventCurrency}
+          saving={savingConfig}
+          containerClassName="dashboard-canvas"
+          onChange={(nextConfig) =>
+            setConfig((current) => (current ? { ...current, ...nextConfig } : current))
+          }
+          onSave={saveConfig}
+        />
       ) : null}
 
       {activeTab === 'categories' || activeTab === 'nominees' ? (
@@ -1288,103 +1149,12 @@ export default function AdminVotingPage() {
       ) : null}
 
       {activeTab === 'results' ? (
-      <section className="dashboard-canvas p-4 space-y-4">
-        <h2 className="text-lg font-semibold text-brand-900">Voting Analytics</h2>
-        {analytics ? (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Total Votes</p>
-                <p className="text-lg font-semibold text-brand-900">{analytics.totals.totalVotes}</p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Unique Voters</p>
-                <p className="text-lg font-semibold text-brand-900">{analytics.totals.uniqueVoters}</p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Free Votes</p>
-                <p className="text-lg font-semibold text-brand-900">{analytics.totals.freeVotes}</p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Paid Votes</p>
-                <p className="text-lg font-semibold text-brand-900">{analytics.totals.paidVotes}</p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Revenue</p>
-                <p className="text-lg font-semibold text-brand-900">
-                  {formatMoney(eventCurrency, analytics.totals.paidRevenue)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Voter Conversion</p>
-                <p className="text-lg font-semibold text-brand-900">{analytics.totals.conversionRate}%</p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Intent Conversion</p>
-                <p className="text-lg font-semibold text-brand-900">{analytics.totals.paidIntentConversionRate}%</p>
-              </div>
-              <div className="rounded-lg bg-surface-50 p-3">
-                <p className="text-xs text-surface-500">Nominations</p>
-                <p className="text-lg font-semibold text-brand-900">
-                  {analytics.totals.nominations?.total || 0}
-                </p>
-                <p className="text-[11px] text-surface-600">
-                  Pending {analytics.totals.nominations?.pending || 0}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-surface-200 p-3">
-                <p className="text-sm font-semibold text-brand-900 mb-2">Contest Breakdown</p>
-                <div className="space-y-2">
-                  {analytics.perContest.map((contest) => (
-                    <div key={contest.contestId} className="flex items-center justify-between text-sm">
-                      <span className="text-surface-700">{contest.title}</span>
-                      <span className="font-semibold text-brand-900">
-                        {contest.totalVotes} ({contest.paidVotes} paid)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-lg border border-surface-200 p-3">
-                <p className="text-sm font-semibold text-brand-900 mb-2">Leaderboard</p>
-                <div className="space-y-2">
-                  {analytics.leaderboard.map((entry, index) => (
-                    <div key={entry.optionId} className="flex items-center justify-between text-sm">
-                      <span className="text-surface-700">
-                        #{index + 1} {entry.name}
-                      </span>
-                      <span className="font-semibold text-brand-900">
-                        {entry.totalVotes} ({entry.growthDelta >= 0 ? '+' : ''}
-                        {entry.growthDelta})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-surface-200 p-3">
-              <p className="text-sm font-semibold text-brand-900 mb-2">Daily Vote Trend</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {analytics.timeSeries.byDay.slice(-18).map((day) => (
-                  <div key={day.day} className="rounded-md bg-surface-50 p-2 text-sm">
-                    <p className="text-surface-600">{day.day}</p>
-                    <p className="font-semibold text-brand-900">{day.votes} votes</p>
-                    <p className="text-xs text-surface-600">
-                      Free {day.freeVotes} - Paid {day.paidVotes}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-surface-500">Analytics unavailable.</p>
-        )}
-      </section>
+        <VotingResultsPanel
+          analytics={analytics}
+          eventCurrency={eventCurrency}
+          formatMoney={formatMoney}
+          containerClassName="dashboard-canvas"
+        />
       ) : null}
     </div>
   );

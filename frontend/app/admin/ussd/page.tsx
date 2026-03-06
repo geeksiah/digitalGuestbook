@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { eventsApi, ussdApi } from '@/lib/api';
@@ -213,6 +214,19 @@ export default function AdminUssdPage() {
         <p className="text-sm text-surface-600">
           Manage offline channels, connect channels to events, and handle credit wallets.
         </p>
+        {selectedEvent ? (
+          <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-3">
+            <Link href={`/admin/events/${selectedEvent.id}/voting`} className="btn-outline text-center">
+              Open Event Voting Workspace
+            </Link>
+            <Link href={`/admin/events/${selectedEvent.id}`} className="btn-outline text-center">
+              Open Event Dashboard
+            </Link>
+            <Link href={`/e/${selectedEvent.slug}/vote`} target="_blank" className="btn-outline text-center">
+              Open Public Vote Page
+            </Link>
+          </div>
+        ) : null}
       </section>
 
       <section className="dashboard-canvas p-4 sm:p-5 space-y-3">
