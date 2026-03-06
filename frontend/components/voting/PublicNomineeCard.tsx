@@ -20,16 +20,16 @@ export default function PublicNomineeCard({
   onCopyVoteLink: () => void;
 }) {
   return (
-    <article className="detail-card p-4">
-      <div className="flex items-start gap-4">
+    <article className="overflow-hidden rounded-[26px] border border-surface-200 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.06)]">
+      <div className="flex items-start gap-4 p-4">
         {imageSrc ? (
           <img
             src={imageSrc}
             alt={name}
-            className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
+            className="h-16 w-16 rounded-2xl border border-surface-200 object-cover sm:h-20 sm:w-20"
           />
         ) : (
-          <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
+          <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100 sm:h-20 sm:w-20" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -41,7 +41,7 @@ export default function PublicNomineeCard({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 border-t border-surface-100 bg-surface-50/70 p-4 sm:grid-cols-3">
         <Link href={voteHref} className="btn-primary w-full text-center">
           Vote
         </Link>

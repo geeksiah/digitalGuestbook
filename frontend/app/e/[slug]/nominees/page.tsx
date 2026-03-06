@@ -70,6 +70,11 @@ export default function NomineesPage() {
       .filter((category) => category.nominees.length > 0);
   }, [categories, selectedCategory, searchQuery]);
 
+  const totalNominees = useMemo(
+    () => categories.reduce((sum, category) => sum + category.nominees.length, 0),
+    [categories]
+  );
+
   const copyVoteLink = async (contestId: string, optionId: string) => {
     const url = `${window.location.origin}/e/${slug}/vote?contestId=${encodeURIComponent(contestId)}&optionId=${encodeURIComponent(optionId)}`;
     try {
@@ -88,24 +93,28 @@ export default function NomineesPage() {
         const response = await votingApi.nominees(slug);
         const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
         const rawCategories = Array.isArray(payload.categories) ? payload.categories : [];
-        const categoriesData: NomineeCategory[] = rawCategories.map((category: any) => ({
-          contestId: String(category?.contestId || category?.id || ''),
-          title: String(category?.title || category?.name || 'Untitled category'),
-          mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
-          totalVotes: Number(category?.totalVotes || 0),
-          nominees: (Array.isArray(category?.nominees) ? category.nominees : []).map((nominee: any) => ({
-            optionId: String(nominee?.optionId || nominee?.id || ''),
-            name: String(nominee?.name || 'Unnamed nominee'),
-            description: nominee?.description ? String(nominee.description) : null,
-            imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
-            imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
-            totalVotes: Number(nominee?.totalVotes || 0),
-            freeVotes: Number(nominee?.freeVotes || 0),
-            paidVotes: Number(nominee?.paidVotes || 0),
-            voteSharePercent: Number(nominee?.voteSharePercent || 0),
-            approvalStatus: nominee?.approvalStatus === 'APPROVED' ? 'APPROVED' : 'ADMIN_ADDED',
-          })).filter((nominee: Nominee) => Boolean(nominee.optionId)),
-        })).filter((category) => category.contestId);
+        const categoriesData: NomineeCategory[] = rawCategories
+          .map((category: any) => ({
+            contestId: String(category?.contestId || category?.id || ''),
+            title: String(category?.title || category?.name || 'Untitled category'),
+            mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+            totalVotes: Number(category?.totalVotes || 0),
+            nominees: (Array.isArray(category?.nominees) ? category.nominees : [])
+              .map((nominee: any) => ({
+                optionId: String(nominee?.optionId || nominee?.id || ''),
+                name: String(nominee?.name || 'Unnamed nominee'),
+                description: nominee?.description ? String(nominee.description) : null,
+                imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
+                imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
+                totalVotes: Number(nominee?.totalVotes || 0),
+                freeVotes: Number(nominee?.freeVotes || 0),
+                paidVotes: Number(nominee?.paidVotes || 0),
+                voteSharePercent: Number(nominee?.voteSharePercent || 0),
+                approvalStatus: nominee?.approvalStatus === 'APPROVED' ? 'APPROVED' : 'ADMIN_ADDED',
+              }))
+              .filter((nominee: Nominee) => Boolean(nominee.optionId)),
+          }))
+          .filter((category) => category.contestId);
 
         setEventName(String(payload?.event?.name || slug));
         setCategories(categoriesData);
@@ -129,23 +138,26 @@ export default function NomineesPage() {
   }
 
   return (
-    <VotingPublicLayout
-      slug={slug}
-      eventName={eventName}
-      activeTab="nominees"
-      contestId={selectedCategory}
-    >
+    <VotingPublicLayout slug={slug} eventName={eventName} activeTab="nominees" contestId={selectedCategory}>
       <div className="space-y-5">
         <section className="subtle-toolbar">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee directory</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Browse all nominees</h2>
-            <p className="mt-1 text-sm text-surface-500">Search by name, filter by category, then vote directly or open a full profile.</p>
+            <p className="mt-1 text-sm text-surface-500">Search by name, narrow the list by category, then vote directly or open a full profile.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-brand-900 ring-1 ring-surface-200">
+              {categories.length} categories
+            </span>
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-surface-600 ring-1 ring-surface-200">
+              {totalNominees} nominees
+            </span>
           </div>
         </section>
 
-        <section className="detail-card space-y-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <section className="detail-card space-y-5">
+          <div className="grid gap-3 rounded-[24px] border border-surface-200 bg-surface-50/80 p-4 md:grid-cols-[minmax(0,1fr)_280px]">
             <input
               className="input"
               placeholder="Search nominees"
@@ -162,19 +174,41 @@ export default function NomineesPage() {
             </select>
           </div>
 
+          {categories.length > 0 ? (
+            <div className="page-tabs overflow-x-auto scrollbar-hide">
+              <button
+                type="button"
+                className={`page-tabs-item ${selectedCategory === '' ? 'page-tabs-item-active' : ''}`}
+                onClick={() => setSelectedCategory('')}
+              >
+                All categories
+              </button>
+              {categories.map((category) => (
+                <button
+                  key={category.contestId}
+                  type="button"
+                  className={`page-tabs-item ${selectedCategory === category.contestId ? 'page-tabs-item-active' : ''}`}
+                  onClick={() => setSelectedCategory(category.contestId)}
+                >
+                  {category.title}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {!visibleCategories.length ? (
-            <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-4 py-10 text-center text-sm text-surface-500">
+            <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-4 py-12 text-center text-sm text-surface-500">
               No nominees match your filters.
             </div>
           ) : (
             <div className="space-y-6">
               {visibleCategories.map((category) => (
                 <div key={category.contestId} className="space-y-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex flex-col gap-3 rounded-[24px] border border-surface-200 bg-white px-4 py-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <h3 className="text-xl font-semibold tracking-tight text-brand-900">{category.title}</h3>
                       <p className="mt-1 text-sm text-surface-500">
-                        {category.mode === 'ELECTION' ? 'Election' : 'Awards'} · {category.totalVotes.toLocaleString()} total votes
+                        {category.mode === 'ELECTION' ? 'Election' : 'Awards'} - {category.totalVotes.toLocaleString()} total votes
                       </p>
                     </div>
                     <Link

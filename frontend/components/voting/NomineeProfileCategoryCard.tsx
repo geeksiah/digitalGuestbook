@@ -14,12 +14,12 @@ export default function NomineeProfileCategoryCard({
   onCopyVoteLink: () => void;
 }) {
   return (
-    <article className="detail-card p-4">
+    <article className="rounded-[26px] border border-surface-200 bg-white p-4 shadow-[0_18px_44px_rgba(15,23,42,0.05)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-base font-semibold tracking-tight text-brand-900">{title}</p>
           <p className="mt-1 text-sm text-surface-500">
-            {mode} · {votesLabel}
+            {mode} - {votesLabel}
           </p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
@@ -38,3 +38,4 @@ export default function NomineeProfileCategoryCard({
     </article>
   );
 }
+

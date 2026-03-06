@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import NomineeProfileCategoryCard from '@/components/voting/NomineeProfileCategoryCard';
@@ -51,19 +50,23 @@ export default function NomineeProfilePage() {
         const response = await votingApi.nominees(slug);
         const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
         const rawCategories = Array.isArray(payload.categories) ? payload.categories : [];
-        const normalizedCategories: NomineeCategory[] = rawCategories.map((category: any) => ({
-          contestId: String(category?.contestId || category?.id || ''),
-          title: String(category?.title || category?.name || 'Untitled category'),
-          mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
-          nominees: (Array.isArray(category?.nominees) ? category.nominees : []).map((nominee: any) => ({
-            optionId: String(nominee?.optionId || nominee?.id || ''),
-            name: String(nominee?.name || 'Unnamed nominee'),
-            description: nominee?.description ? String(nominee.description) : null,
-            imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
-            imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
-            totalVotes: Number(nominee?.totalVotes || 0),
-          })).filter((nominee: Nominee) => Boolean(nominee.optionId)),
-        })).filter((category) => category.contestId);
+        const normalizedCategories: NomineeCategory[] = rawCategories
+          .map((category: any) => ({
+            contestId: String(category?.contestId || category?.id || ''),
+            title: String(category?.title || category?.name || 'Untitled category'),
+            mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+            nominees: (Array.isArray(category?.nominees) ? category.nominees : [])
+              .map((nominee: any) => ({
+                optionId: String(nominee?.optionId || nominee?.id || ''),
+                name: String(nominee?.name || 'Unnamed nominee'),
+                description: nominee?.description ? String(nominee.description) : null,
+                imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
+                imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
+                totalVotes: Number(nominee?.totalVotes || 0),
+              }))
+              .filter((nominee: Nominee) => Boolean(nominee.optionId)),
+          }))
+          .filter((category) => category.contestId);
 
         setEventName(String(payload?.event?.name || slug));
         setCategories(normalizedCategories);
@@ -148,43 +151,55 @@ export default function NomineeProfilePage() {
     <VotingPublicLayout slug={slug} eventName={eventName || slug} activeTab="nominees">
       <div className="space-y-5">
         <section className="detail-card">
-          <div className="grid gap-5 md:grid-cols-[160px_1fr]">
+          <div className="grid gap-5 md:grid-cols-[180px_1fr]">
             {selectedNominee.imageUrl || selectedNominee.imagePath ? (
               <img
                 src={selectedNominee.imageUrl || selectedNominee.imagePath || ''}
                 alt={selectedNominee.name}
-                className="h-40 w-40 rounded-3xl border border-surface-200 object-cover"
+                className="h-44 w-44 rounded-[28px] border border-surface-200 object-cover"
               />
             ) : (
-              <div className="h-40 w-40 rounded-3xl border border-surface-200 bg-surface-100" />
+              <div className="h-44 w-44 rounded-[28px] border border-surface-200 bg-surface-100" />
             )}
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee profile</p>
-              <h2 className="mt-1 text-3xl font-semibold tracking-tight text-brand-900">{selectedNominee.name}</h2>
-              <p className="mt-3 text-sm leading-6 text-surface-500">
-                {selectedNominee.description || 'Support this nominee by voting in one or more categories below.'}
-              </p>
+            <div className="flex min-w-0 flex-col justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee profile</p>
+                <h2 className="mt-1 text-3xl font-semibold tracking-tight text-brand-900">{selectedNominee.name}</h2>
+                <p className="mt-3 text-sm leading-6 text-surface-500">
+                  {selectedNominee.description || 'Support this nominee by voting in one or more categories below.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-surface-50 px-3 py-1.5 text-xs font-semibold text-brand-900 ring-1 ring-surface-200">
+                  {nomineeCategories.length} categories
+                </span>
+                <span className="rounded-full bg-surface-50 px-3 py-1.5 text-xs font-semibold text-surface-600 ring-1 ring-surface-200">
+                  {selectedNominee.totalVotes.toLocaleString()} votes
+                </span>
+              </div>
             </div>
           </div>
         </section>
 
         <section className="detail-card space-y-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Categories</p>
-            <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Vote in any available category</h3>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Available categories</p>
+            <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Vote in any active category</h3>
           </div>
-          {nomineeCategories.map((entry) => (
-            <NomineeProfileCategoryCard
-              key={`${entry.contestId}:${entry.optionId}`}
-              title={entry.categoryTitle}
-              mode={entry.mode}
-              votesLabel={`${entry.votes.toLocaleString()} votes`}
-              voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(entry.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
-              onCopyVoteLink={() => {
-                void copyVoteLink(entry.contestId, entry.optionId);
-              }}
-            />
-          ))}
+          <div className="grid gap-3">
+            {nomineeCategories.map((entry) => (
+              <NomineeProfileCategoryCard
+                key={`${entry.contestId}:${entry.optionId}`}
+                title={entry.categoryTitle}
+                mode={entry.mode}
+                votesLabel={`${entry.votes.toLocaleString()} votes`}
+                voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(entry.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
+                onCopyVoteLink={() => {
+                  void copyVoteLink(entry.contestId, entry.optionId);
+                }}
+              />
+            ))}
+          </div>
         </section>
       </div>
     </VotingPublicLayout>

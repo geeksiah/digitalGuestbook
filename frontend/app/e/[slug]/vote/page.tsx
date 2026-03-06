@@ -13,6 +13,7 @@ import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type VotingConfig = {
   mode: 'AWARDS' | 'ELECTION';
+  isEnabled?: boolean;
   allowFreeVotes: boolean;
   allowPaidVotes: boolean;
   allowPublicNominations?: boolean;
@@ -38,6 +39,7 @@ type VotingContest = {
   title: string;
   description: string | null;
   mode: 'AWARDS' | 'ELECTION';
+  isActive?: boolean;
   allowPublicNominations?: boolean;
   options: VotingOption[];
 };
@@ -47,6 +49,7 @@ type PaymentGateway = {
   name: string;
   gateway: string;
   currency: string;
+  isActive?: boolean;
 };
 
 type VotingEventPayload = {
@@ -73,6 +76,30 @@ const formatMoney = (currency: string, amount: number) => {
 };
 
 const SESSION_STORAGE_KEY_PREFIX = 'vote_session_token:';
+
+const normalizePaymentGateways = (payload: any): PaymentGateway[] => {
+  const directList = Array.isArray(payload?.paymentGateways) ? payload.paymentGateways : [];
+  const alternateList = Array.isArray(payload?.gateways) ? payload.gateways : [];
+  const nestedList = Array.isArray(payload?.eventGateways) ? payload.eventGateways : [];
+  const singular = payload?.gateway ? [payload.gateway] : [];
+
+  const merged = [
+    ...directList,
+    ...alternateList,
+    ...singular,
+    ...nestedList.map((entry: any) => entry?.paymentGateway || entry),
+  ].filter(Boolean);
+
+  return merged
+    .map((gateway: any) => ({
+      id: String(gateway?.id || gateway?.paymentGatewayId || ''),
+      name: String(gateway?.name || gateway?.paymentGateway?.name || 'Payment method'),
+      gateway: String(gateway?.gateway || gateway?.paymentGateway?.gateway || ''),
+      currency: String(gateway?.currency || gateway?.paymentGateway?.currency || 'USD'),
+      isActive: gateway?.isActive !== false,
+    }))
+    .filter((gateway: PaymentGateway) => Boolean(gateway.id) && gateway.isActive !== false);
+};
 
 export default function VotePage() {
   const params = useParams();
@@ -139,6 +166,9 @@ export default function VotePage() {
   const hasContests = contests.length > 0;
   const hasGateways = paymentGateways.length > 0;
   const canUsePaidVoting = Boolean(config?.allowPaidVotes && hasGateways);
+  const nominationsAvailable = Boolean(
+    config?.allowPublicNominations && contests.some((contest) => contest.allowPublicNominations)
+  );
 
   const resolveNomineeImage = (option: VotingOption) => option.imageUrl || option.imagePath || '';
 
@@ -156,6 +186,7 @@ export default function VotePage() {
         title: String(contest?.title || contest?.name || 'Untitled contest'),
         description: contest?.description ? String(contest.description) : null,
         mode: (contest?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+        isActive: contest?.isActive !== false,
         allowPublicNominations: Boolean(contest?.allowPublicNominations),
         options: (Array.isArray(contest?.options) ? contest.options : []).map((option: any) => ({
           id: String(option?.id || option?.optionId || ''),
@@ -172,6 +203,7 @@ export default function VotePage() {
       const normalizedConfig: VotingConfig | null = payload.config
         ? {
             mode: payload.config.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS',
+            isEnabled: payload.config.isEnabled !== false,
             allowFreeVotes: Boolean(payload.config.allowFreeVotes),
             allowPaidVotes: Boolean(payload.config.allowPaidVotes),
             allowPublicNominations: Boolean(payload.config.allowPublicNominations),
@@ -182,7 +214,7 @@ export default function VotePage() {
           }
         : null;
 
-      const gateways = (Array.isArray(payload.paymentGateways) ? payload.paymentGateways : []) as PaymentGateway[];
+      const gateways = normalizePaymentGateways(payload);
 
       setEventName(String(payload?.event?.name || slug));
       setConfig(normalizedConfig);
@@ -430,7 +462,7 @@ export default function VotePage() {
       eventName={eventName}
       activeTab="vote"
       contestId={selectedContestId}
-      showNominateCta={Boolean(config?.allowPublicNominations)}
+      showNominateCta={nominationsAvailable}
     >
       <div className="space-y-5">
         <section className="subtle-toolbar">
