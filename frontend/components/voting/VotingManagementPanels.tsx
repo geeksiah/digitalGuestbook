@@ -1,4 +1,7 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { useMemo, useState, type ReactNode } from 'react';
+import { formatDate, resolvePublicAssetUrl } from '@/lib/utils';
 
 type VoteMode = 'AWARDS' | 'ELECTION';
 
@@ -47,7 +50,13 @@ type VotingNomination = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   nomineeName: string;
   nomineeDescription?: string | null;
+  nomineeImagePath?: string | null;
+  nomineeImageUrl?: string | null;
   submitterName: string;
+  submitterEmail?: string | null;
+  submitterPhone?: string | null;
+  createdAt?: string;
+  reviewNotes?: string | null;
   approvedOption?: { id: string; name: string } | null;
   contest?: { id: string; title: string; mode: VoteMode } | null;
 };
@@ -589,12 +598,16 @@ export function VotingNomineePanel({
               <article key={option.id} className="rounded-3xl border border-surface-200 bg-white p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
-                    {(editingOptionId === option.id ? editingOptionImagePreview || editingOptionImagePath : option.imageUrl || option.imagePath) ? (
+                    {resolvePublicAssetUrl(
+                      editingOptionId === option.id ? editingOptionImagePreview || editingOptionImagePath : option.imageUrl || option.imagePath
+                    ) ? (
                       <img
                         src={
-                          editingOptionId === option.id
-                            ? editingOptionImagePreview || editingOptionImagePath || ''
-                            : option.imageUrl || option.imagePath || ''
+                          resolvePublicAssetUrl(
+                            editingOptionId === option.id
+                              ? editingOptionImagePreview || editingOptionImagePath
+                              : option.imageUrl || option.imagePath
+                          ) || ''
                         }
                         alt={option.name}
                         className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
@@ -714,6 +727,13 @@ export function VotingNominationsPanel({
   };
   onReviewNomination: (nominationId: string, status: 'APPROVED' | 'REJECTED') => void;
 }) {
+  const [selectedNominationId, setSelectedNominationId] = useState('');
+  const selectedNomination = useMemo(
+    () => nominations.find((nomination) => nomination.id === selectedNominationId) || null,
+    [nominations, selectedNominationId]
+  );
+  const selectedNominationView = selectedNomination ? nominationPresentation(selectedNomination) : null;
+
   return (
     <SectionCard
       eyebrow="Nominations"
@@ -735,86 +755,170 @@ export function VotingNominationsPanel({
       ) : (
         <div className="grid gap-3">
           {nominations.map((nomination) => {
-            const view = nominationPresentation(nomination);
             return (
-              <article key={nomination.id} className="rounded-3xl border border-surface-200 bg-white p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    {view.nomineeImageUrl ? (
-                      <img
-                        src={view.nomineeImageUrl}
-                        alt={nomination.nomineeName}
-                        className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
-                      />
-                    ) : (
-                      <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold tracking-tight text-brand-900">{nomination.nomineeName}</h3>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            nomination.status === 'PENDING'
-                              ? 'bg-amber-50 text-amber-700'
-                              : nomination.status === 'APPROVED'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-rose-50 text-rose-700'
-                          }`}
-                        >
-                          {nomination.status === 'PENDING'
-                            ? 'Awaiting review'
+              <article key={nomination.id} className="rounded-3xl border border-surface-200 bg-white p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-base font-semibold tracking-tight text-brand-900">{nomination.nomineeName}</h3>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          nomination.status === 'PENDING'
+                            ? 'bg-amber-50 text-amber-700'
                             : nomination.status === 'APPROVED'
-                            ? 'Approved'
-                            : 'Declined'}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-surface-500">
-                        {nomination.contest?.title || nomination.contestId} - Submitted by {nomination.submitterName}
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-rose-50 text-rose-700'
+                        }`}
+                      >
+                        {nomination.status === 'PENDING'
+                          ? 'Awaiting review'
+                          : nomination.status === 'APPROVED'
+                          ? 'Approved'
+                          : 'Declined'}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-surface-500">
+                      <span>{nomination.contest?.title || nomination.contestId}</span>
+                      <span>Submitted by {nomination.submitterName}</span>
+                      {nomination.createdAt ? <span>{formatDate(nomination.createdAt, 'MMM d, yyyy p')}</span> : null}
+                    </div>
+                    {(nomination.submitterEmail || nomination.submitterPhone) ? (
+                      <p className="mt-2 text-sm text-surface-500">
+                        {nomination.submitterEmail || 'No email'}
+                        {nomination.submitterPhone ? ` · ${nomination.submitterPhone}` : ''}
                       </p>
-                      {nomination.nomineeDescription ? (
-                        <p className="mt-2 text-sm text-surface-600">{nomination.nomineeDescription}</p>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
-                  {nomination.status === 'PENDING' ? (
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <button
-                        className="btn-outline border-emerald-200 text-xs text-emerald-700"
-                        onClick={() => onReviewNomination(nomination.id, 'APPROVED')}
-                        disabled={reviewingNominationId === nomination.id}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="btn-outline border-rose-200 text-xs text-rose-700"
-                        onClick={() => onReviewNomination(nomination.id, 'REJECTED')}
-                        disabled={reviewingNominationId === nomination.id}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : nomination.approvedOption ? (
-                    <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                      Published as {nomination.approvedOption.name}
-                    </div>
-                  ) : null}
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <button className="btn-outline text-xs" onClick={() => setSelectedNominationId(nomination.id)}>
+                      View details
+                    </button>
+                    {nomination.status === 'PENDING' ? (
+                      <>
+                        <button
+                          className="btn-outline border-emerald-200 text-xs text-emerald-700"
+                          onClick={() => onReviewNomination(nomination.id, 'APPROVED')}
+                          disabled={reviewingNominationId === nomination.id}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="btn-outline border-rose-200 text-xs text-rose-700"
+                          onClick={() => onReviewNomination(nomination.id, 'REJECTED')}
+                          disabled={reviewingNominationId === nomination.id}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    ) : nomination.approvedOption ? (
+                      <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                        Published as {nomination.approvedOption.name}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedNomination && selectedNominationView ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-950/45 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-surface-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nomination details</p>
+                <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">{selectedNomination.nomineeName}</h3>
+                <p className="mt-1 text-sm text-surface-500">
+                  {selectedNomination.contest?.title || selectedNomination.contestId}
+                </p>
+              </div>
+              <button className="btn-ghost px-3" onClick={() => setSelectedNominationId('')}>
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[160px_minmax(0,1fr)]">
+              {resolvePublicAssetUrl(selectedNominationView.nomineeImageUrl || selectedNomination.nomineeImageUrl || selectedNomination.nomineeImagePath) ? (
+                <img
+                  src={
+                    resolvePublicAssetUrl(
+                      selectedNominationView.nomineeImageUrl ||
+                        selectedNomination.nomineeImageUrl ||
+                        selectedNomination.nomineeImagePath
+                    ) || ''
+                  }
+                  alt={selectedNomination.nomineeName}
+                  className="h-40 w-40 rounded-[24px] border border-surface-200 object-cover"
+                />
+              ) : (
+                <div className="h-40 w-40 rounded-[24px] border border-surface-200 bg-surface-100" />
+              )}
+
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Sender</p>
+                    <p className="mt-1 text-sm font-semibold text-brand-900">{selectedNomination.submitterName}</p>
+                  </div>
+                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Submitted</p>
+                    <p className="mt-1 text-sm font-semibold text-brand-900">
+                      {selectedNomination.createdAt ? formatDate(selectedNomination.createdAt, 'MMM d, yyyy p') : 'Unknown'}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Email</p>
+                    <p className="mt-1 text-sm text-brand-900">{selectedNomination.submitterEmail || 'Not provided'}</p>
+                  </div>
+                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Phone</p>
+                    <p className="mt-1 text-sm text-brand-900">{selectedNomination.submitterPhone || 'Not provided'}</p>
+                  </div>
                 </div>
 
-                {view.customFieldRows.length ? (
-                  <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    {view.customFieldRows.map((row) => (
-                      <div key={`${nomination.id}:${row.key}`} className="rounded-2xl bg-surface-50 px-3 py-3">
+                {selectedNomination.nomineeDescription ? (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Nominee profile</p>
+                    <p className="mt-2 text-sm leading-6 text-surface-600">{selectedNomination.nomineeDescription}</p>
+                  </div>
+                ) : null}
+
+                {selectedNominationView.customFieldRows.length ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {selectedNominationView.customFieldRows.map((row) => (
+                      <div key={`${selectedNomination.id}:${row.key}`} className="rounded-2xl bg-surface-50 px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">{row.label}</p>
                         <p className="mt-1 text-sm text-brand-900">{row.value}</p>
                       </div>
                     ))}
                   </div>
                 ) : null}
-              </article>
-            );
-          })}
+
+                {selectedNomination.status === 'PENDING' ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="btn-outline border-emerald-200 text-emerald-700"
+                      onClick={() => onReviewNomination(selectedNomination.id, 'APPROVED')}
+                      disabled={reviewingNominationId === selectedNomination.id}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="btn-outline border-rose-200 text-rose-700"
+                      onClick={() => onReviewNomination(selectedNomination.id, 'REJECTED')}
+                      disabled={reviewingNominationId === selectedNomination.id}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+      ) : null}
     </SectionCard>
   );
 }

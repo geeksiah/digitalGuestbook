@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { resolvePublicAssetUrl } from '@/lib/utils';
 
 export default function PublicNomineeCard({
   imageSrc,
@@ -21,12 +22,13 @@ export default function PublicNomineeCard({
   profileHref: string;
   onCopyVoteLink: () => void;
 }) {
+  const resolvedImageSrc = resolvePublicAssetUrl(imageSrc);
   return (
     <article className="overflow-hidden rounded-[26px] border border-surface-200 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.06)]">
       <div className="flex items-start gap-4 p-4">
-        {imageSrc ? (
+        {resolvedImageSrc ? (
           <img
-            src={imageSrc}
+            src={resolvedImageSrc}
             alt={name}
             className="h-16 w-16 rounded-2xl border border-surface-200 object-cover sm:h-20 sm:w-20"
           />

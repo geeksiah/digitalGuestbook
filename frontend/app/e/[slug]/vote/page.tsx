@@ -8,6 +8,7 @@ import ElectionOtpPanel from '@/components/voting/ElectionOtpPanel';
 import PublicStateCard from '@/components/voting/PublicStateCard';
 import { votingApi } from '@/lib/api';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
+import { resolvePublicAssetUrl } from '@/lib/utils';
 
 type VotingConfig = {
   mode: 'AWARDS' | 'ELECTION';
@@ -610,10 +611,10 @@ export default function VotePage() {
         </div>
 
         <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 md:grid-cols-[132px_minmax(0,1fr)] md:gap-5">
-          {selectedOption?.imageUrl || selectedOption?.imagePath ? (
+          {resolvePublicAssetUrl(selectedOption?.imageUrl || selectedOption?.imagePath) ? (
             <img
-              src={selectedOption.imageUrl || selectedOption.imagePath || ''}
-              alt={selectedOption.name}
+              src={resolvePublicAssetUrl(selectedOption?.imageUrl || selectedOption?.imagePath) || ''}
+              alt={selectedOption?.name || 'Nominee'}
               className="h-24 w-24 rounded-[24px] border border-surface-200 object-cover md:h-32 md:w-32 md:rounded-[28px]"
             />
           ) : (

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { resolvePublicAssetUrl } from '@/lib/utils';
 
 type PublicVoteOptionCardProps = {
   imageSrc?: string;
@@ -23,6 +24,7 @@ export default function PublicVoteOptionCard({
   onVote,
   onCopyVoteLink,
 }: PublicVoteOptionCardProps) {
+  const resolvedImageSrc = resolvePublicAssetUrl(imageSrc);
   return (
     <article
       className={`detail-card p-4 transition-all ${
@@ -30,8 +32,8 @@ export default function PublicVoteOptionCard({
       }`}
     >
       <div className="flex items-start gap-4">
-        {imageSrc ? (
-          <img src={imageSrc} alt={name} className="h-16 w-16 rounded-2xl border border-surface-200 object-cover" />
+        {resolvedImageSrc ? (
+          <img src={resolvedImageSrc} alt={name} className="h-16 w-16 rounded-2xl border border-surface-200 object-cover" />
         ) : (
           <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
         )}

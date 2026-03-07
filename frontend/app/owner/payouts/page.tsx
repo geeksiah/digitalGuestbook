@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ownerDashboardApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { formatDate, cn } from '@/lib/utils';
+import { formatDate, cn, formatAggregateCurrency, formatCurrencyAmount } from '@/lib/utils';
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
 
 interface Payout {
@@ -164,6 +164,17 @@ export default function OwnerPayoutsPage() {
 
   const selectedEventTotal = eventTotals.find(e => e.eventId === formData.eventId);
   const maxAmount = selectedEventTotal?.availableBalance || 0;
+  const payoutCurrencies = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          eventTotals
+            .map((entry) => String(entry.currency || walletSummary?.currency || '').toUpperCase())
+            .filter(Boolean)
+        )
+      ),
+    [eventTotals, walletSummary?.currency]
+  );
 
   if (loading) {
     return (
@@ -213,7 +224,7 @@ export default function OwnerPayoutsPage() {
                 </select>
                 {selectedEventTotal && (
                   <p className="text-xs text-surface-500 mt-1">
-                    Available: {new Intl.NumberFormat('en-US', { style: 'currency', currency: selectedEventTotal.currency || 'USD' }).format(selectedEventTotal.availableBalance)}
+                    Available: {formatCurrencyAmount(selectedEventTotal.availableBalance, selectedEventTotal.currency || 'USD')}
                   </p>
                 )}
               </div>
@@ -233,7 +244,7 @@ export default function OwnerPayoutsPage() {
                 />
                 {selectedEventTotal && (
                   <p className="text-xs text-surface-500 mt-1">
-                    Max: {new Intl.NumberFormat('en-US', { style: 'currency', currency: selectedEventTotal.currency || walletSummary?.currency || 'USD' }).format(maxAmount)}
+                    Max: {formatCurrencyAmount(maxAmount, selectedEventTotal.currency || walletSummary?.currency || 'USD')}
                   </p>
                 )}
               </div>
@@ -293,19 +304,19 @@ export default function OwnerPayoutsPage() {
             <div>
               <p className="text-xs text-white/70">Available</p>
               <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.availableBalance)}
+                {formatAggregateCurrency(overallTotals.availableBalance, payoutCurrencies)}
               </p>
             </div>
             <div>
               <p className="text-xs text-white/70">Fulfilled</p>
               <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.fulfilledAmount)}
+                {formatAggregateCurrency(overallTotals.fulfilledAmount, payoutCurrencies)}
               </p>
             </div>
             <div>
               <p className="text-xs text-white/70">Pending</p>
               <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotals.pendingAmount)}
+                {formatAggregateCurrency(overallTotals.pendingAmount, payoutCurrencies)}
               </p>
             </div>
             <div>
@@ -327,19 +338,19 @@ export default function OwnerPayoutsPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <p className="text-surface-500">Net</p>
-                    <p className="font-semibold text-brand-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.totalNet)}</p>
+                    <p className="font-semibold text-brand-900">{formatCurrencyAmount(evt.totalNet, evt.currency || 'USD')}</p>
                   </div>
                   <div>
                     <p className="text-surface-500">Available</p>
-                    <p className="font-semibold text-brand-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.availableBalance)}</p>
+                    <p className="font-semibold text-brand-900">{formatCurrencyAmount(evt.availableBalance, evt.currency || 'USD')}</p>
                   </div>
                   <div>
                     <p className="text-surface-500">Fulfilled</p>
-                    <p className="font-semibold text-emerald-600">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.fulfilledAmount)}</p>
+                    <p className="font-semibold text-emerald-600">{formatCurrencyAmount(evt.fulfilledAmount, evt.currency || 'USD')}</p>
                   </div>
                   <div>
                     <p className="text-surface-500">Pending</p>
-                    <p className="font-semibold text-yellow-600">{new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.pendingAmount)}</p>
+                    <p className="font-semibold text-yellow-600">{formatCurrencyAmount(evt.pendingAmount, evt.currency || 'USD')}</p>
                   </div>
                 </div>
               </div>
@@ -362,16 +373,16 @@ export default function OwnerPayoutsPage() {
                   <tr key={evt.eventId}>
                     <td className="py-3 px-4 font-medium text-brand-900 text-sm">{evt.eventName}</td>
                     <td className="py-3 px-4 text-right text-sm font-semibold">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.totalNet)}
+                      {formatCurrencyAmount(evt.totalNet, evt.currency || 'USD')}
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-emerald-600">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.fulfilledAmount)}
+                      {formatCurrencyAmount(evt.fulfilledAmount, evt.currency || 'USD')}
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-yellow-600">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.pendingAmount)}
+                      {formatCurrencyAmount(evt.pendingAmount, evt.currency || 'USD')}
                     </td>
                     <td className="py-3 px-4 text-right text-sm font-semibold text-brand-900">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: evt.currency || 'USD' }).format(evt.availableBalance)}
+                      {formatCurrencyAmount(evt.availableBalance, evt.currency || 'USD')}
                     </td>
                   </tr>
                 ))}
@@ -437,7 +448,7 @@ export default function OwnerPayoutsPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <p className="text-base font-bold text-brand-900">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: payout.currency }).format(payout.requestedAmount)}
+                      {formatCurrencyAmount(payout.requestedAmount, payout.currency)}
                     </p>
                     <span className="text-sm text-surface-500 capitalize">{payout.payoutMethod.replace('_', ' ')}</span>
                   </div>
@@ -468,7 +479,7 @@ export default function OwnerPayoutsPage() {
                     <tr key={payout.id} className="hover:bg-surface-50 transition-colors">
                       <td className="py-3 px-4 text-sm font-medium text-brand-900">{payout.event.name}</td>
                       <td className="py-3 px-4 text-sm font-semibold text-brand-900">
-                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: payout.currency }).format(payout.requestedAmount)}
+                        {formatCurrencyAmount(payout.requestedAmount, payout.currency)}
                       </td>
                       <td className="py-3 px-4 text-sm text-surface-600 capitalize">{payout.payoutMethod.replace('_', ' ')}</td>
                       <td className="py-3 px-4">

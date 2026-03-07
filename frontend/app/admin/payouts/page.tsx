@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { adminApi, eventsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { formatDate, cn } from '@/lib/utils';
+import { formatDate, cn, formatAggregateCurrency, formatCurrencyAmount } from '@/lib/utils';
 import Link from 'next/link';
 
 interface Payout {
@@ -69,6 +69,9 @@ export default function PayoutsPage() {
     notes: '',
   });
   const [rejectReason, setRejectReason] = useState('');
+  const payoutCurrencies = Array.from(
+    new Set(payouts.map((payout) => String(payout.currency || '').toUpperCase()).filter(Boolean))
+  );
 
   useEffect(() => {
     fetchEvents();
@@ -152,10 +155,7 @@ export default function PayoutsPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'NGN' ? '₦' : currency || '$';
-    return `${symbol}${amount.toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number, currency: string) => formatCurrencyAmount(amount, currency);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -242,35 +242,35 @@ export default function PayoutsPage() {
             <p className="text-sm text-surface-500 mb-1">Pending</p>
             <p className="text-2xl font-bold text-yellow-600">{analytics.totalPending}</p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(analytics.totalPendingAmount, 'USD')}
+              {formatAggregateCurrency(analytics.totalPendingAmount, payoutCurrencies)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
             <p className="text-sm text-surface-500 mb-1">Processing</p>
             <p className="text-2xl font-bold text-blue-600">{analytics.totalProcessing || 0}</p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(analytics.totalProcessingAmount || 0, 'USD')}
+              {formatAggregateCurrency(analytics.totalProcessingAmount || 0, payoutCurrencies)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
             <p className="text-sm text-surface-500 mb-1">Fulfilled</p>
             <p className="text-2xl font-bold text-emerald-600">{analytics.totalFulfilled || 0}</p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(analytics.totalFulfilledAmount || 0, 'USD')}
+              {formatAggregateCurrency(analytics.totalFulfilledAmount || 0, payoutCurrencies)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
             <p className="text-sm text-surface-500 mb-1">Delayed</p>
             <p className="text-2xl font-bold text-orange-600">{analytics.totalDelayed || 0}</p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(analytics.totalDelayedAmount || 0, 'USD')}
+              {formatAggregateCurrency(analytics.totalDelayedAmount || 0, payoutCurrencies)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
             <p className="text-sm text-surface-500 mb-1">Rejected</p>
             <p className="text-2xl font-bold text-rose-600">{analytics.totalRejected}</p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(analytics.totalRejectedAmount, 'USD')}
+              {formatAggregateCurrency(analytics.totalRejectedAmount, payoutCurrencies)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-surface-200 p-6">
@@ -279,9 +279,9 @@ export default function PayoutsPage() {
               {(analytics.byStatus.PENDING || 0) + (analytics.byStatus.PROCESSING || 0) + (analytics.byStatus.FULFILLED || 0) + (analytics.byStatus.DELAYED || 0) + (analytics.byStatus.REJECTED || 0)}
             </p>
             <p className="text-sm text-surface-500 mt-1">
-              {formatCurrency(
+              {formatAggregateCurrency(
                 analytics.totalPendingAmount + (analytics.totalProcessingAmount || 0) + (analytics.totalFulfilledAmount || 0) + (analytics.totalDelayedAmount || 0) + analytics.totalRejectedAmount,
-                'USD'
+                payoutCurrencies
               )}
             </p>
           </div>

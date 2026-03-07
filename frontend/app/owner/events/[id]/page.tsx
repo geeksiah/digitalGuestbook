@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { itineraryApi, ownerDashboardApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
-import { formatDate, getPhaseLabel, cn, copyToClipboard } from '@/lib/utils';
+import { formatDate, getPhaseLabel, cn, copyToClipboard, formatCurrencyAmount } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -472,6 +472,22 @@ export default function OwnerEventDetailPage() {
       if (activeTab === 'gifts') fetchGiftOrders();
     }
   }, [activeTab, rsvpFilter, event]);
+
+  useEffect(() => {
+    if (!event || activeTab !== 'gifts') return;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchGiftOrders();
+    };
+    const interval = window.setInterval(refresh, 12000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [activeTab, event]);
 
   const handleCopyLink = async (path: string) => {
     if (await copyToClipboard(`${window.location.origin}${path}`)) {
@@ -1195,7 +1211,7 @@ export default function OwnerEventDetailPage() {
 
       {/* Tabs */}
       <div className="-mx-1 overflow-x-auto scrollbar-hide px-1 pb-2">
-        <nav className="page-tabs inline-flex w-max min-w-full pr-2">
+        <nav className="page-tabs inline-flex min-w-max whitespace-nowrap pr-6">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -2411,8 +2427,8 @@ export default function OwnerEventDetailPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                            <span className="text-surface-700">Total: {order.currency} {order.totalAmount.toFixed(2)}</span>
-                            <span className="font-semibold text-brand-900">Net: {order.currency} {order.ownerNetAmount.toFixed(2)}</span>
+                            <span className="text-surface-700">Total: {formatCurrencyAmount(order.totalAmount, order.currency)}</span>
+                            <span className="font-semibold text-brand-900">Net: {formatCurrencyAmount(order.ownerNetAmount, order.currency)}</span>
                             <span className="text-surface-500">{formatDate(order.createdAt)}</span>
                           </div>
                         </div>
@@ -2437,8 +2453,8 @@ export default function OwnerEventDetailPage() {
                             <tr key={order.id}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{order.guestName}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{order.guestEmail || order.guestPhone || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-700">{order.currency} {order.totalAmount.toFixed(2)}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-brand-900">{order.currency} {order.ownerNetAmount.toFixed(2)}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-700">{formatCurrencyAmount(order.totalAmount, order.currency)}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-brand-900">{formatCurrencyAmount(order.ownerNetAmount, order.currency)}</td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
                                   {order.status}

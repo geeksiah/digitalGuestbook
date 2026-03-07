@@ -7,7 +7,7 @@ import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, o
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import PaymentGatewaySelector from '@/components/tickets/PaymentGatewaySelector';
-import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard } from '@/lib/utils';
+import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard, resolvePublicAssetUrl } from '@/lib/utils';
 import { CURRENCY_OPTIONS, getCurrencyOption, uniqueCurrencyCodes } from '@/lib/paymentGatewayConfig';
 import toast from 'react-hot-toast';
 
@@ -205,11 +205,7 @@ export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
   const eventId = params.id as string;
-  const resolveGiftThumbnailUrl = (path: string | null | undefined) => {
-    if (!path) return null;
-    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
-    return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
-  };
+  const resolveGiftThumbnailUrl = (path: string | null | undefined) => resolvePublicAssetUrl(path);
 
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -391,6 +387,23 @@ export default function EventDetailPage() {
     if (activeTab === 'formFields') fetchFormFields();
     if (activeTab === 'settings') fetchDomains();
   }, [activeTab, rsvpFilter]);
+
+  useEffect(() => {
+    if (activeTab !== 'gifts' && activeTab !== 'sales') return;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (activeTab === 'gifts') void fetchGifts();
+      if (activeTab === 'sales') void fetchSales();
+    };
+    const interval = window.setInterval(refresh, 12000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [activeTab, eventId]);
 
   useEffect(() => {
     if (event) {
@@ -1217,7 +1230,7 @@ export default function EventDetailPage() {
 
       {/* Tabs */}
       <div className="-mx-1 overflow-x-auto scrollbar-hide px-1 pb-2">
-        <nav className="page-tabs inline-flex w-max min-w-full pr-2">
+        <nav className="page-tabs inline-flex min-w-max whitespace-nowrap pr-6">
           {tabs.map(tab => (
             <button 
               key={tab.id} 
@@ -2720,7 +2733,7 @@ export default function EventDetailPage() {
                                   </div>
                                 </td>
                                 <td className="py-3 px-4 text-sm text-surface-700">
-                                  {pkg.currency} {Number(pkg.price || 0).toFixed(2)}
+                                  {formatCurrency(Number(pkg.price || 0), pkg.currency)}
                                 </td>
                                 <td className="py-3 px-4">
                                   <span
@@ -2867,19 +2880,19 @@ export default function EventDetailPage() {
                               <p className="text-xs text-surface-500">{order.guestEmail || order.guestPhone || 'No contact'}</p>
                             </td>
                             <td className="py-3 px-4 text-sm text-surface-700">
-                              {order.currency} {Number(order.totalAmount || 0).toFixed(2)}
+                              {formatCurrency(Number(order.totalAmount || 0), order.currency)}
                             </td>
                             <td className="py-3 px-4 text-sm text-surface-700">
-                              {order.currency} {Number(order.cashGiftAmount || 0).toFixed(2)}
+                              {formatCurrency(Number(order.cashGiftAmount || 0), order.currency)}
                             </td>
                             <td className="py-3 px-4 text-sm text-surface-700">
-                              {order.currency} {Number(order.packageAmount || 0).toFixed(2)}
+                              {formatCurrency(Number(order.packageAmount || 0), order.currency)}
                             </td>
                             <td className="py-3 px-4 text-sm font-semibold text-emerald-700">
-                              {order.currency} {Number(order.ownerNetAmount || 0).toFixed(2)}
+                              {formatCurrency(Number(order.ownerNetAmount || 0), order.currency)}
                             </td>
                             <td className="py-3 px-4 text-sm font-semibold text-brand-900">
-                              {order.currency} {Number(order.adminRetainedAmount || 0).toFixed(2)}
+                              {formatCurrency(Number(order.adminRetainedAmount || 0), order.currency)}
                             </td>
                             <td className="py-3 px-4">
                               <span

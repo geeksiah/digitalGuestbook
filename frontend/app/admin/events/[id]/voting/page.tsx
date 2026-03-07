@@ -366,6 +366,7 @@ export default function AdminVotingPage() {
       void Promise.all([
         loadAnalytics(),
         loadContests(),
+        loadNominations(),
         ...(selectedContestId ? [loadOptions(selectedContestId)] : []),
       ]);
     };

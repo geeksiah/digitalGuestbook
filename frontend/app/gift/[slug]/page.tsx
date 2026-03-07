@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { API_BASE_URL, giftingApi } from '@/lib/api';
+import { giftingApi } from '@/lib/api';
+import { formatCurrencyAmount, resolvePublicAssetUrl } from '@/lib/utils';
 import toast from 'react-hot-toast';
-
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
 
 interface GiftPackage {
   id: string;
@@ -56,26 +55,8 @@ export default function GiftPage() {
   const [selectedGatewayId, setSelectedGatewayId] = useState('');
   const [note, setNote] = useState('');
 
-  const toAbsoluteAssetUrl = (value: string | null | undefined) => {
-    if (!value) return null;
-    const raw = value.trim();
-    if (!raw) return null;
-    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
-    if (raw.startsWith('/storage/v1/object/public/')) {
-      return SUPABASE_URL ? `${SUPABASE_URL}${raw}` : `${API_BASE_URL}${raw}`;
-    }
-    if (raw.startsWith('/uploads/') || raw.startsWith('/generated/') || raw.startsWith('/api/')) {
-      return `${API_BASE_URL}${raw}`;
-    }
-    const normalized = raw.replace(/^\/+/, '');
-    if (normalized.includes('/') && SUPABASE_URL) {
-      return `${SUPABASE_URL}/storage/v1/object/public/media-assets/${normalized}`;
-    }
-    return `${API_BASE_URL}${raw.startsWith('/') ? '' : '/'}${raw}`;
-  };
-
   const resolveGiftThumbnailUrl = (pkg: GiftPackage) =>
-    toAbsoluteAssetUrl(pkg.thumbnailUrl) || toAbsoluteAssetUrl(pkg.thumbnailPath);
+    resolvePublicAssetUrl(pkg.thumbnailUrl) || resolvePublicAssetUrl(pkg.thumbnailPath);
 
   const adjustQuantity = (giftPackageId: string, delta: number) => {
     setQuantities((prev) => {
@@ -304,7 +285,7 @@ export default function GiftPage() {
                           +
                         </button>
                       </div>
-                      <p className="text-sm font-bold text-brand-900">{pkg.currency} {pkg.price.toFixed(0)}</p>
+                    <p className="text-sm font-bold text-brand-900">{formatCurrencyAmount(pkg.price, pkg.currency)}</p>
                     </div>
                   </div>
                 </article>
@@ -340,13 +321,13 @@ export default function GiftPage() {
                   <p className="min-w-0 truncate text-surface-700">
                     {item.name} <span className="text-surface-500">x{item.quantity}</span>
                   </p>
-                  <p className="font-semibold text-brand-900">{item.currency} {item.lineTotal.toFixed(2)}</p>
+                  <p className="font-semibold text-brand-900">{formatCurrencyAmount(item.lineTotal, item.currency)}</p>
                 </div>
               ))}
               <div className="flex items-center justify-between border-t border-surface-200 pt-2 text-sm font-semibold">
                 <p className="text-surface-700">Packages Subtotal</p>
                 <p className="text-brand-900">
-                  {(selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')} {selectedPackageTotal.toFixed(2)}
+                  {formatCurrencyAmount(selectedPackageTotal, selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')}
                 </p>
               </div>
             </div>
@@ -420,7 +401,7 @@ export default function GiftPage() {
           <div className="min-w-0">
             <p className="text-xs text-surface-500">Total</p>
             <p className="text-sm font-semibold text-brand-900">
-              {(selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')} {totalAmount.toFixed(2)}
+              {formatCurrencyAmount(totalAmount, selectedPackageCurrencies[0] || selectedGateway?.currency || 'USD')}
             </p>
             <p className="text-[11px] text-surface-500">{selectedQuantityTotal} package item(s)</p>
           </div>

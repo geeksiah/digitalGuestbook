@@ -7,6 +7,7 @@ import NomineeProfileCategoryCard from '@/components/voting/NomineeProfileCatego
 import PublicStateCard from '@/components/voting/PublicStateCard';
 import { votingApi } from '@/lib/api';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
+import { resolvePublicAssetUrl } from '@/lib/utils';
 
 type Nominee = {
   optionId: string;
@@ -175,9 +176,9 @@ export default function NomineeProfilePage() {
       <div className="space-y-5">
         <section className="detail-card">
           <div className="grid gap-5 md:grid-cols-[180px_1fr]">
-            {selectedNominee.imageUrl || selectedNominee.imagePath ? (
+            {resolvePublicAssetUrl(selectedNominee.imageUrl || selectedNominee.imagePath) ? (
               <img
-                src={selectedNominee.imageUrl || selectedNominee.imagePath || ''}
+                src={resolvePublicAssetUrl(selectedNominee.imageUrl || selectedNominee.imagePath) || ''}
                 alt={selectedNominee.name}
                 className="h-44 w-44 rounded-[28px] border border-surface-200 object-cover"
               />

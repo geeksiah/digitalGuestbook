@@ -2,6 +2,16 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, formatDistanceToNow } from 'date-fns';
 
+const getPublicApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
+  }
+  return 'http://localhost:3001';
+};
+
+const getPublicSupabaseUrl = () =>
+  (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
+
 // Merge Tailwind classes
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -31,6 +41,58 @@ export function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+export function formatCurrencyAmount(amount: number | null | undefined, currency?: string | null): string {
+  const value = Number(amount || 0);
+  if (!Number.isFinite(value)) return '-';
+  const code = String(currency || 'USD').toUpperCase();
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+  } catch {
+    return `${code} ${value.toFixed(2)}`;
+  }
+}
+
+export function formatAggregateCurrency(
+  amount: number | null | undefined,
+  currencies: string[] = []
+): string {
+  const value = Number(amount || 0);
+  if (!Number.isFinite(value)) return '-';
+  const unique = Array.from(new Set(currencies.map((currency) => String(currency || '').toUpperCase()).filter(Boolean)));
+  if (unique.length === 1) {
+    return formatCurrencyAmount(value, unique[0]);
+  }
+  return `${value.toFixed(2)} (multi-currency)`;
+}
+
+export function resolvePublicAssetUrl(
+  value: string | null | undefined,
+  bucket = 'media-assets'
+): string | null {
+  if (!value) return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+
+  const apiBaseUrl = getPublicApiBaseUrl();
+  const supabaseUrl = getPublicSupabaseUrl();
+
+  if (raw.startsWith('/storage/v1/object/public/')) {
+    return supabaseUrl ? `${supabaseUrl}${raw}` : `${apiBaseUrl}${raw}`;
+  }
+
+  if (raw.startsWith('/uploads/') || raw.startsWith('/generated/') || raw.startsWith('/api/')) {
+    return `${apiBaseUrl}${raw}`;
+  }
+
+  const normalized = raw.replace(/^\/+/, '');
+  if (normalized.includes('/') && supabaseUrl) {
+    return `${supabaseUrl}/storage/v1/object/public/${bucket}/${normalized}`;
+  }
+
+  return `${apiBaseUrl}${raw.startsWith('/') ? '' : '/'}${raw}`;
 }
 
 // Generate slug from string
