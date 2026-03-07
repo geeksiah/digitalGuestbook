@@ -196,6 +196,9 @@ export default function VotePage() {
     () => selectedContest?.options.find((option) => option.id === selectedOptionId) || null,
     [selectedContest, selectedOptionId]
   );
+  const nomineeProfileHref = selectedOption
+    ? `/e/${slug}/nominee/${encodeURIComponent(selectedOption.id)}?contestId=${encodeURIComponent(selectedContestId)}`
+    : `/e/${slug}/nominees`;
 
   const electionMode = (selectedContest?.mode || config?.mode || 'AWARDS') === 'ELECTION';
   const verification = useMemo(
@@ -593,12 +596,15 @@ export default function VotePage() {
       <div className="space-y-5">
         <div className="hidden space-y-2 md:block">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
-          <h2 className="text-3xl font-semibold tracking-tight text-brand-900">{selectedContest?.title}</h2>
-          <p className="text-sm text-surface-500">
-            Voting for <span className="font-semibold text-brand-900">{selectedOption?.name}</span>
+          <h2 className="text-3xl font-semibold leading-[1.08] tracking-tight text-brand-900">{selectedContest?.title}</h2>
+          <p className="text-sm leading-6 text-surface-500">
+            Voting for{' '}
+            <Link href={nomineeProfileHref} className="font-semibold text-brand-900 underline-offset-4 hover:underline">
+              {selectedOption?.name}
+            </Link>
             {config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
           </p>
-          <p className="text-sm text-surface-500">
+          <p className="text-sm leading-6 text-surface-500">
             Category: <span className="font-semibold text-brand-900">{selectedContest?.title}</span>
           </p>
         </div>
@@ -617,20 +623,25 @@ export default function VotePage() {
           <div className="space-y-4">
             <div className="space-y-2 md:hidden">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
-              <h2 className="text-2xl font-semibold tracking-tight text-brand-900">{selectedContest?.title}</h2>
-              <p className="text-sm text-surface-500">
-                Voting for <span className="font-semibold text-brand-900">{selectedOption?.name}</span>
+              <h2 className="text-2xl font-semibold leading-[1.1] tracking-tight text-brand-900">{selectedContest?.title}</h2>
+              <p className="text-sm leading-6 text-surface-500">
+                Voting for{' '}
+                <Link href={nomineeProfileHref} className="font-semibold text-brand-900 underline-offset-4 hover:underline">
+                  {selectedOption?.name}
+                </Link>
                 {config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
               </p>
-              <p className="text-sm text-surface-500">
+              <p className="text-sm leading-6 text-surface-500">
                 Category: <span className="font-semibold text-brand-900">{selectedContest?.title}</span>
               </p>
             </div>
 
             <div className="rounded-3xl border border-surface-200 bg-surface-50 px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Selected nominee</p>
-              <p className="mt-2 text-xl font-semibold tracking-tight text-brand-900">{selectedOption?.name}</p>
-              <p className="mt-1 text-sm text-surface-500">{selectedOption?.totalVotes.toLocaleString()} total votes</p>
+              <Link href={nomineeProfileHref} className="mt-2 block text-xl font-semibold tracking-tight text-brand-900 underline-offset-4 hover:underline">
+                {selectedOption?.name}
+              </Link>
+              <p className="mt-1 text-sm leading-6 text-surface-500">{selectedOption?.totalVotes.toLocaleString()} total votes</p>
             </div>
 
             <div className="rounded-3xl border border-surface-200 bg-white p-4">
@@ -767,8 +778,12 @@ export default function VotePage() {
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Checkout</p>
                 <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Complete your vote</h3>
-                <p className="mt-1 text-sm text-surface-500">
-                  Voting for {selectedOption?.name} in {selectedContest?.title}.
+                <p className="mt-1 text-sm leading-6 text-surface-500">
+                  Voting for{' '}
+                  <Link href={nomineeProfileHref} className="font-semibold text-brand-900 underline-offset-4 hover:underline">
+                    {selectedOption?.name}
+                  </Link>{' '}
+                  in {selectedContest?.title}.
                 </p>
               </div>
               <button className="btn-ghost px-3" onClick={() => setCheckoutOpen(false)}>

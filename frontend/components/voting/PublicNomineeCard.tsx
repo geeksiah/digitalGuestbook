@@ -35,7 +35,9 @@ export default function PublicNomineeCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h4 className="text-base font-semibold tracking-tight text-brand-900">{name}</h4>
+            <Link href={profileHref} className="text-base font-semibold tracking-tight text-brand-900 underline-offset-4 hover:underline">
+              {name}
+            </Link>
             <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">{badgeLabel}</span>
           </div>
           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{categoryLabel}</p>

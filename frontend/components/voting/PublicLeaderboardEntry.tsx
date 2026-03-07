@@ -6,12 +6,14 @@ export default function PublicLeaderboardEntry({
   name,
   votesLabel,
   voteHref,
+  profileHref,
 }: {
   rank: number;
   imageSrc?: string;
   name: string;
   votesLabel: string;
   voteHref: string;
+  profileHref: string;
 }) {
   return (
     <article className="overflow-hidden rounded-[24px] border border-surface-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
@@ -30,7 +32,9 @@ export default function PublicLeaderboardEntry({
             <div className="h-11 w-11 shrink-0 rounded-2xl border border-surface-200 bg-surface-100" />
           )}
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-semibold text-brand-900 sm:text-base">{name}</h3>
+            <Link href={profileHref} className="truncate text-sm font-semibold text-brand-900 underline-offset-4 hover:underline sm:text-base">
+              {name}
+            </Link>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-sm font-semibold text-brand-900 sm:text-base">{votesLabel}</p>

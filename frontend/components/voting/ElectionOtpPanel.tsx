@@ -36,17 +36,17 @@ export default function ElectionOtpPanel({
   onVerifyManualId,
 }: ElectionOtpPanelProps) {
   return (
-    <section className="dashboard-canvas space-y-4 p-4">
+    <section className="dashboard-canvas space-y-4 p-5">
       <div>
-        <h2 className="text-base font-semibold text-brand-900">Verify your identity</h2>
-        <p className="text-xs text-surface-600">Complete the required verification step before submitting your vote.</p>
+        <h2 className="text-lg font-semibold leading-tight text-brand-900">Verify your identity</h2>
+        <p className="mt-1 text-sm leading-6 text-surface-600">Complete the required verification step before submitting your vote.</p>
       </div>
 
       {requiresPhoneOtp ? (
         <div className="space-y-3 rounded-3xl border border-surface-200 bg-white p-4">
           <div>
             <p className="text-sm font-semibold text-brand-900">Phone OTP</p>
-            <p className="text-xs text-surface-500">
+            <p className="text-sm leading-6 text-surface-500">
               {otpVerified ? 'Phone verified.' : 'Verify your phone number once for this voting session.'}
             </p>
           </div>
@@ -77,7 +77,7 @@ export default function ElectionOtpPanel({
         <div className="space-y-3 rounded-3xl border border-surface-200 bg-white p-4">
           <div>
             <p className="text-sm font-semibold text-brand-900">{manualIdLabel}</p>
-            <p className="text-xs text-surface-500">
+            <p className="text-sm leading-6 text-surface-500">
               {manualIdVerified
                 ? manualIdName
                   ? `Verified for ${manualIdName}.`
@@ -99,7 +99,7 @@ export default function ElectionOtpPanel({
         </div>
       ) : null}
 
-      <p className="text-xs text-surface-600">
+      <p className="text-sm leading-6 text-surface-600">
         {requiresPhoneOtp && requiresManualId
           ? otpVerified && manualIdVerified
             ? 'Phone and voter ID verification complete.'

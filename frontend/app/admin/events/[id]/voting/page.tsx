@@ -189,6 +189,14 @@ const parseSettingsJson = (value: unknown) => {
   return typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 };
 
+const normalizeVotingConfig = (value: any): VotingConfig | null =>
+  value
+    ? {
+        ...value,
+        settingsJson: parseSettingsJson(value.settingsJson),
+      }
+    : null;
+
 export default function AdminVotingPage() {
   const params = useParams();
   const eventId = String(params.id || '');
@@ -278,15 +286,7 @@ export default function AdminVotingPage() {
 
   const loadVotingConfig = async () => {
     const response = await adminVotingApi.getVotingConfig(eventId);
-    const nextConfig = response.data?.config || null;
-    setConfig(
-      nextConfig
-        ? {
-            ...nextConfig,
-            settingsJson: parseSettingsJson(nextConfig.settingsJson),
-          }
-        : null
-    );
+    setConfig(normalizeVotingConfig(response.data?.config || null));
   };
 
   const loadContests = async () => {
@@ -405,10 +405,10 @@ export default function AdminVotingPage() {
         freeVoteLabel: config.freeVoteLabel || null,
         paidVoteLabel: config.paidVoteLabel || null,
         currency: eventCurrency,
-        settingsJson: config.settingsJson || null,
+        settingsJson: config.settingsJson ?? undefined,
       };
       const response = await adminVotingApi.updateVotingConfig(eventId, payload);
-      setConfig(response.data?.config || config);
+      setConfig(normalizeVotingConfig(response.data?.config || config));
       toast.success('Voting config updated');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to update voting config');
@@ -431,10 +431,10 @@ export default function AdminVotingPage() {
       freeVoteLabel: config.freeVoteLabel || null,
       paidVoteLabel: config.paidVoteLabel || null,
       currency: eventCurrency,
-      settingsJson: config.settingsJson || null,
+      settingsJson: config.settingsJson ?? undefined,
     };
     const response = await adminVotingApi.updateVotingConfig(eventId, payload);
-    setConfig(response.data?.config || { ...config, allowPublicNominations: true });
+    setConfig(normalizeVotingConfig(response.data?.config || { ...config, allowPublicNominations: true }));
   };
 
   const createContest = async () => {

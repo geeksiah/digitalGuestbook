@@ -1194,8 +1194,8 @@ export default function OwnerEventDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="overflow-x-auto scrollbar-hide">
-        <nav className="page-tabs min-w-max">
+      <div className="-mx-1 overflow-x-auto scrollbar-hide px-1 pb-2">
+        <nav className="page-tabs inline-flex w-max min-w-full pr-2">
           {tabs.map(tab => (
             <button
               key={tab.id}

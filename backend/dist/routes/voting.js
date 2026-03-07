@@ -366,8 +366,9 @@ router.get('/public/:slug/nomination-form', (0, errorHandler_js_1.asyncHandler)(
     const { slug } = req.params;
     const event = await ensureVotingContext(slug);
     const nominationEnabled = Boolean(event.votingConfig.allowPublicNominations);
+    const hasExplicitOpenContests = event.votingContests.some((contest) => contest.allowPublicNominations);
     const contests = event.votingContests
-        .filter((contest) => contest.allowPublicNominations)
+        .filter((contest) => (hasExplicitOpenContests ? contest.allowPublicNominations : true))
         .map((contest) => ({
         id: contest.id,
         title: contest.title,
@@ -462,7 +463,8 @@ router.post('/public/:slug/nominations', (0, errorHandler_js_1.asyncHandler)(asy
     });
     if (!contest)
         throw new errorHandler_js_1.AppError('Voting contest not found', 404);
-    if (!contest.allowPublicNominations) {
+    const hasExplicitOpenContests = event.votingContests.some((entry) => entry.allowPublicNominations);
+    if (hasExplicitOpenContests && !contest.allowPublicNominations) {
         throw new errorHandler_js_1.AppError('Public nominations are disabled for this contest', 400);
     }
     const { session, token } = await getOrCreateVoterSession(event.id, req, input.sessionToken, embedPayload?.originHost || null);

@@ -37,7 +37,9 @@ export default function PublicVoteOptionCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <p className="text-base font-semibold tracking-tight text-brand-900">{name}</p>
+            <Link href={profileHref} className="text-base font-semibold tracking-tight text-brand-900 underline-offset-4 hover:underline">
+              {name}
+            </Link>
             <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">{votesLabel}</span>
           </div>
           <p className="mt-2 text-sm leading-6 text-surface-500">{description}</p>

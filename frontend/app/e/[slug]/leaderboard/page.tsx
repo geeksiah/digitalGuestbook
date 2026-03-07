@@ -232,6 +232,7 @@ export default function LeaderboardPage() {
                         name={entry.name}
                         votesLabel={`${entry.totalVotes.toLocaleString()} votes`}
                         voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
+                        profileHref={`/e/${slug}/nominee/${encodeURIComponent(entry.optionId)}?contestId=${encodeURIComponent(selectedContest.contestId)}`}
                       />
                     ))}
                   </div>
