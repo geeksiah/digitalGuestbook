@@ -51,7 +51,7 @@ const resolveMediaUrl = (mediaPath: string | null | undefined) => {
 type NominationFieldDefinition = {
   id: string;
   label: string;
-  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select';
+  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select' | 'url';
   required?: boolean;
   placeholder?: string | null;
   options?: string[];
@@ -595,6 +595,18 @@ router.post('/public/:slug/nominations', asyncHandler(async (req, res) => {
       if (!isValid) throw new AppError(`"${definition.label}" must be a valid email`, 400);
       normalizedFields[key] = value.toLowerCase();
       continue;
+    }
+    if (definition.type === 'url') {
+      try {
+        const parsed = new URL(value);
+        if (!/^https?:$/i.test(parsed.protocol)) {
+          throw new Error('invalid');
+        }
+        normalizedFields[key] = parsed.toString();
+        continue;
+      } catch {
+        throw new AppError(`"${definition.label}" must be a valid URL`, 400);
+      }
     }
     if (definition.type === 'number') {
       const parsed = Number(value);

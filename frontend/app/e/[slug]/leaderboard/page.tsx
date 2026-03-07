@@ -175,7 +175,7 @@ export default function LeaderboardPage() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Leaderboard</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Track who is leading</h2>
-            <p className="mt-1 text-sm text-surface-500">Switch categories, search nominees, and send supporters straight to the right vote page.</p>
+            <p className="mt-1 text-sm text-surface-500">Choose a category and vote for a nominee.</p>
           </div>
           {selectedContest ? (
             <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-brand-900 ring-1 ring-surface-200">
@@ -184,8 +184,8 @@ export default function LeaderboardPage() {
           ) : null}
         </section>
 
-        <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="space-y-4">
+        <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
             <section className="detail-card space-y-4">
               <div className="grid gap-3 rounded-[24px] border border-surface-200 bg-surface-50/80 p-4">
                 <select className="input" value={selectedContestId} onChange={(event) => setSelectedContestId(event.target.value)}>
@@ -214,9 +214,7 @@ export default function LeaderboardPage() {
               <>
                 <div className="rounded-[24px] border border-surface-200 bg-white px-4 py-4">
                   <h3 className="text-xl font-semibold tracking-tight text-brand-900">{selectedContest.title}</h3>
-                  <p className="mt-1 text-sm text-surface-500">
-                    {selectedContest.mode === 'ELECTION' ? 'Election' : 'Awards'} leaderboard
-                  </p>
+                  <p className="mt-1 text-sm text-surface-500">{selectedContest.mode === 'ELECTION' ? 'Election' : 'Awards'} category</p>
                 </div>
                 {visibleRankings.length === 0 ? (
                   <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-4 py-12 text-center text-sm text-surface-500">

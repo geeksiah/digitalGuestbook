@@ -18,16 +18,12 @@ export default function NomineeProfileCategoryCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-base font-semibold tracking-tight text-brand-900">{title}</p>
-          <p className="mt-1 text-sm text-surface-500">
-            {mode} - {votesLabel}
-          </p>
-          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-surface-400">
-            You are voting in this category
-          </p>
+          <p className="mt-1 text-sm text-surface-500">{mode} category</p>
+          <p className="mt-2 text-sm font-medium text-brand-900">{votesLabel}</p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-          <Link href={voteHref} className="btn-primary w-full text-center" title={`Vote in ${title}`}>
-            Vote In {title}
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-2">
+          <Link href={voteHref} className="btn-primary col-span-2 w-full text-center sm:col-span-1" title={`Vote in ${title}`}>
+            Vote
           </Link>
           <button
             type="button"

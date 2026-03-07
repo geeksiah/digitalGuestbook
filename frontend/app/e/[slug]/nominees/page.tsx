@@ -186,7 +186,7 @@ export default function NomineesPage() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee directory</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Browse all nominees</h2>
-            <p className="mt-1 text-sm text-surface-500">Search by name, narrow the list by category, then vote directly or open a full profile.</p>
+            <p className="mt-1 text-sm text-surface-500">Choose a category, scan profiles, then vote.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-brand-900 ring-1 ring-surface-200">
@@ -250,7 +250,7 @@ export default function NomineesPage() {
                     <div>
                       <h3 className="text-xl font-semibold tracking-tight text-brand-900">{category.title}</h3>
                       <p className="mt-1 text-sm text-surface-500">
-                        {category.mode === 'ELECTION' ? 'Election' : 'Awards'} - {category.totalVotes.toLocaleString()} total votes
+                        {category.mode === 'ELECTION' ? 'Election' : 'Awards'} category
                       </p>
                     </div>
                     <Link

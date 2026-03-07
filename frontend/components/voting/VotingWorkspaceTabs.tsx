@@ -1,9 +1,10 @@
-type VotingWorkspaceTab = 'setup' | 'categories' | 'nominees' | 'nominations' | 'results';
+type VotingWorkspaceTab = 'setup' | 'categories' | 'nominees' | 'published' | 'nominations' | 'results';
 
 const TABS: Array<{ id: VotingWorkspaceTab; label: string }> = [
   { id: 'setup', label: 'Setup' },
   { id: 'categories', label: 'Categories' },
-  { id: 'nominees', label: 'Nominees' },
+  { id: 'nominees', label: 'Add Nominees' },
+  { id: 'published', label: 'Published Profiles' },
   { id: 'nominations', label: 'Nominations' },
   { id: 'results', label: 'Results' },
 ];

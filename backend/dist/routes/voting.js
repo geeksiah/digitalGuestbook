@@ -500,6 +500,19 @@ router.post('/public/:slug/nominations', (0, errorHandler_js_1.asyncHandler)(asy
             normalizedFields[key] = value.toLowerCase();
             continue;
         }
+        if (definition.type === 'url') {
+            try {
+                const parsed = new URL(value);
+                if (!/^https?:$/i.test(parsed.protocol)) {
+                    throw new Error('invalid');
+                }
+                normalizedFields[key] = parsed.toString();
+                continue;
+            }
+            catch {
+                throw new errorHandler_js_1.AppError(`"${definition.label}" must be a valid URL`, 400);
+            }
+        }
         if (definition.type === 'number') {
             const parsed = Number(value);
             if (!Number.isFinite(parsed))

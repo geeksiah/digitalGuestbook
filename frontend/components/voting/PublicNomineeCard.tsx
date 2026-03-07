@@ -44,14 +44,23 @@ export default function PublicNomineeCard({
           </div>
           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{categoryLabel}</p>
           <p className="mt-2 text-sm font-medium text-brand-900">{votesLabel}</p>
-          <p className="mt-2 text-sm leading-6 text-surface-500">{description}</p>
-          <p className="mt-2 text-sm text-surface-500">Open the vote page for this category.</p>
+          <p
+            className="mt-2 text-sm leading-6 text-surface-500"
+            style={{
+              display: '-webkit-box',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: 3,
+              overflow: 'hidden',
+            }}
+          >
+            {description}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 border-t border-surface-100 bg-surface-50/70 p-4 sm:grid-cols-3">
-        <Link href={voteHref} className="btn-primary w-full text-center" title={`Vote in ${categoryLabel}`}>
-          Vote In {categoryLabel}
+      <div className="grid grid-cols-2 gap-2 border-t border-surface-100 bg-surface-50/70 p-4 sm:grid-cols-3">
+        <Link href={voteHref} className="btn-primary col-span-2 w-full text-center sm:col-span-1" title={`Vote in ${categoryLabel}`}>
+          Vote
         </Link>
         <Link href={profileHref} className="btn-outline w-full text-center">
           View Profile

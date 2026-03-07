@@ -190,7 +190,7 @@ export default function NomineeProfilePage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominee profile</p>
                 <h2 className="mt-1 text-3xl font-semibold tracking-tight text-brand-900">{selectedNominee.name}</h2>
                 <p className="mt-3 text-sm leading-6 text-surface-500">
-                  {selectedNominee.description || 'Support this nominee by voting in one or more categories below.'}
+                  {selectedNominee.description || 'Open a category below to vote for this nominee.'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -208,7 +208,7 @@ export default function NomineeProfilePage() {
         <section className="detail-card space-y-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Available categories</p>
-            <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Vote in any active category</h3>
+            <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Choose a category to vote in</h3>
           </div>
           <div className="grid gap-3">
             {nomineeCategories.map((entry) => (

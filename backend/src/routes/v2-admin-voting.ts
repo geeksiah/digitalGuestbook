@@ -94,7 +94,7 @@ const ensureManagedEvent = async (eventId: string, ownerId?: string | null, admi
 const nominationFieldSchema = z.object({
   id: z.string().min(1).max(64),
   label: z.string().min(1).max(120),
-  type: z.enum(['text', 'textarea', 'email', 'phone', 'number', 'select']),
+  type: z.enum(['text', 'textarea', 'email', 'phone', 'number', 'select', 'url']),
   required: z.boolean().optional(),
   placeholder: z.string().max(200).optional().nullable(),
   options: z.array(z.string().max(120)).optional(),

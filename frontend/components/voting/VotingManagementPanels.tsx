@@ -8,7 +8,7 @@ type VoteMode = 'AWARDS' | 'ELECTION';
 type NominationField = {
   id: string;
   label: string;
-  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select';
+  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select' | 'url';
   required?: boolean;
   placeholder?: string | null;
   options?: string[];
@@ -25,6 +25,7 @@ type FieldDraft = {
 type VotingContest = {
   id: string;
   title: string;
+  description?: string | null;
   mode: VoteMode;
   isActive: boolean;
   allowPublicNominations?: boolean;
@@ -90,17 +91,49 @@ function SectionCard({
   );
 }
 
+function TogglePill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-3 py-2 text-sm font-medium transition ${
+        active
+          ? 'bg-brand-900 text-white shadow-[0_10px_30px_rgba(6,57,50,0.18)]'
+          : 'bg-white text-surface-600 ring-1 ring-surface-200 hover:bg-surface-50'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function VotingCategoryPanel({
   contests,
   selectedContestId,
   newContestTitle,
   newContestMode,
   savingContest,
+  editingContestId,
+  editingContestTitle,
+  editingContestDescription,
+  savingEditingContest,
   onContestTitleChange,
   onContestModeChange,
   onCreateContest,
   onSelectContest,
-  onRenameContest,
+  onStartEditingContest,
+  onEditingContestTitleChange,
+  onEditingContestDescriptionChange,
+  onSaveEditingContest,
+  onCancelEditingContest,
   onToggleContestStatus,
   onDeleteContest,
 }: {
@@ -109,11 +142,19 @@ export function VotingCategoryPanel({
   newContestTitle: string;
   newContestMode: VoteMode;
   savingContest: boolean;
+  editingContestId: string;
+  editingContestTitle: string;
+  editingContestDescription: string;
+  savingEditingContest: boolean;
   onContestTitleChange: (value: string) => void;
   onContestModeChange: (value: VoteMode) => void;
   onCreateContest: () => void;
   onSelectContest: (contestId: string) => void;
-  onRenameContest: (contest: any) => void;
+  onStartEditingContest: (contest: any) => void;
+  onEditingContestTitleChange: (value: string) => void;
+  onEditingContestDescriptionChange: (value: string) => void;
+  onSaveEditingContest: () => void;
+  onCancelEditingContest: () => void;
   onToggleContestStatus: (contest: any) => void;
   onDeleteContest: (contest: any) => void;
 }) {
@@ -159,37 +200,70 @@ export function VotingCategoryPanel({
               }`}
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <button type="button" onClick={() => onSelectContest(contest.id)} className="min-w-0 flex-1 text-left">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold tracking-tight text-brand-900">{contest.title}</h3>
-                    <span className="rounded-full bg-surface-100 px-2.5 py-1 text-[11px] font-semibold text-surface-600">
-                      {contest.mode === 'ELECTION' ? 'Election' : 'Awards'}
-                    </span>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                        contest.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-500'
-                      }`}
-                    >
-                      {contest.isActive ? 'Open' : 'Paused'}
-                    </span>
-                  </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Nominees</p>
-                      <p className="mt-1 text-lg font-semibold text-brand-900">{contest.options?.length || 0}</p>
+                <div className="min-w-0 flex-1">
+                  {editingContestId === contest.id ? (
+                    <div className="space-y-3">
+                      <input
+                        className="input"
+                        value={editingContestTitle}
+                        onChange={(event) => onEditingContestTitleChange(event.target.value)}
+                        placeholder="Category title"
+                      />
+                      <textarea
+                        className="input min-h-[140px]"
+                        value={editingContestDescription}
+                        onChange={(event) => onEditingContestDescriptionChange(event.target.value)}
+                        placeholder="Category description"
+                      />
                     </div>
-                    <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Public nominations</p>
-                      <p className="mt-1 text-sm font-semibold text-brand-900">
-                        {contest.allowPublicNominations ? 'Open' : 'Closed'}
-                      </p>
-                    </div>
-                  </div>
-                </button>
+                  ) : (
+                    <button type="button" onClick={() => onSelectContest(contest.id)} className="min-w-0 w-full text-left">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-semibold tracking-tight text-brand-900">{contest.title}</h3>
+                        <span className="rounded-full bg-surface-100 px-2.5 py-1 text-[11px] font-semibold text-surface-600">
+                          {contest.mode === 'ELECTION' ? 'Election' : 'Awards'}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            contest.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-500'
+                          }`}
+                        >
+                          {contest.isActive ? 'Open' : 'Paused'}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Nominees</p>
+                          <p className="mt-1 text-lg font-semibold text-brand-900">{contest.options?.length || 0}</p>
+                        </div>
+                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Public nominations</p>
+                          <p className="mt-1 text-sm font-semibold text-brand-900">
+                            {contest.allowPublicNominations ? 'Open' : 'Closed'}
+                          </p>
+                        </div>
+                      </div>
+                      {contest.description ? (
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-surface-500">{contest.description}</p>
+                      ) : null}
+                    </button>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2 lg:justify-end">
-                  <button className="btn-outline text-xs" onClick={() => onRenameContest(contest)}>
-                    Rename
-                  </button>
+                  {editingContestId === contest.id ? (
+                    <>
+                      <button className="btn-outline text-xs" onClick={onSaveEditingContest} disabled={savingEditingContest}>
+                        {savingEditingContest ? 'Saving...' : 'Save'}
+                      </button>
+                      <button className="btn-ghost text-xs" onClick={onCancelEditingContest}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn-outline text-xs" onClick={() => onStartEditingContest(contest)}>
+                      Edit
+                    </button>
+                  )}
                   <button className="btn-outline text-xs" onClick={() => onToggleContestStatus(contest)}>
                     {contest.isActive ? 'Pause' : 'Open'}
                   </button>
@@ -333,16 +407,14 @@ export function VotingNomineePanel({
         >
           <div className="rounded-3xl border border-surface-200 bg-surface-50/80 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Assign to categories</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {contests.map((contest) => (
-                <label key={contest.id} className="flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-3 py-3 text-sm text-brand-900">
-                  <input
-                    type="checkbox"
-                    checked={selectedNomineeContestIds.includes(contest.id)}
-                    onChange={(event) => onToggleNomineeContest(contest.id, event.target.checked)}
-                  />
-                  <span className="truncate">{contest.title}</span>
-                </label>
+                <TogglePill
+                  key={contest.id}
+                  active={selectedNomineeContestIds.includes(contest.id)}
+                  label={contest.title}
+                  onClick={() => onToggleNomineeContest(contest.id, !selectedNomineeContestIds.includes(contest.id))}
+                />
               ))}
             </div>
           </div>
@@ -355,9 +427,9 @@ export function VotingNomineePanel({
               onChange={(event) => onOptionNameChange(event.target.value)}
               disabled={!selectedContestId}
             />
-            <input
-              className="input"
-              placeholder="Short description"
+            <textarea
+              className="input min-h-[160px]"
+              placeholder="Full nominee profile"
               value={newOptionDescription}
               onChange={(event) => onOptionDescriptionChange(event.target.value)}
               disabled={!selectedContestId}
@@ -436,6 +508,7 @@ export function VotingNomineePanel({
                 <option value="phone">Phone</option>
                 <option value="number">Number</option>
                 <option value="select">Dropdown</option>
+                <option value="url">URL</option>
               </select>
             </div>
             <input
@@ -455,15 +528,18 @@ export function VotingNomineePanel({
               />
             ) : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <label className="inline-flex items-center gap-2 text-sm text-surface-600">
-                <input
-                  type="checkbox"
-                  checked={newFieldRequired}
-                  onChange={(event) => onNewFieldRequiredChange(event.target.checked)}
-                  disabled={!selectedContestId}
-                />
-                Make this required
-              </label>
+              <button
+                type="button"
+                className={`rounded-full px-3 py-2 text-sm font-medium transition ${
+                  newFieldRequired
+                    ? 'bg-brand-900 text-white'
+                    : 'bg-surface-100 text-surface-600'
+                }`}
+                onClick={() => onNewFieldRequiredChange(!newFieldRequired)}
+                disabled={!selectedContestId}
+              >
+                {newFieldRequired ? 'Required' : 'Optional'}
+              </button>
               <button className="btn-outline text-xs" onClick={onAddField} disabled={!selectedContestId || savingNominationRule}>
                 Add field
               </button>
@@ -509,6 +585,7 @@ export function VotingNomineePanel({
                             <option value="phone">Phone</option>
                             <option value="number">Number</option>
                             <option value="select">Dropdown</option>
+                            <option value="url">URL</option>
                           </select>
                         </div>
                         <input
@@ -534,18 +611,21 @@ export function VotingNomineePanel({
                           />
                         ) : null}
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <label className="inline-flex items-center gap-2 text-sm text-surface-600">
-                            <input
-                              type="checkbox"
-                              checked={editingFieldDraft.required}
-                              onChange={(event) =>
-                                onEditingFieldDraftChange(
-                                  editingFieldDraft ? { ...editingFieldDraft, required: event.target.checked } : editingFieldDraft
-                                )
-                              }
-                            />
-                            Make this required
-                          </label>
+                          <button
+                            type="button"
+                            className={`rounded-full px-3 py-2 text-sm font-medium transition ${
+                              editingFieldDraft.required
+                                ? 'bg-brand-900 text-white'
+                                : 'bg-surface-100 text-surface-600'
+                            }`}
+                            onClick={() =>
+                              onEditingFieldDraftChange(
+                                editingFieldDraft ? { ...editingFieldDraft, required: !editingFieldDraft.required } : editingFieldDraft
+                              )
+                            }
+                          >
+                            {editingFieldDraft.required ? 'Required' : 'Optional'}
+                          </button>
                           <div className="flex flex-wrap gap-2">
                             <button className="btn-outline text-xs" onClick={onSaveFieldEdit} disabled={savingNominationRule}>
                               Save field
@@ -583,131 +663,194 @@ export function VotingNomineePanel({
         </SectionCard>
       </div>
 
-      <SectionCard
-        eyebrow="Existing nominees"
-        title="Published nominee profiles"
-        description="Review how nominees are presented across this category and quickly update their visibility."
-      >
-        {options.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
-            No nominees in this category yet.
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            {options.map((option) => (
-              <article key={option.id} className="rounded-3xl border border-surface-200 bg-white p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    {resolvePublicAssetUrl(
-                      editingOptionId === option.id ? editingOptionImagePreview || editingOptionImagePath : option.imageUrl || option.imagePath
-                    ) ? (
-                      <img
-                        src={
-                          resolvePublicAssetUrl(
-                            editingOptionId === option.id
-                              ? editingOptionImagePreview || editingOptionImagePath
-                              : option.imageUrl || option.imagePath
-                          ) || ''
-                        }
-                        alt={option.name}
-                        className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
-                      />
-                    ) : (
-                      <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold tracking-tight text-brand-900">
-                          {editingOptionId === option.id ? editingOptionName || option.name : option.name}
-                        </h3>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            option.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-500'
-                          }`}
-                        >
-                          {option.isActive ? 'Visible' : 'Hidden'}
-                        </span>
-                      </div>
-                      {editingOptionId === option.id ? (
-                        <div className="mt-3 space-y-3">
-                          <input
-                            className="input"
-                            value={editingOptionName}
-                            onChange={(event) => onEditingOptionNameChange(event.target.value)}
-                            placeholder="Nominee name"
-                          />
-                          <textarea
-                            className="input min-h-[110px]"
-                            value={editingOptionDescription}
-                            onChange={(event) => onEditingOptionDescriptionChange(event.target.value)}
-                            placeholder="Short description"
-                          />
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="btn-outline text-xs"
-                              onClick={onUploadEditingImageClick}
-                              disabled={uploadingEditingOptionImage}
-                            >
-                              {uploadingEditingOptionImage ? 'Uploading...' : editingOptionImagePath ? 'Replace photo' : 'Upload photo'}
-                            </button>
-                            {editingOptionImagePath ? (
-                              <button type="button" className="btn-ghost text-xs" onClick={onRemoveEditingImage}>
-                                Remove photo
-                              </button>
-                            ) : null}
+    </section>
+  );
+}
+
+export function VotingPublishedNomineesPanel({
+  contests,
+  options,
+  selectedContestTitle,
+  editingOptionId,
+  editingOptionName,
+  editingOptionDescription,
+  editingOptionImagePath,
+  editingOptionImagePreview,
+  editingOptionContestIds,
+  savingEditingOption,
+  uploadingEditingOptionImage,
+  onStartEditingNominee,
+  onEditingOptionNameChange,
+  onEditingOptionDescriptionChange,
+  onToggleEditingNomineeContest,
+  onUploadEditingImageClick,
+  onRemoveEditingImage,
+  onSaveEditingNominee,
+  onCancelEditingNominee,
+  onToggleNomineeStatus,
+  onDeleteNominee,
+}: {
+  contests: VotingContest[];
+  options: VotingOption[];
+  selectedContestTitle: string;
+  editingOptionId: string;
+  editingOptionName: string;
+  editingOptionDescription: string;
+  editingOptionImagePath: string;
+  editingOptionImagePreview: string;
+  editingOptionContestIds: string[];
+  savingEditingOption: boolean;
+  uploadingEditingOptionImage: boolean;
+  onStartEditingNominee: (option: any) => void;
+  onEditingOptionNameChange: (value: string) => void;
+  onEditingOptionDescriptionChange: (value: string) => void;
+  onToggleEditingNomineeContest: (contestId: string, checked: boolean) => void;
+  onUploadEditingImageClick: () => void;
+  onRemoveEditingImage: () => void;
+  onSaveEditingNominee: () => void;
+  onCancelEditingNominee: () => void;
+  onToggleNomineeStatus: (option: any) => void;
+  onDeleteNominee: (option: any) => void;
+}) {
+  return (
+    <SectionCard
+      eyebrow="Published nominees"
+      title="Manage published profiles"
+      description={
+        selectedContestTitle
+          ? `Update ${selectedContestTitle} nominees, adjust visibility, and assign additional categories.`
+          : 'Select a category to manage published nominee profiles.'
+      }
+    >
+      {options.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
+          No nominees in this category yet.
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {options.map((option) => (
+            <article key={option.id} className="rounded-3xl border border-surface-200 bg-white p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  {resolvePublicAssetUrl(
+                    editingOptionId === option.id ? editingOptionImagePreview || editingOptionImagePath : option.imageUrl || option.imagePath
+                  ) ? (
+                    <img
+                      src={
+                        resolvePublicAssetUrl(
+                          editingOptionId === option.id
+                            ? editingOptionImagePreview || editingOptionImagePath
+                            : option.imageUrl || option.imagePath
+                        ) || ''
+                      }
+                      alt={option.name}
+                      className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
+                    />
+                  ) : (
+                    <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-semibold tracking-tight text-brand-900">
+                        {editingOptionId === option.id ? editingOptionName || option.name : option.name}
+                      </h3>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          option.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-500'
+                        }`}
+                      >
+                        {option.isActive ? 'Visible' : 'Hidden'}
+                      </span>
+                    </div>
+                    {editingOptionId === option.id ? (
+                      <div className="mt-3 space-y-3">
+                        <input
+                          className="input"
+                          value={editingOptionName}
+                          onChange={(event) => onEditingOptionNameChange(event.target.value)}
+                          placeholder="Nominee name"
+                        />
+                        <textarea
+                          className="input min-h-[140px]"
+                          value={editingOptionDescription}
+                          onChange={(event) => onEditingOptionDescriptionChange(event.target.value)}
+                          placeholder="Full nominee profile"
+                        />
+                        <div className="rounded-2xl border border-surface-200 bg-surface-50 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Assigned categories</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {contests.map((contest) => (
+                              <TogglePill
+                                key={contest.id}
+                                active={editingOptionContestIds.includes(contest.id)}
+                                label={contest.title}
+                                onClick={() => onToggleEditingNomineeContest(contest.id, !editingOptionContestIds.includes(contest.id))}
+                              />
+                            ))}
                           </div>
                         </div>
-                      ) : (
-                        <>
-                          <p className="mt-1 text-sm text-surface-500">{option.description || 'Nominee profile'}</p>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                            <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Total votes</p>
-                              <p className="mt-1 text-base font-semibold text-brand-900">{option.totalVotes}</p>
-                            </div>
-                            <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Free</p>
-                              <p className="mt-1 text-base font-semibold text-brand-900">{option.freeVotes}</p>
-                            </div>
-                            <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Paid</p>
-                              <p className="mt-1 text-base font-semibold text-brand-900">{option.paidVotes}</p>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 sm:justify-end">
-                    {editingOptionId === option.id ? (
-                      <>
-                        <button className="btn-outline text-xs" onClick={onSaveEditingNominee} disabled={savingEditingOption}>
-                          {savingEditingOption ? 'Saving...' : 'Save'}
-                        </button>
-                        <button className="btn-ghost text-xs" onClick={onCancelEditingNominee}>
-                          Cancel
-                        </button>
-                      </>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="btn-outline text-xs"
+                            onClick={onUploadEditingImageClick}
+                            disabled={uploadingEditingOptionImage}
+                          >
+                            {uploadingEditingOptionImage ? 'Uploading...' : editingOptionImagePath ? 'Replace photo' : 'Upload photo'}
+                          </button>
+                          {editingOptionImagePath ? (
+                            <button type="button" className="btn-ghost text-xs" onClick={onRemoveEditingImage}>
+                              Remove photo
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
                     ) : (
-                      <button className="btn-outline text-xs" onClick={() => onStartEditingNominee(option)}>
-                        Edit
-                      </button>
+                      <>
+                        <p className="mt-1 text-sm leading-6 text-surface-500">{option.description || 'Nominee profile'}</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                          <div className="rounded-full bg-surface-50 px-3 py-2 text-surface-600">
+                            <span className="font-semibold text-brand-900">{option.totalVotes}</span> total votes
+                          </div>
+                          <div className="rounded-full bg-surface-50 px-3 py-2 text-surface-600">
+                            <span className="font-semibold text-brand-900">{option.freeVotes}</span> free
+                          </div>
+                          <div className="rounded-full bg-surface-50 px-3 py-2 text-surface-600">
+                            <span className="font-semibold text-brand-900">{option.paidVotes}</span> paid
+                          </div>
+                        </div>
+                      </>
                     )}
-                    <button className="btn-outline text-xs" onClick={() => onToggleNomineeStatus(option)}>
-                      {option.isActive ? 'Hide' : 'Show'}
-                    </button>
-                    <button className="btn-outline border-rose-200 text-xs text-rose-700" onClick={() => onDeleteNominee(option)}>
-                      Delete
-                    </button>
                   </div>
                 </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </SectionCard>
-    </section>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  {editingOptionId === option.id ? (
+                    <>
+                      <button className="btn-outline text-xs" onClick={onSaveEditingNominee} disabled={savingEditingOption}>
+                        {savingEditingOption ? 'Saving...' : 'Save'}
+                      </button>
+                      <button className="btn-ghost text-xs" onClick={onCancelEditingNominee}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn-outline text-xs" onClick={() => onStartEditingNominee(option)}>
+                      Edit
+                    </button>
+                  )}
+                  <button className="btn-outline text-xs" onClick={() => onToggleNomineeStatus(option)}>
+                    {option.isActive ? 'Hide' : 'Show'}
+                  </button>
+                  <button className="btn-outline border-rose-200 text-xs text-rose-700" onClick={() => onDeleteNominee(option)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   VotingCategoryPanel,
   VotingNomineePanel,
   VotingNominationsPanel,
+  VotingPublishedNomineesPanel,
 } from '@/components/voting/VotingManagementPanels';
 import VotingResultsPanel from '@/components/voting/VotingResultsPanel';
 import VotingSetupPanel from '@/components/voting/VotingSetupPanel';
@@ -20,7 +21,7 @@ type VoteMode = 'AWARDS' | 'ELECTION';
 type NominationField = {
   id: string;
   label: string;
-  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select';
+  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select' | 'url';
   required?: boolean;
   placeholder?: string | null;
   options?: string[];
@@ -101,7 +102,7 @@ type FieldDraft = {
 };
 
 const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
-type VotingTab = 'setup' | 'categories' | 'nominees' | 'nominations' | 'results';
+type VotingTab = 'setup' | 'categories' | 'nominees' | 'published' | 'nominations' | 'results';
 
 type VotingAnalytics = {
   totals: {
@@ -221,6 +222,10 @@ export default function AdminVotingPage() {
 
   const [newContestTitle, setNewContestTitle] = useState('');
   const [newContestMode, setNewContestMode] = useState<VoteMode>('AWARDS');
+  const [editingContestId, setEditingContestId] = useState('');
+  const [editingContestTitle, setEditingContestTitle] = useState('');
+  const [editingContestDescription, setEditingContestDescription] = useState('');
+  const [savingEditingContest, setSavingEditingContest] = useState(false);
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionDescription, setNewOptionDescription] = useState('');
   const [newOptionImagePath, setNewOptionImagePath] = useState('');
@@ -231,6 +236,8 @@ export default function AdminVotingPage() {
   const [editingOptionDescription, setEditingOptionDescription] = useState('');
   const [editingOptionImagePath, setEditingOptionImagePath] = useState('');
   const [editingOptionImagePreview, setEditingOptionImagePreview] = useState('');
+  const [editingOptionContestIds, setEditingOptionContestIds] = useState<string[]>([]);
+  const [editingLinkedOptionIds, setEditingLinkedOptionIds] = useState<Record<string, string>>({});
   const [savingEditingOption, setSavingEditingOption] = useState(false);
   const [uploadingEditingOptionImage, setUploadingEditingOptionImage] = useState(false);
   const editingOptionImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -253,6 +260,16 @@ export default function AdminVotingPage() {
   const pendingNominations = useMemo(
     () => nominations.filter((nomination) => nomination.status === 'PENDING'),
     [nominations]
+  );
+  const allOptions = useMemo(
+    () =>
+      contests.flatMap((contest) =>
+        (contest.options || []).map((option) => ({
+          ...option,
+          contestId: option.contestId || contest.id,
+        }))
+      ),
+    [contests]
   );
   const eventCurrency = useMemo(
     () => String(event && (event as any).defaultCurrency ? (event as any).defaultCurrency : config?.currency || 'USD').toUpperCase(),
@@ -472,17 +489,36 @@ export default function AdminVotingPage() {
     }
   };
 
-  const renameContest = async (contest: VotingContest) => {
-    const title = window.prompt('Update contest title', contest.title);
-    if (!title || !title.trim()) return;
+  const startEditingContest = (contest: VotingContest) => {
+    setEditingContestId(contest.id);
+    setEditingContestTitle(contest.title || '');
+    setEditingContestDescription(contest.description || '');
+  };
+
+  const cancelEditingContest = () => {
+    setEditingContestId('');
+    setEditingContestTitle('');
+    setEditingContestDescription('');
+  };
+
+  const saveEditingContest = async () => {
+    if (!editingContestId || !editingContestTitle.trim()) {
+      toast.error('Category title is required');
+      return;
+    }
+    setSavingEditingContest(true);
     try {
-      await ownerDashboardApi.updateVotingContest(eventId, contest.id, {
-        title: title.trim(),
+      await ownerDashboardApi.updateVotingContest(eventId, editingContestId, {
+        title: editingContestTitle.trim(),
+        description: editingContestDescription.trim() || null,
       });
       await loadContests();
+      cancelEditingContest();
       toast.success('Contest updated');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to update contest');
+    } finally {
+      setSavingEditingContest(false);
     }
   };
 
@@ -569,11 +605,28 @@ export default function AdminVotingPage() {
   };
 
   const renameNominee = async (option: VotingOption) => {
+    const linkedOptions = allOptions.filter((candidate) => candidate.name.trim().toLowerCase() === option.name.trim().toLowerCase());
     setEditingOptionId(option.id);
     setEditingOptionName(option.name || '');
     setEditingOptionDescription(option.description || '');
     setEditingOptionImagePath(option.imagePath || '');
     setEditingOptionImagePreview(option.imageUrl || option.imagePath || '');
+    setEditingOptionContestIds(
+      Array.from(
+        new Set(
+          linkedOptions
+            .map((candidate) => candidate.contestId)
+            .filter((contestId): contestId is string => Boolean(contestId))
+        )
+      )
+    );
+    setEditingLinkedOptionIds(
+      Object.fromEntries(
+        linkedOptions
+          .filter((candidate) => Boolean(candidate.contestId))
+          .map((candidate) => [String(candidate.contestId), candidate.id])
+      )
+    );
   };
 
   const cancelNomineeEdit = () => {
@@ -582,6 +635,8 @@ export default function AdminVotingPage() {
     setEditingOptionDescription('');
     setEditingOptionImagePath('');
     setEditingOptionImagePreview('');
+    setEditingOptionContestIds([]);
+    setEditingLinkedOptionIds({});
     if (editingOptionImageInputRef.current) {
       editingOptionImageInputRef.current.value = '';
     }
@@ -592,13 +647,49 @@ export default function AdminVotingPage() {
       toast.error('Nominee name is required');
       return;
     }
+    const targetContestIds = editingOptionContestIds.filter((contestId) =>
+      contests.some((contest) => contest.id === contestId)
+    );
+    if (targetContestIds.length === 0) {
+      toast.error('Select at least one category');
+      return;
+    }
     setSavingEditingOption(true);
     try {
-      await ownerDashboardApi.updateVotingOption(eventId, editingOptionId, {
+      const currentOption = allOptions.find((option) => option.id === editingOptionId);
+      const currentContestId = currentOption?.contestId || selectedContestId;
+      const payload = {
         name: editingOptionName.trim(),
         description: editingOptionDescription.trim() || null,
         imagePath: editingOptionImagePath.trim() || null,
+      };
+      const operations: Array<Promise<unknown>> = [];
+      if (currentContestId && targetContestIds.includes(currentContestId)) {
+        operations.push(ownerDashboardApi.updateVotingOption(eventId, editingOptionId, payload));
+      } else {
+        operations.push(ownerDashboardApi.deleteVotingOption(eventId, editingOptionId));
+      }
+
+      for (const contestId of targetContestIds) {
+        const linkedOptionId = editingLinkedOptionIds[contestId];
+        if (contestId === currentContestId && targetContestIds.includes(contestId)) {
+          continue;
+        }
+        if (linkedOptionId) {
+          operations.push(ownerDashboardApi.updateVotingOption(eventId, linkedOptionId, payload));
+        } else {
+          operations.push(ownerDashboardApi.createVotingOption(eventId, contestId, payload));
+        }
+      }
+
+      Object.entries(editingLinkedOptionIds).forEach(([contestId, optionId]) => {
+        if (contestId === currentContestId) return;
+        if (!targetContestIds.includes(contestId)) {
+          operations.push(ownerDashboardApi.deleteVotingOption(eventId, optionId));
+        }
       });
+
+      await Promise.all(operations);
       await Promise.all([loadOptions(selectedContestId), loadContests()]);
       cancelNomineeEdit();
       toast.success('Nominee updated');
@@ -772,6 +863,16 @@ export default function AdminVotingPage() {
     });
   };
 
+  const toggleEditingNomineeContest = (contestId: string, checked: boolean) => {
+    setEditingOptionContestIds((current) => {
+      if (checked) {
+        if (current.includes(contestId)) return current;
+        return [...current, contestId];
+      }
+      return current.filter((id) => id !== contestId);
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
@@ -839,11 +940,19 @@ export default function AdminVotingPage() {
           newContestTitle={newContestTitle}
           newContestMode={newContestMode}
           savingContest={savingContest}
+          editingContestId={editingContestId}
+          editingContestTitle={editingContestTitle}
+          editingContestDescription={editingContestDescription}
+          savingEditingContest={savingEditingContest}
           onContestTitleChange={setNewContestTitle}
           onContestModeChange={setNewContestMode}
           onCreateContest={createContest}
           onSelectContest={setSelectedContestId}
-          onRenameContest={renameContest}
+          onStartEditingContest={startEditingContest}
+          onEditingContestTitleChange={setEditingContestTitle}
+          onEditingContestDescriptionChange={setEditingContestDescription}
+          onSaveEditingContest={saveEditingContest}
+          onCancelEditingContest={cancelEditingContest}
           onToggleContestStatus={toggleContestStatus}
           onDeleteContest={deleteContest}
         />
@@ -920,6 +1029,38 @@ export default function AdminVotingPage() {
           onStartEditingNominee={renameNominee}
           onEditingOptionNameChange={setEditingOptionName}
           onEditingOptionDescriptionChange={setEditingOptionDescription}
+          onUploadEditingImageClick={() => editingOptionImageInputRef.current?.click()}
+          onRemoveEditingImage={() => {
+            setEditingOptionImagePath('');
+            setEditingOptionImagePreview('');
+            if (editingOptionImageInputRef.current) {
+              editingOptionImageInputRef.current.value = '';
+            }
+          }}
+          onSaveEditingNominee={saveEditingNominee}
+          onCancelEditingNominee={cancelNomineeEdit}
+          onToggleNomineeStatus={toggleNomineeStatus}
+          onDeleteNominee={deleteNominee}
+        />
+      ) : null}
+
+      {activeTab === 'published' ? (
+        <VotingPublishedNomineesPanel
+          contests={contests}
+          options={options}
+          selectedContestTitle={selectedContest?.title || ''}
+          editingOptionId={editingOptionId}
+          editingOptionName={editingOptionName}
+          editingOptionDescription={editingOptionDescription}
+          editingOptionImagePath={editingOptionImagePath}
+          editingOptionImagePreview={editingOptionImagePreview}
+          editingOptionContestIds={editingOptionContestIds}
+          savingEditingOption={savingEditingOption}
+          uploadingEditingOptionImage={uploadingEditingOptionImage}
+          onStartEditingNominee={renameNominee}
+          onEditingOptionNameChange={setEditingOptionName}
+          onEditingOptionDescriptionChange={setEditingOptionDescription}
+          onToggleEditingNomineeContest={toggleEditingNomineeContest}
           onUploadEditingImageClick={() => editingOptionImageInputRef.current?.click()}
           onRemoveEditingImage={() => {
             setEditingOptionImagePath('');
