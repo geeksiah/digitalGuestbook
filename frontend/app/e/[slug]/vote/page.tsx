@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -19,6 +19,7 @@ type VotingConfig = {
   voteUnitPrice: number;
   currency: string;
   maxVotesPerPurchase: number;
+  settingsJson?: Record<string, unknown> | null;
 };
 
 type VotingOption = {
@@ -62,10 +63,34 @@ type VotingEventPayload = {
   voterSession: {
     token: string;
     otpVerified: boolean;
+    manualIdVerified?: boolean;
+    verifiedManualName?: string | null;
+    verification?: {
+      requiresPhoneOtp?: boolean;
+      requiresManualId?: boolean;
+      manualIdLabel?: string;
+    };
   };
 };
 
+type VerificationSettings = {
+  requiresPhoneOtp: boolean;
+  requiresManualId: boolean;
+  manualIdLabel: string;
+};
+
 const SESSION_STORAGE_KEY_PREFIX = 'vote_session_token:';
+const VOTE_CHECKOUT_CONTEXT_KEY = 'eventpeepo_vote_checkout_context';
+const VOTE_PAYMENT_STATUS_KEY_PREFIX = 'eventpeepo_vote_payment_status:';
+const VOTE_PAYMENT_DONE_EVENT = 'EVENTPEEPO_VOTE_PAYMENT_DONE';
+
+type VotePaymentMessage = {
+  type: typeof VOTE_PAYMENT_DONE_EVENT;
+  status: 'success' | 'cancelled';
+  slug: string;
+  contestId?: string;
+  optionId?: string;
+};
 
 const formatMoney = (currency: string, amount: number) => {
   try {
@@ -100,6 +125,36 @@ const normalizePaymentGateways = (payload: any): PaymentGateway[] => {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const clampVoteCount = (value: number, max: number) => Math.min(Math.max(1, value), Math.max(1, max));
+const parseSettingsJson = (value: unknown) => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+};
+
+const getVerificationSettings = (
+  config: VotingConfig | null,
+  sessionVerification?: VotingEventPayload['voterSession']['verification']
+): VerificationSettings => {
+  const settings = parseSettingsJson(config?.settingsJson);
+  const verification =
+    settings?.verification && typeof settings.verification === 'object' && !Array.isArray(settings.verification)
+      ? (settings.verification as Record<string, unknown>)
+      : {};
+  return {
+    requiresPhoneOtp: Boolean(sessionVerification?.requiresPhoneOtp ?? config?.requireOtpForElection),
+    requiresManualId: Boolean(sessionVerification?.requiresManualId ?? verification.manualIdEnabled),
+    manualIdLabel:
+      String(sessionVerification?.manualIdLabel || verification.manualIdLabel || 'Voter ID').trim() || 'Voter ID',
+  };
+};
 
 export default function VotePage() {
   const params = useParams();
@@ -109,6 +164,7 @@ export default function VotePage() {
   const optionQuery = String(searchParams.get('optionId') || '');
   const embedToken = String(searchParams.get('token') || searchParams.get('embedToken') || '');
   const storageKey = `${SESSION_STORAGE_KEY_PREFIX}${slug}`;
+  const paymentStatusKey = `${VOTE_PAYMENT_STATUS_KEY_PREFIX}${slug}`;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -122,9 +178,14 @@ export default function VotePage() {
   const [otpPhone, setOtpPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
+  const [manualIdValue, setManualIdValue] = useState('');
+  const [manualIdVerified, setManualIdVerified] = useState(false);
+  const [manualIdName, setManualIdName] = useState<string | null>(null);
+  const [sessionVerification, setSessionVerification] = useState<VotingEventPayload['voterSession']['verification']>();
   const [voteCount, setVoteCount] = useState(1);
   const [selectedGatewayId, setSelectedGatewayId] = useState('');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const checkoutPopupRef = useRef<Window | null>(null);
 
   const selectedContest = useMemo(
     () => contests.find((contest) => contest.id === selectedContestId) || null,
@@ -137,20 +198,26 @@ export default function VotePage() {
   );
 
   const electionMode = (selectedContest?.mode || config?.mode || 'AWARDS') === 'ELECTION';
+  const verification = useMemo(
+    () => getVerificationSettings(config, sessionVerification),
+    [config, sessionVerification]
+  );
   const hasGateways = paymentGateways.length > 0;
   const canUsePaidVoting = Boolean(config?.allowPaidVotes && hasGateways);
   const nominationsAvailable = Boolean(
     config?.allowPublicNominations && contests.some((contest) => contest.allowPublicNominations)
   );
   const amountLabel = config ? formatMoney(config.currency, voteCount * config.voteUnitPrice) : '';
-  const requiresOtp = Boolean(electionMode && config?.requireOtpForElection && !otpVerified);
+  const phoneVerificationPending = verification.requiresPhoneOtp && !otpVerified;
+  const manualIdVerificationPending = verification.requiresManualId && !manualIdVerified;
+  const requiresOtp = phoneVerificationPending || manualIdVerificationPending;
   const hasVoteTarget = Boolean(selectedContest && selectedOption);
   const canSubmitFreeVote = Boolean(config?.allowFreeVotes && hasVoteTarget && !requiresOtp);
   const canStartPaidVote = Boolean(config?.allowPaidVotes && hasVoteTarget && !requiresOtp);
 
-  const fetchVoteData = async () => {
+  const fetchVoteData = async (showLoading = true) => {
     if (!slug) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const persisted = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
       const publicResponse = await votingApi.getPublicVoting(slug, persisted || undefined, embedToken || undefined);
@@ -191,6 +258,7 @@ export default function VotePage() {
             voteUnitPrice: Number(payload.config.voteUnitPrice || 0),
             currency: String(payload.config.currency || 'USD'),
             maxVotesPerPurchase: Math.max(1, Number(payload.config.maxVotesPerPurchase || 1)),
+            settingsJson: parseSettingsJson((payload.config as any).settingsJson),
           }
         : null;
 
@@ -221,6 +289,9 @@ export default function VotePage() {
       }
 
       setOtpVerified(Boolean(payload.voterSession?.otpVerified));
+      setManualIdVerified(Boolean(payload.voterSession?.manualIdVerified));
+      setManualIdName(payload.voterSession?.verifiedManualName || null);
+      setSessionVerification(payload.voterSession?.verification);
       if (payload.voterSession?.token) {
         setSessionToken(payload.voterSession.token);
         if (typeof window !== 'undefined') {
@@ -228,9 +299,11 @@ export default function VotePage() {
         }
       }
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to load voting page');
+      if (showLoading) {
+        toast.error(error?.response?.data?.error || 'Failed to load voting page');
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -239,6 +312,65 @@ export default function VotePage() {
     void fetchVoteData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, embedToken, contestQuery, optionQuery]);
+
+  useEffect(() => {
+    if (!slug) return;
+
+    const refreshVoteViews = async (status?: 'success' | 'cancelled') => {
+      setCheckoutOpen(false);
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await fetchVoteData(false);
+        if (attempt < 3) await sleep(2000);
+      }
+      if (status === 'success') {
+        toast.success('Payment completed');
+      }
+      if (status === 'cancelled') {
+        toast('Payment cancelled');
+      }
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      const payload = event.data as VotePaymentMessage | undefined;
+      if (!payload || payload.type !== VOTE_PAYMENT_DONE_EVENT || payload.slug !== slug) return;
+      void refreshVoteViews(payload.status);
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== paymentStatusKey || !event.newValue) return;
+      try {
+        const payload = JSON.parse(event.newValue) as { status?: 'success' | 'cancelled' };
+        if (payload?.status) {
+          void refreshVoteViews(payload.status);
+        }
+      } catch {
+        // Ignore malformed payloads
+      }
+    };
+
+    const handleFocus = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchVoteData(false);
+    };
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchVoteData(false);
+    }, 12000);
+
+    window.addEventListener('message', handleMessage);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [paymentStatusKey, slug]);
 
   const castFreeVote = async () => {
     if (!selectedContest || !selectedOption) {
@@ -274,14 +406,16 @@ export default function VotePage() {
       toast.error('Allow pop-ups to continue with payment');
       return false;
     }
+    checkoutPopupRef.current = popup;
     popup.focus();
     const timer = window.setInterval(() => {
       if (popup.closed) {
         window.clearInterval(timer);
+        checkoutPopupRef.current = null;
         setCheckoutOpen(false);
         void (async () => {
           for (let attempt = 0; attempt < 5; attempt += 1) {
-            await fetchVoteData();
+            await fetchVoteData(false);
             if (attempt < 4) await sleep(2500);
           }
         })();
@@ -317,6 +451,20 @@ export default function VotePage() {
       }
       const nextAction = response.data?.nextAction;
       if (nextAction?.type === 'REDIRECT' && nextAction?.url) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(
+            VOTE_CHECKOUT_CONTEXT_KEY,
+            JSON.stringify({
+              slug,
+              eventName,
+              contestId: selectedContest.id,
+              contestTitle: selectedContest.title,
+              optionId: selectedOption.id,
+              optionName: selectedOption.name,
+              amountLabel,
+            })
+          );
+        }
         if (openCheckoutWindow(String(nextAction.url))) {
           toast.success('Checkout opened in a new window');
         }
@@ -383,6 +531,38 @@ export default function VotePage() {
     }
   };
 
+  const verifyManualId = async () => {
+    if (!manualIdValue.trim()) {
+      toast.error(`Enter your ${verification.manualIdLabel}`);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await votingApi.verifyManualVoterId({
+        slug,
+        voterId: manualIdValue.trim(),
+        sessionToken: sessionToken || undefined,
+        embedToken: embedToken || undefined,
+      });
+      const token = response.data?.voterSessionToken;
+      if (token) {
+        setSessionToken(token);
+        if (typeof window !== 'undefined') localStorage.setItem(storageKey, token);
+      }
+      setManualIdVerified(Boolean(response.data?.verified));
+      setManualIdName(response.data?.matchedName || null);
+      toast.success(
+        response.data?.matchedName
+          ? `${verification.manualIdLabel} verified for ${response.data.matchedName}`
+          : `${verification.manualIdLabel} verified`
+      );
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || `${verification.manualIdLabel} verification failed`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-50">
@@ -408,6 +588,135 @@ export default function VotePage() {
     ? 'Submit Election Vote'
     : 'Submit Vote';
 
+  const votePanel = (
+    <section className="detail-card overflow-hidden">
+      <div className="space-y-5">
+        <div className="hidden space-y-2 md:block">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
+          <h2 className="text-3xl font-semibold tracking-tight text-brand-900">{selectedContest?.title}</h2>
+          <p className="text-sm text-surface-500">
+            Voting for <span className="font-semibold text-brand-900">{selectedOption?.name}</span>
+            {config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
+          </p>
+          <p className="text-sm text-surface-500">
+            Category: <span className="font-semibold text-brand-900">{selectedContest?.title}</span>
+          </p>
+        </div>
+
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 md:grid-cols-[132px_minmax(0,1fr)] md:gap-5">
+          {selectedOption?.imageUrl || selectedOption?.imagePath ? (
+            <img
+              src={selectedOption.imageUrl || selectedOption.imagePath || ''}
+              alt={selectedOption.name}
+              className="h-24 w-24 rounded-[24px] border border-surface-200 object-cover md:h-32 md:w-32 md:rounded-[28px]"
+            />
+          ) : (
+            <div className="h-24 w-24 rounded-[24px] border border-surface-200 bg-surface-100 md:h-32 md:w-32 md:rounded-[28px]" />
+          )}
+
+          <div className="space-y-4">
+            <div className="space-y-2 md:hidden">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-brand-900">{selectedContest?.title}</h2>
+              <p className="text-sm text-surface-500">
+                Voting for <span className="font-semibold text-brand-900">{selectedOption?.name}</span>
+                {config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
+              </p>
+              <p className="text-sm text-surface-500">
+                Category: <span className="font-semibold text-brand-900">{selectedContest?.title}</span>
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-surface-200 bg-surface-50 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Selected nominee</p>
+              <p className="mt-2 text-xl font-semibold tracking-tight text-brand-900">{selectedOption?.name}</p>
+              <p className="mt-1 text-sm text-surface-500">{selectedOption?.totalVotes.toLocaleString()} total votes</p>
+            </div>
+
+            <div className="rounded-3xl border border-surface-200 bg-white p-4">
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-surface-500">Number of votes</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-outline h-12 w-12 justify-center rounded-2xl px-0"
+                    disabled={!config?.allowPaidVotes || voteCount <= 1}
+                    onClick={() => setVoteCount((current) => clampVoteCount(current - 1, config?.maxVotesPerPurchase || 1))}
+                  >
+                    -
+                  </button>
+                  <input
+                    className="input text-center"
+                    type="number"
+                    min={1}
+                    max={config?.allowPaidVotes ? config.maxVotesPerPurchase : 1}
+                    value={config?.allowPaidVotes ? voteCount : 1}
+                    disabled={!config?.allowPaidVotes}
+                    onChange={(event) => setVoteCount(clampVoteCount(Number(event.target.value || 1), config?.maxVotesPerPurchase || 1))}
+                  />
+                  <button
+                    type="button"
+                    className="btn-outline h-12 w-12 justify-center rounded-2xl px-0"
+                    disabled={!config?.allowPaidVotes || voteCount >= (config?.maxVotesPerPurchase || 1)}
+                    onClick={() => setVoteCount((current) => clampVoteCount(current + 1, config?.maxVotesPerPurchase || 1))}
+                  >
+                    +
+                  </button>
+                </div>
+              </label>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-surface-50 px-3 py-3 text-sm text-surface-500">
+                <span>Category: {selectedContest?.title}</span>
+                <span className="font-semibold text-brand-900">{config?.allowPaidVotes ? amountLabel : '1 vote'}</span>
+              </div>
+            </div>
+
+            {config?.allowPaidVotes && !canUsePaidVoting ? (
+              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Paid voting is enabled but no payment gateway is available for this event.
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2">
+              <button
+                className="btn-primary w-full"
+                disabled={
+                  submitting ||
+                  requiresOtp ||
+                  (canUsePaidVoting ? !canStartPaidVote : !canSubmitFreeVote)
+                }
+                onClick={() => {
+                  if (canUsePaidVoting) {
+                    setCheckoutOpen(true);
+                    return;
+                  }
+                  void castFreeVote();
+                }}
+              >
+                {submitting ? 'Please wait...' : primaryActionLabel}
+              </button>
+
+              {config?.allowFreeVotes && config?.allowPaidVotes ? (
+                <button
+                  className="btn-outline w-full"
+                  disabled={submitting || !canSubmitFreeVote}
+                  onClick={() => {
+                    void castFreeVote();
+                  }}
+                >
+                  Use Free Vote Instead
+                </button>
+              ) : null}
+
+              <Link href={`/e/${slug}/nominees?contestId=${encodeURIComponent(selectedContestId)}`} className="btn-ghost w-full text-center">
+                Back to nominees
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
   return (
     <VotingPublicLayout
       slug={slug}
@@ -415,177 +724,96 @@ export default function VotePage() {
       activeTab="nominees"
       contestId={selectedContestId}
       showNominateCta={nominationsAvailable}
+      desktopAside={votePanel}
     >
-      <div className="mx-auto max-w-3xl space-y-5">
-        <section className="detail-card overflow-hidden">
-          <div className="space-y-5">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-brand-900">{selectedContest?.title}</h2>
-              <p className="mt-2 text-sm text-surface-500">
-                Voting for <span className="font-semibold text-brand-900">{selectedOption?.name}</span>
-                {config?.allowPaidVotes ? ` - ${formatMoney(config.currency, config.voteUnitPrice)} per vote` : ''}
-              </p>
-              <p className="mt-2 text-sm text-surface-500">
-                Category: <span className="font-semibold text-brand-900">{selectedContest?.title}</span>
-              </p>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-[132px_minmax(0,1fr)]">
-              {selectedOption?.imageUrl || selectedOption?.imagePath ? (
-                <img
-                  src={selectedOption.imageUrl || selectedOption.imagePath || ''}
-                  alt={selectedOption.name}
-                  className="h-32 w-32 rounded-[28px] border border-surface-200 object-cover"
-                />
-              ) : (
-                <div className="h-32 w-32 rounded-[28px] border border-surface-200 bg-surface-100" />
-              )}
-
-              <div className="space-y-4">
-                <div className="rounded-3xl border border-surface-200 bg-surface-50 px-4 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Selected nominee</p>
-                  <p className="mt-2 text-xl font-semibold tracking-tight text-brand-900">{selectedOption?.name}</p>
-                  <p className="mt-1 text-sm text-surface-500">{selectedOption?.totalVotes.toLocaleString()} total votes</p>
-                </div>
-
-                <div className="rounded-3xl border border-surface-200 bg-white p-4">
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-surface-500">Number of votes</span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={1}
-                      max={config?.allowPaidVotes ? config.maxVotesPerPurchase : 1}
-                      value={config?.allowPaidVotes ? voteCount : 1}
-                      disabled={!config?.allowPaidVotes}
-                      onChange={(event) => setVoteCount(Math.max(1, Number(event.target.value || 1)))}
-                    />
-                  </label>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-surface-50 px-3 py-3 text-sm text-surface-500">
-                    <span>Category: {selectedContest?.title}</span>
-                    <span className="font-semibold text-brand-900">{config?.allowPaidVotes ? amountLabel : '1 vote'}</span>
-                  </div>
-                </div>
-
-                {config?.allowPaidVotes && !canUsePaidVoting ? (
-                  <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Paid voting is enabled but no payment gateway is available for this event.
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col gap-2">
-                  <button
-                    className="btn-primary w-full"
-                    disabled={
-                      submitting ||
-                      requiresOtp ||
-                      (canUsePaidVoting ? !canStartPaidVote : !canSubmitFreeVote)
-                    }
-                    onClick={() => {
-                      if (canUsePaidVoting) {
-                        setCheckoutOpen(true);
-                        return;
-                      }
-                      void castFreeVote();
-                    }}
-                  >
-                    {submitting ? 'Please wait...' : primaryActionLabel}
-                  </button>
-
-                  {config?.allowFreeVotes && config?.allowPaidVotes ? (
-                    <button
-                      className="btn-outline w-full"
-                      disabled={submitting || !canSubmitFreeVote}
-                      onClick={() => {
-                        void castFreeVote();
-                      }}
-                    >
-                      Use Free Vote Instead
-                    </button>
-                  ) : null}
-
-                  <Link href={`/e/${slug}/nominees?contestId=${encodeURIComponent(selectedContestId)}`} className="btn-ghost w-full text-center">
-                    Back to nominees
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {config && electionMode ? (
+        {(verification.requiresPhoneOtp || verification.requiresManualId) ? (
           <ElectionOtpPanel
+            requiresPhoneOtp={verification.requiresPhoneOtp}
+            requiresManualId={verification.requiresManualId}
+            manualIdLabel={verification.manualIdLabel}
             otpPhone={otpPhone}
             otpCode={otpCode}
             otpVerified={otpVerified}
+            manualIdValue={manualIdValue}
+            manualIdVerified={manualIdVerified}
+            manualIdName={manualIdName}
             submitting={submitting}
-            onPhoneChange={setOtpPhone}
+            onPhoneChange={(value) => {
+              setOtpPhone(value);
+              setOtpVerified(false);
+            }}
             onCodeChange={setOtpCode}
+            onManualIdChange={(value) => {
+              setManualIdValue(value);
+              setManualIdVerified(false);
+              setManualIdName(null);
+            }}
             onRequestOtp={() => {
               void requestOtp();
             }}
             onVerifyOtp={() => {
               void verifyOtp();
             }}
+            onVerifyManualId={() => {
+              void verifyManualId();
+            }}
           />
         ) : null}
 
-        {checkoutOpen && config ? (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-surface-950/45 p-3 sm:items-center sm:p-6">
-            <div className="w-full max-w-lg rounded-[28px] border border-surface-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
-              <div className="flex items-start justify-between gap-4">
+      {checkoutOpen && config ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-surface-950/45 p-3 backdrop-blur-md sm:items-center sm:p-6">
+          <div className="w-full max-w-lg rounded-[28px] border border-surface-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Checkout</p>
+                <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Complete your vote</h3>
+                <p className="mt-1 text-sm text-surface-500">
+                  Voting for {selectedOption?.name} in {selectedContest?.title}.
+                </p>
+              </div>
+              <button className="btn-ghost px-3" onClick={() => setCheckoutOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-surface-500">Payment method</span>
+                <select className="input" value={selectedGatewayId} onChange={(event) => setSelectedGatewayId(event.target.value)}>
+                  {paymentGateways.map((gateway) => (
+                    <option key={gateway.id} value={gateway.id}>
+                      {gateway.name} ({gateway.currency})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="grid gap-2 rounded-3xl border border-surface-200 bg-surface-50 p-4 text-sm text-surface-600 sm:grid-cols-2">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Checkout</p>
-                  <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Complete your vote</h3>
-                  <p className="mt-1 text-sm text-surface-500">
-                    Voting for {selectedOption?.name} in {selectedContest?.title}.
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Nominee</p>
+                  <p className="mt-1 font-semibold text-brand-900">{selectedOption?.name}</p>
                 </div>
-                <button className="btn-ghost px-3" onClick={() => setCheckoutOpen(false)}>
-                  Close
-                </button>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Category</p>
+                  <p className="mt-1 font-semibold text-brand-900">{selectedContest?.title}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Votes</p>
+                  <p className="mt-1 font-semibold text-brand-900">{voteCount}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Total</p>
+                  <p className="mt-1 font-semibold text-brand-900">{amountLabel}</p>
+                </div>
               </div>
 
-              <div className="mt-5 space-y-4">
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-surface-500">Payment method</span>
-                  <select className="input" value={selectedGatewayId} onChange={(event) => setSelectedGatewayId(event.target.value)}>
-                    {paymentGateways.map((gateway) => (
-                      <option key={gateway.id} value={gateway.id}>
-                        {gateway.name} ({gateway.currency})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="grid gap-2 rounded-3xl border border-surface-200 bg-surface-50 p-4 text-sm text-surface-600 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Nominee</p>
-                    <p className="mt-1 font-semibold text-brand-900">{selectedOption?.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Category</p>
-                    <p className="mt-1 font-semibold text-brand-900">{selectedContest?.title}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Votes</p>
-                    <p className="mt-1 font-semibold text-brand-900">{voteCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Total</p>
-                    <p className="mt-1 font-semibold text-brand-900">{amountLabel}</p>
-                  </div>
-                </div>
-
-                <button className="btn-primary w-full" disabled={submitting || !selectedGatewayId || !canStartPaidVote} onClick={() => { void startPaidVote(); }}>
-                  {submitting ? 'Opening checkout...' : 'Open Payment Window'}
-                </button>
-              </div>
+              <button className="btn-primary w-full" disabled={submitting || !selectedGatewayId || !canStartPaidVote} onClick={() => { void startPaidVote(); }}>
+                {submitting ? 'Opening checkout...' : 'Open Payment Window'}
+              </button>
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </VotingPublicLayout>
   );
 }

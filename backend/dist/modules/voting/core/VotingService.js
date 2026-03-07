@@ -14,6 +14,25 @@ const parseMetadataJson = (value, fallback) => {
         return fallback;
     }
 };
+const hasManualIdVerification = (settingsJson) => {
+    const settings = settingsJson && typeof settingsJson === 'object' && !Array.isArray(settingsJson)
+        ? settingsJson
+        : {};
+    const verification = settings.verification && typeof settings.verification === 'object' && !Array.isArray(settings.verification)
+        ? settings.verification
+        : {};
+    return Boolean(verification.manualIdEnabled);
+};
+const countManualIdEntries = (settingsJson) => {
+    const settings = settingsJson && typeof settingsJson === 'object' && !Array.isArray(settingsJson)
+        ? settingsJson
+        : {};
+    const verification = settings.verification && typeof settings.verification === 'object' && !Array.isArray(settings.verification)
+        ? settings.verification
+        : {};
+    const entries = Array.isArray(verification.manualIdEntries) ? verification.manualIdEntries : [];
+    return entries.length;
+};
 class VotingService {
     repository;
     constructor(repository) {
@@ -29,9 +48,27 @@ class VotingService {
             throw new errorHandler_js_1.AppError('Voting start date must be before end date', 400);
         }
         const currency = String(config.currency || event.defaultCurrency || 'USD').toUpperCase();
+        const normalizedMode = config.mode;
+        const electionRules = normalizedMode === 'ELECTION'
+            ? {
+                allowPaidVotes: false,
+                maxVotesPerPurchase: 1,
+            }
+            : {};
+        if (normalizedMode === 'ELECTION') {
+            const requiresPhoneOtp = Boolean(config.requireOtpForElection);
+            const requiresManualId = hasManualIdVerification(config.settingsJson);
+            if (!requiresPhoneOtp && !requiresManualId) {
+                throw new errorHandler_js_1.AppError('Election mode requires at least one voter verification method: phone OTP, manual voter IDs, or both', 400);
+            }
+        }
+        if (hasManualIdVerification(config.settingsJson) && countManualIdEntries(config.settingsJson) === 0) {
+            throw new errorHandler_js_1.AppError('Manual voter ID verification requires at least one approved voter ID entry', 400);
+        }
         return this.repository.upsertVotingConfig(eventId, {
             ...config,
             currency,
+            ...electionRules,
         });
     }
     async listContests(eventId) {

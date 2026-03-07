@@ -31,7 +31,7 @@ const DEFAULT_VOTING_TEMPLATE_IDS = {
 const NOMINATION_PHOTO_FIELD_KEY = '__nomineeImagePath';
 const nomineeImageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
-    limits: { fileSize: 8 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
         if (!String(file.mimetype || '').startsWith('image/')) {
             cb(new errorHandler_js_1.AppError('Please upload an image file', 400));
@@ -49,6 +49,21 @@ const parseJson = (value, fallback) => {
     catch {
         return fallback;
     }
+};
+const hasManualIdVerification = (settingsJson) => {
+    const settings = settingsJson && typeof settingsJson === 'object' && !Array.isArray(settingsJson) ? settingsJson : {};
+    const verification = settings.verification && typeof settings.verification === 'object' && !Array.isArray(settings.verification)
+        ? settings.verification
+        : {};
+    return Boolean(verification.manualIdEnabled);
+};
+const countManualIdEntries = (settingsJson) => {
+    const settings = settingsJson && typeof settingsJson === 'object' && !Array.isArray(settingsJson) ? settingsJson : {};
+    const verification = settings.verification && typeof settings.verification === 'object' && !Array.isArray(settings.verification)
+        ? settings.verification
+        : {};
+    const entries = Array.isArray(verification.manualIdEntries) ? verification.manualIdEntries : [];
+    return entries.length;
 };
 const extractNominationPhotoPath = (customFieldsJson) => {
     const fields = parseJson(customFieldsJson, {});
@@ -263,18 +278,25 @@ router.put('/events/:eventId/voting/config', (0, errorHandler_js_1.asyncHandler)
     const event = await ensureManagedEvent(eventId, ownerId || undefined, adminId || undefined);
     const input = configSchema.parse(req.body || {});
     const eventCurrency = (event.defaultCurrency || 'USD').toUpperCase();
+    const electionMode = input.mode === 'ELECTION';
+    if (electionMode && !Boolean(input.requireOtpForElection) && !hasManualIdVerification(input.settingsJson)) {
+        throw new errorHandler_js_1.AppError('Election mode requires at least one voter verification method: phone OTP, manual voter IDs, or both', 400);
+    }
+    if (hasManualIdVerification(input.settingsJson) && countManualIdEntries(input.settingsJson) === 0) {
+        throw new errorHandler_js_1.AppError('Manual voter ID verification requires at least one approved voter ID entry', 400);
+    }
     const config = await prisma_js_1.default.votingEventConfig.upsert({
         where: { eventId },
         update: {
             mode: input.mode ?? undefined,
             isEnabled: input.isEnabled ?? undefined,
             allowFreeVotes: input.allowFreeVotes ?? undefined,
-            allowPaidVotes: input.allowPaidVotes ?? undefined,
+            allowPaidVotes: electionMode ? false : input.allowPaidVotes ?? undefined,
             allowPublicNominations: input.allowPublicNominations ?? undefined,
             requireOtpForElection: input.requireOtpForElection ?? undefined,
             voteUnitPrice: input.voteUnitPrice ?? undefined,
             currency: eventCurrency,
-            maxVotesPerPurchase: input.maxVotesPerPurchase ?? undefined,
+            maxVotesPerPurchase: electionMode ? 1 : input.maxVotesPerPurchase ?? undefined,
             freeVoteLabel: input.freeVoteLabel === undefined ? undefined : input.freeVoteLabel,
             paidVoteLabel: input.paidVoteLabel === undefined ? undefined : input.paidVoteLabel,
             settingsJson: input.settingsJson === undefined
@@ -288,12 +310,12 @@ router.put('/events/:eventId/voting/config', (0, errorHandler_js_1.asyncHandler)
             mode: input.mode || 'AWARDS',
             isEnabled: input.isEnabled ?? true,
             allowFreeVotes: input.allowFreeVotes ?? true,
-            allowPaidVotes: input.allowPaidVotes ?? false,
+            allowPaidVotes: electionMode ? false : input.allowPaidVotes ?? false,
             allowPublicNominations: input.allowPublicNominations ?? false,
-            requireOtpForElection: input.requireOtpForElection ?? true,
+            requireOtpForElection: input.requireOtpForElection ?? false,
             voteUnitPrice: input.voteUnitPrice ?? 1,
             currency: eventCurrency,
-            maxVotesPerPurchase: input.maxVotesPerPurchase ?? 100,
+            maxVotesPerPurchase: electionMode ? 1 : input.maxVotesPerPurchase ?? 100,
             freeVoteLabel: input.freeVoteLabel ?? null,
             paidVoteLabel: input.paidVoteLabel ?? null,
             settingsJson: input.settingsJson ? JSON.stringify(input.settingsJson) : null,

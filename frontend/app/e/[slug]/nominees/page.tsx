@@ -131,7 +131,7 @@ export default function NomineesPage() {
 
   useEffect(() => {
     if (!slug) return;
-    const interval = window.setInterval(() => {
+    const refresh = () => {
       if (document.visibilityState !== 'visible') return;
       void votingApi.nominees(slug, selectedCategory || undefined).then((response) => {
         const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
@@ -160,8 +160,15 @@ export default function NomineesPage() {
           .filter((category) => category.contestId);
         setCategories(categoriesData);
       }).catch(() => {});
-    }, 15000);
-    return () => window.clearInterval(interval);
+    };
+    const interval = window.setInterval(refresh, 12000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, [slug, selectedCategory]);
 
   if (loading) {

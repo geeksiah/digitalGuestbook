@@ -70,6 +70,7 @@ type NomineesFallbackPayload = {
 };
 
 const SESSION_STORAGE_KEY_PREFIX = 'vote_session_token:';
+const MAX_NOMINATION_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
 
 export default function NominatePage() {
   const params = useParams();
@@ -281,6 +282,10 @@ export default function NominatePage() {
   };
 
   const uploadNomineePhoto = async (file: File) => {
+    if (file.size > MAX_NOMINATION_PHOTO_SIZE_BYTES) {
+      toast.error('Photo must be 10MB or smaller');
+      return;
+    }
     setUploadingPhoto(true);
     try {
       const response = await votingApi.uploadNominationPhoto(slug, file);
@@ -377,7 +382,7 @@ export default function NominatePage() {
             ) : null}
 
             <label className="space-y-1 block">
-              <span className="text-xs text-surface-600">Nominee Description</span>
+              <span className="text-xs text-surface-600">Nominee Profile</span>
               <textarea className="input min-h-[120px]" value={nomineeDescription} onChange={(event) => setNomineeDescription(event.target.value)} />
             </label>
 
@@ -403,6 +408,7 @@ export default function NominatePage() {
                   void uploadNomineePhoto(file);
                 }}
               />
+              <p className="mt-2 text-xs text-surface-500">JPG, PNG, or WEBP up to 10MB.</p>
               {uploadingPhoto ? <p className="mt-2 text-xs text-surface-500">Uploading photo...</p> : null}
             </div>
 

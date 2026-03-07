@@ -45,6 +45,7 @@ type VotingConfig = {
   maxVotesPerPurchase: number;
   freeVoteLabel?: string | null;
   paidVoteLabel?: string | null;
+  settingsJson?: Record<string, unknown> | null;
 };
 
 type VotingOption = {
@@ -175,6 +176,19 @@ const fieldToDraft = (field: NominationField): FieldDraft => ({
   options: (field.options || []).join(', '),
 });
 
+const parseSettingsJson = (value: unknown) => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+};
+
 export default function AdminVotingPage() {
   const params = useParams();
   const eventId = String(params.id || '');
@@ -264,7 +278,15 @@ export default function AdminVotingPage() {
 
   const loadVotingConfig = async () => {
     const response = await adminVotingApi.getVotingConfig(eventId);
-    setConfig(response.data?.config || null);
+    const nextConfig = response.data?.config || null;
+    setConfig(
+      nextConfig
+        ? {
+            ...nextConfig,
+            settingsJson: parseSettingsJson(nextConfig.settingsJson),
+          }
+        : null
+    );
   };
 
   const loadContests = async () => {
@@ -339,15 +361,22 @@ export default function AdminVotingPage() {
 
   useEffect(() => {
     if (!eventId) return;
-    const interval = window.setInterval(() => {
+    const refresh = () => {
       if (document.visibilityState !== 'visible') return;
       void Promise.all([
         loadAnalytics(),
         loadContests(),
         ...(selectedContestId ? [loadOptions(selectedContestId)] : []),
       ]);
-    }, 15000);
-    return () => window.clearInterval(interval);
+    };
+    const interval = window.setInterval(refresh, 12000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, selectedContestId]);
 
@@ -376,6 +405,7 @@ export default function AdminVotingPage() {
         freeVoteLabel: config.freeVoteLabel || null,
         paidVoteLabel: config.paidVoteLabel || null,
         currency: eventCurrency,
+        settingsJson: config.settingsJson || null,
       };
       const response = await adminVotingApi.updateVotingConfig(eventId, payload);
       setConfig(response.data?.config || config);
@@ -385,6 +415,26 @@ export default function AdminVotingPage() {
     } finally {
       setSavingConfig(false);
     }
+  };
+
+  const ensureEventPublicNominationsEnabled = async () => {
+    if (!config || config.allowPublicNominations) return;
+    const payload = {
+      mode: config.mode,
+      isEnabled: config.isEnabled,
+      allowFreeVotes: config.allowFreeVotes,
+      allowPaidVotes: config.allowPaidVotes,
+      allowPublicNominations: true,
+      requireOtpForElection: config.requireOtpForElection,
+      voteUnitPrice: Number(config.voteUnitPrice || 0),
+      maxVotesPerPurchase: Math.max(1, Number(config.maxVotesPerPurchase || 1)),
+      freeVoteLabel: config.freeVoteLabel || null,
+      paidVoteLabel: config.paidVoteLabel || null,
+      currency: eventCurrency,
+      settingsJson: config.settingsJson || null,
+    };
+    const response = await adminVotingApi.updateVotingConfig(eventId, payload);
+    setConfig(response.data?.config || { ...config, allowPublicNominations: true });
   };
 
   const createContest = async () => {
@@ -841,12 +891,18 @@ export default function AdminVotingPage() {
             }
           }}
           onCreateNominee={createNominee}
-          onTogglePublicNominations={() =>
-            selectedContest &&
-            updateSelectedContestNominationRules({
-              allowPublicNominations: !Boolean(selectedContest.allowPublicNominations),
-            })
-          }
+          onTogglePublicNominations={() => {
+            if (!selectedContest) return;
+            void (async () => {
+              const nextValue = !Boolean(selectedContest.allowPublicNominations);
+              if (nextValue) {
+                await ensureEventPublicNominationsEnabled();
+              }
+              await updateSelectedContestNominationRules({
+                allowPublicNominations: nextValue,
+              });
+            })();
+          }}
           onNewFieldLabelChange={setNewFieldLabel}
           onNewFieldTypeChange={setNewFieldType}
           onNewFieldRequiredChange={setNewFieldRequired}

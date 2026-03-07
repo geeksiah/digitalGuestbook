@@ -5,7 +5,6 @@ import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
 import PublicLeaderboardEntry from '@/components/voting/PublicLeaderboardEntry';
-import VotingMetricCard from '@/components/voting/VotingMetricCard';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 
 type RankedNominee = {
@@ -116,7 +115,7 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     if (!slug) return;
-    const interval = window.setInterval(() => {
+    const refresh = () => {
       if (document.visibilityState !== 'visible') return;
       void votingApi.leaderboard(slug, selectedContestId || undefined).then((response) => {
         const payload = ((response.data as any)?.data || response.data || {}) as Partial<LeaderboardPayload>;
@@ -150,8 +149,15 @@ export default function LeaderboardPage() {
           .filter((contest) => contest.contestId);
         setContests(dataContests);
       }).catch(() => {});
-    }, 15000);
-    return () => window.clearInterval(interval);
+    };
+    const interval = window.setInterval(refresh, 12000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, [slug, selectedContestId]);
 
   if (loading) {
@@ -196,14 +202,6 @@ export default function LeaderboardPage() {
                   onChange={(event) => setSearchQuery(event.target.value)}
                 />
               </div>
-
-              {selectedContest ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-1">
-                  <VotingMetricCard label="Total votes" value={selectedContest.totals.totalVotes.toLocaleString()} />
-                  <VotingMetricCard label="Free votes" value={selectedContest.totals.freeVotes.toLocaleString()} />
-                  <VotingMetricCard label="Paid votes" value={selectedContest.totals.paidVotes.toLocaleString()} />
-                </div>
-              ) : null}
             </section>
           </aside>
 
@@ -232,9 +230,7 @@ export default function LeaderboardPage() {
                         rank={entry.rank}
                         imageSrc={entry.imageUrl || entry.imagePath || ''}
                         name={entry.name}
-                        categoryLabel={`Category: ${selectedContest.title}`}
                         votesLabel={`${entry.totalVotes.toLocaleString()} votes`}
-                        breakdownLabel={`Free ${entry.freeVotes} | Paid ${entry.paidVotes}`}
                         voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
                       />
                     ))}

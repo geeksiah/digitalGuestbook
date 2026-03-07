@@ -42,41 +42,64 @@ export default function NomineeProfilePage() {
   const [eventName, setEventName] = useState('');
   const [categories, setCategories] = useState<NomineeCategory[]>([]);
 
+  const loadNomineeData = async (showLoading = true) => {
+    if (!slug) return;
+    if (showLoading) setLoading(true);
+    try {
+      const response = await votingApi.nominees(slug);
+      const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
+      const rawCategories = Array.isArray(payload.categories) ? payload.categories : [];
+      const normalizedCategories: NomineeCategory[] = rawCategories
+        .map((category: any) => ({
+          contestId: String(category?.contestId || category?.id || ''),
+          title: String(category?.title || category?.name || 'Untitled category'),
+          mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
+          nominees: (Array.isArray(category?.nominees) ? category.nominees : [])
+            .map((nominee: any) => ({
+              optionId: String(nominee?.optionId || nominee?.id || ''),
+              name: String(nominee?.name || 'Unnamed nominee'),
+              description: nominee?.description ? String(nominee.description) : null,
+              imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
+              imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
+              totalVotes: Number(nominee?.totalVotes || 0),
+            }))
+            .filter((nominee: Nominee) => Boolean(nominee.optionId)),
+        }))
+        .filter((category) => category.contestId);
+
+      setEventName(String(payload?.event?.name || slug));
+      setCategories(normalizedCategories);
+    } catch (error: any) {
+      if (showLoading) {
+        toast.error(error?.response?.data?.error || 'Failed to load nominee profile');
+      }
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!slug) return;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const response = await votingApi.nominees(slug);
-        const payload = ((response.data as any)?.data || response.data || {}) as Partial<NomineesPayload>;
-        const rawCategories = Array.isArray(payload.categories) ? payload.categories : [];
-        const normalizedCategories: NomineeCategory[] = rawCategories
-          .map((category: any) => ({
-            contestId: String(category?.contestId || category?.id || ''),
-            title: String(category?.title || category?.name || 'Untitled category'),
-            mode: (category?.mode === 'ELECTION' ? 'ELECTION' : 'AWARDS') as 'AWARDS' | 'ELECTION',
-            nominees: (Array.isArray(category?.nominees) ? category.nominees : [])
-              .map((nominee: any) => ({
-                optionId: String(nominee?.optionId || nominee?.id || ''),
-                name: String(nominee?.name || 'Unnamed nominee'),
-                description: nominee?.description ? String(nominee.description) : null,
-                imagePath: nominee?.imagePath ? String(nominee.imagePath) : null,
-                imageUrl: nominee?.imageUrl ? String(nominee.imageUrl) : null,
-                totalVotes: Number(nominee?.totalVotes || 0),
-              }))
-              .filter((nominee: Nominee) => Boolean(nominee.optionId)),
-          }))
-          .filter((category) => category.contestId);
+    void loadNomineeData();
+  }, [slug]);
 
-        setEventName(String(payload?.event?.name || slug));
-        setCategories(normalizedCategories);
-      } catch (error: any) {
-        toast.error(error?.response?.data?.error || 'Failed to load nominee profile');
-      } finally {
-        setLoading(false);
-      }
+  useEffect(() => {
+    if (!slug) return;
+    const handleFocus = () => {
+      if (document.visibilityState !== 'visible') return;
+      void loadNomineeData(false);
     };
-    void run();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void loadNomineeData(false);
+    }, 12000);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, [slug]);
 
   const selectedNominee = useMemo(() => {

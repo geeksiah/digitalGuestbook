@@ -1140,6 +1140,7 @@ export default function EventDetailPage() {
       ...(guestbookEnabled ? [{ id: 'media' as Tab, label: 'Media', count: event._count.mediaAssets }] : []),
       { id: 'templates', label: 'Templates' },
       ...(ticketingEnabled ? [{ id: 'tickets' as Tab, label: 'Tickets' }] : []),
+      ...(ticketingEnabled ? [{ id: 'sales' as Tab, label: 'Sales' }] : []),
       ...(itineraryEnabled ? [{ id: 'itinerary' as Tab, label: 'Itinerary', count: itineraryItems.length || undefined }] : []),
       ...(rsvpEnabled ? [{ id: 'formFields' as Tab, label: 'Form Fields', count: formFields.length }] : []),
       ...(giftingEnabled ? [{ id: 'gifts' as Tab, label: 'Gifts', count: event._count.giftOrders || undefined }] : []),
@@ -1237,40 +1238,119 @@ export default function EventDetailPage() {
 
       {/* Overview */}
       {activeTab === 'overview' && (
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
-            {[
-              { l: 'Guest Responses', v: event._count.rsvps, icon: Icons.check },
-              { l: 'Invites Sent', v: event._count.invitations, icon: Icons.copy },
-              { l: 'Arrivals', v: event._count.checkIns, icon: Icons.check },
-              { l: 'Guest Media', v: event._count.mediaAssets, icon: Icons.video },
-            ].map(s => (
-              <div key={s.l} className="metric-card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 mb-1">{s.l}</p>
-                    <p className="text-3xl font-bold tracking-tight text-brand-900">{s.v}</p>
-                  </div>
-                  <div className="w-11 h-11 rounded-2xl bg-surface-100 flex items-center justify-center text-surface-500">
-                    {s.icon}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_320px]">
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { l: 'Guest Responses', v: event._count.rsvps, icon: Icons.check },
+                { l: 'Invites Sent', v: event._count.invitations, icon: Icons.copy },
+                { l: 'Arrivals', v: event._count.checkIns, icon: Icons.check },
+                { l: 'Guest Media', v: event._count.mediaAssets, icon: Icons.video },
+              ].map((s) => (
+                <div key={s.l} className="rounded-[24px] border border-surface-200 bg-white px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">{s.l}</p>
+                      <p className="text-2xl font-bold tracking-tight text-brand-900">{s.v}</p>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-100 text-surface-500">
+                      {s.icon}
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+
+            <div className="detail-card">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="font-semibold text-brand-900">Public Pages</h3>
+                  <p className="mt-1 text-sm text-surface-600">
+                    Open or copy the live pages attached to this event.
+                  </p>
+                </div>
               </div>
-            ))}
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {[
+                  { l: 'Event Home', p: `/e/${event.slug}`, enabled: true },
+                  { l: 'Invitation Page', p: `/e/${event.slug}/invitation`, enabled: event.invitationEnabled },
+                  { l: 'Live Page', p: `/e/${event.slug}/live`, enabled: true },
+                  { l: 'RSVP Form', p: `/e/${event.slug}/rsvp`, enabled: event.rsvpEnabled },
+                  { l: 'Guestbook', p: `/e/${event.slug}/guestbook`, enabled: event.guestbookEnabled },
+                  { l: 'Guest Booth', p: `/e/${event.slug}/booth`, enabled: event.guestbookEnabled },
+                  { l: 'Check-In', p: `/e/${event.slug}/checkin`, enabled: event.checkInEnabled },
+                  { l: 'Itinerary', p: `/e/${event.slug}/itinerary`, enabled: event.itineraryEnabled },
+                  { l: 'Gift Page', p: `/gift/${event.slug}`, enabled: event.giftingEnabled },
+                  { l: 'Nomination Page', p: `/e/${event.slug}/nominate`, enabled: true },
+                  { l: 'Nominees Page', p: `/e/${event.slug}/nominees`, enabled: true },
+                  { l: 'Vote Page', p: `/e/${event.slug}/vote`, enabled: true },
+                  { l: 'Leaderboard Page', p: `/e/${event.slug}/leaderboard`, enabled: true },
+                  { l: 'Thank You Page', p: `/e/${event.slug}/thanks`, enabled: true },
+                  { l: 'Owner Token View', p: `/event-owner/${event.ownerAccessToken}`, enabled: true },
+                  { l: 'Owner Dashboard Login', p: `/owner/login`, enabled: true },
+                ].map((x) => (
+                  <div
+                    key={x.p}
+                    className={cn(
+                      'flex items-center justify-between rounded-2xl border px-3 py-3 transition-colors',
+                      x.enabled
+                        ? 'border-surface-200 bg-surface-50/40 text-surface-700 hover:border-brand-200 hover:bg-surface-50'
+                        : 'border-surface-200 bg-surface-50/60 text-surface-400'
+                    )}
+                  >
+                    <div className="min-w-0 pr-3">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-sm font-medium">{x.l}</span>
+                        {!x.enabled ? (
+                          <span className="rounded bg-surface-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-surface-500">
+                            Disabled
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={x.p}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          'rounded-md p-1.5 transition-colors',
+                          x.enabled ? 'text-surface-500 hover:bg-surface-100 hover:text-brand-900' : 'text-surface-300'
+                        )}
+                        title="Open link"
+                      >
+                        {Icons.external}
+                      </a>
+                      <button
+                        onClick={() => handleCopyLink(x.p)}
+                        className={cn(
+                          'rounded-md p-1.5 transition-colors',
+                          x.enabled ? 'text-surface-500 hover:bg-surface-100 hover:text-brand-900' : 'text-surface-300'
+                        )}
+                        title="Copy link"
+                      >
+                        {Icons.copy}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+
           <div className="space-y-4">
             <div className="detail-card">
-              <h3 className="font-semibold text-brand-900 mb-4">Event Stage</h3>
+              <h3 className="mb-4 font-semibold text-brand-900">Event Stage</h3>
               <div className="space-y-2">
-                {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map(p => (
-                  <button 
-                    key={p} 
-                    onClick={() => handlePhaseChange(p)} 
-                    disabled={event.currentPhase === p} 
+                {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => handlePhaseChange(p)}
+                    disabled={event.currentPhase === p}
                     className={cn(
-                      'w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
-                      event.currentPhase === p 
-                        ? 'bg-brand-900 text-white' 
+                      'w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
+                      event.currentPhase === p
+                        ? 'bg-brand-900 text-white'
                         : 'bg-surface-50 text-surface-700 hover:bg-surface-100'
                     )}
                   >
@@ -1283,7 +1363,7 @@ export default function EventDetailPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-brand-900">Voting Hub</h3>
-                  <p className="text-sm text-surface-600 mt-1">
+                  <p className="mt-1 text-sm text-surface-600">
                     Manage categories, nominees, nominations, and live rankings.
                   </p>
                 </div>
@@ -1327,70 +1407,6 @@ export default function EventDetailPage() {
                 >
                   Leaderboard
                 </a>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl border border-surface-200 p-5">
-              <h3 className="font-semibold text-brand-900 mb-4">Public Pages</h3>
-              <div className="space-y-1 text-sm">
-                {[
-                  { l: 'Event Home', p: `/e/${event.slug}`, enabled: true },
-                  { l: 'Invitation Page', p: `/e/${event.slug}/invitation`, enabled: event.invitationEnabled },
-                  { l: 'Live Page', p: `/e/${event.slug}/live`, enabled: true },
-                  { l: 'RSVP Form', p: `/e/${event.slug}/rsvp`, enabled: event.rsvpEnabled },
-                  { l: 'Guestbook', p: `/e/${event.slug}/guestbook`, enabled: event.guestbookEnabled },
-                  { l: 'Guest Booth', p: `/e/${event.slug}/booth`, enabled: event.guestbookEnabled },
-                  { l: 'Check-In', p: `/e/${event.slug}/checkin`, enabled: event.checkInEnabled },
-                  { l: 'Itinerary', p: `/e/${event.slug}/itinerary`, enabled: event.itineraryEnabled },
-                  { l: 'Gift Page', p: `/gift/${event.slug}`, enabled: event.giftingEnabled },
-                  { l: 'Nomination Page', p: `/e/${event.slug}/nominate`, enabled: true },
-                  { l: 'Nominees Page', p: `/e/${event.slug}/nominees`, enabled: true },
-                  { l: 'Vote Page', p: `/e/${event.slug}/vote`, enabled: true },
-                  { l: 'Leaderboard Page', p: `/e/${event.slug}/leaderboard`, enabled: true },
-                  { l: 'Thank You Page', p: `/e/${event.slug}/thanks`, enabled: true },
-                  { l: 'Owner Token View', p: `/event-owner/${event.ownerAccessToken}`, enabled: true },
-                  { l: 'Owner Dashboard Login', p: `/owner/login`, enabled: true },
-                ].map(x => (
-                  <div
-                    key={x.p}
-                    className={cn(
-                      'w-full p-2.5 rounded-lg flex items-center justify-between transition-colors',
-                      x.enabled ? 'hover:bg-surface-50 text-surface-700' : 'bg-surface-50/60 text-surface-400'
-                    )}
-                  >
-                    <div className="min-w-0 flex items-center gap-2">
-                      <span className="truncate">{x.l}</span>
-                      {!x.enabled ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-200 text-surface-500 uppercase tracking-wide">
-                          Disabled
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <a
-                        href={x.p}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          'p-1.5 rounded-md transition-colors',
-                          x.enabled ? 'hover:bg-surface-100 text-surface-500 hover:text-brand-900' : 'text-surface-300'
-                        )}
-                        title="Open link"
-                      >
-                        {Icons.external}
-                      </a>
-                      <button
-                        onClick={() => handleCopyLink(x.p)}
-                        className={cn(
-                          'p-1.5 rounded-md transition-colors',
-                          x.enabled ? 'hover:bg-surface-100 text-surface-500 hover:text-brand-900' : 'text-surface-300'
-                        )}
-                        title="Copy link"
-                      >
-                        {Icons.copy}
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

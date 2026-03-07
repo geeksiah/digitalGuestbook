@@ -131,6 +131,43 @@ class InMemoryVotingRepo implements IVotingRepository {
 }
 
 describe('VotingService', () => {
+  it('rejects election mode when no verification method is enabled', async () => {
+    const repo = new InMemoryVotingRepo();
+    const service = new VotingService(repo);
+
+    await expect(
+      service.configureVoting('event-1', {
+        mode: 'ELECTION',
+        requireOtpForElection: false,
+        settingsJson: {
+          verification: {
+            manualIdEnabled: false,
+            manualIdEntries: [],
+          },
+        },
+      })
+    ).rejects.toMatchObject<AppError>({ statusCode: 400 });
+  });
+
+  it('allows election mode when manual voter ids are configured', async () => {
+    const repo = new InMemoryVotingRepo();
+    const service = new VotingService(repo);
+
+    await expect(
+      service.configureVoting('event-1', {
+        mode: 'ELECTION',
+        requireOtpForElection: false,
+        settingsJson: {
+          verification: {
+            manualIdEnabled: true,
+            manualIdLabel: 'Voter ID',
+            manualIdEntries: [{ id: 'ABC123', name: 'Voter One' }],
+          },
+        },
+      })
+    ).resolves.toBeTruthy();
+  });
+
   it('enforces free vote uniqueness conflicts', async () => {
     const repo = new InMemoryVotingRepo();
     repo.duplicateFreeVote = true;
@@ -173,4 +210,3 @@ describe('VotingService', () => {
     expect(result.voteGrant.id).toBe('grant-2');
   });
 });
-

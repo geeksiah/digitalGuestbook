@@ -26,8 +26,8 @@ export default function NomineeProfileCategoryCard({
           </p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-          <Link href={voteHref} className="btn-primary w-full text-center">
-            Vote In Category
+          <Link href={voteHref} className="btn-primary w-full text-center" title={`Vote in ${title}`}>
+            Vote In {title}
           </Link>
           <button
             type="button"

@@ -24,7 +24,7 @@ router.use((req, res, next) => {
 });
 const imageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
-    limits: { fileSize: 8 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
         if (!String(file.mimetype || '').startsWith('image/')) {
             cb(new errorHandler_js_1.AppError('Please upload an image file', 400));

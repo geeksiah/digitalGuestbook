@@ -790,6 +790,8 @@ export const votingApi = {
     axios.post(`${API_BASE_URL}/api/voting/otp/request`, data),
   verifyOtp: (data: { slug: string; code: string; sessionToken?: string; embedToken?: string }) =>
     axios.post(`${API_BASE_URL}/api/voting/otp/verify`, data),
+  verifyManualVoterId: (data: { slug: string; voterId: string; sessionToken?: string; embedToken?: string }) =>
+    axios.post(`${API_BASE_URL}/api/voting/id/verify`, data),
   leaderboard: (slug: string, contestId?: string) =>
     axios.get(`${API_BASE_URL}/api/voting/public/${slug}/leaderboard`, {
       params: contestId ? { contestId } : undefined,

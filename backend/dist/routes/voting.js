@@ -54,7 +54,7 @@ const resolveMediaUrl = (mediaPath) => {
 };
 const nominationPhotoUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
-    limits: { fileSize: 8 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
         if (!String(file.mimetype || '').startsWith('image/')) {
             cb(new errorHandler_js_1.AppError('Please upload an image file', 400));
@@ -105,6 +105,66 @@ const hashOtp = (code) => (0, crypto_1.createHash)('sha256').update(code).digest
 const hashElectionKey = (value) => (0, crypto_1.createHash)('sha256').update(value).digest('hex');
 const normalizeHost = (value) => String(value || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 const normalizePhone = (phone) => phone.replace(/[^\d+]/g, '');
+const normalizeManualId = (value) => String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+const parseSessionVerificationState = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw)
+        return {};
+    if (raw.startsWith('{')) {
+        try {
+            const parsed = JSON.parse(raw);
+            return {
+                phone: parsed.phone ? normalizePhone(parsed.phone) : null,
+                manualId: parsed.manualId ? normalizeManualId(parsed.manualId) : null,
+                manualName: parsed.manualName ? String(parsed.manualName).trim() : null,
+            };
+        }
+        catch {
+            return {};
+        }
+    }
+    return { phone: normalizePhone(raw) };
+};
+const serializeSessionVerificationState = (state) => JSON.stringify({
+    phone: state.phone ? normalizePhone(state.phone) : null,
+    manualId: state.manualId ? normalizeManualId(state.manualId) : null,
+    manualName: state.manualName ? String(state.manualName).trim() : null,
+});
+const getVerificationSettings = (config) => {
+    const settings = parseJson(config.settingsJson, {});
+    const verification = settings?.verification && typeof settings.verification === 'object' ? settings.verification : {};
+    const rawEntries = Array.isArray(verification.manualIdEntries) ? verification.manualIdEntries : [];
+    const manualIdEntries = rawEntries
+        .map((entry) => ({
+        id: normalizeManualId(entry?.id || entry?.idNumber || entry?.identifier || ''),
+        name: String(entry?.name || '').trim(),
+    }))
+        .filter((entry) => entry.id);
+    const requiresPhoneOtp = Boolean(config.requireOtpForElection);
+    const requiresManualId = Boolean(verification.manualIdEnabled);
+    return {
+        requiresPhoneOtp,
+        requiresManualId,
+        manualIdLabel: String(verification.manualIdLabel || 'Voter ID').trim() || 'Voter ID',
+        manualIdEntries,
+    };
+};
+const buildElectionIdentityKey = (state, verification) => {
+    const parts = [];
+    if (verification.requiresPhoneOtp) {
+        if (!state.phone)
+            return null;
+        parts.push(`phone:${normalizePhone(state.phone)}`);
+    }
+    if (verification.requiresManualId) {
+        if (!state.manualId)
+            return null;
+        parts.push(`id:${normalizeManualId(state.manualId)}`);
+    }
+    if (parts.length === 0)
+        return null;
+    return hashElectionKey(parts.join('|'));
+};
 const resolveEmbedToken = (req, explicitToken) => String(explicitToken ||
     req.get('x-voting-embed-token') ||
     req.query?.embedToken ||
@@ -170,6 +230,7 @@ const getOrCreateVoterSession = async (eventId, req, providedToken, originHost) 
     });
     return { session, token, isNew: true };
 };
+const getVerifiedStateForSession = (session) => parseSessionVerificationState(session.verifiedPhone);
 const ensureVotingContext = async (slug) => {
     const event = await prisma_js_1.default.event.findUnique({
         where: { slug },
@@ -244,6 +305,8 @@ router.get('/public/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res)
     const embedPayload = validateEmbedTokenForEvent(event, embedToken);
     const providedToken = String(req.query.sessionToken || req.get('x-voter-session') || '').trim() || null;
     const { session, token } = await getOrCreateVoterSession(event.id, req, providedToken, embedPayload?.originHost || null);
+    const verification = getVerificationSettings(event.votingConfig);
+    const verifiedState = getVerifiedStateForSession(session);
     const walletState = (0, walletPolicy_js_1.resolveOwnerWalletState)((event.Owner?.wallets || []));
     const visibleGateways = (0, walletPolicy_js_1.filterEventGatewaysForOwner)({
         eventGateways: event.eventPaymentGateways,
@@ -288,7 +351,14 @@ router.get('/public/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res)
             id: session.id,
             voterKey: session.voterKey,
             token,
-            otpVerified: Boolean(session.otpVerifiedAt),
+            otpVerified: Boolean(verifiedState.phone && session.otpVerifiedAt),
+            manualIdVerified: Boolean(verifiedState.manualId),
+            verifiedManualName: verifiedState.manualName || null,
+            verification: {
+                requiresPhoneOtp: verification.requiresPhoneOtp,
+                requiresManualId: verification.requiresManualId,
+                manualIdLabel: verification.manualIdLabel,
+            },
         },
     });
 }));
@@ -506,13 +576,19 @@ router.post('/free-vote', (0, errorHandler_js_1.asyncHandler)(async (req, res) =
     if (!option)
         throw new errorHandler_js_1.AppError('Voting nominee not found', 404);
     const electionMode = contest.mode === 'ELECTION' || event.votingConfig.mode === 'ELECTION';
-    const electionVoterKey = electionMode
-        ? session.verifiedPhone
-            ? hashElectionKey(session.verifiedPhone)
-            : null
-        : null;
-    if (electionMode && event.votingConfig.requireOtpForElection && !electionVoterKey) {
-        throw new errorHandler_js_1.AppError('OTP verification is required before voting in election mode', 400);
+    const verification = getVerificationSettings(event.votingConfig);
+    const verifiedState = getVerifiedStateForSession(session);
+    const verifiedIdentityKey = buildElectionIdentityKey(verifiedState, verification);
+    const electionVoterKey = electionMode ? buildElectionIdentityKey(verifiedState, verification) : null;
+    const voterKeyForGrant = verifiedIdentityKey || session.voterKey;
+    if (verification.requiresPhoneOtp && !verifiedState.phone) {
+        throw new errorHandler_js_1.AppError('Phone OTP verification is required before voting for this event', 400);
+    }
+    if (verification.requiresManualId && !verifiedState.manualId) {
+        throw new errorHandler_js_1.AppError(`${verification.manualIdLabel} verification is required before voting for this event`, 400);
+    }
+    if (electionMode && !electionVoterKey) {
+        throw new errorHandler_js_1.AppError('Voter verification is required before casting an election vote', 400);
     }
     await prisma_js_1.default.$transaction(async (tx) => {
         if (electionMode && electionVoterKey) {
@@ -531,7 +607,7 @@ router.post('/free-vote', (0, errorHandler_js_1.asyncHandler)(async (req, res) =
             data: {
                 eventId: event.id,
                 contestId: contest.id,
-                voterKey: session.voterKey,
+                voterKey: voterKeyForGrant,
                 electionVoterKey,
                 voteType: 'FREE',
                 voteCount: 1,
@@ -542,7 +618,7 @@ router.post('/free-vote', (0, errorHandler_js_1.asyncHandler)(async (req, res) =
                 eventId: event.id,
                 contestId: contest.id,
                 optionId: option.id,
-                voterKey: session.voterKey,
+                voterKey: voterKeyForGrant,
                 voteType: 'FREE',
                 voteCount: 1,
             },
@@ -605,13 +681,20 @@ router.post('/payment-intent', (0, errorHandler_js_1.asyncHandler)(async (req, r
         throw new errorHandler_js_1.AppError('Voting nominee not found', 404);
     const { session, token } = await getOrCreateVoterSession(event.id, req, input.sessionToken, embedPayload?.originHost || null);
     const electionMode = contest.mode === 'ELECTION' || event.votingConfig.mode === 'ELECTION';
-    const electionVoterKey = electionMode
-        ? session.verifiedPhone
-            ? hashElectionKey(session.verifiedPhone)
-            : null
-        : null;
-    if (electionMode && event.votingConfig.requireOtpForElection && !electionVoterKey) {
-        throw new errorHandler_js_1.AppError('OTP verification is required before voting in election mode', 400);
+    const verification = getVerificationSettings(event.votingConfig);
+    const verifiedState = getVerifiedStateForSession(session);
+    const electionVoterKey = electionMode ? buildElectionIdentityKey(verifiedState, verification) : null;
+    if (verification.requiresPhoneOtp && !verifiedState.phone) {
+        throw new errorHandler_js_1.AppError('Phone OTP verification is required before voting for this event', 400);
+    }
+    if (verification.requiresManualId && !verifiedState.manualId) {
+        throw new errorHandler_js_1.AppError(`${verification.manualIdLabel} verification is required before voting for this event`, 400);
+    }
+    if (electionMode && !electionVoterKey) {
+        throw new errorHandler_js_1.AppError('Voter verification is required before starting this election vote', 400);
+    }
+    if (electionMode) {
+        throw new errorHandler_js_1.AppError('Paid voting is not available in election mode', 400);
     }
     const existingPaidGrant = await prisma_js_1.default.voteGrant.findFirst({
         where: {
@@ -688,18 +771,23 @@ router.post('/otp/request', (0, errorHandler_js_1.asyncHandler)(async (req, res)
     const input = otpRequestSchema.parse(req.body || {});
     const event = await ensureVotingContext(input.slug);
     const embedPayload = validateEmbedTokenForEvent(event, resolveEmbedToken(req, input.embedToken || null));
-    if (event.votingConfig.mode !== 'ELECTION' && !event.votingConfig.requireOtpForElection) {
-        throw new errorHandler_js_1.AppError('OTP is only supported in election mode', 400);
+    const verification = getVerificationSettings(event.votingConfig);
+    if (!verification.requiresPhoneOtp) {
+        throw new errorHandler_js_1.AppError('Phone OTP verification is not enabled for this event', 400);
     }
     const { session, token } = await getOrCreateVoterSession(event.id, req, input.sessionToken, embedPayload?.originHost || null);
     const normalizedPhone = normalizePhone(input.phone);
     if (!normalizedPhone)
         throw new errorHandler_js_1.AppError('Phone number is required for OTP', 400);
+    const existingState = getVerifiedStateForSession(session);
     const code = String(Math.floor(100000 + Math.random() * 900000));
     await prisma_js_1.default.voterSession.update({
         where: { id: session.id },
         data: {
-            verifiedPhone: normalizedPhone,
+            verifiedPhone: serializeSessionVerificationState({
+                ...existingState,
+                phone: normalizedPhone,
+            }),
             otpCodeHash: hashOtp(code),
             otpExpiresAt: new Date(Date.now() + OTP_TTL_SECONDS * 1000),
             otpVerifiedAt: null,
@@ -724,6 +812,12 @@ const otpVerifySchema = zod_1.z.object({
     sessionToken: zod_1.z.string().optional(),
     embedToken: zod_1.z.string().optional(),
 });
+const manualIdVerifySchema = zod_1.z.object({
+    slug: zod_1.z.string().min(1),
+    voterId: zod_1.z.string().min(1).max(120),
+    sessionToken: zod_1.z.string().optional(),
+    embedToken: zod_1.z.string().optional(),
+});
 router.post('/otp/verify', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const input = otpVerifySchema.parse(req.body || {});
     const event = await ensureVotingContext(input.slug);
@@ -738,9 +832,11 @@ router.post('/otp/verify', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
     const isValid = session.otpCodeHash === hashOtp(input.code);
     if (!isValid)
         throw new errorHandler_js_1.AppError('Invalid OTP code', 400);
+    const verifiedState = getVerifiedStateForSession(session);
     await prisma_js_1.default.voterSession.update({
         where: { id: session.id },
         data: {
+            verifiedPhone: serializeSessionVerificationState(verifiedState),
             otpVerifiedAt: new Date(),
             lastSeenAt: new Date(),
         },
@@ -749,6 +845,43 @@ router.post('/otp/verify', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
         success: true,
         voterSessionToken: token,
         verified: true,
+    });
+}));
+router.post('/id/verify', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const input = manualIdVerifySchema.parse(req.body || {});
+    const event = await ensureVotingContext(input.slug);
+    const embedPayload = validateEmbedTokenForEvent(event, resolveEmbedToken(req, input.embedToken || null));
+    const verification = getVerificationSettings(event.votingConfig);
+    if (!verification.requiresManualId) {
+        throw new errorHandler_js_1.AppError(`${verification.manualIdLabel} verification is not enabled for this event`, 400);
+    }
+    const normalizedId = normalizeManualId(input.voterId);
+    if (!normalizedId) {
+        throw new errorHandler_js_1.AppError(`${verification.manualIdLabel} is required`, 400);
+    }
+    const matchedEntry = verification.manualIdEntries.find((entry) => entry.id === normalizedId);
+    if (!matchedEntry) {
+        throw new errorHandler_js_1.AppError(`${verification.manualIdLabel} was not found in the approved voter list`, 400);
+    }
+    const { session, token } = await getOrCreateVoterSession(event.id, req, input.sessionToken, embedPayload?.originHost || null);
+    const existingState = getVerifiedStateForSession(session);
+    await prisma_js_1.default.voterSession.update({
+        where: { id: session.id },
+        data: {
+            verifiedPhone: serializeSessionVerificationState({
+                ...existingState,
+                manualId: normalizedId,
+                manualName: matchedEntry.name || null,
+            }),
+            lastSeenAt: new Date(),
+        },
+    });
+    res.json({
+        success: true,
+        voterSessionToken: token,
+        verified: true,
+        manualIdLabel: verification.manualIdLabel,
+        matchedName: matchedEntry.name || null,
     });
 }));
 router.get('/public/:slug/nominees', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
