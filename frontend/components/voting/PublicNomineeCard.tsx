@@ -24,7 +24,7 @@ export default function PublicNomineeCard({
 }) {
   const resolvedImageSrc = resolvePublicAssetUrl(imageSrc);
   return (
-    <article className="overflow-hidden rounded-[26px] border border-surface-200 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.06)]">
+    <article className="overflow-hidden rounded-[26px] border border-surface-200 bg-white shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
       <div className="flex items-start gap-4 p-4">
         {resolvedImageSrc ? (
           <img
@@ -58,8 +58,8 @@ export default function PublicNomineeCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-surface-100 bg-surface-50/70 p-4 sm:grid-cols-3">
-        <Link href={voteHref} className="btn-primary col-span-2 w-full text-center sm:col-span-1" title={`Vote in ${categoryLabel}`}>
+      <div className="flex flex-col gap-2 border-t border-surface-100 bg-surface-50/70 p-4 sm:grid sm:grid-cols-3 sm:gap-2">
+        <Link href={voteHref} className="btn-primary w-full text-center" title={`Vote in ${categoryLabel}`}>
           Vote
         </Link>
         <Link href={profileHref} className="btn-outline w-full text-center">

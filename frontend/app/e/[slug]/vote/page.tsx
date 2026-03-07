@@ -593,7 +593,7 @@ export default function VotePage() {
     : 'Submit Vote';
 
   const votePanel = (
-    <section className="detail-card overflow-hidden">
+    <section className="detail-card overflow-hidden !p-4 sm:!p-5">
       <div className="space-y-5">
         <div className="hidden space-y-2 md:block">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
@@ -610,18 +610,20 @@ export default function VotePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 md:grid-cols-[132px_minmax(0,1fr)] md:gap-5">
-          {resolvePublicAssetUrl(selectedOption?.imageUrl || selectedOption?.imagePath) ? (
-            <img
-              src={resolvePublicAssetUrl(selectedOption?.imageUrl || selectedOption?.imagePath) || ''}
-              alt={selectedOption?.name || 'Nominee'}
-              className="h-24 w-24 rounded-[24px] border border-surface-200 object-cover md:h-32 md:w-32 md:rounded-[28px]"
-            />
-          ) : (
-            <div className="h-24 w-24 rounded-[24px] border border-surface-200 bg-surface-100 md:h-32 md:w-32 md:rounded-[28px]" />
-          )}
+        <div className="grid gap-4 md:grid-cols-[132px_minmax(0,1fr)] md:gap-5">
+          <div className="mx-auto w-fit md:mx-0">
+            {resolvePublicAssetUrl(selectedOption?.imageUrl || selectedOption?.imagePath) ? (
+              <img
+                src={resolvePublicAssetUrl(selectedOption?.imageUrl || selectedOption?.imagePath) || ''}
+                alt={selectedOption?.name || 'Nominee'}
+                className="h-24 w-24 rounded-[24px] border border-surface-200 object-cover md:h-32 md:w-32 md:rounded-[28px]"
+              />
+            ) : (
+              <div className="h-24 w-24 rounded-[24px] border border-surface-200 bg-surface-100 md:h-32 md:w-32 md:rounded-[28px]" />
+            )}
+          </div>
 
-          <div className="space-y-4">
+          <div className="w-full space-y-4">
             <div className="space-y-2 md:hidden">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Ready to vote</p>
               <h2 className="text-2xl font-semibold leading-[1.1] tracking-tight text-brand-900">{selectedContest?.title}</h2>
@@ -785,9 +787,9 @@ export default function VotePage() {
         ) : null}
 
       {checkoutOpen && config ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-surface-950/45 p-3 backdrop-blur-md sm:items-center sm:p-6">
-          <div className="w-full max-w-lg rounded-[28px] border border-surface-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-surface-950/45 p-0 backdrop-blur-md sm:items-center sm:p-6">
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] border border-surface-200 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.24)] sm:rounded-[28px] sm:p-5">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Checkout</p>
                 <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Complete your vote</h3>
@@ -799,7 +801,7 @@ export default function VotePage() {
                   in {selectedContest?.title}.
                 </p>
               </div>
-              <button className="btn-ghost px-3" onClick={() => setCheckoutOpen(false)}>
+              <button className="btn-ghost shrink-0 px-3" onClick={() => setCheckoutOpen(false)}>
                 Close
               </button>
             </div>
