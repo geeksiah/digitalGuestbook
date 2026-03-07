@@ -35,6 +35,8 @@ type VotingContest = {
 
 type VotingOption = {
   id: string;
+  contestId?: string;
+  contestTitle?: string;
   name: string;
   description?: string | null;
   imagePath?: string | null;
@@ -301,14 +303,6 @@ export function VotingNomineePanel({
   editingFieldDraft,
   savingNominationRule,
   selectedContestAllowsPublicNominations,
-  options,
-  editingOptionId,
-  editingOptionName,
-  editingOptionDescription,
-  editingOptionImagePath,
-  editingOptionImagePreview,
-  savingEditingOption,
-  uploadingEditingOptionImage,
   onToggleNomineeContest,
   onOptionNameChange,
   onOptionDescriptionChange,
@@ -327,15 +321,6 @@ export function VotingNomineePanel({
   onSaveFieldEdit,
   onCancelFieldEdit,
   onRemoveField,
-  onStartEditingNominee,
-  onEditingOptionNameChange,
-  onEditingOptionDescriptionChange,
-  onUploadEditingImageClick,
-  onRemoveEditingImage,
-  onSaveEditingNominee,
-  onCancelEditingNominee,
-  onToggleNomineeStatus,
-  onDeleteNominee,
 }: {
   contests: VotingContest[];
   selectedContestTitle: string;
@@ -357,14 +342,6 @@ export function VotingNomineePanel({
   editingFieldDraft: FieldDraft | null;
   savingNominationRule: boolean;
   selectedContestAllowsPublicNominations: boolean;
-  options: VotingOption[];
-  editingOptionId: string;
-  editingOptionName: string;
-  editingOptionDescription: string;
-  editingOptionImagePath: string;
-  editingOptionImagePreview: string;
-  savingEditingOption: boolean;
-  uploadingEditingOptionImage: boolean;
   onToggleNomineeContest: (contestId: string, checked: boolean) => void;
   onOptionNameChange: (value: string) => void;
   onOptionDescriptionChange: (value: string) => void;
@@ -383,15 +360,6 @@ export function VotingNomineePanel({
   onSaveFieldEdit: () => void;
   onCancelFieldEdit: () => void;
   onRemoveField: (fieldId: string) => void;
-  onStartEditingNominee: (option: any) => void;
-  onEditingOptionNameChange: (value: string) => void;
-  onEditingOptionDescriptionChange: (value: string) => void;
-  onUploadEditingImageClick: () => void;
-  onRemoveEditingImage: () => void;
-  onSaveEditingNominee: () => void;
-  onCancelEditingNominee: () => void;
-  onToggleNomineeStatus: (option: any) => void;
-  onDeleteNominee: (option: any) => void;
 }) {
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
@@ -467,7 +435,9 @@ export function VotingNomineePanel({
             </button>
           </div>
         </SectionCard>
+      </div>
 
+      <div className="space-y-4">
         <SectionCard
           eyebrow="Nomination form"
           title="Control public nominations"
@@ -662,7 +632,6 @@ export function VotingNomineePanel({
           )}
         </SectionCard>
       </div>
-
     </section>
   );
 }
@@ -671,6 +640,8 @@ export function VotingPublishedNomineesPanel({
   contests,
   options,
   selectedContestTitle,
+  publishedContestFilter,
+  onPublishedContestFilterChange,
   editingOptionId,
   editingOptionName,
   editingOptionDescription,
@@ -693,6 +664,8 @@ export function VotingPublishedNomineesPanel({
   contests: VotingContest[];
   options: VotingOption[];
   selectedContestTitle: string;
+  publishedContestFilter: string;
+  onPublishedContestFilterChange: (contestId: string) => void;
   editingOptionId: string;
   editingOptionName: string;
   editingOptionDescription: string;
@@ -712,6 +685,14 @@ export function VotingPublishedNomineesPanel({
   onToggleNomineeStatus: (option: any) => void;
   onDeleteNominee: (option: any) => void;
 }) {
+  const visibleOptions = useMemo(
+    () =>
+      publishedContestFilter
+        ? options.filter((option) => option.contestId === publishedContestFilter)
+        : options,
+    [options, publishedContestFilter]
+  );
+
   return (
     <SectionCard
       eyebrow="Published nominees"
@@ -719,16 +700,34 @@ export function VotingPublishedNomineesPanel({
       description={
         selectedContestTitle
           ? `Update ${selectedContestTitle} nominees, adjust visibility, and assign additional categories.`
-          : 'Select a category to manage published nominee profiles.'
+          : 'Manage nominees across all categories and filter when needed.'
       }
     >
-      {options.length === 0 ? (
+      <div className="grid gap-3 rounded-3xl border border-surface-200 bg-surface-50/80 p-4 md:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="text-sm text-surface-500">
+          Showing {visibleOptions.length} published profile{visibleOptions.length === 1 ? '' : 's'}
+        </div>
+        <select
+          className="input"
+          value={publishedContestFilter}
+          onChange={(event) => onPublishedContestFilterChange(event.target.value)}
+        >
+          <option value="">All categories</option>
+          {contests.map((contest) => (
+            <option key={contest.id} value={contest.id}>
+              {contest.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {visibleOptions.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
-          No nominees in this category yet.
+          No published nominees match this filter.
         </div>
       ) : (
         <div className="grid gap-3">
-          {options.map((option) => (
+          {visibleOptions.map((option) => (
             <article key={option.id} className="rounded-3xl border border-surface-200 bg-white p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
@@ -808,6 +807,9 @@ export function VotingPublishedNomineesPanel({
                     ) : (
                       <>
                         <p className="mt-1 text-sm leading-6 text-surface-500">{option.description || 'Nominee profile'}</p>
+                        {option.contestTitle ? (
+                          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{option.contestTitle}</p>
+                        ) : null}
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                           <div className="rounded-full bg-surface-50 px-3 py-2 text-surface-600">
                             <span className="font-semibold text-brand-900">{option.totalVotes}</span> total votes

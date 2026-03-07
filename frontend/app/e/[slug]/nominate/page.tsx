@@ -11,7 +11,7 @@ import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
 type NominationField = {
   id: string;
   label: string;
-  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select';
+  type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'select' | 'url';
   required?: boolean;
   placeholder?: string | null;
   options?: string[];
@@ -123,6 +123,7 @@ export default function NominatePage() {
         const fallbackResponse = await votingApi.getPublicVoting(slug);
         const fallbackPayload = ((fallbackResponse.data as any)?.data || fallbackResponse.data || {}) as Partial<PublicVotingFallbackPayload>;
         normalizedContests = (Array.isArray(fallbackPayload.contests) ? fallbackPayload.contests : [])
+          .filter((contest: any) => contest?.allowPublicNominations !== false)
           .map((contest: any) => ({
             id: String(contest?.id || ''),
             title: String(contest?.title || contest?.name || 'Untitled category'),
@@ -330,7 +331,14 @@ export default function NominatePage() {
   }
 
   return (
-    <VotingPublicLayout slug={slug} eventName={eventName} activeTab="nominate" contestId={contestId} showNominateCta={false}>
+    <VotingPublicLayout
+      slug={slug}
+      eventName={eventName}
+      activeTab="nominate"
+      contestId={contestId}
+      showNominateCta={false}
+      step="choose"
+    >
       <div className="space-y-5">
         <section className="subtle-toolbar">
           <div>
@@ -462,7 +470,15 @@ export default function NominatePage() {
                     ) : (
                       <input
                         className="input"
-                        type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
+                        type={
+                          field.type === 'number'
+                            ? 'number'
+                            : field.type === 'email'
+                            ? 'email'
+                            : field.type === 'url'
+                            ? 'url'
+                            : 'text'
+                        }
                         value={customFields[field.id] || ''}
                         placeholder={field.placeholder || ''}
                         onChange={(event) => setCustomFields((current) => ({ ...current, [field.id]: event.target.value }))}

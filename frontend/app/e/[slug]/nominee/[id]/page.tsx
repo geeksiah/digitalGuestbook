@@ -172,7 +172,7 @@ export default function NomineeProfilePage() {
   }
 
   return (
-    <VotingPublicLayout slug={slug} eventName={eventName || slug} activeTab="nominees">
+    <VotingPublicLayout slug={slug} eventName={eventName || slug} activeTab="nominees" step="choose">
       <div className="space-y-5">
         <section className="detail-card">
           <div className="grid gap-5 md:grid-cols-[180px_1fr]">

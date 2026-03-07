@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { votingApi } from '@/lib/api';
 import PublicNomineeCard from '@/components/voting/PublicNomineeCard';
 import VotingPublicLayout from '@/components/voting/VotingPublicLayout';
+import { resolvePublicAssetUrl } from '@/lib/utils';
 
 type Nominee = {
   optionId: string;
@@ -74,6 +75,17 @@ export default function NomineesPage() {
     () => categories.reduce((sum, category) => sum + category.nominees.length, 0),
     [categories]
   );
+  const spotlight = useMemo(() => {
+    const rankedCandidates = visibleCategories
+      .flatMap((category) =>
+        category.nominees.map((nominee) => ({
+          category,
+          nominee,
+        }))
+      )
+      .sort((a, b) => Number(b.nominee.totalVotes || 0) - Number(a.nominee.totalVotes || 0));
+    return rankedCandidates[0] || null;
+  }, [visibleCategories]);
 
   const copyVoteLink = async (contestId: string, optionId: string) => {
     const url = `${window.location.origin}/e/${slug}/vote?contestId=${encodeURIComponent(contestId)}&optionId=${encodeURIComponent(optionId)}`;
@@ -180,7 +192,7 @@ export default function NomineesPage() {
   }
 
   return (
-    <VotingPublicLayout slug={slug} eventName={eventName} activeTab="nominees" contestId={selectedCategory}>
+    <VotingPublicLayout slug={slug} eventName={eventName} activeTab="nominees" contestId={selectedCategory} step="choose">
       <div className="space-y-5">
         <section className="subtle-toolbar">
           <div>
@@ -236,6 +248,58 @@ export default function NomineesPage() {
                 </button>
               ))}
             </div>
+          ) : null}
+
+          {spotlight ? (
+            <article className="overflow-hidden rounded-[28px] border border-surface-200 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.06)]">
+              <div className="grid gap-4 p-4 sm:grid-cols-[160px_minmax(0,1fr)] sm:p-5">
+                {resolvePublicAssetUrl(spotlight.nominee.imageUrl || spotlight.nominee.imagePath) ? (
+                  <img
+                    src={resolvePublicAssetUrl(spotlight.nominee.imageUrl || spotlight.nominee.imagePath) || ''}
+                    alt={spotlight.nominee.name}
+                    className="h-40 w-full rounded-[22px] border border-surface-200 object-cover sm:h-full"
+                  />
+                ) : (
+                  <div className="h-40 w-full rounded-[22px] border border-surface-200 bg-surface-100" />
+                )}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-700">Nominee spotlight</p>
+                  <Link
+                    href={`/e/${slug}/nominee/${encodeURIComponent(spotlight.nominee.optionId)}?contestId=${encodeURIComponent(spotlight.category.contestId)}`}
+                    className="mt-1 block text-2xl font-semibold tracking-tight text-brand-900 underline-offset-4 hover:underline"
+                  >
+                    {spotlight.nominee.name}
+                  </Link>
+                  <p className="mt-1 text-sm font-medium text-surface-500">{spotlight.category.title}</p>
+                  <p className="mt-2 text-sm text-brand-900">{spotlight.nominee.totalVotes.toLocaleString()} votes</p>
+                  <p
+                    className="mt-2 text-sm leading-6 text-surface-500"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitBoxOrient: 'vertical',
+                      WebkitLineClamp: 3,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {spotlight.nominee.description || 'Open this profile to review full details and vote.'}
+                  </p>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <Link
+                      href={`/e/${slug}/vote?contestId=${encodeURIComponent(spotlight.category.contestId)}&optionId=${encodeURIComponent(spotlight.nominee.optionId)}`}
+                      className="btn-primary w-full justify-center sm:w-auto"
+                    >
+                      Vote
+                    </Link>
+                    <Link
+                      href={`/e/${slug}/nominee/${encodeURIComponent(spotlight.nominee.optionId)}?contestId=${encodeURIComponent(spotlight.category.contestId)}`}
+                      className="btn-outline w-full justify-center sm:w-auto"
+                    >
+                      View Profile
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </article>
           ) : null}
 
           {!visibleCategories.length ? (

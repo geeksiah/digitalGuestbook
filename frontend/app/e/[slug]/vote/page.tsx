@@ -587,7 +587,7 @@ export default function VotePage() {
   }
 
   const primaryActionLabel = canUsePaidVoting
-    ? 'Continue To Checkout'
+    ? 'Submit Vote'
     : electionMode
     ? 'Submit Election Vote'
     : 'Submit Vote';
@@ -676,9 +676,20 @@ export default function VotePage() {
                   </button>
                 </div>
               </label>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-surface-50 px-3 py-3 text-sm text-surface-500">
-                <span>Category: {selectedContest?.title}</span>
-                <span className="font-semibold text-brand-900">{config?.allowPaidVotes ? amountLabel : '1 vote'}</span>
+              <div className="mt-4 space-y-2 rounded-2xl border border-surface-200 bg-surface-50 px-3 py-3 text-sm text-surface-600">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Your vote summary</p>
+                <p>
+                  Category: <span className="font-semibold text-brand-900">{selectedContest?.title}</span>
+                </p>
+                <p>
+                  Nominee: <span className="font-semibold text-brand-900">{selectedOption?.name}</span>
+                </p>
+                <p>
+                  Votes: <span className="font-semibold text-brand-900">{config?.allowPaidVotes ? voteCount : 1}</span>
+                </p>
+                <p>
+                  Total: <span className="font-semibold text-brand-900">{config?.allowPaidVotes ? amountLabel : '1 vote'}</span>
+                </p>
               </div>
             </div>
 
@@ -736,6 +747,7 @@ export default function VotePage() {
       activeTab="nominees"
       contestId={selectedContestId}
       showNominateCta={nominationsAvailable}
+      step={requiresOtp ? 'verify' : 'cast'}
       desktopAside={votePanel}
     >
         {(verification.requiresPhoneOtp || verification.requiresManualId) ? (
@@ -824,7 +836,7 @@ export default function VotePage() {
               </div>
 
               <button className="btn-primary w-full" disabled={submitting || !selectedGatewayId || !canStartPaidVote} onClick={() => { void startPaidVote(); }}>
-                {submitting ? 'Opening checkout...' : 'Open Payment Window'}
+                {submitting ? 'Opening checkout...' : 'Continue to Payment'}
               </button>
             </div>
           </div>

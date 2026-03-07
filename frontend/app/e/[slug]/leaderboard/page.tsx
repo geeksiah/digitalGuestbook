@@ -63,6 +63,8 @@ export default function LeaderboardPage() {
       return String(entry.name || '').toLowerCase().includes(query);
     });
   }, [selectedContest, searchQuery]);
+  const topThree = useMemo(() => visibleRankings.slice(0, 3), [visibleRankings]);
+  const remainingRankings = useMemo(() => visibleRankings.slice(3), [visibleRankings]);
 
   useEffect(() => {
     if (!slug) return;
@@ -169,7 +171,7 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <VotingPublicLayout slug={slug} eventName={eventName} activeTab="results" contestId={selectedContestId}>
+    <VotingPublicLayout slug={slug} eventName={eventName} activeTab="leaderboard" contestId={selectedContestId} step="confirm">
       <div className="space-y-5">
         <section className="subtle-toolbar">
           <div>
@@ -221,19 +223,35 @@ export default function LeaderboardPage() {
                     No nominees match your filters.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {visibleRankings.map((entry) => (
-                      <PublicLeaderboardEntry
-                        key={entry.optionId}
-                        rank={entry.rank}
-                        imageSrc={entry.imageUrl || entry.imagePath || ''}
-                        name={entry.name}
-                        votesLabel={`${entry.totalVotes.toLocaleString()} votes`}
-                        voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
-                        profileHref={`/e/${slug}/nominee/${encodeURIComponent(entry.optionId)}?contestId=${encodeURIComponent(selectedContest.contestId)}`}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {topThree.map((entry, index) => (
+                        <article
+                          key={entry.optionId}
+                          className={`rounded-[24px] border border-surface-200 bg-white p-4 text-center shadow-[0_14px_36px_rgba(15,23,42,0.05)] ${
+                            index === 0 ? 'sm:order-2' : index === 1 ? 'sm:order-1' : 'sm:order-3'
+                          }`}
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">#{entry.rank}</p>
+                          <p className="mt-2 truncate text-base font-semibold tracking-tight text-brand-900">{entry.name}</p>
+                          <p className="mt-1 text-sm text-surface-500">{entry.totalVotes.toLocaleString()} votes</p>
+                        </article>
+                      ))}
+                    </div>
+                    <div className="space-y-3">
+                      {remainingRankings.map((entry) => (
+                        <PublicLeaderboardEntry
+                          key={entry.optionId}
+                          rank={entry.rank}
+                          imageSrc={entry.imageUrl || entry.imagePath || ''}
+                          name={entry.name}
+                          votesLabel={`${entry.totalVotes.toLocaleString()} votes`}
+                          voteHref={`/e/${slug}/vote?contestId=${encodeURIComponent(selectedContest.contestId)}&optionId=${encodeURIComponent(entry.optionId)}`}
+                          profileHref={`/e/${slug}/nominee/${encodeURIComponent(entry.optionId)}?contestId=${encodeURIComponent(selectedContest.contestId)}`}
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
               </>
             )}

@@ -52,6 +52,7 @@ type VotingConfig = {
 type VotingOption = {
   id: string;
   contestId: string;
+  contestTitle?: string;
   name: string;
   description?: string | null;
   imagePath?: string | null;
@@ -218,6 +219,7 @@ export default function AdminVotingPage() {
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
   const [selectedContestId, setSelectedContestId] = useState('');
   const [activeTab, setActiveTab] = useState<VotingTab>('setup');
+  const [publishedContestFilter, setPublishedContestFilter] = useState('');
   const [selectedNomineeContestIds, setSelectedNomineeContestIds] = useState<string[]>([]);
 
   const [newContestTitle, setNewContestTitle] = useState('');
@@ -267,9 +269,14 @@ export default function AdminVotingPage() {
         (contest.options || []).map((option) => ({
           ...option,
           contestId: option.contestId || contest.id,
+          contestTitle: contest.title,
         }))
       ),
     [contests]
+  );
+  const publishedContest = useMemo(
+    () => contests.find((contest) => contest.id === publishedContestFilter) || null,
+    [contests, publishedContestFilter]
   );
   const eventCurrency = useMemo(
     () => String(event && (event as any).defaultCurrency ? (event as any).defaultCurrency : config?.currency || 'USD').toUpperCase(),
@@ -406,6 +413,13 @@ export default function AdminVotingPage() {
       return [selectedContestId, ...valid];
     });
   }, [selectedContestId, contests]);
+
+  useEffect(() => {
+    if (!publishedContestFilter) return;
+    if (!contests.some((contest) => contest.id === publishedContestFilter)) {
+      setPublishedContestFilter('');
+    }
+  }, [contests, publishedContestFilter]);
 
   const saveConfig = async () => {
     if (!config) return;
@@ -911,7 +925,7 @@ export default function AdminVotingPage() {
         </div>
         <div className="metric-card">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominees</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{options.length}</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{allOptions.length}</p>
           <p className="mt-2 text-sm text-surface-500">Total nominees across all categories.</p>
         </div>
         <div className="metric-card">
@@ -981,14 +995,6 @@ export default function AdminVotingPage() {
           editingFieldDraft={editingFieldDraft}
           savingNominationRule={savingNominationRule}
           selectedContestAllowsPublicNominations={Boolean(selectedContest?.allowPublicNominations)}
-          options={options}
-          editingOptionId={editingOptionId}
-          editingOptionName={editingOptionName}
-          editingOptionDescription={editingOptionDescription}
-          editingOptionImagePath={editingOptionImagePath}
-          editingOptionImagePreview={editingOptionImagePreview}
-          savingEditingOption={savingEditingOption}
-          uploadingEditingOptionImage={uploadingEditingOptionImage}
           onToggleNomineeContest={toggleNomineeTargetContest}
           onOptionNameChange={setNewOptionName}
           onOptionDescriptionChange={setNewOptionDescription}
@@ -1027,29 +1033,16 @@ export default function AdminVotingPage() {
             setEditingFieldDraft(null);
           }}
           onRemoveField={removeNominationField}
-          onStartEditingNominee={renameNominee}
-          onEditingOptionNameChange={setEditingOptionName}
-          onEditingOptionDescriptionChange={setEditingOptionDescription}
-          onUploadEditingImageClick={() => editingOptionImageInputRef.current?.click()}
-          onRemoveEditingImage={() => {
-            setEditingOptionImagePath('');
-            setEditingOptionImagePreview('');
-            if (editingOptionImageInputRef.current) {
-              editingOptionImageInputRef.current.value = '';
-            }
-          }}
-          onSaveEditingNominee={saveEditingNominee}
-          onCancelEditingNominee={cancelNomineeEdit}
-          onToggleNomineeStatus={toggleNomineeStatus}
-          onDeleteNominee={deleteNominee}
         />
       ) : null}
 
       {activeTab === 'published' ? (
         <VotingPublishedNomineesPanel
           contests={contests}
-          options={options}
-          selectedContestTitle={selectedContest?.title || ''}
+          options={allOptions}
+          selectedContestTitle={publishedContest?.title || ''}
+          publishedContestFilter={publishedContestFilter}
+          onPublishedContestFilterChange={setPublishedContestFilter}
           editingOptionId={editingOptionId}
           editingOptionName={editingOptionName}
           editingOptionDescription={editingOptionDescription}
