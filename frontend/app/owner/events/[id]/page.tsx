@@ -1,6 +1,7 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { itineraryApi, ownerDashboardApi } from '@/lib/api';
@@ -174,21 +175,91 @@ function RsvpActionMenu({
   onDetails: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const MENU_WIDTH = 192; // w-48
+  const GAP = 4;
+  const EDGE = 8;
+
+  // The menu is portalled to <body> and positioned against the trigger, so the
+  // table's overflow-x-auto / overflow-hidden ancestors can no longer clip it.
+  const position = useCallback(() => {
+    const trigger = buttonRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const menuHeight = menuRef.current?.offsetHeight ?? 216;
+
+    let left = rect.right - MENU_WIDTH;
+    left = Math.min(Math.max(EDGE, left), window.innerWidth - MENU_WIDTH - EDGE);
+
+    let top = rect.bottom + GAP;
+    if (top + menuHeight > window.innerHeight - EDGE) {
+      const flipped = rect.top - menuHeight - GAP;
+      top = flipped >= EDGE ? flipped : Math.max(EDGE, window.innerHeight - menuHeight - EDGE);
+    }
+
+    setCoords({ top, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+
+    position();
+
+    const onDismiss = () => setOpen(false);
+    const onKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') setOpen(false);
+    };
+
+    // capture:true so scrolling the table container (not just the window) is seen
+    window.addEventListener('scroll', position, true);
+    window.addEventListener('resize', onDismiss);
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('scroll', position, true);
+      window.removeEventListener('resize', onDismiss);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, position]);
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-600 bg-surface-50 border border-surface-200 rounded-lg hover:bg-surface-100 active:bg-surface-200 transition-colors"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
         Actions
       </button>
-      {open && (
+      {open && typeof document !== 'undefined' && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-50 w-48 rounded-xl border border-surface-200 bg-white shadow-lg py-1">
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: coords?.top ?? 0,
+              left: coords?.left ?? 0,
+              width: MENU_WIDTH,
+              visibility: coords ? 'visible' : 'hidden',
+            }}
+            className="z-[61] rounded-xl border border-surface-200 bg-white shadow-lg py-1"
+          >
             <button
+              type="button"
+              role="menuitem"
               onClick={() => { onDetails(); setOpen(false); }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-900 hover:bg-surface-50 transition-colors"
             >
@@ -197,6 +268,8 @@ function RsvpActionMenu({
             </button>
             <div className="h-px bg-surface-100 my-1" />
             <button
+              type="button"
+              role="menuitem"
               onClick={() => { onReview(rsvpId, 'APPROVED'); setOpen(false); }}
               disabled={reviewing || status === 'APPROVED'}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-40"
@@ -205,6 +278,8 @@ function RsvpActionMenu({
               Approve
             </button>
             <button
+              type="button"
+              role="menuitem"
               onClick={() => { onReview(rsvpId, 'PENDING'); setOpen(false); }}
               disabled={reviewing || status === 'PENDING'}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-yellow-700 hover:bg-yellow-50 transition-colors disabled:opacity-40"
@@ -213,6 +288,8 @@ function RsvpActionMenu({
               Set Pending
             </button>
             <button
+              type="button"
+              role="menuitem"
               onClick={() => { onReview(rsvpId, 'REJECTED'); setOpen(false); }}
               disabled={reviewing || status === 'REJECTED'}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-700 hover:bg-rose-50 transition-colors disabled:opacity-40"
@@ -221,7 +298,8 @@ function RsvpActionMenu({
               Reject
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
