@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { publicApi, rsvpApi, ticketingApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 
 type FieldType = 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox' | 'radio' | 'textarea' | 'date';
 
@@ -81,6 +82,10 @@ export default function EventRsvpPage() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
 
+  // Render the assigned RSVP template when the event has one; otherwise fall
+  // back to the built-in form below.
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'rsvp');
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +146,7 @@ export default function EventRsvpPage() {
   const submitDisabled = submitting || (isPaidMode ? !paidReadyToSubmit : !freeReadyToSubmit);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || templateLoading || hasTemplate) return;
 
     let cancelled = false;
     const run = async () => {
@@ -173,7 +178,7 @@ export default function EventRsvpPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, templateLoading, hasTemplate]);
 
   const updateTicketQty = (ticketId: string, nextValue: number, maxPerOrder: number, available: number) => {
     const safeMax = Math.max(0, Math.min(maxPerOrder, available));
@@ -357,6 +362,18 @@ export default function EventRsvpPage() {
       setSubmitting(false);
     }
   };
+
+  if (templateLoading) {
+    return (
+      <div className="min-h-screen section-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
+      </div>
+    );
+  }
+
+  if (hasTemplate) {
+    return <BackendTemplateFrame slug={slug} endpoint="rsvp" />;
+  }
 
   if (loading) {
     return (

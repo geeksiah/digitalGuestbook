@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>RSVP | {{event.name}}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ─────────────────────────────────────────────────────────────
+       Cherry On Top - RSVP template
+       Palette taken from the cherry/blush arch backdrop:
+       deep cherry arches, blush pink signage, white stage, rose florals.
+       All rules are scoped under .cherry-rsvp so the template can be
+       injected into the host page without leaking styles.
+       ───────────────────────────────────────────────────────────── */
+    body {
+      margin: 0;
+      background: #fdeef2;
+    }
+
+    .cherry-rsvp {
+      --cr-wine: #6b0f26;
+      --cr-cherry-dark: #8e1233;
+      --cr-cherry: #a8163c;
+      --cr-cherry-light: #c21e4a;
+      --cr-rose: #e0446b;
+      --cr-blush: #f4b4c6;
+      --cr-blush-soft: #f9cfd9;
+      --cr-blush-mist: #fde7ec;
+      --cr-cream: #fdeef2;
+      --cr-white: #ffffff;
+      --cr-ink: #3a0a18;
+      --cr-ink-soft: #7c5563;
+      --cr-line: #f0d3db;
+      --cr-shadow: 0 18px 44px rgba(107, 15, 38, 0.14);
+
+      position: relative;
+      min-height: 100vh;
+      min-height: 100dvh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--cr-ink);
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: calc(36px + env(safe-area-inset-bottom));
+    }
+
+    .cherry-rsvp *,
+    .cherry-rsvp *::before,
+    .cherry-rsvp *::after { box-sizing: border-box; }
+
+    /* ─── Backdrop ─────────────────────────────────────────────── */
+    .cr-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 8% 6%, rgba(224, 68, 107, 0.20) 0, rgba(224, 68, 107, 0) 42%),
+        radial-gradient(circle at 96% 16%, rgba(168, 22, 60, 0.16) 0, rgba(168, 22, 60, 0) 40%),
+        radial-gradient(circle at 50% 100%, rgba(244, 180, 198, 0.45) 0, rgba(244, 180, 198, 0) 55%),
+        linear-gradient(180deg, #fdeef2 0%, #fbe2e9 100%);
+    }
+
+    .cr-shell {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      padding: 22px 16px 0;
+    }
+
+    /* ─── Hero arch ────────────────────────────────────────────── */
+    .cr-hero { padding-top: calc(6px + env(safe-area-inset-top)); }
+
+    .cr-arch {
+      position: relative;
+      padding: 22px 10px 0;
+    }
+
+    .cr-arch-stack {
+      position: relative;
+      border-radius: 200px 200px 26px 26px;
+      background: linear-gradient(165deg, var(--cr-cherry) 0%, var(--cr-cherry-dark) 62%, var(--cr-wine) 100%);
+      padding: 26px 18px 30px;
+      box-shadow: var(--cr-shadow);
+      overflow: hidden;
+    }
+
+    /* nested arch reveals, echoing the layered backdrop panels */
+    .cr-arch-stack::before,
+    .cr-arch-stack::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 0;
+      border-radius: 200px 200px 0 0;
+      pointer-events: none;
+    }
+    .cr-arch-stack::before {
+      width: 88%;
+      height: 94%;
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+    .cr-arch-stack::after {
+      width: 72%;
+      height: 86%;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    }
+
+    .cr-sign {
+      position: relative;
+      z-index: 2;
+      border-radius: 150px 150px 20px 20px;
+      background: linear-gradient(170deg, var(--cr-blush-soft) 0%, var(--cr-blush) 100%);
+      padding: 34px 20px 26px;
+      text-align: center;
+      box-shadow: 0 12px 26px rgba(107, 15, 38, 0.18);
+    }
+
+    .cr-script {
+      margin: 0;
+      font-family: 'Great Vibes', 'Cormorant Garamond', cursive;
+      font-size: 30px;
+      line-height: 1.1;
+      color: var(--cr-wine);
+    }
+
+    .cr-event-name {
+      margin: 8px 0 0;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 27px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+      color: var(--cr-wine);
+    }
+
+    .cr-rule {
+      width: 54px;
+      height: 1px;
+      margin: 14px auto;
+      background: rgba(107, 15, 38, 0.32);
+    }
+
+    .cr-meta {
+      margin: 4px 0 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #7d2540;
+      font-weight: 500;
+    }
+
+    /* floral clusters built from layered radial gradients */
+    .cr-florals {
+      position: absolute;
+      z-index: 3;
+      width: 130px;
+      height: 150px;
+      pointer-events: none;
+      background-repeat: no-repeat;
+      background-image:
+        radial-gradient(circle at 20% 18%, var(--cr-cherry-light) 0 11px, transparent 12px),
+        radial-gradient(circle at 46% 8%, var(--cr-blush) 0 9px, transparent 10px),
+        radial-gradient(circle at 72% 22%, var(--cr-rose) 0 12px, transparent 13px),
+        radial-gradient(circle at 14% 46%, var(--cr-blush-mist) 0 10px, transparent 11px),
+        radial-gradient(circle at 44% 40%, var(--cr-wine) 0 13px, transparent 14px),
+        radial-gradient(circle at 76% 52%, var(--cr-blush-soft) 0 11px, transparent 12px),
+        radial-gradient(circle at 24% 74%, var(--cr-rose) 0 10px, transparent 11px),
+        radial-gradient(circle at 56% 78%, var(--cr-cherry) 0 12px, transparent 13px),
+        radial-gradient(circle at 84% 84%, var(--cr-blush) 0 9px, transparent 10px);
+      filter: drop-shadow(0 6px 12px rgba(107, 15, 38, 0.22));
+      opacity: 0.96;
+    }
+    .cr-florals.is-left { top: 4px; left: -12px; }
+    .cr-florals.is-right { bottom: -14px; right: -10px; transform: rotate(180deg); }
+
+    .cr-stage {
+      width: 84%;
+      height: 22px;
+      margin: -11px auto 0;
+      border-radius: 50%;
+      background: var(--cr-white);
+      box-shadow: 0 14px 30px rgba(107, 15, 38, 0.16);
+    }
+
+    /* ─── Card ─────────────────────────────────────────────────── */
+    .cr-card {
+      position: relative;
+      margin-top: 20px;
+      padding: 20px 18px 22px;
+      background: var(--cr-white);
+      border: 1px solid var(--cr-line);
+      border-radius: 26px;
+      box-shadow: var(--cr-shadow);
+    }
+
+    .cr-card-title {
+      margin: 0 0 4px;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--cr-wine);
+    }
+
+    .cr-card-sub {
+      margin: 0 0 18px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--cr-ink-soft);
+    }
+
+    /* ─── Attendance choices ───────────────────────────────────── */
+    .cr-choices {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .cr-choice {
+      appearance: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 13px 6px 12px;
+      border: 1.5px solid var(--cr-line);
+      border-radius: 18px;
+      background: var(--cr-blush-mist);
+      color: var(--cr-wine);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .cr-choice small {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      opacity: 0.72;
+    }
+
+    .cr-choice svg { width: 20px; height: 20px; }
+
+    .cr-choice:hover { border-color: var(--cr-blush); }
+
+    .cr-choice[aria-pressed="true"] {
+      background: linear-gradient(160deg, var(--cr-cherry-light) 0%, var(--cr-cherry) 55%, var(--cr-wine) 100%);
+      border-color: var(--cr-wine);
+      color: var(--cr-white);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 22px rgba(107, 15, 38, 0.28);
+    }
+
+    .cr-choice[aria-pressed="true"] small { opacity: 0.86; }
+
+    /* ─── Fields ───────────────────────────────────────────────── */
+    .cr-field { display: block; margin-bottom: 15px; }
+
+    .cr-label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--cr-wine);
+    }
+
+    .cr-label em {
+      font-style: normal;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: var(--cr-ink-soft);
+    }
+
+    .cherry-rsvp input[type="text"],
+    .cherry-rsvp input[type="tel"],
+    .cherry-rsvp input[type="email"],
+    .cherry-rsvp textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--cr-line);
+      border-radius: 14px;
+      background: #fffafb;
+      font-family: inherit;
+      font-size: 15px;
+      color: var(--cr-ink);
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    }
+
+    .cherry-rsvp textarea {
+      min-height: 88px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .cherry-rsvp input::placeholder,
+    .cherry-rsvp textarea::placeholder { color: #c39fac; }
+
+    .cherry-rsvp input:focus,
+    .cherry-rsvp textarea:focus {
+      outline: none;
+      background: var(--cr-white);
+      border-color: var(--cr-cherry);
+      box-shadow: 0 0 0 3px rgba(224, 68, 107, 0.16);
+    }
+
+    .cherry-rsvp .is-invalid { border-color: var(--cr-rose); }
+
+    .cr-help {
+      margin: 6px 0 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--cr-ink-soft);
+    }
+
+    .cr-error {
+      display: none;
+      margin: 6px 0 0;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--cr-cherry-light);
+    }
+    .cr-error.is-visible { display: block; }
+
+    /* ─── Guest stepper ────────────────────────────────────────── */
+    .cr-guests { margin-bottom: 15px; }
+
+    .cr-stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 8px;
+      border: 1.5px solid var(--cr-line);
+      border-radius: 16px;
+      background: #fffafb;
+    }
+
+    .cr-step {
+      appearance: none;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      border: none;
+      border-radius: 12px;
+      background: var(--cr-blush-mist);
+      color: var(--cr-wine);
+      font-family: inherit;
+      font-size: 22px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.16s ease, color 0.16s ease;
+    }
+    .cr-step:hover { background: var(--cr-blush-soft); }
+    .cr-step:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .cr-count {
+      flex: 1 1 auto;
+      text-align: center;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--cr-wine);
+    }
+    .cr-count span {
+      display: block;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--cr-ink-soft);
+    }
+
+    /* ─── Submit ───────────────────────────────────────────────── */
+    .cr-submit {
+      appearance: none;
+      width: 100%;
+      margin-top: 6px;
+      padding: 16px 18px;
+      border: none;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--cr-cherry-light) 0%, var(--cr-cherry) 50%, var(--cr-wine) 100%);
+      color: var(--cr-white);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      box-shadow: 0 14px 28px rgba(107, 15, 38, 0.26);
+      transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+    }
+    .cr-submit:hover { transform: translateY(-1px); }
+    .cr-submit:active { transform: translateY(0); }
+    .cr-submit:disabled {
+      opacity: 0.65;
+      cursor: progress;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .cr-alert {
+      margin: 14px 0 0;
+      padding: 11px 13px;
+      border: 1px solid #f2b9c6;
+      border-radius: 14px;
+      background: #fff1f4;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #92183c;
+    }
+
+    .cr-footnote {
+      margin: 16px 0 0;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--cr-ink-soft);
+    }
+
+    /* ─── Success ──────────────────────────────────────────────── */
+    .cr-success {
+      margin-top: 20px;
+      padding: 30px 20px 26px;
+      text-align: center;
+      background: var(--cr-white);
+      border: 1px solid var(--cr-line);
+      border-radius: 150px 150px 26px 26px;
+      box-shadow: var(--cr-shadow);
+    }
+
+    .cr-seal {
+      width: 66px;
+      height: 66px;
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: linear-gradient(150deg, var(--cr-cherry-light) 0%, var(--cr-wine) 100%);
+      box-shadow: 0 12px 24px rgba(107, 15, 38, 0.26);
+    }
+    .cr-seal svg { width: 30px; height: 30px; }
+
+    .cr-success h2 {
+      margin: 0 0 8px;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 25px;
+      font-weight: 700;
+      color: var(--cr-wine);
+    }
+
+    .cr-success p {
+      margin: 0 auto;
+      max-width: 320px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--cr-ink-soft);
+    }
+
+    .cr-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin: 18px 0 0;
+    }
+
+    .cr-chip {
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: var(--cr-blush-mist);
+      border: 1px solid var(--cr-line);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--cr-wine);
+    }
+
+    .cr-links {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-top: 20px;
+    }
+
+    .cr-link {
+      display: block;
+      padding: 13px 16px;
+      border-radius: 16px;
+      border: 1.5px solid var(--cr-blush);
+      background: var(--cr-blush-mist);
+      color: var(--cr-wine);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.16s ease, transform 0.16s ease;
+    }
+    .cr-link:hover { background: var(--cr-blush-soft); transform: translateY(-1px); }
+
+    .cr-restart {
+      appearance: none;
+      margin-top: 16px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--cr-ink-soft);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .cherry-rsvp [hidden] { display: none !important; }
+
+    @media (min-width: 420px) {
+      .cr-script { font-size: 34px; }
+      .cr-event-name { font-size: 30px; }
+      .cr-card { padding: 24px 22px 26px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cherry-rsvp * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cherry-rsvp" id="cherryRsvp" data-slug="{{event.slug}}" data-api="{{api.baseUrl}}">
+    <div class="cr-backdrop" aria-hidden="true"></div>
+
+    <div class="cr-shell">
+      <header class="cr-hero">
+        <div class="cr-arch">
+          <div class="cr-florals is-left" aria-hidden="true"></div>
+          <div class="cr-florals is-right" aria-hidden="true"></div>
+          <div class="cr-arch-stack">
+            <div class="cr-sign">
+              <p class="cr-script">You&rsquo;re invited</p>
+              <h1 class="cr-event-name">{{event.name}}</h1>
+              <div class="cr-rule"></div>
+              <p class="cr-meta">{{event.formattedDate}}</p>
+              {{#if event.venue}}<p class="cr-meta">{{event.venue}}</p>{{/if}}
+            </div>
+          </div>
+        </div>
+        <div class="cr-stage" aria-hidden="true"></div>
+      </header>
+
+      <form class="cr-card" id="crForm" novalidate>
+        <h2 class="cr-card-title">Will you be joining us?</h2>
+        <p class="cr-card-sub">Kindly respond below &mdash; it takes less than a minute.</p>
+
+        <div class="cr-choices" role="group" aria-label="Your response">
+          <button type="button" class="cr-choice" data-attendance="YES" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            Yes
+            <small>I&rsquo;ll be there</small>
+          </button>
+          <button type="button" class="cr-choice" data-attendance="NO" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            No
+            <small>Can&rsquo;t make it</small>
+          </button>
+          <button type="button" class="cr-choice" data-attendance="MAYBE" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+            Maybe
+            <small>Not sure yet</small>
+          </button>
+        </div>
+
+        <label class="cr-field" for="crName">
+          <span class="cr-label">Full name</span>
+          <input id="crName" type="text" name="primaryName" autocomplete="name" placeholder="Your name" maxlength="80" required>
+          <span class="cr-error" id="crNameError"></span>
+        </label>
+
+        <div class="cr-guests" id="crGuestsRow">
+          <span class="cr-label">Number of guests</span>
+          <div class="cr-stepper">
+            <button type="button" class="cr-step" id="crMinus" aria-label="Fewer guests">&minus;</button>
+            <div class="cr-count" aria-live="polite">
+              <span id="crCountValue">1</span>
+              <span>including you</span>
+            </div>
+            <button type="button" class="cr-step" id="crPlus" aria-label="More guests">+</button>
+          </div>
+          <input type="hidden" id="crGuestCount" value="1">
+        </div>
+
+        <label class="cr-field" for="crPhone">
+          <span class="cr-label">Phone <em>(optional)</em></span>
+          <input id="crPhone" type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="e.g. 024 000 0000" maxlength="30">
+        </label>
+
+        <label class="cr-field" for="crEmail">
+          <span class="cr-label">Email <em>(optional)</em></span>
+          <input id="crEmail" type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" maxlength="120">
+          <span class="cr-error" id="crEmailError"></span>
+        </label>
+
+        <label class="cr-field" for="crNote">
+          <span class="cr-label">Notes <em>(optional)</em></span>
+          <textarea id="crNote" name="note" placeholder="Anything we should know? Dietary needs, a message, arrival time&hellip;" maxlength="500"></textarea>
+          <p class="cr-help"><span id="crNoteCount">0</span>/500</p>
+        </label>
+
+        <button type="submit" class="cr-submit" id="crSubmit">Send my RSVP</button>
+
+        <p class="cr-alert" id="crAlert" role="alert" hidden></p>
+
+        <p class="cr-footnote">Your details are only shared with the hosts of {{event.name}}.</p>
+      </form>
+
+      <section class="cr-success" id="crSuccess" hidden aria-live="polite">
+        <div class="cr-seal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h2 id="crSuccessTitle">Thank you!</h2>
+        <p id="crSuccessMessage">Your RSVP has been received.</p>
+        <div class="cr-chips" id="crSuccessChips"></div>
+
+        <div class="cr-links">
+          {{#if urls.guestbook}}<a class="cr-link" href="{{urls.guestbook}}">Sign the guestbook</a>{{/if}}
+          {{#if urls.itinerary}}<a class="cr-link" href="{{urls.itinerary}}">View the itinerary</a>{{/if}}
+          {{#if urls.gifting}}<a class="cr-link" href="{{urls.gifting}}">Send a gift</a>{{/if}}
+          {{#if urls.invitation}}<a class="cr-link" href="{{urls.invitation}}">Back to the invitation</a>{{/if}}
+        </div>
+
+        <button type="button" class="cr-restart" id="crRestart">Submit another RSVP</button>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById('cherryRsvp');
+      if (!root || root.getAttribute('data-cr-ready') === '1') return;
+      root.setAttribute('data-cr-ready', '1');
+
+      var form = document.getElementById('crForm');
+      var successPanel = document.getElementById('crSuccess');
+      var submitBtn = document.getElementById('crSubmit');
+      var alertBox = document.getElementById('crAlert');
+      var nameInput = document.getElementById('crName');
+      var phoneInput = document.getElementById('crPhone');
+      var emailInput = document.getElementById('crEmail');
+      var noteInput = document.getElementById('crNote');
+      var noteCount = document.getElementById('crNoteCount');
+      var guestsRow = document.getElementById('crGuestsRow');
+      var countValue = document.getElementById('crCountValue');
+      var countField = document.getElementById('crGuestCount');
+      var minusBtn = document.getElementById('crMinus');
+      var plusBtn = document.getElementById('crPlus');
+      var choices = root.querySelectorAll('.cr-choice');
+
+      var MAX_GUESTS = 20;
+      var attendance = 'YES';
+      var guestCount = 1;
+
+      // ─── API base ────────────────────────────────────────────────
+      // Prefer the api base URL injected into data-api. If the platform did not
+      // set it, recover the backend origin from the request this page came from.
+      function resolveApiBase() {
+        var declared = (root.getAttribute('data-api') || '').trim();
+        if (declared) return declared.replace(/\/+$/, '');
+
+        try {
+          var entries = (window.performance && window.performance.getEntriesByType)
+            ? window.performance.getEntriesByType('resource')
+            : [];
+          for (var i = entries.length - 1; i >= 0; i--) {
+            var url = entries[i].name || '';
+            var marker = url.indexOf('/api/public/event/');
+            if (marker > 0) return url.slice(0, marker);
+          }
+        } catch (err) { /* resource timing unavailable */ }
+
+        return window.location.origin;
+      }
+
+      var apiBase = resolveApiBase();
+      var slug = (root.getAttribute('data-slug') || '').trim();
+
+      function queryParam(key) {
+        try {
+          return new URLSearchParams(window.location.search).get(key) || '';
+        } catch (err) {
+          return '';
+        }
+      }
+      var inviteToken = (queryParam('inviteToken') || queryParam('token') || '').trim();
+
+      // ─── Helpers ─────────────────────────────────────────────────
+      function showAlert(message) {
+        alertBox.textContent = message;
+        alertBox.hidden = false;
+      }
+
+      function clearAlert() {
+        alertBox.textContent = '';
+        alertBox.hidden = true;
+      }
+
+      function setFieldError(input, errorId, message) {
+        var node = document.getElementById(errorId);
+        if (node) {
+          node.textContent = message || '';
+          node.classList.toggle('is-visible', Boolean(message));
+        }
+        if (input) input.classList.toggle('is-invalid', Boolean(message));
+      }
+
+      function renderGuestCount() {
+        countValue.textContent = String(guestCount);
+        countField.value = String(guestCount);
+        minusBtn.disabled = guestCount <= 1;
+        plusBtn.disabled = guestCount >= MAX_GUESTS;
+      }
+
+      function setAttendance(value) {
+        attendance = value;
+        for (var i = 0; i < choices.length; i++) {
+          var isActive = choices[i].getAttribute('data-attendance') === value;
+          choices[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+        // A decline does not need a party size.
+        guestsRow.hidden = value === 'NO';
+      }
+
+      // ─── Wiring ──────────────────────────────────────────────────
+      for (var c = 0; c < choices.length; c++) {
+        choices[c].addEventListener('click', function () {
+          setAttendance(this.getAttribute('data-attendance'));
+          clearAlert();
+        });
+      }
+
+      minusBtn.addEventListener('click', function () {
+        guestCount = Math.max(1, guestCount - 1);
+        renderGuestCount();
+      });
+
+      plusBtn.addEventListener('click', function () {
+        guestCount = Math.min(MAX_GUESTS, guestCount + 1);
+        renderGuestCount();
+      });
+
+      noteInput.addEventListener('input', function () {
+        noteCount.textContent = String(noteInput.value.length);
+      });
+
+      nameInput.addEventListener('input', function () {
+        setFieldError(nameInput, 'crNameError', '');
+      });
+
+      emailInput.addEventListener('input', function () {
+        setFieldError(emailInput, 'crEmailError', '');
+      });
+
+      // ─── Submit ──────────────────────────────────────────────────
+      form.addEventListener('submit', function (evt) {
+        evt.preventDefault();
+        clearAlert();
+
+        var name = nameInput.value.trim();
+        var phone = phoneInput.value.trim();
+        var email = emailInput.value.trim();
+        var note = noteInput.value.trim();
+        var valid = true;
+
+        if (name.length < 2) {
+          setFieldError(nameInput, 'crNameError', 'Please enter your name (at least 2 characters).');
+          valid = false;
+        }
+
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          setFieldError(emailInput, 'crEmailError', 'That email address does not look right.');
+          valid = false;
+        }
+
+        if (!valid) {
+          nameInput.focus();
+          return;
+        }
+
+        var payload = {
+          primaryName: name,
+          attendance: attendance,
+          guestCount: attendance === 'NO' ? 1 : guestCount,
+          submissionChannel: 'WEB'
+        };
+        if (phone) payload.phone = phone;
+        if (email) payload.email = email;
+        if (note) payload.note = note;
+        if (inviteToken) payload.inviteToken = inviteToken;
+
+        var headers = { 'Content-Type': 'application/json' };
+        if (inviteToken) headers['X-Invite-Token'] = inviteToken;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending…';
+
+        fetch(apiBase + '/api/rsvp/' + encodeURIComponent(slug), {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload)
+        })
+          .then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (data) {
+              return { ok: response.ok, status: response.status, data: data || {} };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              var reason = result.data.error || result.data.message || 'We could not save your RSVP. Please try again.';
+              showAlert(reason);
+              return;
+            }
+            showSuccess(name, result.data);
+          })
+          .catch(function () {
+            showAlert('We could not reach the server. Please check your connection and try again.');
+          })
+          .then(function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send my RSVP';
+          });
+      });
+
+      function showSuccess(name, data) {
+        var status = (data.rsvp && data.rsvp.status) || '';
+        var firstName = name.split(' ')[0];
+
+        document.getElementById('crSuccessTitle').textContent =
+          attendance === 'NO' ? ('Thank you, ' + firstName) : ('See you soon, ' + firstName + '!');
+
+        document.getElementById('crSuccessMessage').textContent =
+          data.message || (attendance === 'NO'
+            ? 'We are sorry you cannot make it. Your response has been recorded.'
+            : 'Your RSVP has been received.');
+
+        var chips = document.getElementById('crSuccessChips');
+        chips.innerHTML = '';
+
+        function addChip(text) {
+          if (!text) return;
+          var chip = document.createElement('span');
+          chip.className = 'cr-chip';
+          chip.textContent = text;
+          chips.appendChild(chip);
+        }
+
+        addChip(attendance === 'YES' ? 'Attending' : attendance === 'NO' ? 'Not attending' : 'Maybe attending');
+        if (attendance !== 'NO') {
+          addChip(guestCount + (guestCount === 1 ? ' guest' : ' guests'));
+        }
+        if (status === 'PENDING') addChip('Awaiting approval');
+        if (status === 'APPROVED') addChip('Confirmed');
+
+        form.hidden = true;
+        successPanel.hidden = false;
+        try {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (err) {
+          window.scrollTo(0, 0);
+        }
+      }
+
+      document.getElementById('crRestart').addEventListener('click', function () {
+        form.reset();
+        guestCount = 1;
+        setAttendance('YES');
+        renderGuestCount();
+        noteCount.textContent = '0';
+        setFieldError(nameInput, 'crNameError', '');
+        setFieldError(emailInput, 'crEmailError', '');
+        clearAlert();
+        successPanel.hidden = true;
+        form.hidden = false;
+        nameInput.focus();
+      });
+
+      setAttendance('YES');
+      renderGuestCount();
+    })();
+  </script>
+</body>
+</html>

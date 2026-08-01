@@ -117,7 +117,7 @@ Templates support variable injection using double curly braces: `{{variable.name
 - `{{guestName}}` - Guest name (for invitation pages)
 - `{{guestCount}}` - Guest count (for invitation pages)
 - `{{qrCodeData}}` - QR code data URL (base64 image) for check-in (invitation pages, RSVP approval pages)
-- `{{formFields}}` - Array of custom form fields (for RSVP templates)
+- `{{formFields}}` - Array of custom form fields (invitation/ticketing contexts only; **not** injected into `RSVP` templates — fetch `/api/ticketing/public/:slug/form` instead)
   - Each field contains: `label`, `type`, `name`, `required`, `placeholder`, `helpText`, `options` (for select fields)
 - `{{rsvpStatus}}` - RSVP status: PENDING, APPROVED, REJECTED (for RSVP confirmation pages)
 - `{{attendance}}` - Attendance response: YES, NO, MAYBE (for RSVP pages)
@@ -293,6 +293,51 @@ Templates are isolated per event:
   leaderboard: string (full URL)
 }
 ```
+
+## RSVP Template Rules
+
+An RSVP template assigned to an event renders at `/e/:slug/rsvp`. When no RSVP template is
+assigned, the built-in React RSVP/checkout form is used instead.
+
+Submission contract — post the form yourself from the template:
+
+```
+POST {{api.baseUrl}}/api/rsvp/{{event.slug}}
+Content-Type: application/json
+
+{
+  "primaryName": "Ama Serwaa",     // required, min 2 characters
+  "attendance": "YES",             // required: YES | NO | MAYBE
+  "guestCount": 2,                 // required, 1-20 (defaults to 1)
+  "phone": "0240000000",           // optional
+  "email": "ama@example.com",      // optional, must be a valid email when present
+  "note": "Arriving after 6pm",    // optional, max 500 characters
+  "submissionChannel": "WEB",
+  "inviteToken": "..."             // required only when the event is strict-invite-only
+}
+```
+
+Response: `201` with `{ success, rsvp: { id, status, attendance }, message }`.
+`status` is `APPROVED` for open events and `PENDING` when the event is invitation-only —
+render `message` back to the guest rather than hardcoding confirmation wording.
+
+Rules:
+
+1. Read the backend origin from `{{api.baseUrl}}` and the event from `{{event.slug}}`; never hardcode hosts.
+2. Send `guestCount: 1` when attendance is `NO`; the API rejects values below 1.
+3. Omit optional keys instead of sending empty strings.
+4. Pass `inviteToken` from the `inviteToken` or `token` query parameter so strict-invite events accept the RSVP.
+5. Surface the API `error` message on non-2xx responses.
+6. Custom form fields (`EventFormField`) are not injected into RSVP templates. A template that needs
+   them should fetch `GET {{api.baseUrl}}/api/ticketing/public/{{event.slug}}/form` and post the
+   answers as a JSON string in `customFields`.
+
+### Starter: Cherry On Top RSVP
+
+`backend/templates/uploads/cherry-rsvp-template.html` is a single-file starter — a simple
+name / phone / email / notes / guest-count form with YES-NO-MAYBE actions, styled in a cherry
+and blush arch palette. Upload it as type `RSVP` (zip it, or paste it into the manual
+HTML field of Admin > Templates > New) and assign it on the event's Templates tab.
 
 ## Voting Template Rules
 
@@ -598,6 +643,10 @@ For template development support:
 - ✅ Added booth photo download system with QR codes
 - ✅ Improved camera UX with mirror mode and fullscreen controls
 
+
+### Recent Updates (2026-08-01)
+- `/e/:slug/rsvp` now renders the event's assigned `RSVP` template; the built-in form remains the fallback.
+- Documented the RSVP submission contract and added the `cherry-rsvp-template.html` starter.
 
 ### Recent Updates (2026-03-04)
 - Added split voting template types: `VOTING_NOMINATION`, `VOTING_NOMINEES`, `VOTING`, and `VOTING_LEADERBOARD`.
