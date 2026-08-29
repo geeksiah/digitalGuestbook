@@ -619,8 +619,15 @@ router.get('/domain/:host', asyncHandler(async (req, res) => {
     throw new AppError('Host is required', 400);
   }
 
-  const domain = await prisma.eventDomain.findUnique({
-    where: { host },
+  // Domains are normally stored canonically without the leading `www`, while
+  // DNS points the public website at `www.<domain>`. Resolve both forms so the
+  // incoming Host header maps to the same event.
+  const candidateHosts = host.startsWith('www.')
+    ? [host, host.slice(4)]
+    : [host, `www.${host}`];
+
+  const domain = await prisma.eventDomain.findFirst({
+    where: { host: { in: candidateHosts } },
     include: {
       event: {
         select: {

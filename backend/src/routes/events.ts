@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { promises as dns } from 'node:dns';
+import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
+import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
 import multer from 'multer';
 import sharp from 'sharp';
 import prisma from '../utils/prisma.js';
@@ -978,38 +980,24 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) 
     throw new AppError('Domain not found', 404);
   }
 
-  const txtHost = `_eventpeepo.${domain.host}`;
-  let txtMatch = false;
-  let cnameMatch = false;
-  let errorMessage: string | null = null;
+  const dnsVerification = await verifyCustomDomainDns(
+    domain.host,
+    domain.verificationToken,
+    cnameTarget,
+  );
 
-  try {
-    const txtRecords = await dns.resolveTxt(txtHost);
-    const flat = txtRecords.flat().map((value) => value.trim());
-    txtMatch = flat.includes(domain.verificationToken);
-  } catch {
-    txtMatch = false;
-  }
+  const verified = dnsVerification.verified;
+  const hosting = verified
+    ? await provisionCustomDomainOnNetlify(domain.host)
+    : null;
 
-  try {
-    const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
-    const cnameRecords = await dns.resolveCname(cnameHost);
-    cnameMatch = cnameRecords.some((record) =>
-      record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, '')
-    );
-  } catch {
-    cnameMatch = false;
-  }
-
-  const verified = txtMatch && cnameMatch;
   let status: 'ACTIVE' | 'VERIFIED' | 'FAILED' = 'FAILED';
   if (verified) {
     status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
   }
 
-  if (!verified) {
-    errorMessage = 'TXT and/or CNAME records are not yet configured correctly';
-  }
+  const dnsNote = buildDomainVerificationNote(dnsVerification);
+  const errorMessage = dnsNote || (hosting && !hosting.configured ? hosting.error || null : null);
 
   const updated = await prisma.eventDomain.update({
     where: { id: domain.id },
@@ -1026,13 +1014,22 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) 
       action: 'EVENT_DOMAIN_VERIFIED',
       entityType: 'EVENT_DOMAIN',
       entityId: domain.id,
-      details: JSON.stringify({ host: domain.host, status, txtMatch, cnameMatch }),
+      details: JSON.stringify({
+        host: domain.host,
+        status,
+        txtMatch: dnsVerification.txtMatch,
+        cnameMatch: dnsVerification.cnameMatch,
+        hosting,
+      }),
     },
   });
 
   res.json({
     domain: updated,
-    verification: { txtMatch, cnameMatch, verified },
+    verification: {
+      ...dnsVerification,
+      hosting,
+    },
   });
 }));
 

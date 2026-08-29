@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { randomBytes } from 'crypto';
 import { promises as dns } from 'dns';
+import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
+import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateOwnerAccount } from '../middleware/auth.js';
@@ -841,31 +843,25 @@ router.post('/events/:eventId/domains/:domainId/verify', asyncHandler(async (req
   });
   if (!domain) throw new AppError('Domain not found', 404);
 
-  let txtMatch = false;
-  let cnameMatch = false;
-  try {
-    const txtRecords = await dns.resolveTxt(`_eventpeepo.${domain.host}`);
-    txtMatch = txtRecords.flat().map((v) => v.trim()).includes(domain.verificationToken);
-  } catch {
-    txtMatch = false;
-  }
-  try {
-    const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
-    const cnameRecords = await dns.resolveCname(cnameHost);
-    cnameMatch = cnameRecords.some((record) =>
-      record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, '')
-    );
-  } catch {
-    cnameMatch = false;
-  }
+  const dnsVerification = await verifyCustomDomainDns(
+    domain.host,
+    domain.verificationToken,
+    cnameTarget,
+  );
+  const verified = dnsVerification.verified;
+  const hosting = verified
+    ? await provisionCustomDomainOnNetlify(domain.host)
+    : null;
 
-  const verified = txtMatch && cnameMatch;
   const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
+  const dnsNote = buildDomainVerificationNote(dnsVerification);
+  const verificationNotes = dnsNote || (hosting && !hosting.configured ? hosting.error || null : null);
+
   const updated = await prisma.eventDomain.update({
     where: { id: domain.id },
     data: {
       status,
-      verificationNotes: verified ? null : 'TXT and/or CNAME records do not match yet',
+      verificationNotes,
     },
   });
 
@@ -875,13 +871,23 @@ router.post('/events/:eventId/domains/:domainId/verify', asyncHandler(async (req
       action: 'EVENT_DOMAIN_VERIFIED_BY_OWNER',
       entityType: 'EVENT_DOMAIN',
       entityId: domain.id,
-      details: JSON.stringify({ ownerId, host: domain.host, status, txtMatch, cnameMatch }),
+      details: JSON.stringify({
+        ownerId,
+        host: domain.host,
+        status,
+        txtMatch: dnsVerification.txtMatch,
+        cnameMatch: dnsVerification.cnameMatch,
+        hosting,
+      }),
     },
   });
 
   res.json({
     domain: updated,
-    verification: { verified, txtMatch, cnameMatch },
+    verification: {
+      ...dnsVerification,
+      hosting,
+    },
   });
 }));
 
