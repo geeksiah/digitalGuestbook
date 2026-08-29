@@ -9,7 +9,18 @@
       "Bash(ls:*)",
       "Bash(npx prisma migrate dev:*)",
       "Bash(npx prisma db push:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node render-check.mjs \"c:/Users/abbas/Documents/DigitalGuestbook/digitalGuestbook/backend/templates/uploads/cherry-rsvp-template.html\" \"./rendered-rsvp.html\")",
+      "Bash(node -e ' *)",
+      "Bash(node --check tpl-script.js)",
+      "Bash(node make-preview.mjs)",
+      "Bash(git checkout *)",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 3000,3001,3002,8080 } | Select-Object LocalAddress,LocalPort,OwningProcess | Format-Table -AutoSize)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npm run *)"
     ]
   }
 }

@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /c/Users/abbas/AppData/Local/Temp/avyntagh)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' https://avyntagh.com/checkout -o /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout.html -w 'checkout: HTTP %{http_code}  size=%{size_download}  final=%{url_effective}\\\\n')",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' https://avyntagh.com/ -o /c/Users/abbas/AppData/Local/Temp/avyntagh/home.html -w 'home:     HTTP %{http_code}  size=%{size_download}  final=%{url_effective}\\\\n')",
+      "Bash(curl.exe -sSI -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15\" \"https://avyntagh.com/checkout\")",
+      "Bash(OUT=\"/c/Users/abbas/AppData/Local/Temp/avyntagh\" *)",
+      "Read(//c/Users/abbas/AppData/Local/Temp/avyntagh/**)",
+      "Bash(grep -oE '<script type=\"speculationrules\">.{0,300}' /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout.html)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' https://avyntagh.com/shop/ -o /c/Users/abbas/AppData/Local/Temp/avyntagh/shop.html -w 'shop: HTTP %{http_code} size=%{size_download} final=%{url_effective}\\\\n')",
+      "Bash(rm -f /c/Users/abbas/AppData/Local/Temp/avyntagh/jar.txt)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /c/Users/abbas/AppData/Local/Temp/avyntagh/jar.txt -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar.txt 'https://avyntagh.com/?add-to-cart=29227&quantity=1' -o /dev/null -w 'add-to-cart: HTTP %{http_code}\\\\n')",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /c/Users/abbas/AppData/Local/Temp/avyntagh/jar.txt -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar.txt https://avyntagh.com/checkout/ -o /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout-real.html -w 'checkout: HTTP %{http_code} size=%{size_download} final=%{url_effective}\\\\n')",
+      "Bash(awk '{print $6}')",
+      "Bash(perl -0777 -ne 'while\\(/<script[^>]*>\\(.*?\\)<\\\\/script>/gs\\){ $s=$1; print \"-----\\\\n$s\\\\n\\\\n\" if $s=~/wc_checkout_params|checkout_url|ajax_url|sourceURL=woodmart/i }' /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout-real.html)",
+      "Bash(curl.exe -sS -D - -o /dev/null -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar.txt https://avyntagh.com/checkout/)",
+      "Bash(rm -f /tmp/j2.txt)",
+      "Bash(curl.exe -sS -D - -o /dev/null -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /tmp/j2.txt 'https://avyntagh.com/?add-to-cart=29228&quantity=1')",
+      "Bash(JS=\"/c/Users/abbas/AppData/Local/Temp/avyntagh/js\" *)",
+      "Read(//c/Users/abbas/AppData/Local/Temp/avyntagh/js/**)",
+      "Bash(perl -0777 -ne 'if\\(/\\(<div class=\"product-wrapper\".{0,3000}?<\\\\/div>\\\\s*<\\\\/div>\\)/s\\){ print $1 }' /c/Users/abbas/AppData/Local/Temp/avyntagh/shop.html)",
+      "Bash(perl -0777 -ne 'if\\(/\\(<div class=\"wd-buttons\".{0,1200}?\\)<div class=\"wd-product-header/s\\){ print $1 }' /c/Users/abbas/AppData/Local/Temp/avyntagh/shop.html)",
+      "Bash(perl -0777 -ne 'if\\(/\\(.{600}wd-add-btn.{1400}\\)/s\\){ $x=$1; $x=~s/\\\\t+/ /g; print $x }' /c/Users/abbas/AppData/Local/Temp/avyntagh/shop.html)",
+      "Bash(rm -f /c/Users/abbas/AppData/Local/Temp/avyntagh/jar3.txt)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /c/Users/abbas/AppData/Local/Temp/avyntagh/jar3.txt -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar3.txt 'https://avyntagh.com/?add-to-cart=29227&quantity=1' -o /dev/null)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /c/Users/abbas/AppData/Local/Temp/avyntagh/jar3.txt -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar3.txt https://avyntagh.com/checkout/ -o /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout-v3.html -w 'HTTP %{http_code} size=%{size_download}\\\\n')",
+      "Bash(echo \"=== active theme ===\")",
+      "Bash(perl -0777 -ne 'while\\(/<script[^>]*>\\(.*?\\)<\\\\/script>/gs\\){ $s=$1; print \"$s\\\\n\" if $s=~/sourceURL=woodmart-theme-js-after/ }' /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout-v3.html)",
+      "Bash(rm -f /c/Users/abbas/AppData/Local/Temp/avyntagh/jar4.txt)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /c/Users/abbas/AppData/Local/Temp/avyntagh/jar4.txt -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar4.txt 'https://avyntagh.com/?add-to-cart=29227&quantity=1' -o /dev/null)",
+      "Bash(curl.exe -sSL -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Version/17.4 Safari/605.1.15' -c /c/Users/abbas/AppData/Local/Temp/avyntagh/jar4.txt -b /c/Users/abbas/AppData/Local/Temp/avyntagh/jar4.txt https://avyntagh.com/checkout/ -o /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout-v4.html -w 'HTTP %{http_code}\\\\n')",
+      "Bash(grep -oE '<p class=\"form-row[^\"]*\"[^>]*id=\"billing_email_field\".{0,260}' /c/Users/abbas/AppData/Local/Temp/avyntagh/checkout-v4.html)"
+    ]
+  }
+}
