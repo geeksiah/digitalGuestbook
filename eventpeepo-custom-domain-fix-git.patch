@@ -1,0 +1,406 @@
+diff --git a/backend/ENV.example b/backend/ENV.example
+index 811a43e..4d4e497 100644
+--- a/backend/ENV.example
++++ b/backend/ENV.example
+@@ -59,3 +59,10 @@ FF_OWNER_MEDIA_ALBUMS_MOBILE="true"
+ ONESIGNAL_APP_ID=""
+ ONESIGNAL_API_KEY=""
+ 
++
++# Custom domains / Netlify frontend hosting
++# Point customer CNAME records to the actual Netlify site hostname (for example: digiguestbook.netlify.app)
++DOMAIN_CNAME_TARGET="your-site.netlify.app"
++# Optional but recommended: lets the backend automatically register verified customer domains as Netlify aliases
++NETLIFY_SITE_ID="your-netlify-site-id"
++NETLIFY_AUTH_TOKEN="your-netlify-personal-access-token"
+diff --git a/backend/src/routes/events.ts b/backend/src/routes/events.ts
+index d8459bc..8673eb5 100644
+--- a/backend/src/routes/events.ts
++++ b/backend/src/routes/events.ts
+@@ -2,6 +2,8 @@ import { Router } from 'express';
+ import { v4 as uuidv4 } from 'uuid';
+ import { randomBytes, randomUUID } from 'node:crypto';
+ import { promises as dns } from 'node:dns';
++import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
++import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
+ import multer from 'multer';
+ import sharp from 'sharp';
+ import prisma from '../utils/prisma.js';
+@@ -978,38 +980,24 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res)
+     throw new AppError('Domain not found', 404);
+   }
+ 
+-  const txtHost = `_eventpeepo.${domain.host}`;
+-  let txtMatch = false;
+-  let cnameMatch = false;
+-  let errorMessage: string | null = null;
+-
+-  try {
+-    const txtRecords = await dns.resolveTxt(txtHost);
+-    const flat = txtRecords.flat().map((value) => value.trim());
+-    txtMatch = flat.includes(domain.verificationToken);
+-  } catch {
+-    txtMatch = false;
+-  }
++  const dnsVerification = await verifyCustomDomainDns(
++    domain.host,
++    domain.verificationToken,
++    cnameTarget,
++  );
+ 
+-  try {
+-    const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
+-    const cnameRecords = await dns.resolveCname(cnameHost);
+-    cnameMatch = cnameRecords.some((record) =>
+-      record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, '')
+-    );
+-  } catch {
+-    cnameMatch = false;
+-  }
++  const verified = dnsVerification.verified;
++  const hosting = verified
++    ? await provisionCustomDomainOnNetlify(domain.host)
++    : null;
+ 
+-  const verified = txtMatch && cnameMatch;
+   let status: 'ACTIVE' | 'VERIFIED' | 'FAILED' = 'FAILED';
+   if (verified) {
+     status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
+   }
+ 
+-  if (!verified) {
+-    errorMessage = 'TXT and/or CNAME records are not yet configured correctly';
+-  }
++  const dnsNote = buildDomainVerificationNote(dnsVerification);
++  const errorMessage = dnsNote || (hosting && !hosting.configured ? hosting.error || null : null);
+ 
+   const updated = await prisma.eventDomain.update({
+     where: { id: domain.id },
+@@ -1026,13 +1014,22 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res)
+       action: 'EVENT_DOMAIN_VERIFIED',
+       entityType: 'EVENT_DOMAIN',
+       entityId: domain.id,
+-      details: JSON.stringify({ host: domain.host, status, txtMatch, cnameMatch }),
++      details: JSON.stringify({
++        host: domain.host,
++        status,
++        txtMatch: dnsVerification.txtMatch,
++        cnameMatch: dnsVerification.cnameMatch,
++        hosting,
++      }),
+     },
+   });
+ 
+   res.json({
+     domain: updated,
+-    verification: { txtMatch, cnameMatch, verified },
++    verification: {
++      ...dnsVerification,
++      hosting,
++    },
+   });
+ }));
+ 
+diff --git a/backend/src/routes/owner-dashboard.ts b/backend/src/routes/owner-dashboard.ts
+index de290fc..12a9a20 100644
+--- a/backend/src/routes/owner-dashboard.ts
++++ b/backend/src/routes/owner-dashboard.ts
+@@ -1,6 +1,8 @@
+ import { Router } from 'express';
+ import { randomBytes } from 'crypto';
+ import { promises as dns } from 'dns';
++import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
++import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
+ import prisma from '../utils/prisma.js';
+ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
+ import { authenticateOwnerAccount } from '../middleware/auth.js';
+@@ -841,31 +843,25 @@ router.post('/events/:eventId/domains/:domainId/verify', asyncHandler(async (req
+   });
+   if (!domain) throw new AppError('Domain not found', 404);
+ 
+-  let txtMatch = false;
+-  let cnameMatch = false;
+-  try {
+-    const txtRecords = await dns.resolveTxt(`_eventpeepo.${domain.host}`);
+-    txtMatch = txtRecords.flat().map((v) => v.trim()).includes(domain.verificationToken);
+-  } catch {
+-    txtMatch = false;
+-  }
+-  try {
+-    const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
+-    const cnameRecords = await dns.resolveCname(cnameHost);
+-    cnameMatch = cnameRecords.some((record) =>
+-      record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, '')
+-    );
+-  } catch {
+-    cnameMatch = false;
+-  }
++  const dnsVerification = await verifyCustomDomainDns(
++    domain.host,
++    domain.verificationToken,
++    cnameTarget,
++  );
++  const verified = dnsVerification.verified;
++  const hosting = verified
++    ? await provisionCustomDomainOnNetlify(domain.host)
++    : null;
+ 
+-  const verified = txtMatch && cnameMatch;
+   const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
++  const dnsNote = buildDomainVerificationNote(dnsVerification);
++  const verificationNotes = dnsNote || (hosting && !hosting.configured ? hosting.error || null : null);
++
+   const updated = await prisma.eventDomain.update({
+     where: { id: domain.id },
+     data: {
+       status,
+-      verificationNotes: verified ? null : 'TXT and/or CNAME records do not match yet',
++      verificationNotes,
+     },
+   });
+ 
+@@ -875,13 +871,23 @@ router.post('/events/:eventId/domains/:domainId/verify', asyncHandler(async (req
+       action: 'EVENT_DOMAIN_VERIFIED_BY_OWNER',
+       entityType: 'EVENT_DOMAIN',
+       entityId: domain.id,
+-      details: JSON.stringify({ ownerId, host: domain.host, status, txtMatch, cnameMatch }),
++      details: JSON.stringify({
++        ownerId,
++        host: domain.host,
++        status,
++        txtMatch: dnsVerification.txtMatch,
++        cnameMatch: dnsVerification.cnameMatch,
++        hosting,
++      }),
+     },
+   });
+ 
+   res.json({
+     domain: updated,
+-    verification: { verified, txtMatch, cnameMatch },
++    verification: {
++      ...dnsVerification,
++      hosting,
++    },
+   });
+ }));
+ 
+diff --git a/backend/src/routes/public.ts b/backend/src/routes/public.ts
+index 5928c48..119ada2 100644
+--- a/backend/src/routes/public.ts
++++ b/backend/src/routes/public.ts
+@@ -619,8 +619,15 @@ router.get('/domain/:host', asyncHandler(async (req, res) => {
+     throw new AppError('Host is required', 400);
+   }
+ 
+-  const domain = await prisma.eventDomain.findUnique({
+-    where: { host },
++  // Domains are normally stored canonically without the leading `www`, while
++  // DNS points the public website at `www.<domain>`. Resolve both forms so the
++  // incoming Host header maps to the same event.
++  const candidateHosts = host.startsWith('www.')
++    ? [host, host.slice(4)]
++    : [host, `www.${host}`];
++
++  const domain = await prisma.eventDomain.findFirst({
++    where: { host: { in: candidateHosts } },
+     include: {
+       event: {
+         select: {
+diff --git a/ep-new/backend/src/services/customDomainDns.ts b/backend/src/services/customDomainDns.ts
+new file mode 100644
+index 0000000..ea1dd38
+--- /dev/null
++++ b/backend/src/services/customDomainDns.ts
+@@ -0,0 +1,91 @@
++import { promises as dns } from 'node:dns';
++
++export interface DomainDnsVerificationResult {
++  verified: boolean;
++  txtMatch: boolean;
++  cnameMatch: boolean;
++  txtHost: string;
++  cnameHost: string;
++  expectedTxtValue: string;
++  expectedCnameValue: string;
++  observedTxtValues: string[];
++  observedCnameValues: string[];
++  txtError?: string;
++  cnameError?: string;
++}
++
++const dnsErrorLabel = (error: unknown) => {
++  if (!error || typeof error !== 'object') return 'DNS lookup failed';
++  const candidate = error as { code?: string; message?: string };
++  return candidate.code || candidate.message || 'DNS lookup failed';
++};
++
++export async function verifyCustomDomainDns(
++  host: string,
++  verificationToken: string,
++  cnameTarget: string,
++): Promise<DomainDnsVerificationResult> {
++  const canonicalHost = host.trim().toLowerCase().replace(/\.$/, '');
++  const txtHost = `_eventpeepo.${canonicalHost}`;
++  const cnameHost = canonicalHost.startsWith('www.') ? canonicalHost : `www.${canonicalHost}`;
++  const expectedCnameValue = cnameTarget.trim().toLowerCase().replace(/\.$/, '');
++
++  let observedTxtValues: string[] = [];
++  let observedCnameValues: string[] = [];
++  let txtError: string | undefined;
++  let cnameError: string | undefined;
++
++  try {
++    const records = await dns.resolveTxt(txtHost);
++    // A single TXT RR can be split into multiple character-string chunks.
++    // Join each RR's chunks instead of flattening them into separate values.
++    observedTxtValues = records.map((parts) => parts.join('').trim());
++  } catch (error) {
++    txtError = dnsErrorLabel(error);
++  }
++
++  try {
++    const records = await dns.resolveCname(cnameHost);
++    observedCnameValues = records.map((record) => record.toLowerCase().replace(/\.$/, ''));
++  } catch (error) {
++    cnameError = dnsErrorLabel(error);
++  }
++
++  const txtMatch = observedTxtValues.includes(verificationToken);
++  const cnameMatch = observedCnameValues.includes(expectedCnameValue);
++
++  return {
++    verified: txtMatch && cnameMatch,
++    txtMatch,
++    cnameMatch,
++    txtHost,
++    cnameHost,
++    expectedTxtValue: verificationToken,
++    expectedCnameValue,
++    observedTxtValues,
++    observedCnameValues,
++    ...(txtError ? { txtError } : {}),
++    ...(cnameError ? { cnameError } : {}),
++  };
++}
++
++export function buildDomainVerificationNote(result: DomainDnsVerificationResult) {
++  if (result.verified) return null;
++
++  const failures: string[] = [];
++  if (!result.txtMatch) {
++    failures.push(
++      result.txtError
++        ? `TXT lookup failed for ${result.txtHost} (${result.txtError})`
++        : `TXT mismatch at ${result.txtHost}; expected ${result.expectedTxtValue}${result.observedTxtValues.length ? `, found ${result.observedTxtValues.join(', ')}` : ', found no TXT value'}`,
++    );
++  }
++  if (!result.cnameMatch) {
++    failures.push(
++      result.cnameError
++        ? `CNAME lookup failed for ${result.cnameHost} (${result.cnameError})`
++        : `CNAME mismatch at ${result.cnameHost}; expected ${result.expectedCnameValue}${result.observedCnameValues.length ? `, found ${result.observedCnameValues.join(', ')}` : ', found no CNAME value'}`,
++    );
++  }
++  return failures.join(' | ');
++}
+diff --git a/ep-new/backend/src/services/customDomainHosting.ts b/backend/src/services/customDomainHosting.ts
+new file mode 100644
+index 0000000..04cf4fe
+--- /dev/null
++++ b/backend/src/services/customDomainHosting.ts
+@@ -0,0 +1,94 @@
++export interface HostingProvisionResult {
++  attempted: boolean;
++  configured: boolean;
++  aliases: string[];
++  error?: string;
++}
++
++const normalizeHost = (host: string) => host.trim().toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
++
++export const getCustomDomainAliases = (host: string) => {
++  const canonical = normalizeHost(host);
++  return [canonical, `www.${canonical}`];
++};
++
++/**
++ * Register the customer hostname(s) as aliases on the Netlify site that serves
++ * the EventPeepo frontend. Netlify must know about each hostname so it can
++ * route the Host header and provision HTTPS certificates.
++ *
++ * If NETLIFY_SITE_ID / NETLIFY_AUTH_TOKEN are not configured, this function
++ * deliberately does not fail DNS verification; it returns a clear manual-action
++ * message instead. This keeps existing deployments backwards compatible while
++ * making the missing hosting step visible.
++ */
++export async function provisionCustomDomainOnNetlify(host: string): Promise<HostingProvisionResult> {
++  const aliases = getCustomDomainAliases(host);
++  const siteId = String(process.env.NETLIFY_SITE_ID || '').trim();
++  const authToken = String(process.env.NETLIFY_AUTH_TOKEN || '').trim();
++
++  if (!siteId || !authToken) {
++    return {
++      attempted: false,
++      configured: false,
++      aliases,
++      error: 'DNS is verified, but automatic Netlify domain provisioning is not configured. Add NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN, or add both domain aliases manually in Netlify.',
++    };
++  }
++
++  const endpoint = `https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}`;
++  const headers = {
++    Authorization: `Bearer ${authToken}`,
++    'Content-Type': 'application/json',
++  };
++
++  try {
++    const currentResponse = await fetch(endpoint, { headers });
++    if (!currentResponse.ok) {
++      const detail = await currentResponse.text().catch(() => '');
++      return {
++        attempted: true,
++        configured: false,
++        aliases,
++        error: `Netlify site lookup failed (${currentResponse.status})${detail ? `: ${detail.slice(0, 180)}` : ''}`,
++      };
++    }
++
++    const current = await currentResponse.json() as {
++      custom_domain?: string | null;
++      domain_aliases?: string[] | null;
++    };
++
++    const existing = Array.isArray(current.domain_aliases) ? current.domain_aliases : [];
++    const protectedHosts = new Set([
++      ...(current.custom_domain ? [current.custom_domain.toLowerCase()] : []),
++      ...existing.map((value) => value.toLowerCase()),
++    ]);
++    aliases.forEach((alias) => protectedHosts.add(alias));
++
++    const patchResponse = await fetch(endpoint, {
++      method: 'PATCH',
++      headers,
++      body: JSON.stringify({ domain_aliases: Array.from(protectedHosts) }),
++    });
++
++    if (!patchResponse.ok) {
++      const detail = await patchResponse.text().catch(() => '');
++      return {
++        attempted: true,
++        configured: false,
++        aliases,
++        error: `Netlify domain alias update failed (${patchResponse.status})${detail ? `: ${detail.slice(0, 180)}` : ''}`,
++      };
++    }
++
++    return { attempted: true, configured: true, aliases };
++  } catch (error) {
++    return {
++      attempted: true,
++      configured: false,
++      aliases,
++      error: `Netlify domain provisioning failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
++    };
++  }
++}
