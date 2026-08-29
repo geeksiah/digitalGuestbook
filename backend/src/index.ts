@@ -364,7 +364,7 @@ const uniqueOrigins = [...new Set(allowedOrigins)];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    // Allow requests with no Origin header (mobile apps, curl, server-to-server).
     if (!origin) return callback(null, true);
 
     if (process.env.NODE_ENV !== 'production') {
@@ -383,18 +383,38 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Allow any *.eventpeepo.com subdomain
+    let hostname = '';
     try {
-      const hostname = new URL(origin).hostname;
+      hostname = new URL(origin).hostname.toLowerCase().replace(/\.$/, '');
       if (hostname.endsWith('.eventpeepo.com')) {
         return callback(null, true);
       }
     } catch {
-      // Invalid URL — fall through to deny
+      console.warn(`[CORS] Blocked invalid origin: ${origin}`);
+      return callback(null, false);
     }
 
-    console.warn(`[CORS] Blocked origin: ${origin}`);
-    callback(new Error('Not allowed by CORS'));
+    // Customer domains are tenant origins. Only a fully ACTIVE EventDomain may
+    // call the API from a browser. This prevents arbitrary sites from becoming
+    // trusted merely because they point DNS at EventPeepo.
+    const canonicalHost = hostname.replace(/^www\./, '');
+    prisma.eventDomain.findFirst({
+      where: {
+        host: { in: [canonicalHost, `www.${canonicalHost}`] },
+        status: 'ACTIVE',
+        event: { isArchived: false },
+      },
+      select: { id: true },
+    })
+      .then((domain) => {
+        if (domain) return callback(null, true);
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        return callback(null, false);
+      })
+      .catch((error) => {
+        console.error('[CORS] Failed to validate custom-domain origin:', error);
+        return callback(null, false);
+      });
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

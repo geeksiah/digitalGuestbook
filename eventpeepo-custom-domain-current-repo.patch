@@ -1,0 +1,1351 @@
+--- a/frontend/middleware.ts
++++ b/frontend/middleware.ts
+@@ -1,20 +1,12 @@
+ import { NextRequest, NextResponse } from 'next/server';
+ 
+-const CACHE_TTL_MS = 5 * 60 * 1000;
+-const domainCache = new Map<string, { slug: string; expiresAt: number }>();
++type DomainMapping = {
++  slug: string;
++  canonicalHost: string;
++};
+ 
+-const isIgnoredPath = (pathname: string) =>
+-  pathname.startsWith('/api')
+-  || pathname.startsWith('/_next')
+-  || pathname.startsWith('/admin')
+-  || pathname.startsWith('/owner')
+-  || pathname.startsWith('/event-owner')
+-  || pathname.startsWith('/invite')
+-  || pathname.startsWith('/gift')
+-  || pathname.startsWith('/e/')
+-  || pathname === '/favicon.ico'
+-  || pathname.startsWith('/img/')
+-  || pathname.startsWith('/public/');
++const CACHE_TTL_MS = 15 * 1000;
++const domainCache = new Map<string, { mapping: DomainMapping | null; expiresAt: number }>();
+ 
+ const isPlatformHost = (host: string) =>
+   host.includes('localhost')
+@@ -23,11 +15,38 @@
+   || host.endsWith('.netlify.app')
+   || host.endsWith('.eventpeepo.com');
+ 
+-async function resolveMappedSlug(host: string): Promise<string | null> {
++const isStaticAssetPath = (pathname: string) =>
++  pathname.startsWith('/_next/')
++  || pathname === '/favicon.ico'
++  || pathname === '/robots.txt'
++  || pathname === '/sitemap.xml'
++  || pathname === '/manifest.json'
++  || pathname.startsWith('/img/')
++  || pathname.startsWith('/public/')
++  || pathname.startsWith('/embed/')
++  || pathname === '/sw.js'
++  || /\.[a-z0-9]{2,8}$/i.test(pathname);
++
++const isBlockedPlatformPath = (pathname: string) =>
++  pathname === '/admin'
++  || pathname.startsWith('/admin/')
++  || pathname === '/owner'
++  || pathname.startsWith('/owner/')
++  || pathname === '/event-owner'
++  || pathname.startsWith('/event-owner/')
++  || pathname === '/invite'
++  || pathname.startsWith('/invite/')
++  || pathname === '/api'
++  || pathname.startsWith('/api/');
++
++const notFound = () => new NextResponse('Not Found', {
++  status: 404,
++  headers: { 'Cache-Control': 'no-store' },
++});
++
++async function resolveMappedDomain(host: string): Promise<DomainMapping | null> {
+   const cached = domainCache.get(host);
+-  if (cached && cached.expiresAt > Date.now()) {
+-    return cached.slug;
+-  }
++  if (cached && cached.expiresAt > Date.now()) return cached.mapping;
+ 
+   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+   try {
+@@ -36,36 +55,92 @@
+       headers: { 'Content-Type': 'application/json' },
+       cache: 'no-store',
+     });
+-    if (!response.ok) return null;
++
++    if (!response.ok) {
++      domainCache.set(host, { mapping: null, expiresAt: Date.now() + 5_000 });
++      return null;
++    }
++
+     const payload = await response.json();
+-    if (!payload?.mapped || !payload?.slug) return null;
++    if (!payload?.mapped || !payload?.slug || !payload?.host) return null;
+ 
+-    domainCache.set(host, {
+-      slug: payload.slug,
+-      expiresAt: Date.now() + CACHE_TTL_MS,
+-    });
+-    return payload.slug;
++    const mapping = {
++      slug: String(payload.slug),
++      canonicalHost: String(payload.host).toLowerCase().replace(/^www\./, ''),
++    };
++    domainCache.set(host, { mapping, expiresAt: Date.now() + CACHE_TTL_MS });
++    return mapping;
+   } catch {
+     return null;
+   }
+ }
+ 
+ export async function middleware(request: NextRequest) {
+-  const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() || '';
++  const incomingHost = request.headers.get('host')?.split(':')[0]?.toLowerCase().replace(/\.$/, '') || '';
+   const pathname = request.nextUrl.pathname;
+ 
+-  if (!host || isPlatformHost(host) || isIgnoredPath(pathname)) {
++  if (!incomingHost || isPlatformHost(incomingHost)) {
+     return NextResponse.next();
+   }
+ 
+-  const slug = await resolveMappedSlug(host);
+-  if (!slug) {
+-    return NextResponse.next();
++  const mapping = await resolveMappedDomain(incomingHost);
++  if (!mapping) return notFound();
++
++  // Canonicalize www -> apex while preserving path and query string.
++  if (incomingHost !== mapping.canonicalHost) {
++    const redirectUrl = request.nextUrl.clone();
++    redirectUrl.protocol = 'https:';
++    redirectUrl.host = mapping.canonicalHost;
++    return NextResponse.redirect(redirectUrl, 308);
+   }
+ 
+-  const rewriteUrl = request.nextUrl.clone();
+-  rewriteUrl.pathname = pathname === '/' ? `/e/${slug}` : `/e/${slug}${pathname}`;
++  // Shared Next.js/public assets are safe to serve from the common deployment.
++  if (isStaticAssetPath(pathname)) return NextResponse.next();
++
++  // A custom hostname belongs to exactly one Event, never to the EventPeepo
++  // admin/owner platform or token-based global routes.
++  if (isBlockedPlatformPath(pathname)) return notFound();
++
++  const eventPrefix = `/e/${mapping.slug}`;
++
++  // Clean up old EventPeepo-style links so visitors never need /e/<slug> on a
++  // connected custom domain.
++  if (pathname === eventPrefix) {
++    const redirectUrl = request.nextUrl.clone();
++    redirectUrl.pathname = '/';
++    return NextResponse.redirect(redirectUrl, 308);
++  }
++
++  if (pathname.startsWith(`${eventPrefix}/`)) {
++    const redirectUrl = request.nextUrl.clone();
++    redirectUrl.pathname = pathname.slice(eventPrefix.length) || '/';
++    return NextResponse.redirect(redirectUrl, 308);
++  }
+ 
++  // Never allow another event slug to be mounted beneath this customer host.
++  if (pathname === '/e' || pathname.startsWith('/e/')) return notFound();
++
++  // Gifting is currently implemented at /gift/[slug], unlike the other event
++  // pages under /e/[slug]. Expose it cleanly as customer-domain.com/gift.
++  if (pathname === `/gift/${mapping.slug}`) {
++    const redirectUrl = request.nextUrl.clone();
++    redirectUrl.pathname = '/gift';
++    return NextResponse.redirect(redirectUrl, 308);
++  }
++  if (pathname.startsWith('/gift/')) return notFound();
++  if (pathname === '/gift') {
++    const rewriteUrl = request.nextUrl.clone();
++    rewriteUrl.pathname = `/gift/${mapping.slug}`;
++    return NextResponse.rewrite(rewriteUrl);
++  }
++
++  // Clean tenant routing:
++  //   client.com/              -> internal /e/event-slug
++  //   client.com/rsvp          -> internal /e/event-slug/rsvp
++  //   client.com/guestbook/... -> internal /e/event-slug/guestbook/...
++  // The internal rewrite never changes the URL shown in the browser.
++  const rewriteUrl = request.nextUrl.clone();
++  rewriteUrl.pathname = pathname === '/' ? eventPrefix : `${eventPrefix}${pathname}`;
+   return NextResponse.rewrite(rewriteUrl);
+ }
+ 
+--- a/backend/ENV.example
++++ b/backend/ENV.example
+@@ -61,8 +61,10 @@
+ 
+ 
+ # Custom domains / Netlify frontend hosting
+-# Point customer CNAME records to the actual Netlify site hostname (for example: digiguestbook.netlify.app)
+-DOMAIN_CNAME_TARGET="your-site.netlify.app"
+-# Optional but recommended: lets the backend automatically register verified customer domains as Netlify aliases
++# Branded CNAME shown to customers. Configure cname.eventpeepo.com to point to the Netlify site hostname.
++DOMAIN_CNAME_TARGET="cname.eventpeepo.com"
++# Apex A record shown to customers for their bare/root domain.
++DOMAIN_APEX_IP="75.2.60.5"
++# Required for automatic alias attach/detach and Let's Encrypt certificate lifecycle.
+ NETLIFY_SITE_ID="your-netlify-site-id"
+ NETLIFY_AUTH_TOKEN="your-netlify-personal-access-token"
+--- a/backend/prisma/schema.prisma
++++ b/backend/prisma/schema.prisma
+@@ -1338,7 +1338,7 @@
+   eventId           String
+   host              String   @unique
+   isPrimary         Boolean  @default(false)
+-  status            String   @default("PENDING_VERIFICATION") // PENDING_VERIFICATION | VERIFIED | ACTIVE | FAILED
++  status            String   @default("PENDING_VERIFICATION") // VERIFIED = DNS/hosting pending TLS; ACTIVE = Netlify aliases + HTTPS ready
+   verificationToken String
+   verificationNotes String?
+   createdAt         DateTime @default(now())
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -364,7 +364,7 @@
+ 
+ app.use(cors({
+   origin: (origin, callback) => {
+-    // Allow requests with no origin (mobile apps, curl, server-to-server)
++    // Allow requests with no Origin header (mobile apps, curl, server-to-server).
+     if (!origin) return callback(null, true);
+ 
+     if (process.env.NODE_ENV !== 'production') {
+@@ -383,18 +383,38 @@
+       return callback(null, true);
+     }
+ 
+-    // Allow any *.eventpeepo.com subdomain
+-    try {
+-      const hostname = new URL(origin).hostname;
+-      if (hostname.endsWith('.eventpeepo.com')) {
+-        return callback(null, true);
+-      }
+-    } catch {
+-      // Invalid URL — fall through to deny
++    let hostname = '';
++    try {
++      hostname = new URL(origin).hostname.toLowerCase().replace(/\.$/, '');
++      if (hostname.endsWith('.eventpeepo.com')) {
++        return callback(null, true);
++      }
++    } catch {
++      console.warn(`[CORS] Blocked invalid origin: ${origin}`);
++      return callback(null, false);
+     }
+ 
+-    console.warn(`[CORS] Blocked origin: ${origin}`);
+-    callback(new Error('Not allowed by CORS'));
++    // Customer domains are tenant origins. Only a fully ACTIVE EventDomain may
++    // call the API from a browser. This prevents arbitrary sites from becoming
++    // trusted merely because they point DNS at EventPeepo.
++    const canonicalHost = hostname.replace(/^www\./, '');
++    prisma.eventDomain.findFirst({
++      where: {
++        host: { in: [canonicalHost, `www.${canonicalHost}`] },
++        status: 'ACTIVE',
++        event: { isArchived: false },
++      },
++      select: { id: true },
++    })
++      .then((domain) => {
++        if (domain) return callback(null, true);
++        console.warn(`[CORS] Blocked origin: ${origin}`);
++        return callback(null, false);
++      })
++      .catch((error) => {
++        console.error('[CORS] Failed to validate custom-domain origin:', error);
++        return callback(null, false);
++      });
+   },
+   credentials: true,
+   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+--- a/backend/src/routes/events.ts
++++ b/backend/src/routes/events.ts
+@@ -2,7 +2,13 @@
+ import { v4 as uuidv4 } from 'uuid';
+ import { randomBytes, randomUUID } from 'node:crypto';
+ import { promises as dns } from 'node:dns';
+-import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
++import {
++  checkCustomDomainOnNetlify,
++  isNetlifyDomainAutomationConfigured,
++  provisionCustomDomainOnNetlify,
++  removeCustomDomainFromNetlify,
++  removeCustomDomainsFromNetlify,
++} from '../services/customDomainHosting.js';
+ import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
+ import multer from 'multer';
+ import sharp from 'sharp';
+@@ -27,7 +33,14 @@
+ });
+ 
+ const normalizeDomainHost = (rawHost: string) =>
+-  rawHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
++  rawHost
++    .trim()
++    .toLowerCase()
++    .replace(/^https?:\/\//, '')
++    .split('/')[0]
++    .split(':')[0]
++    .replace(/^www\./, '')
++    .replace(/\.$/, '');
+ 
+ const isValidDomainHost = (host: string) =>
+   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
+@@ -891,9 +904,22 @@
+     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+   });
+ 
++  // TLS issuance can finish after the Verify request returns. Reconcile any
++  // DNS-verified domains whenever the owner/admin revisits the domain screen.
++  const reconciledDomains = await Promise.all(domains.map(async (domain) => {
++    if (domain.status !== 'VERIFIED') return domain;
++    const hosting = await checkCustomDomainOnNetlify(domain.host);
++    if (!hosting.configured) return domain;
++    return prisma.eventDomain.update({
++      where: { id: domain.id },
++      data: { status: 'ACTIVE', verificationNotes: null },
++    });
++  }));
++
+   res.json({
+-    domains,
++    domains: reconciledDomains,
+     dnsTarget: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
++    apexTarget: process.env.DOMAIN_APEX_IP || '75.2.60.5',
+   });
+ }));
+ 
+@@ -957,9 +983,14 @@
+     domain,
+     verification: {
+       txtName: `_eventpeepo.${host}`,
++      txtHost: '_eventpeepo',
+       txtValue: verificationToken,
+-      cnameName: host.startsWith('www.') ? host : `www.${host}`,
++      cnameName: `www.${host}`,
++      cnameHost: 'www',
+       cnameValue: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
++      apexName: host,
++      apexHost: '@',
++      apexValue: process.env.DOMAIN_APEX_IP || '75.2.60.5',
+     },
+   });
+ }));
+@@ -971,6 +1002,7 @@
+ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) => {
+   const { eventId, domainId } = req.params;
+   const cnameTarget = (process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com').toLowerCase();
++  const apexTarget = process.env.DOMAIN_APEX_IP || '75.2.60.5';
+ 
+   const domain = await prisma.eventDomain.findFirst({
+     where: { id: domainId, eventId },
+@@ -984,6 +1016,7 @@
+     domain.host,
+     domain.verificationToken,
+     cnameTarget,
++    apexTarget,
+   );
+ 
+   const verified = dnsVerification.verified;
+@@ -993,7 +1026,9 @@
+ 
+   let status: 'ACTIVE' | 'VERIFIED' | 'FAILED' = 'FAILED';
+   if (verified) {
+-    status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
++    // ACTIVE means the hostname is actually routable with managed HTTPS.
++    // VERIFIED means DNS is correct but Netlify/TLS is still pending.
++    status = hosting?.configured ? 'ACTIVE' : 'VERIFIED';
+   }
+ 
+   const dnsNote = buildDomainVerificationNote(dnsVerification);
+@@ -1019,6 +1054,7 @@
+         status,
+         txtMatch: dnsVerification.txtMatch,
+         cnameMatch: dnsVerification.cnameMatch,
++        apexMatch: dnsVerification.apexMatch,
+         hosting,
+       }),
+     },
+@@ -1048,8 +1084,8 @@
+     throw new AppError('Domain not found', 404);
+   }
+ 
+-  if (!['VERIFIED', 'ACTIVE'].includes(domain.status)) {
+-    throw new AppError('Only verified domains can be set as primary', 400);
++  if (domain.status !== 'ACTIVE') {
++    throw new AppError('Only fully active HTTPS domains can be set as primary', 400);
+   }
+ 
+   await prisma.eventDomain.updateMany({
+@@ -1059,7 +1095,7 @@
+ 
+   const updated = await prisma.eventDomain.update({
+     where: { id: domain.id },
+-    data: { isPrimary: true, status: 'ACTIVE' },
++    data: { isPrimary: true },
+   });
+ 
+   await prisma.auditLog.create({
+@@ -1091,19 +1127,32 @@
+     throw new AppError('Domain not found', 404);
+   }
+ 
++  let hostingCleanup = null;
++  if (isNetlifyDomainAutomationConfigured()) {
++    hostingCleanup = await removeCustomDomainFromNetlify(domain.host);
++    if (!hostingCleanup.aliasesRemoved) {
++      throw new AppError(hostingCleanup.error || 'Failed to remove domain from Netlify', 502);
++    }
++  } else if (['VERIFIED', 'ACTIVE'].includes(domain.status)) {
++    throw new AppError(
++      'Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before removing this hosted domain.',
++      503,
++    );
++  }
++
+   await prisma.eventDomain.delete({
+     where: { id: domain.id },
+   });
+ 
+   if (domain.isPrimary) {
+     const fallback = await prisma.eventDomain.findFirst({
+-      where: { eventId, status: { in: ['VERIFIED', 'ACTIVE'] } },
++      where: { eventId, status: 'ACTIVE' },
+       orderBy: { createdAt: 'asc' },
+     });
+     if (fallback) {
+       await prisma.eventDomain.update({
+         where: { id: fallback.id },
+-        data: { isPrimary: true, status: 'ACTIVE' },
++        data: { isPrimary: true },
+       });
+     }
+   }
+@@ -1115,11 +1164,11 @@
+       action: 'EVENT_DOMAIN_DELETED',
+       entityType: 'EVENT_DOMAIN',
+       entityId: domain.id,
+-      details: JSON.stringify({ host: domain.host }),
++      details: JSON.stringify({ host: domain.host, hostingCleanup }),
+     },
+   });
+ 
+-  res.json({ message: 'Domain removed successfully' });
++  res.json({ message: 'Domain removed successfully', hostingCleanup });
+ }));
+ 
+ /**
+@@ -1245,6 +1294,26 @@
+     throw new AppError('Event not found', 404);
+   }
+ 
++  const eventDomains = await prisma.eventDomain.findMany({
++    where: { eventId: event.id },
++    select: { host: true, status: true },
++  });
++
++  let hostingCleanup = null;
++  if (eventDomains.length > 0 && isNetlifyDomainAutomationConfigured()) {
++    // Clean every hostname, not only ACTIVE rows, so a stale alias from an older
++    // status cannot remain attached to EventPeepo after the event disappears.
++    hostingCleanup = await removeCustomDomainsFromNetlify(eventDomains.map((domain) => domain.host));
++    if (!hostingCleanup.aliasesRemoved) {
++      throw new AppError(hostingCleanup.error || 'Failed to remove event domains from Netlify', 502);
++    }
++  } else if (eventDomains.some((domain) => ['VERIFIED', 'ACTIVE'].includes(domain.status))) {
++    throw new AppError(
++      'This event has hosted custom domains, but Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before deleting the event.',
++      503,
++    );
++  }
++
+   await prisma.event.delete({
+     where: { id: req.params.id },
+   });
+@@ -1261,7 +1330,7 @@
+       action: 'EVENT_DELETED',
+       entityType: 'EVENT',
+       entityId: req.params.id,
+-      details: JSON.stringify({ eventName: event.name, slug: event.slug }),
++      details: JSON.stringify({ eventName: event.name, slug: event.slug, hostingCleanup }),
+     },
+   });
+ 
+--- a/backend/src/routes/public.ts
++++ b/backend/src/routes/public.ts
+@@ -13,6 +13,7 @@
+ 
+ import { Router } from 'express';
+ import prisma from '../utils/prisma.js';
++import { checkCustomDomainOnNetlify } from '../services/customDomainHosting.js';
+ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
+ import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
+ import { getEventTemplate } from '../utils/template-helper.js';
+@@ -614,40 +615,58 @@
+  * Resolve custom domain host to event slug
+  */
+ router.get('/domain/:host', asyncHandler(async (req, res) => {
+-  const host = String(req.params.host || '').trim().toLowerCase();
+-  if (!host) {
++  const rawHost = String(req.params.host || '').trim().toLowerCase().replace(/\.$/, '');
++  if (!rawHost) {
+     throw new AppError('Host is required', 400);
+   }
+ 
+-  // Domains are normally stored canonically without the leading `www`, while
+-  // DNS points the public website at `www.<domain>`. Resolve both forms so the
+-  // incoming Host header maps to the same event.
+-  const candidateHosts = host.startsWith('www.')
+-    ? [host, host.slice(4)]
+-    : [host, `www.${host}`];
++  const canonicalHost = rawHost.replace(/^www\./, '');
++  const candidateHosts = [canonicalHost, `www.${canonicalHost}`];
+ 
+-  const domain = await prisma.eventDomain.findFirst({
+-    where: { host: { in: candidateHosts } },
++  let domain = await prisma.eventDomain.findFirst({
++    where: {
++      host: { in: candidateHosts },
++      status: { in: ['ACTIVE', 'VERIFIED'] },
++    },
+     include: {
+       event: {
+-        select: {
+-          id: true,
+-          slug: true,
+-          isArchived: true,
+-        },
++        select: { id: true, slug: true, isArchived: true },
+       },
+     },
+   });
+ 
+-  if (!domain || !domain.event || domain.event.isArchived || !['ACTIVE', 'VERIFIED'].includes(domain.status)) {
++  if (!domain || !domain.event || domain.event.isArchived) {
+     return res.status(404).json({ mapped: false });
+   }
+ 
++  // Let's Encrypt may finish after the owner's Verify request. The first
++  // request that reaches the hostname can safely promote VERIFIED -> ACTIVE.
++  if (domain.status === 'VERIFIED') {
++    const hosting = await checkCustomDomainOnNetlify(domain.host);
++    if (hosting.configured) {
++      domain = await prisma.eventDomain.update({
++        where: { id: domain.id },
++        data: { status: 'ACTIVE', verificationNotes: null },
++        include: {
++          event: {
++            select: { id: true, slug: true, isArchived: true },
++          },
++        },
++      });
++    }
++  }
++
++  // VERIFIED means DNS ownership is proven but TLS/hosting is still pending.
++  if (domain.status !== 'ACTIVE') {
++    return res.status(404).json({ mapped: false, status: domain.status });
++  }
++
+   return res.json({
+     mapped: true,
+     eventId: domain.event.id,
+     slug: domain.event.slug,
+-    host: domain.host,
++    host: domain.host.replace(/^www\./, ''),
++    status: domain.status,
+   });
+ }));
+ 
+--- a/backend/src/routes/owner-dashboard.ts
++++ b/backend/src/routes/owner-dashboard.ts
+@@ -1,7 +1,12 @@
+ import { Router } from 'express';
+ import { randomBytes } from 'crypto';
+ import { promises as dns } from 'dns';
+-import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
++import {
++  checkCustomDomainOnNetlify,
++  isNetlifyDomainAutomationConfigured,
++  provisionCustomDomainOnNetlify,
++  removeCustomDomainFromNetlify,
++} from '../services/customDomainHosting.js';
+ import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
+ import prisma from '../utils/prisma.js';
+ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
+@@ -38,7 +43,14 @@
+ router.use(authenticateOwnerAccount);
+ 
+ const normalizeDomainHost = (rawHost: string) =>
+-  rawHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
++  rawHost
++    .trim()
++    .toLowerCase()
++    .replace(/^https?:\/\//, '')
++    .split('/')[0]
++    .split(':')[0]
++    .replace(/^www\./, '')
++    .replace(/\.$/, '');
+ 
+ const isValidDomainHost = (host: string) =>
+   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
+@@ -759,9 +771,20 @@
+     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+   });
+ 
++  const reconciledDomains = await Promise.all(domains.map(async (domain) => {
++    if (domain.status !== 'VERIFIED') return domain;
++    const hosting = await checkCustomDomainOnNetlify(domain.host);
++    if (!hosting.configured) return domain;
++    return prisma.eventDomain.update({
++      where: { id: domain.id },
++      data: { status: 'ACTIVE', verificationNotes: null },
++    });
++  }));
++
+   res.json({
+-    domains,
++    domains: reconciledDomains,
+     dnsTarget: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
++    apexTarget: process.env.DOMAIN_APEX_IP || '75.2.60.5',
+   });
+ }));
+ 
+@@ -816,9 +839,14 @@
+     domain,
+     verification: {
+       txtName: `_eventpeepo.${host}`,
++      txtHost: '_eventpeepo',
+       txtValue: domain.verificationToken,
+-      cnameName: host.startsWith('www.') ? host : `www.${host}`,
++      cnameName: `www.${host}`,
++      cnameHost: 'www',
+       cnameValue: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
++      apexName: host,
++      apexHost: '@',
++      apexValue: process.env.DOMAIN_APEX_IP || '75.2.60.5',
+     },
+   });
+ }));
+@@ -831,6 +859,7 @@
+   const ownerId = (req as any).ownerId;
+   const { eventId, domainId } = req.params;
+   const cnameTarget = (process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com').toLowerCase();
++  const apexTarget = process.env.DOMAIN_APEX_IP || '75.2.60.5';
+ 
+   const event = await prisma.event.findFirst({
+     where: { id: eventId, ownerId },
+@@ -847,13 +876,16 @@
+     domain.host,
+     domain.verificationToken,
+     cnameTarget,
++    apexTarget,
+   );
+   const verified = dnsVerification.verified;
+   const hosting = verified
+     ? await provisionCustomDomainOnNetlify(domain.host)
+     : null;
+ 
+-  const status = verified ? (domain.isPrimary ? 'ACTIVE' : 'VERIFIED') : 'FAILED';
++  const status: 'ACTIVE' | 'VERIFIED' | 'FAILED' = verified
++    ? (hosting?.configured ? 'ACTIVE' : 'VERIFIED')
++    : 'FAILED';
+   const dnsNote = buildDomainVerificationNote(dnsVerification);
+   const verificationNotes = dnsNote || (hosting && !hosting.configured ? hosting.error || null : null);
+ 
+@@ -877,6 +909,7 @@
+         status,
+         txtMatch: dnsVerification.txtMatch,
+         cnameMatch: dnsVerification.cnameMatch,
++        apexMatch: dnsVerification.apexMatch,
+         hosting,
+       }),
+     },
+@@ -908,14 +941,14 @@
+     where: { id: domainId, eventId },
+   });
+   if (!domain) throw new AppError('Domain not found', 404);
+-  if (!['VERIFIED', 'ACTIVE'].includes(domain.status)) {
+-    throw new AppError('Only verified domains can be made primary', 400);
++  if (domain.status !== 'ACTIVE') {
++    throw new AppError('Only fully active HTTPS domains can be made primary', 400);
+   }
+ 
+   await prisma.eventDomain.updateMany({ where: { eventId }, data: { isPrimary: false } });
+   const updated = await prisma.eventDomain.update({
+     where: { id: domain.id },
+-    data: { isPrimary: true, status: 'ACTIVE' },
++    data: { isPrimary: true },
+   });
+ 
+   await prisma.auditLog.create({
+@@ -949,17 +982,30 @@
+   });
+   if (!domain) throw new AppError('Domain not found', 404);
+ 
++  let hostingCleanup = null;
++  if (isNetlifyDomainAutomationConfigured()) {
++    hostingCleanup = await removeCustomDomainFromNetlify(domain.host);
++    if (!hostingCleanup.aliasesRemoved) {
++      throw new AppError(hostingCleanup.error || 'Failed to remove domain from Netlify', 502);
++    }
++  } else if (['VERIFIED', 'ACTIVE'].includes(domain.status)) {
++    throw new AppError(
++      'Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before removing this hosted domain.',
++      503,
++    );
++  }
++
+   await prisma.eventDomain.delete({ where: { id: domain.id } });
+ 
+   if (domain.isPrimary) {
+     const fallback = await prisma.eventDomain.findFirst({
+-      where: { eventId, status: { in: ['VERIFIED', 'ACTIVE'] } },
++      where: { eventId, status: 'ACTIVE' },
+       orderBy: { createdAt: 'asc' },
+     });
+     if (fallback) {
+       await prisma.eventDomain.update({
+         where: { id: fallback.id },
+-        data: { isPrimary: true, status: 'ACTIVE' },
++        data: { isPrimary: true },
+       });
+     }
+   }
+@@ -970,11 +1016,11 @@
+       action: 'EVENT_DOMAIN_DELETED_BY_OWNER',
+       entityType: 'EVENT_DOMAIN',
+       entityId: domain.id,
+-      details: JSON.stringify({ ownerId, host: domain.host }),
++      details: JSON.stringify({ ownerId, host: domain.host, hostingCleanup }),
+     },
+   });
+ 
+-  res.json({ message: 'Domain removed successfully' });
++  res.json({ message: 'Domain removed successfully', hostingCleanup });
+ }));
+ 
+ /**
+--- a/backend/src/services/customDomainDns.ts
++++ b/backend/src/services/customDomainDns.ts
+@@ -4,14 +4,19 @@
+   verified: boolean;
+   txtMatch: boolean;
+   cnameMatch: boolean;
++  apexMatch: boolean;
+   txtHost: string;
+   cnameHost: string;
++  apexHost: string;
+   expectedTxtValue: string;
+   expectedCnameValue: string;
++  expectedApexValue: string;
+   observedTxtValues: string[];
+   observedCnameValues: string[];
++  observedApexValues: string[];
+   txtError?: string;
+   cnameError?: string;
++  apexError?: string;
+ }
+ 
+ const dnsErrorLabel = (error: unknown) => {
+@@ -20,25 +25,32 @@
+   return candidate.code || candidate.message || 'DNS lookup failed';
+ };
+ 
++const normalizeHost = (host: string) =>
++  host.trim().toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
++
+ export async function verifyCustomDomainDns(
+   host: string,
+   verificationToken: string,
+   cnameTarget: string,
++  apexTarget: string,
+ ): Promise<DomainDnsVerificationResult> {
+-  const canonicalHost = host.trim().toLowerCase().replace(/\.$/, '');
++  const canonicalHost = normalizeHost(host);
+   const txtHost = `_eventpeepo.${canonicalHost}`;
+-  const cnameHost = canonicalHost.startsWith('www.') ? canonicalHost : `www.${canonicalHost}`;
++  const cnameHost = `www.${canonicalHost}`;
++  const apexHost = canonicalHost;
+   const expectedCnameValue = cnameTarget.trim().toLowerCase().replace(/\.$/, '');
++  const expectedApexValue = apexTarget.trim();
+ 
+   let observedTxtValues: string[] = [];
+   let observedCnameValues: string[] = [];
++  let observedApexValues: string[] = [];
+   let txtError: string | undefined;
+   let cnameError: string | undefined;
++  let apexError: string | undefined;
+ 
+   try {
+     const records = await dns.resolveTxt(txtHost);
+-    // A single TXT RR can be split into multiple character-string chunks.
+-    // Join each RR's chunks instead of flattening them into separate values.
++    // TXT RRs can be split into multiple character-string chunks.
+     observedTxtValues = records.map((parts) => parts.join('').trim());
+   } catch (error) {
+     txtError = dnsErrorLabel(error);
+@@ -51,21 +63,33 @@
+     cnameError = dnsErrorLabel(error);
+   }
+ 
++  try {
++    observedApexValues = await dns.resolve4(apexHost);
++  } catch (error) {
++    apexError = dnsErrorLabel(error);
++  }
++
+   const txtMatch = observedTxtValues.includes(verificationToken);
+   const cnameMatch = observedCnameValues.includes(expectedCnameValue);
++  const apexMatch = observedApexValues.includes(expectedApexValue);
+ 
+   return {
+-    verified: txtMatch && cnameMatch,
++    verified: txtMatch && cnameMatch && apexMatch,
+     txtMatch,
+     cnameMatch,
++    apexMatch,
+     txtHost,
+     cnameHost,
++    apexHost,
+     expectedTxtValue: verificationToken,
+     expectedCnameValue,
++    expectedApexValue,
+     observedTxtValues,
+     observedCnameValues,
++    observedApexValues,
+     ...(txtError ? { txtError } : {}),
+     ...(cnameError ? { cnameError } : {}),
++    ...(apexError ? { apexError } : {}),
+   };
+ }
+ 
+@@ -87,5 +111,12 @@
+         : `CNAME mismatch at ${result.cnameHost}; expected ${result.expectedCnameValue}${result.observedCnameValues.length ? `, found ${result.observedCnameValues.join(', ')}` : ', found no CNAME value'}`,
+     );
+   }
++  if (!result.apexMatch) {
++    failures.push(
++      result.apexError
++        ? `A-record lookup failed for ${result.apexHost} (${result.apexError})`
++        : `A-record mismatch at ${result.apexHost}; expected ${result.expectedApexValue}${result.observedApexValues.length ? `, found ${result.observedApexValues.join(', ')}` : ', found no IPv4 value'}`,
++    );
++  }
+   return failures.join(' | ');
+ }
+--- a/backend/src/services/customDomainHosting.ts
++++ b/backend/src/services/customDomainHosting.ts
+@@ -1,94 +1,355 @@
+ export interface HostingProvisionResult {
+   attempted: boolean;
++  aliasesConfigured: boolean;
++  tlsReady: boolean;
+   configured: boolean;
+   aliases: string[];
++  certificateDomains: string[];
++  certificateState?: string;
+   error?: string;
+ }
+ 
+-const normalizeHost = (host: string) => host.trim().toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
++export interface HostingRemovalResult {
++  attempted: boolean;
++  aliasesRemoved: boolean;
++  aliases: string[];
++  tlsRefreshRequested: boolean;
++  error?: string;
++}
++
++type NetlifySite = {
++  custom_domain?: string | null;
++  domain_aliases?: string[] | null;
++};
++
++type NetlifyCertificate = {
++  state?: string | null;
++  domains?: string[] | null;
++  expires_at?: string | null;
++};
++
++type FetchResponse = Awaited<ReturnType<typeof fetch>>;
++
++const NETLIFY_API = 'https://api.netlify.com/api/v1';
++
++const normalizeHost = (host: string) =>
++  host
++    .trim()
++    .toLowerCase()
++    .replace(/^https?:\/\//, '')
++    .replace(/^www\./, '')
++    .replace(/\/+$/, '')
++    .replace(/\.$/, '');
++
++const normalizeAlias = (host: string) => host.trim().toLowerCase().replace(/\.$/, '');
+ 
+ export const getCustomDomainAliases = (host: string) => {
+   const canonical = normalizeHost(host);
+-  return [canonical, `www.${canonical}`];
++  return canonical ? [canonical, `www.${canonical}`] : [];
+ };
+ 
++const getNetlifyConfig = () => ({
++  siteId: String(process.env.NETLIFY_SITE_ID || '').trim(),
++  authToken: String(process.env.NETLIFY_AUTH_TOKEN || '').trim(),
++});
++
++export const isNetlifyDomainAutomationConfigured = () => {
++  const { siteId, authToken } = getNetlifyConfig();
++  return Boolean(siteId && authToken);
++};
++
++const netlifyHeaders = (authToken: string) => ({
++  Authorization: `Bearer ${authToken}`,
++  'Content-Type': 'application/json',
++});
++
++const readResponseDetail = async (response: FetchResponse) => {
++  const detail = await response.text().catch(() => '');
++  return detail ? `: ${detail.slice(0, 300)}` : '';
++};
++
++async function getNetlifySite(siteId: string, authToken: string): Promise<NetlifySite> {
++  const response = await fetch(`${NETLIFY_API}/sites/${encodeURIComponent(siteId)}`, {
++    headers: netlifyHeaders(authToken),
++  });
++  if (!response.ok) {
++    throw new Error(`Netlify site lookup failed (${response.status})${await readResponseDetail(response)}`);
++  }
++  return response.json() as Promise<NetlifySite>;
++}
++
++async function getNetlifyCertificate(
++  siteId: string,
++  authToken: string,
++): Promise<NetlifyCertificate | null> {
++  const response = await fetch(`${NETLIFY_API}/sites/${encodeURIComponent(siteId)}/ssl`, {
++    headers: netlifyHeaders(authToken),
++  });
++  if (response.status === 404) return null;
++  if (!response.ok) {
++    throw new Error(`Netlify certificate lookup failed (${response.status})${await readResponseDetail(response)}`);
++  }
++  return response.json() as Promise<NetlifyCertificate>;
++}
++
++const certificateCovers = (certificate: NetlifyCertificate | null, aliases: string[]) => {
++  if (!certificate) return false;
++  const domains = new Set((certificate.domains || []).map(normalizeAlias));
++  return aliases.every((alias) => domains.has(normalizeAlias(alias)));
++};
++
++async function requestTlsRefresh(
++  siteId: string,
++  authToken: string,
++  hasExistingCertificate: boolean,
++): Promise<NetlifyCertificate | null> {
++  // Netlify requires /ssl/renew when a Let's Encrypt certificate already exists.
++  const suffix = hasExistingCertificate ? '/ssl/renew' : '/ssl';
++  const response = await fetch(`${NETLIFY_API}/sites/${encodeURIComponent(siteId)}${suffix}`, {
++    method: 'POST',
++    headers: netlifyHeaders(authToken),
++  });
++
++  if (!response.ok) {
++    throw new Error(`Netlify TLS provisioning failed (${response.status})${await readResponseDetail(response)}`);
++  }
++
++  const contentType = response.headers.get('content-type') || '';
++  if (!contentType.includes('application/json')) return null;
++  return response.json().catch(() => null) as Promise<NetlifyCertificate | null>;
++}
++
+ /**
+- * Register the customer hostname(s) as aliases on the Netlify site that serves
+- * the EventPeepo frontend. Netlify must know about each hostname so it can
+- * route the Host header and provision HTTPS certificates.
+- *
+- * If NETLIFY_SITE_ID / NETLIFY_AUTH_TOKEN are not configured, this function
+- * deliberately does not fail DNS verification; it returns a clear manual-action
+- * message instead. This keeps existing deployments backwards compatible while
+- * making the missing hosting step visible.
++ * Read-only hosting/TLS status check. VERIFIED means EventPeepo has proven DNS
++ * ownership; ACTIVE is reserved for domains whose aliases and certificate are
++ * both ready on Netlify.
+  */
+-export async function provisionCustomDomainOnNetlify(host: string): Promise<HostingProvisionResult> {
++export async function checkCustomDomainOnNetlify(host: string): Promise<HostingProvisionResult> {
+   const aliases = getCustomDomainAliases(host);
+-  const siteId = String(process.env.NETLIFY_SITE_ID || '').trim();
+-  const authToken = String(process.env.NETLIFY_AUTH_TOKEN || '').trim();
++  const { siteId, authToken } = getNetlifyConfig();
+ 
+   if (!siteId || !authToken) {
+     return {
+       attempted: false,
++      aliasesConfigured: false,
++      tlsReady: false,
+       configured: false,
+       aliases,
+-      error: 'DNS is verified, but automatic Netlify domain provisioning is not configured. Add NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN, or add both domain aliases manually in Netlify.',
++      certificateDomains: [],
++      error: 'Automatic Netlify custom-domain hosting is not configured. Set NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN.',
+     };
+   }
+ 
+-  const endpoint = `https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}`;
+-  const headers = {
+-    Authorization: `Bearer ${authToken}`,
+-    'Content-Type': 'application/json',
+-  };
++  try {
++    const site = await getNetlifySite(siteId, authToken);
++    const existingAliases = new Set((site.domain_aliases || []).map(normalizeAlias));
++    const aliasesConfigured = aliases.every((alias) => existingAliases.has(normalizeAlias(alias)));
++    const certificate = await getNetlifyCertificate(siteId, authToken);
++    const certificateDomains = (certificate?.domains || []).map(normalizeAlias);
++    const tlsReady = aliasesConfigured && certificateCovers(certificate, aliases);
++
++    return {
++      attempted: true,
++      aliasesConfigured,
++      tlsReady,
++      configured: aliasesConfigured && tlsReady,
++      aliases,
++      certificateDomains,
++      ...(certificate?.state ? { certificateState: certificate.state } : {}),
++      ...(!aliasesConfigured
++        ? { error: 'Netlify has not attached all required aliases yet.' }
++        : !tlsReady
++          ? { error: 'Netlify aliases are attached, but the Let\'s Encrypt certificate is still provisioning.' }
++          : {}),
++    };
++  } catch (error) {
++    return {
++      attempted: true,
++      aliasesConfigured: false,
++      tlsReady: false,
++      configured: false,
++      aliases,
++      certificateDomains: [],
++      error: error instanceof Error ? error.message : 'Unknown Netlify hosting error',
++    };
++  }
++}
++
++/**
++ * Attach both apex + www as aliases on the existing EventPeepo Netlify site,
++ * then request Let's Encrypt provisioning/renewal. The primary site domain is
++ * never changed.
++ */
++export async function provisionCustomDomainOnNetlify(host: string): Promise<HostingProvisionResult> {
++  const aliases = getCustomDomainAliases(host);
++  const { siteId, authToken } = getNetlifyConfig();
++
++  if (!siteId || !authToken) {
++    return {
++      attempted: false,
++      aliasesConfigured: false,
++      tlsReady: false,
++      configured: false,
++      aliases,
++      certificateDomains: [],
++      error: 'DNS is verified, but automatic Netlify provisioning is not configured. Set NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN.',
++    };
++  }
+ 
+   try {
+-    const currentResponse = await fetch(endpoint, { headers });
+-    if (!currentResponse.ok) {
+-      const detail = await currentResponse.text().catch(() => '');
+-      return {
+-        attempted: true,
+-        configured: false,
+-        aliases,
+-        error: `Netlify site lookup failed (${currentResponse.status})${detail ? `: ${detail.slice(0, 180)}` : ''}`,
+-      };
++    const site = await getNetlifySite(siteId, authToken);
++    const existingAliases = (site.domain_aliases || []).map(normalizeAlias);
++    const merged = new Set(existingAliases);
++    aliases.forEach((alias) => merged.add(normalizeAlias(alias)));
++
++    const needsAliasUpdate = aliases.some((alias) => !existingAliases.includes(normalizeAlias(alias)));
++    if (needsAliasUpdate) {
++      const response = await fetch(`${NETLIFY_API}/sites/${encodeURIComponent(siteId)}`, {
++        method: 'PATCH',
++        headers: netlifyHeaders(authToken),
++        body: JSON.stringify({ domain_aliases: Array.from(merged) }),
++      });
++      if (!response.ok) {
++        throw new Error(`Netlify domain alias update failed (${response.status})${await readResponseDetail(response)}`);
++      }
++    }
++
++    let certificate = await getNetlifyCertificate(siteId, authToken);
++    if (!certificateCovers(certificate, aliases)) {
++      try {
++        const refreshed = await requestTlsRefresh(siteId, authToken, Boolean(certificate));
++        if (refreshed) certificate = refreshed;
++      } catch (error) {
++        // Alias attachment succeeded; keep VERIFIED while Netlify/Let's Encrypt
++        // completes provisioning or retries automatically.
++        return {
++          attempted: true,
++          aliasesConfigured: true,
++          tlsReady: false,
++          configured: false,
++          aliases,
++          certificateDomains: (certificate?.domains || []).map(normalizeAlias),
++          ...(certificate?.state ? { certificateState: certificate.state } : {}),
++          error: error instanceof Error ? error.message : 'Netlify TLS provisioning is pending',
++        };
++      }
+     }
+ 
+-    const current = await currentResponse.json() as {
+-      custom_domain?: string | null;
+-      domain_aliases?: string[] | null;
+-    };
+-
+-    const existing = Array.isArray(current.domain_aliases) ? current.domain_aliases : [];
+-    const protectedHosts = new Set([
+-      ...(current.custom_domain ? [current.custom_domain.toLowerCase()] : []),
+-      ...existing.map((value) => value.toLowerCase()),
+-    ]);
+-    aliases.forEach((alias) => protectedHosts.add(alias));
+-
+-    const patchResponse = await fetch(endpoint, {
+-      method: 'PATCH',
+-      headers,
+-      body: JSON.stringify({ domain_aliases: Array.from(protectedHosts) }),
+-    });
++    if (!certificateCovers(certificate, aliases)) {
++      certificate = await getNetlifyCertificate(siteId, authToken).catch(() => certificate);
++    }
++
++    const certificateDomains = (certificate?.domains || []).map(normalizeAlias);
++    const tlsReady = certificateCovers(certificate, aliases);
++
++    return {
++      attempted: true,
++      aliasesConfigured: true,
++      tlsReady,
++      configured: tlsReady,
++      aliases,
++      certificateDomains,
++      ...(certificate?.state ? { certificateState: certificate.state } : {}),
++      ...(!tlsReady
++        ? { error: 'Netlify aliases are attached. Let\'s Encrypt certificate provisioning is still in progress.' }
++        : {}),
++    };
++  } catch (error) {
++    return {
++      attempted: true,
++      aliasesConfigured: false,
++      tlsReady: false,
++      configured: false,
++      aliases,
++      certificateDomains: [],
++      error: error instanceof Error ? error.message : 'Unknown Netlify provisioning error',
++    };
++  }
++}
++
++/**
++ * Remove one or more customer domains from the site's alias list. Alias removal
++ * is the critical routing cleanup. A certificate refresh is requested afterwards
++ * so stale customer SANs are removed from the next managed certificate too.
++ */
++export async function removeCustomDomainsFromNetlify(hosts: string[]): Promise<HostingRemovalResult> {
++  const aliases = Array.from(new Set(hosts.flatMap(getCustomDomainAliases).map(normalizeAlias)));
++  if (aliases.length === 0) {
++    return { attempted: false, aliasesRemoved: true, aliases: [], tlsRefreshRequested: false };
++  }
+ 
+-    if (!patchResponse.ok) {
+-      const detail = await patchResponse.text().catch(() => '');
++  const { siteId, authToken } = getNetlifyConfig();
++  if (!siteId || !authToken) {
++    return {
++      attempted: false,
++      aliasesRemoved: false,
++      aliases,
++      tlsRefreshRequested: false,
++      error: 'Netlify cleanup is not configured. Set NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before removing a hosted custom domain.',
++    };
++  }
++
++  try {
++    const site = await getNetlifySite(siteId, authToken);
++    const aliasesToRemove = new Set(aliases);
++    const existing = (site.domain_aliases || []).map(normalizeAlias);
++    const remaining = existing.filter((alias) => !aliasesToRemove.has(alias));
++
++    if (remaining.length !== existing.length) {
++      const response = await fetch(`${NETLIFY_API}/sites/${encodeURIComponent(siteId)}`, {
++        method: 'PATCH',
++        headers: netlifyHeaders(authToken),
++        body: JSON.stringify({ domain_aliases: remaining }),
++      });
++      if (!response.ok) {
++        throw new Error(`Netlify domain alias removal failed (${response.status})${await readResponseDetail(response)}`);
++      }
++    }
++
++    const confirmedSite = await getNetlifySite(siteId, authToken);
++    const confirmedAliases = new Set((confirmedSite.domain_aliases || []).map(normalizeAlias));
++    const aliasesRemoved = aliases.every((alias) => !confirmedAliases.has(alias));
++    if (!aliasesRemoved) {
+       return {
+         attempted: true,
+-        configured: false,
++        aliasesRemoved: false,
+         aliases,
+-        error: `Netlify domain alias update failed (${patchResponse.status})${detail ? `: ${detail.slice(0, 180)}` : ''}`,
++        tlsRefreshRequested: false,
++        error: 'Netlify still reports one or more removed customer aliases.',
+       };
+     }
+ 
+-    return { attempted: true, configured: true, aliases };
++    let tlsRefreshRequested = false;
++    let tlsWarning: string | undefined;
++    try {
++      const certificate = await getNetlifyCertificate(siteId, authToken);
++      if (certificate) {
++        await requestTlsRefresh(siteId, authToken, true);
++        tlsRefreshRequested = true;
++      }
++    } catch (error) {
++      // Routing has already been removed. Preserve the warning, but do not keep
++      // a database record solely because Netlify's certificate refresh is async.
++      tlsWarning = error instanceof Error ? error.message : 'Netlify TLS refresh could not be requested';
++    }
++
++    return {
++      attempted: true,
++      aliasesRemoved: true,
++      aliases,
++      tlsRefreshRequested,
++      ...(tlsWarning ? { error: `Aliases removed, but certificate refresh warning: ${tlsWarning}` } : {}),
++    };
+   } catch (error) {
+     return {
+       attempted: true,
+-      configured: false,
++      aliasesRemoved: false,
+       aliases,
+-      error: `Netlify domain provisioning failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
++      tlsRefreshRequested: false,
++      error: error instanceof Error ? error.message : 'Unknown Netlify cleanup error',
+     };
+   }
+ }
++
++export const removeCustomDomainFromNetlify = (host: string) =>
++  removeCustomDomainsFromNetlify([host]);
+--- a/frontend/app/admin/events/[id]/page.tsx
++++ b/frontend/app/admin/events/[id]/page.tsx
+@@ -3518,7 +3518,7 @@
+ 
+               <div className="border-t border-surface-100 pt-6">
+                 <h4 className="font-medium text-brand-900 mb-4">Custom Domains</h4>
+-                <p className="text-sm text-surface-500 mb-4">Map client-owned domains to this event. Verification requires TXT + CNAME records.</p>
++                <p className="text-sm text-surface-500 mb-4">Map client-owned domains to this event. Verification uses TXT, CNAME and apex A records; HTTPS is provisioned automatically.</p>
+ 
+                 <div className="flex flex-col sm:flex-row gap-3">
+                   <input
+@@ -3555,7 +3555,7 @@
+                                 className={cn(
+                                   'px-2 py-0.5 rounded text-xs font-medium border',
+                                   domain.status === 'ACTIVE' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+-                                  domain.status === 'VERIFIED' && 'bg-blue-50 text-blue-700 border-blue-200',
++                                  domain.status === 'VERIFIED' && 'bg-amber-50 text-amber-700 border-amber-200',
+                                   domain.status === 'FAILED' && 'bg-rose-50 text-rose-700 border-rose-200',
+                                   domain.status === 'PENDING_VERIFICATION' && 'bg-amber-50 text-amber-700 border-amber-200'
+                                 )}
+@@ -3564,8 +3564,9 @@
+                               </span>
+                             </div>
+                             <div className="mt-2 text-xs text-surface-500 space-y-1">
+-                              <p>TXT: <span className="font-mono text-surface-700">_eventpeepo.{domain.host}</span> = <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
+-                              <p>CNAME: <span className="font-mono text-surface-700">{domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`}</span> = <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
++                              <p>TXT — Host: <span className="font-mono text-surface-700">_eventpeepo</span> · Value: <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
++                              <p>CNAME — Host: <span className="font-mono text-surface-700">www</span> · Target: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
++                              <p>A — Host: <span className="font-mono text-surface-700">@</span> · Value: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span></p>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-2">
+@@ -3577,7 +3578,7 @@
+                                 type="button"
+                                 className="btn-outline"
+                                 onClick={() => handleSetPrimaryDomain(domain.id)}
+-                                disabled={!['VERIFIED', 'ACTIVE'].includes(domain.status)}
++                                disabled={domain.status !== 'ACTIVE'}
+                               >
+                                 Make Primary
+                               </button>
+@@ -3588,7 +3589,7 @@
+                           </div>
+                         </div>
+                         {domain.verificationNotes && (
+-                          <p className="mt-2 text-xs text-rose-600">{domain.verificationNotes}</p>
++                          <p className={cn('mt-2 text-xs', domain.status === 'VERIFIED' ? 'text-amber-700' : 'text-rose-600')}>{domain.verificationNotes}</p>
+                         )}
+                       </div>
+                     ))
+--- a/frontend/app/owner/events/[id]/page.tsx
++++ b/frontend/app/owner/events/[id]/page.tsx
+@@ -2321,7 +2321,7 @@
+         {activeTab === 'domains' && (
+           <div className="space-y-4">
+             <div className="bg-white rounded-lg border border-surface-200 p-4">
+-              <p className="text-sm text-surface-600 mb-3">Connect your own domain via TXT + CNAME verification.</p>
++              <p className="text-sm text-surface-600 mb-3">Connect your own domain with TXT, CNAME and apex A records. HTTPS is provisioned automatically after verification.</p>
+               <div className="flex flex-col sm:flex-row gap-3">
+                 <input
+                   type="text"
+@@ -2353,7 +2353,7 @@
+                             className={cn(
+                               'px-2 py-0.5 rounded text-xs font-medium border',
+                               domain.status === 'ACTIVE' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+-                              domain.status === 'VERIFIED' && 'bg-blue-50 text-blue-700 border-blue-200',
++                              domain.status === 'VERIFIED' && 'bg-amber-50 text-amber-700 border-amber-200',
+                               domain.status === 'FAILED' && 'bg-rose-50 text-rose-700 border-rose-200',
+                               domain.status === 'PENDING_VERIFICATION' && 'bg-amber-50 text-amber-700 border-amber-200'
+                             )}
+@@ -2362,8 +2362,9 @@
+                           </span>
+                         </div>
+                         <div className="mt-2 text-xs text-surface-500 space-y-1">
+-                          <p>TXT: <span className="font-mono text-surface-700">_eventpeepo.{domain.host}</span> = <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
+-                          <p>CNAME: <span className="font-mono text-surface-700">{domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`}</span> = <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
++                          <p>TXT — Host: <span className="font-mono text-surface-700">_eventpeepo</span> · Value: <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
++                          <p>CNAME — Host: <span className="font-mono text-surface-700">www</span> · Target: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
++                          <p>A — Host: <span className="font-mono text-surface-700">@</span> · Value: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span></p>
+                         </div>
+                       </div>
+                       <div className="flex items-center gap-2">
+@@ -2371,7 +2372,7 @@
+                         {!domain.isPrimary && (
+                           <button
+                             className="btn-outline"
+-                            disabled={!['VERIFIED', 'ACTIVE'].includes(domain.status)}
++                            disabled={domain.status !== 'ACTIVE'}
+                             onClick={() => handleSetPrimaryDomain(domain.id)}
+                           >
+                             Make Primary
+@@ -2383,7 +2384,7 @@
+                       </div>
+                     </div>
+                     {domain.verificationNotes && (
+-                      <p className="text-xs text-rose-600 mt-2">{domain.verificationNotes}</p>
++                      <p className={cn('text-xs mt-2', domain.status === 'VERIFIED' ? 'text-amber-700' : 'text-rose-600')}>{domain.verificationNotes}</p>
+                     )}
+                   </div>
+                 ))}

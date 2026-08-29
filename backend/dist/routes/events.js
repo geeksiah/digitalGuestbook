@@ -6,7 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const uuid_1 = require("uuid");
 const node_crypto_1 = require("node:crypto");
-const node_dns_1 = require("node:dns");
+const customDomainHosting_js_1 = require("../services/customDomainHosting.js");
+const customDomainDns_js_1 = require("../services/customDomainDns.js");
 const multer_1 = __importDefault(require("multer"));
 const sharp_1 = __importDefault(require("sharp"));
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
@@ -27,7 +28,14 @@ const coverUpload = (0, multer_1.default)({
         cb(null, true);
     },
 });
-const normalizeDomainHost = (rawHost) => rawHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+const normalizeDomainHost = (rawHost) => rawHost
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0]
+    .split(':')[0]
+    .replace(/^www\./, '')
+    .replace(/\.$/, '');
 const isValidDomainHost = (host) => /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
 const resolveCoverUrl = (coverImagePath) => {
     if (!coverImagePath)
@@ -763,9 +771,23 @@ router.get('/:eventId/domains', (0, errorHandler_js_1.asyncHandler)(async (req, 
         where: { eventId },
         orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
     });
+    // TLS issuance can finish after the Verify request returns. Reconcile any
+    // DNS-verified domains whenever the owner/admin revisits the domain screen.
+    const reconciledDomains = await Promise.all(domains.map(async (domain) => {
+        if (domain.status !== 'VERIFIED')
+            return domain;
+        const hosting = await (0, customDomainHosting_js_1.checkCustomDomainOnNetlify)(domain.host);
+        if (!hosting.configured)
+            return domain;
+        return prisma_js_1.default.eventDomain.update({
+            where: { id: domain.id },
+            data: { status: 'ACTIVE', verificationNotes: null },
+        });
+    }));
     res.json({
-        domains,
+        domains: reconciledDomains,
         dnsTarget: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+        apexTarget: process.env.DOMAIN_APEX_IP || '75.2.60.5',
     });
 }));
 /**
@@ -820,9 +842,14 @@ router.post('/:eventId/domains', (0, errorHandler_js_1.asyncHandler)(async (req,
         domain,
         verification: {
             txtName: `_eventpeepo.${host}`,
+            txtHost: '_eventpeepo',
             txtValue: verificationToken,
-            cnameName: host.startsWith('www.') ? host : `www.${host}`,
+            cnameName: `www.${host}`,
+            cnameHost: 'www',
             cnameValue: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+            apexName: host,
+            apexHost: '@',
+            apexValue: process.env.DOMAIN_APEX_IP || '75.2.60.5',
         },
     });
 }));
@@ -833,40 +860,26 @@ router.post('/:eventId/domains', (0, errorHandler_js_1.asyncHandler)(async (req,
 router.post('/:eventId/domains/:domainId/verify', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId, domainId } = req.params;
     const cnameTarget = (process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com').toLowerCase();
+    const apexTarget = process.env.DOMAIN_APEX_IP || '75.2.60.5';
     const domain = await prisma_js_1.default.eventDomain.findFirst({
         where: { id: domainId, eventId },
     });
     if (!domain) {
         throw new errorHandler_js_1.AppError('Domain not found', 404);
     }
-    const txtHost = `_eventpeepo.${domain.host}`;
-    let txtMatch = false;
-    let cnameMatch = false;
-    let errorMessage = null;
-    try {
-        const txtRecords = await node_dns_1.promises.resolveTxt(txtHost);
-        const flat = txtRecords.flat().map((value) => value.trim());
-        txtMatch = flat.includes(domain.verificationToken);
-    }
-    catch {
-        txtMatch = false;
-    }
-    try {
-        const cnameHost = domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`;
-        const cnameRecords = await node_dns_1.promises.resolveCname(cnameHost);
-        cnameMatch = cnameRecords.some((record) => record.toLowerCase().replace(/\.$/, '') === cnameTarget.replace(/\.$/, ''));
-    }
-    catch {
-        cnameMatch = false;
-    }
-    const verified = txtMatch && cnameMatch;
+    const dnsVerification = await (0, customDomainDns_js_1.verifyCustomDomainDns)(domain.host, domain.verificationToken, cnameTarget, apexTarget);
+    const verified = dnsVerification.verified;
+    const hosting = verified
+        ? await (0, customDomainHosting_js_1.provisionCustomDomainOnNetlify)(domain.host)
+        : null;
     let status = 'FAILED';
     if (verified) {
-        status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
+        // ACTIVE means the hostname is actually routable with managed HTTPS.
+        // VERIFIED means DNS is correct but Netlify/TLS is still pending.
+        status = hosting?.configured ? 'ACTIVE' : 'VERIFIED';
     }
-    if (!verified) {
-        errorMessage = 'TXT and/or CNAME records are not yet configured correctly';
-    }
+    const dnsNote = (0, customDomainDns_js_1.buildDomainVerificationNote)(dnsVerification);
+    const errorMessage = dnsNote || (hosting && !hosting.configured ? hosting.error || null : null);
     const updated = await prisma_js_1.default.eventDomain.update({
         where: { id: domain.id },
         data: {
@@ -881,12 +894,22 @@ router.post('/:eventId/domains/:domainId/verify', (0, errorHandler_js_1.asyncHan
             action: 'EVENT_DOMAIN_VERIFIED',
             entityType: 'EVENT_DOMAIN',
             entityId: domain.id,
-            details: JSON.stringify({ host: domain.host, status, txtMatch, cnameMatch }),
+            details: JSON.stringify({
+                host: domain.host,
+                status,
+                txtMatch: dnsVerification.txtMatch,
+                cnameMatch: dnsVerification.cnameMatch,
+                apexMatch: dnsVerification.apexMatch,
+                hosting,
+            }),
         },
     });
     res.json({
         domain: updated,
-        verification: { txtMatch, cnameMatch, verified },
+        verification: {
+            ...dnsVerification,
+            hosting,
+        },
     });
 }));
 /**
@@ -901,8 +924,8 @@ router.patch('/:eventId/domains/:domainId/primary', (0, errorHandler_js_1.asyncH
     if (!domain) {
         throw new errorHandler_js_1.AppError('Domain not found', 404);
     }
-    if (!['VERIFIED', 'ACTIVE'].includes(domain.status)) {
-        throw new errorHandler_js_1.AppError('Only verified domains can be set as primary', 400);
+    if (domain.status !== 'ACTIVE') {
+        throw new errorHandler_js_1.AppError('Only fully active HTTPS domains can be set as primary', 400);
     }
     await prisma_js_1.default.eventDomain.updateMany({
         where: { eventId },
@@ -910,7 +933,7 @@ router.patch('/:eventId/domains/:domainId/primary', (0, errorHandler_js_1.asyncH
     });
     const updated = await prisma_js_1.default.eventDomain.update({
         where: { id: domain.id },
-        data: { isPrimary: true, status: 'ACTIVE' },
+        data: { isPrimary: true },
     });
     await prisma_js_1.default.auditLog.create({
         data: {
@@ -936,18 +959,28 @@ router.delete('/:eventId/domains/:domainId', (0, errorHandler_js_1.asyncHandler)
     if (!domain) {
         throw new errorHandler_js_1.AppError('Domain not found', 404);
     }
+    let hostingCleanup = null;
+    if ((0, customDomainHosting_js_1.isNetlifyDomainAutomationConfigured)()) {
+        hostingCleanup = await (0, customDomainHosting_js_1.removeCustomDomainFromNetlify)(domain.host);
+        if (!hostingCleanup.aliasesRemoved) {
+            throw new errorHandler_js_1.AppError(hostingCleanup.error || 'Failed to remove domain from Netlify', 502);
+        }
+    }
+    else if (['VERIFIED', 'ACTIVE'].includes(domain.status)) {
+        throw new errorHandler_js_1.AppError('Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before removing this hosted domain.', 503);
+    }
     await prisma_js_1.default.eventDomain.delete({
         where: { id: domain.id },
     });
     if (domain.isPrimary) {
         const fallback = await prisma_js_1.default.eventDomain.findFirst({
-            where: { eventId, status: { in: ['VERIFIED', 'ACTIVE'] } },
+            where: { eventId, status: 'ACTIVE' },
             orderBy: { createdAt: 'asc' },
         });
         if (fallback) {
             await prisma_js_1.default.eventDomain.update({
                 where: { id: fallback.id },
-                data: { isPrimary: true, status: 'ACTIVE' },
+                data: { isPrimary: true },
             });
         }
     }
@@ -958,10 +991,10 @@ router.delete('/:eventId/domains/:domainId', (0, errorHandler_js_1.asyncHandler)
             action: 'EVENT_DOMAIN_DELETED',
             entityType: 'EVENT_DOMAIN',
             entityId: domain.id,
-            details: JSON.stringify({ host: domain.host }),
+            details: JSON.stringify({ host: domain.host, hostingCleanup }),
         },
     });
-    res.json({ message: 'Domain removed successfully' });
+    res.json({ message: 'Domain removed successfully', hostingCleanup });
 }));
 /**
  * POST /api/events/:id/duplicate
@@ -1070,6 +1103,22 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     if (!event) {
         throw new errorHandler_js_1.AppError('Event not found', 404);
     }
+    const eventDomains = await prisma_js_1.default.eventDomain.findMany({
+        where: { eventId: event.id },
+        select: { host: true, status: true },
+    });
+    let hostingCleanup = null;
+    if (eventDomains.length > 0 && (0, customDomainHosting_js_1.isNetlifyDomainAutomationConfigured)()) {
+        // Clean every hostname, not only ACTIVE rows, so a stale alias from an older
+        // status cannot remain attached to EventPeepo after the event disappears.
+        hostingCleanup = await (0, customDomainHosting_js_1.removeCustomDomainsFromNetlify)(eventDomains.map((domain) => domain.host));
+        if (!hostingCleanup.aliasesRemoved) {
+            throw new errorHandler_js_1.AppError(hostingCleanup.error || 'Failed to remove event domains from Netlify', 502);
+        }
+    }
+    else if (eventDomains.some((domain) => ['VERIFIED', 'ACTIVE'].includes(domain.status))) {
+        throw new errorHandler_js_1.AppError('This event has hosted custom domains, but Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before deleting the event.', 503);
+    }
     await prisma_js_1.default.event.delete({
         where: { id: req.params.id },
     });
@@ -1084,7 +1133,7 @@ router.delete('/:id', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
             action: 'EVENT_DELETED',
             entityType: 'EVENT',
             entityId: req.params.id,
-            details: JSON.stringify({ eventName: event.name, slug: event.slug }),
+            details: JSON.stringify({ eventName: event.name, slug: event.slug, hostingCleanup }),
         },
     });
     res.json({ message: 'Event deleted successfully' });

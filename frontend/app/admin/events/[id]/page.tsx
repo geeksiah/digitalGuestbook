@@ -3518,7 +3518,7 @@ export default function EventDetailPage() {
 
               <div className="border-t border-surface-100 pt-6">
                 <h4 className="font-medium text-brand-900 mb-4">Custom Domains</h4>
-                <p className="text-sm text-surface-500 mb-4">Map client-owned domains to this event. Verification requires TXT + CNAME records.</p>
+                <p className="text-sm text-surface-500 mb-4">Map client-owned domains to this event. Verification uses TXT, CNAME and apex A records; HTTPS is provisioned automatically.</p>
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
@@ -3555,7 +3555,7 @@ export default function EventDetailPage() {
                                 className={cn(
                                   'px-2 py-0.5 rounded text-xs font-medium border',
                                   domain.status === 'ACTIVE' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                  domain.status === 'VERIFIED' && 'bg-blue-50 text-blue-700 border-blue-200',
+                                  domain.status === 'VERIFIED' && 'bg-amber-50 text-amber-700 border-amber-200',
                                   domain.status === 'FAILED' && 'bg-rose-50 text-rose-700 border-rose-200',
                                   domain.status === 'PENDING_VERIFICATION' && 'bg-amber-50 text-amber-700 border-amber-200'
                                 )}
@@ -3564,8 +3564,9 @@ export default function EventDetailPage() {
                               </span>
                             </div>
                             <div className="mt-2 text-xs text-surface-500 space-y-1">
-                              <p>TXT: <span className="font-mono text-surface-700">_eventpeepo.{domain.host}</span> = <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
-                              <p>CNAME: <span className="font-mono text-surface-700">{domain.host.startsWith('www.') ? domain.host : `www.${domain.host}`}</span> = <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
+                              <p>TXT — Host: <span className="font-mono text-surface-700">_eventpeepo</span> · Value: <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
+                              <p>CNAME — Host: <span className="font-mono text-surface-700">www</span> · Target: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
+                              <p>A — Host: <span className="font-mono text-surface-700">@</span> · Value: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span></p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -3577,7 +3578,7 @@ export default function EventDetailPage() {
                                 type="button"
                                 className="btn-outline"
                                 onClick={() => handleSetPrimaryDomain(domain.id)}
-                                disabled={!['VERIFIED', 'ACTIVE'].includes(domain.status)}
+                                disabled={domain.status !== 'ACTIVE'}
                               >
                                 Make Primary
                               </button>
@@ -3588,7 +3589,7 @@ export default function EventDetailPage() {
                           </div>
                         </div>
                         {domain.verificationNotes && (
-                          <p className="mt-2 text-xs text-rose-600">{domain.verificationNotes}</p>
+                          <p className={cn('mt-2 text-xs', domain.status === 'VERIFIED' ? 'text-amber-700' : 'text-rose-600')}>{domain.verificationNotes}</p>
                         )}
                       </div>
                     ))

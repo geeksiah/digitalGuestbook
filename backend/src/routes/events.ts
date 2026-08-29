@@ -2,7 +2,13 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { promises as dns } from 'node:dns';
-import { provisionCustomDomainOnNetlify } from '../services/customDomainHosting.js';
+import {
+  checkCustomDomainOnNetlify,
+  isNetlifyDomainAutomationConfigured,
+  provisionCustomDomainOnNetlify,
+  removeCustomDomainFromNetlify,
+  removeCustomDomainsFromNetlify,
+} from '../services/customDomainHosting.js';
 import { buildDomainVerificationNote, verifyCustomDomainDns } from '../services/customDomainDns.js';
 import multer from 'multer';
 import sharp from 'sharp';
@@ -27,7 +33,14 @@ const coverUpload = multer({
 });
 
 const normalizeDomainHost = (rawHost: string) =>
-  rawHost.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  rawHost
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0]
+    .split(':')[0]
+    .replace(/^www\./, '')
+    .replace(/\.$/, '');
 
 const isValidDomainHost = (host: string) =>
   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
@@ -891,9 +904,22 @@ router.get('/:eventId/domains', asyncHandler(async (req, res) => {
     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
   });
 
+  // TLS issuance can finish after the Verify request returns. Reconcile any
+  // DNS-verified domains whenever the owner/admin revisits the domain screen.
+  const reconciledDomains = await Promise.all(domains.map(async (domain) => {
+    if (domain.status !== 'VERIFIED') return domain;
+    const hosting = await checkCustomDomainOnNetlify(domain.host);
+    if (!hosting.configured) return domain;
+    return prisma.eventDomain.update({
+      where: { id: domain.id },
+      data: { status: 'ACTIVE', verificationNotes: null },
+    });
+  }));
+
   res.json({
-    domains,
+    domains: reconciledDomains,
     dnsTarget: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+    apexTarget: process.env.DOMAIN_APEX_IP || '75.2.60.5',
   });
 }));
 
@@ -957,9 +983,14 @@ router.post('/:eventId/domains', asyncHandler(async (req, res) => {
     domain,
     verification: {
       txtName: `_eventpeepo.${host}`,
+      txtHost: '_eventpeepo',
       txtValue: verificationToken,
-      cnameName: host.startsWith('www.') ? host : `www.${host}`,
+      cnameName: `www.${host}`,
+      cnameHost: 'www',
       cnameValue: process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com',
+      apexName: host,
+      apexHost: '@',
+      apexValue: process.env.DOMAIN_APEX_IP || '75.2.60.5',
     },
   });
 }));
@@ -971,6 +1002,7 @@ router.post('/:eventId/domains', asyncHandler(async (req, res) => {
 router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) => {
   const { eventId, domainId } = req.params;
   const cnameTarget = (process.env.DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com').toLowerCase();
+  const apexTarget = process.env.DOMAIN_APEX_IP || '75.2.60.5';
 
   const domain = await prisma.eventDomain.findFirst({
     where: { id: domainId, eventId },
@@ -984,6 +1016,7 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) 
     domain.host,
     domain.verificationToken,
     cnameTarget,
+    apexTarget,
   );
 
   const verified = dnsVerification.verified;
@@ -993,7 +1026,9 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) 
 
   let status: 'ACTIVE' | 'VERIFIED' | 'FAILED' = 'FAILED';
   if (verified) {
-    status = domain.isPrimary ? 'ACTIVE' : 'VERIFIED';
+    // ACTIVE means the hostname is actually routable with managed HTTPS.
+    // VERIFIED means DNS is correct but Netlify/TLS is still pending.
+    status = hosting?.configured ? 'ACTIVE' : 'VERIFIED';
   }
 
   const dnsNote = buildDomainVerificationNote(dnsVerification);
@@ -1019,6 +1054,7 @@ router.post('/:eventId/domains/:domainId/verify', asyncHandler(async (req, res) 
         status,
         txtMatch: dnsVerification.txtMatch,
         cnameMatch: dnsVerification.cnameMatch,
+        apexMatch: dnsVerification.apexMatch,
         hosting,
       }),
     },
@@ -1048,8 +1084,8 @@ router.patch('/:eventId/domains/:domainId/primary', asyncHandler(async (req, res
     throw new AppError('Domain not found', 404);
   }
 
-  if (!['VERIFIED', 'ACTIVE'].includes(domain.status)) {
-    throw new AppError('Only verified domains can be set as primary', 400);
+  if (domain.status !== 'ACTIVE') {
+    throw new AppError('Only fully active HTTPS domains can be set as primary', 400);
   }
 
   await prisma.eventDomain.updateMany({
@@ -1059,7 +1095,7 @@ router.patch('/:eventId/domains/:domainId/primary', asyncHandler(async (req, res
 
   const updated = await prisma.eventDomain.update({
     where: { id: domain.id },
-    data: { isPrimary: true, status: 'ACTIVE' },
+    data: { isPrimary: true },
   });
 
   await prisma.auditLog.create({
@@ -1091,19 +1127,32 @@ router.delete('/:eventId/domains/:domainId', asyncHandler(async (req, res) => {
     throw new AppError('Domain not found', 404);
   }
 
+  let hostingCleanup = null;
+  if (isNetlifyDomainAutomationConfigured()) {
+    hostingCleanup = await removeCustomDomainFromNetlify(domain.host);
+    if (!hostingCleanup.aliasesRemoved) {
+      throw new AppError(hostingCleanup.error || 'Failed to remove domain from Netlify', 502);
+    }
+  } else if (['VERIFIED', 'ACTIVE'].includes(domain.status)) {
+    throw new AppError(
+      'Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before removing this hosted domain.',
+      503,
+    );
+  }
+
   await prisma.eventDomain.delete({
     where: { id: domain.id },
   });
 
   if (domain.isPrimary) {
     const fallback = await prisma.eventDomain.findFirst({
-      where: { eventId, status: { in: ['VERIFIED', 'ACTIVE'] } },
+      where: { eventId, status: 'ACTIVE' },
       orderBy: { createdAt: 'asc' },
     });
     if (fallback) {
       await prisma.eventDomain.update({
         where: { id: fallback.id },
-        data: { isPrimary: true, status: 'ACTIVE' },
+        data: { isPrimary: true },
       });
     }
   }
@@ -1115,11 +1164,11 @@ router.delete('/:eventId/domains/:domainId', asyncHandler(async (req, res) => {
       action: 'EVENT_DOMAIN_DELETED',
       entityType: 'EVENT_DOMAIN',
       entityId: domain.id,
-      details: JSON.stringify({ host: domain.host }),
+      details: JSON.stringify({ host: domain.host, hostingCleanup }),
     },
   });
 
-  res.json({ message: 'Domain removed successfully' });
+  res.json({ message: 'Domain removed successfully', hostingCleanup });
 }));
 
 /**
@@ -1245,6 +1294,26 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     throw new AppError('Event not found', 404);
   }
 
+  const eventDomains = await prisma.eventDomain.findMany({
+    where: { eventId: event.id },
+    select: { host: true, status: true },
+  });
+
+  let hostingCleanup = null;
+  if (eventDomains.length > 0 && isNetlifyDomainAutomationConfigured()) {
+    // Clean every hostname, not only ACTIVE rows, so a stale alias from an older
+    // status cannot remain attached to EventPeepo after the event disappears.
+    hostingCleanup = await removeCustomDomainsFromNetlify(eventDomains.map((domain) => domain.host));
+    if (!hostingCleanup.aliasesRemoved) {
+      throw new AppError(hostingCleanup.error || 'Failed to remove event domains from Netlify', 502);
+    }
+  } else if (eventDomains.some((domain) => ['VERIFIED', 'ACTIVE'].includes(domain.status))) {
+    throw new AppError(
+      'This event has hosted custom domains, but Netlify cleanup is not configured. Configure NETLIFY_SITE_ID and NETLIFY_AUTH_TOKEN before deleting the event.',
+      503,
+    );
+  }
+
   await prisma.event.delete({
     where: { id: req.params.id },
   });
@@ -1261,7 +1330,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
       action: 'EVENT_DELETED',
       entityType: 'EVENT',
       entityId: req.params.id,
-      details: JSON.stringify({ eventName: event.name, slug: event.slug }),
+      details: JSON.stringify({ eventName: event.name, slug: event.slug, hostingCleanup }),
     },
   });
 

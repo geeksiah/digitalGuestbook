@@ -13,6 +13,7 @@
 
 import { Router } from 'express';
 import prisma from '../utils/prisma.js';
+import { checkCustomDomainOnNetlify } from '../services/customDomainHosting.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { calculateEventPhase, getPhaseCapabilities } from '../utils/phase.js';
 import { getEventTemplate } from '../utils/template-helper.js';
@@ -614,40 +615,58 @@ router.get('/event/:slug', asyncHandler(async (req, res) => {
  * Resolve custom domain host to event slug
  */
 router.get('/domain/:host', asyncHandler(async (req, res) => {
-  const host = String(req.params.host || '').trim().toLowerCase();
-  if (!host) {
+  const rawHost = String(req.params.host || '').trim().toLowerCase().replace(/\.$/, '');
+  if (!rawHost) {
     throw new AppError('Host is required', 400);
   }
 
-  // Domains are normally stored canonically without the leading `www`, while
-  // DNS points the public website at `www.<domain>`. Resolve both forms so the
-  // incoming Host header maps to the same event.
-  const candidateHosts = host.startsWith('www.')
-    ? [host, host.slice(4)]
-    : [host, `www.${host}`];
+  const canonicalHost = rawHost.replace(/^www\./, '');
+  const candidateHosts = [canonicalHost, `www.${canonicalHost}`];
 
-  const domain = await prisma.eventDomain.findFirst({
-    where: { host: { in: candidateHosts } },
+  let domain = await prisma.eventDomain.findFirst({
+    where: {
+      host: { in: candidateHosts },
+      status: { in: ['ACTIVE', 'VERIFIED'] },
+    },
     include: {
       event: {
-        select: {
-          id: true,
-          slug: true,
-          isArchived: true,
-        },
+        select: { id: true, slug: true, isArchived: true },
       },
     },
   });
 
-  if (!domain || !domain.event || domain.event.isArchived || !['ACTIVE', 'VERIFIED'].includes(domain.status)) {
+  if (!domain || !domain.event || domain.event.isArchived) {
     return res.status(404).json({ mapped: false });
+  }
+
+  // Let's Encrypt may finish after the owner's Verify request. The first
+  // request that reaches the hostname can safely promote VERIFIED -> ACTIVE.
+  if (domain.status === 'VERIFIED') {
+    const hosting = await checkCustomDomainOnNetlify(domain.host);
+    if (hosting.configured) {
+      domain = await prisma.eventDomain.update({
+        where: { id: domain.id },
+        data: { status: 'ACTIVE', verificationNotes: null },
+        include: {
+          event: {
+            select: { id: true, slug: true, isArchived: true },
+          },
+        },
+      });
+    }
+  }
+
+  // VERIFIED means DNS ownership is proven but TLS/hosting is still pending.
+  if (domain.status !== 'ACTIVE') {
+    return res.status(404).json({ mapped: false, status: domain.status });
   }
 
   return res.json({
     mapped: true,
     eventId: domain.event.id,
     slug: domain.event.slug,
-    host: domain.host,
+    host: domain.host.replace(/^www\./, ''),
+    status: domain.status,
   });
 }));
 

@@ -17,6 +17,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
+const customDomainHosting_js_1 = require("../services/customDomainHosting.js");
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const phase_js_1 = require("../utils/phase.js");
 const template_helper_js_1 = require("../utils/template-helper.js");
@@ -543,30 +544,52 @@ router.get('/event/:slug', (0, errorHandler_js_1.asyncHandler)(async (req, res) 
  * Resolve custom domain host to event slug
  */
 router.get('/domain/:host', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const host = String(req.params.host || '').trim().toLowerCase();
-    if (!host) {
+    const rawHost = String(req.params.host || '').trim().toLowerCase().replace(/\.$/, '');
+    if (!rawHost) {
         throw new errorHandler_js_1.AppError('Host is required', 400);
     }
-    const domain = await prisma_js_1.default.eventDomain.findUnique({
-        where: { host },
+    const canonicalHost = rawHost.replace(/^www\./, '');
+    const candidateHosts = [canonicalHost, `www.${canonicalHost}`];
+    let domain = await prisma_js_1.default.eventDomain.findFirst({
+        where: {
+            host: { in: candidateHosts },
+            status: { in: ['ACTIVE', 'VERIFIED'] },
+        },
         include: {
             event: {
-                select: {
-                    id: true,
-                    slug: true,
-                    isArchived: true,
-                },
+                select: { id: true, slug: true, isArchived: true },
             },
         },
     });
-    if (!domain || !domain.event || domain.event.isArchived || !['ACTIVE', 'VERIFIED'].includes(domain.status)) {
+    if (!domain || !domain.event || domain.event.isArchived) {
         return res.status(404).json({ mapped: false });
+    }
+    // Let's Encrypt may finish after the owner's Verify request. The first
+    // request that reaches the hostname can safely promote VERIFIED -> ACTIVE.
+    if (domain.status === 'VERIFIED') {
+        const hosting = await (0, customDomainHosting_js_1.checkCustomDomainOnNetlify)(domain.host);
+        if (hosting.configured) {
+            domain = await prisma_js_1.default.eventDomain.update({
+                where: { id: domain.id },
+                data: { status: 'ACTIVE', verificationNotes: null },
+                include: {
+                    event: {
+                        select: { id: true, slug: true, isArchived: true },
+                    },
+                },
+            });
+        }
+    }
+    // VERIFIED means DNS ownership is proven but TLS/hosting is still pending.
+    if (domain.status !== 'ACTIVE') {
+        return res.status(404).json({ mapped: false, status: domain.status });
     }
     return res.json({
         mapped: true,
         eventId: domain.event.id,
         slug: domain.event.slug,
-        host: domain.host,
+        host: domain.host.replace(/^www\./, ''),
+        status: domain.status,
     });
 }));
 /**
