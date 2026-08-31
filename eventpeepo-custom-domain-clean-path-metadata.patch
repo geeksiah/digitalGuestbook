@@ -1,0 +1,225 @@
+diff --git a/frontend/app/e/[slug]/layout.tsx b/frontend/app/e/[slug]/layout.tsx
+index 7c1750e..d349cbc 100644
+--- a/frontend/app/e/[slug]/layout.tsx
++++ b/frontend/app/e/[slug]/layout.tsx
+@@ -1,4 +1,5 @@
+ import type { Metadata } from 'next';
++import { headers } from 'next/headers';
+ 
+ const SITE_URL =
+   process.env.NEXT_PUBLIC_SITE_URL
+@@ -28,7 +29,10 @@ const SUPABASE_URL = (
+ ).replace(/\/+$/, '');
+ const SITE_BASE_URL = SITE_URL.replace(/\/+$/, '');
+ 
+-const toAbsoluteMediaUrl = (value: string | null | undefined) => {
++const toAbsoluteMediaUrl = (
++  value: string | null | undefined,
++  publicBaseUrl: string = SITE_BASE_URL,
++) => {
+   if (!value) return null;
+   const raw = value.trim();
+   if (!raw) return null;
+@@ -59,9 +63,68 @@ const toAbsoluteMediaUrl = (value: string | null | undefined) => {
+   }
+ 
+   const path = raw.startsWith('/') ? raw : `/${raw}`;
+-  return `${SITE_BASE_URL}${path}`;
++  return `${publicBaseUrl.replace(/\/+$/, '')}${path}`;
+ };
+ 
++const normalizeHost = (raw: string | null) =>
++  String(raw || '')
++    .split(',')[0]
++    .trim()
++    .toLowerCase()
++    .replace(/:\d+$/, '')
++    .replace(/\.$/, '');
++
++const isPlatformHost = (host: string) =>
++  host === 'localhost'
++  || host === '127.0.0.1'
++  || host.endsWith('.vercel.app')
++  || host.endsWith('.netlify.app')
++  || host === 'eventpeepo.com'
++  || host.endsWith('.eventpeepo.com');
++
++const normalizePublicPath = (raw: string | null) => {
++  const value = String(raw || '/').trim();
++  if (!value || value === '/') return '/';
++  return value.startsWith('/') ? value : `/${value}`;
++};
++
++async function resolveMetadataLocation(slug: string) {
++  const requestHeaders = await headers();
++  const middlewareCustomHost = normalizeHost(
++    requestHeaders.get('x-eventpeepo-custom-domain'),
++  );
++  const forwardedHost = normalizeHost(requestHeaders.get('x-forwarded-host'));
++  const directHost = normalizeHost(requestHeaders.get('host'));
++  const requestHost = forwardedHost || directHost;
++
++  // Middleware writes x-eventpeepo-custom-domain only after a hostname has
++  // successfully resolved to an ACTIVE EventDomain. Prefer that trusted value.
++  const customHost = middlewareCustomHost
++    || (requestHost && !isPlatformHost(requestHost) ? requestHost : '');
++
++  if (customHost && !isPlatformHost(customHost)) {
++    const forwardedProto = String(requestHeaders.get('x-forwarded-proto') || '')
++      .split(',')[0]
++      .trim()
++      .replace(/:$/, '');
++    const protocol = forwardedProto || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
++    const origin = `${protocol}://${customHost}`;
++    const publicPath = normalizePublicPath(
++      requestHeaders.get('x-eventpeepo-public-path'),
++    );
++
++    return {
++      origin,
++      canonicalUrl: publicPath === '/' ? `${origin}/` : `${origin}${publicPath}`,
++    };
++  }
++
++  return {
++    origin: SITE_BASE_URL,
++    canonicalUrl: `${SITE_BASE_URL}/e/${slug}`,
++  };
++}
++
+ async function fetchEventForMetadata(slug: string) {
+   try {
+     const response = await fetch(`${API_BASE_URL}/api/public/event/${slug}`, {
+@@ -79,7 +142,10 @@ export async function generateMetadata(
+   { params }: { params: Promise<{ slug: string }> }
+ ): Promise<Metadata> {
+   const { slug } = await params;
+-  const event = await fetchEventForMetadata(slug);
++  const [event, metadataLocation] = await Promise.all([
++    fetchEventForMetadata(slug),
++    resolveMetadataLocation(slug),
++  ]);
+ 
+   const title = event?.socialTitle || event?.name || 'EventPeepo Event';
+   const description =
+@@ -87,20 +153,24 @@ export async function generateMetadata(
+     || event?.description
+     || 'Join this event on EventPeepo.';
+   const image =
+-    toAbsoluteMediaUrl(event?.coverImageUrl)
+-    || toAbsoluteMediaUrl(event?.coverImagePath)
+-    || `${SITE_BASE_URL}/og-app-eventpeepo.png`;
+-  const url = `${SITE_URL}/e/${slug}`;
++    toAbsoluteMediaUrl(event?.coverImageUrl, metadataLocation.origin)
++    || toAbsoluteMediaUrl(event?.coverImagePath, metadataLocation.origin)
++    || `${metadataLocation.origin}/og-app-eventpeepo.png`;
++  const url = metadataLocation.canonicalUrl;
+ 
+   return {
+-    metadataBase: new URL(SITE_URL),
++    metadataBase: new URL(metadataLocation.origin),
+     title,
+     description,
++    alternates: {
++      canonical: url,
++    },
+     openGraph: {
+       type: 'website',
+       title,
+       description,
+       url,
++      siteName: event?.name || 'EventPeepo',
+       images: [
+         {
+           url: image,
+diff --git a/frontend/middleware.ts b/frontend/middleware.ts
+index ec568e2..7267a7d 100644
+--- a/frontend/middleware.ts
++++ b/frontend/middleware.ts
+@@ -39,6 +39,35 @@ const isBlockedPlatformPath = (pathname: string) =>
+   || pathname === '/api'
+   || pathname.startsWith('/api/');
+ 
++const EVENT_CHILD_ROUTE_ROOTS = new Set([
++  'booth',
++  'checkin',
++  'ended',
++  'guestbook',
++  'invitation',
++  'itinerary',
++  'leaderboard',
++  'live',
++  'nominate',
++  'nominee',
++  'nominees',
++  'rsvp',
++  'thanks',
++  'vote',
++]);
++
++const getRewriteRequestHeaders = (
++  request: NextRequest,
++  mapping: DomainMapping,
++  publicPath: string,
++) => {
++  const requestHeaders = new Headers(request.headers);
++  requestHeaders.set('x-eventpeepo-custom-domain', mapping.canonicalHost);
++  requestHeaders.set('x-eventpeepo-event-slug', mapping.slug);
++  requestHeaders.set('x-eventpeepo-public-path', publicPath || '/');
++  return requestHeaders;
++};
++
+ const notFound = () => new NextResponse('Not Found', {
+   status: 404,
+   headers: { 'Cache-Control': 'no-store' },
+@@ -117,8 +146,22 @@ export async function middleware(request: NextRequest) {
+     return NextResponse.redirect(redirectUrl, 308);
+   }
+ 
+-  // Never allow another event slug to be mounted beneath this customer host.
+-  if (pathname === '/e' || pathname.startsWith('/e/')) return notFound();
++  // Some legacy/custom templates generated shorthand links such as
++  // /e/guestbook or /e/rsvp (without the event slug). On a custom hostname the
++  // hostname already identifies the Event, so collapse only known event-child
++  // route roots to their clean public equivalent. Unknown /e/* paths remain
++  // blocked so a customer hostname can never browse another event by slug.
++  if (pathname.startsWith('/e/')) {
++    const legacyRemainder = pathname.slice('/e/'.length);
++    const legacyRoot = legacyRemainder.split('/')[0]?.toLowerCase();
++    if (legacyRoot && EVENT_CHILD_ROUTE_ROOTS.has(legacyRoot)) {
++      const redirectUrl = request.nextUrl.clone();
++      redirectUrl.pathname = `/${legacyRemainder}`;
++      return NextResponse.redirect(redirectUrl, 308);
++    }
++    return notFound();
++  }
++  if (pathname === '/e') return notFound();
+ 
+   // Gifting is currently implemented at /gift/[slug], unlike the other event
+   // pages under /e/[slug]. Expose it cleanly as customer-domain.com/gift.
+@@ -131,7 +174,11 @@ export async function middleware(request: NextRequest) {
+   if (pathname === '/gift') {
+     const rewriteUrl = request.nextUrl.clone();
+     rewriteUrl.pathname = `/gift/${mapping.slug}`;
+-    return NextResponse.rewrite(rewriteUrl);
++    return NextResponse.rewrite(rewriteUrl, {
++      request: {
++        headers: getRewriteRequestHeaders(request, mapping, pathname),
++      },
++    });
+   }
+ 
+   // Clean tenant routing:
+@@ -141,7 +188,11 @@ export async function middleware(request: NextRequest) {
+   // The internal rewrite never changes the URL shown in the browser.
+   const rewriteUrl = request.nextUrl.clone();
+   rewriteUrl.pathname = pathname === '/' ? eventPrefix : `${eventPrefix}${pathname}`;
+-  return NextResponse.rewrite(rewriteUrl);
++  return NextResponse.rewrite(rewriteUrl, {
++    request: {
++      headers: getRewriteRequestHeaders(request, mapping, pathname),
++    },
++  });
+ }
+ 
+ export const config = {

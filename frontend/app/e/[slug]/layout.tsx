@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL
@@ -28,7 +29,10 @@ const SUPABASE_URL = (
 ).replace(/\/+$/, '');
 const SITE_BASE_URL = SITE_URL.replace(/\/+$/, '');
 
-const toAbsoluteMediaUrl = (value: string | null | undefined) => {
+const toAbsoluteMediaUrl = (
+  value: string | null | undefined,
+  publicBaseUrl: string = SITE_BASE_URL,
+) => {
   if (!value) return null;
   const raw = value.trim();
   if (!raw) return null;
@@ -59,8 +63,67 @@ const toAbsoluteMediaUrl = (value: string | null | undefined) => {
   }
 
   const path = raw.startsWith('/') ? raw : `/${raw}`;
-  return `${SITE_BASE_URL}${path}`;
+  return `${publicBaseUrl.replace(/\/+$/, '')}${path}`;
 };
+
+const normalizeHost = (raw: string | null) =>
+  String(raw || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '')
+    .replace(/\.$/, '');
+
+const isPlatformHost = (host: string) =>
+  host === 'localhost'
+  || host === '127.0.0.1'
+  || host.endsWith('.vercel.app')
+  || host.endsWith('.netlify.app')
+  || host === 'eventpeepo.com'
+  || host.endsWith('.eventpeepo.com');
+
+const normalizePublicPath = (raw: string | null) => {
+  const value = String(raw || '/').trim();
+  if (!value || value === '/') return '/';
+  return value.startsWith('/') ? value : `/${value}`;
+};
+
+async function resolveMetadataLocation(slug: string) {
+  const requestHeaders = await headers();
+  const middlewareCustomHost = normalizeHost(
+    requestHeaders.get('x-eventpeepo-custom-domain'),
+  );
+  const forwardedHost = normalizeHost(requestHeaders.get('x-forwarded-host'));
+  const directHost = normalizeHost(requestHeaders.get('host'));
+  const requestHost = forwardedHost || directHost;
+
+  // Middleware writes x-eventpeepo-custom-domain only after a hostname has
+  // successfully resolved to an ACTIVE EventDomain. Prefer that trusted value.
+  const customHost = middlewareCustomHost
+    || (requestHost && !isPlatformHost(requestHost) ? requestHost : '');
+
+  if (customHost && !isPlatformHost(customHost)) {
+    const forwardedProto = String(requestHeaders.get('x-forwarded-proto') || '')
+      .split(',')[0]
+      .trim()
+      .replace(/:$/, '');
+    const protocol = forwardedProto || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+    const origin = `${protocol}://${customHost}`;
+    const publicPath = normalizePublicPath(
+      requestHeaders.get('x-eventpeepo-public-path'),
+    );
+
+    return {
+      origin,
+      canonicalUrl: publicPath === '/' ? `${origin}/` : `${origin}${publicPath}`,
+    };
+  }
+
+  return {
+    origin: SITE_BASE_URL,
+    canonicalUrl: `${SITE_BASE_URL}/e/${slug}`,
+  };
+}
 
 async function fetchEventForMetadata(slug: string) {
   try {
@@ -79,7 +142,10 @@ export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> }
 ): Promise<Metadata> {
   const { slug } = await params;
-  const event = await fetchEventForMetadata(slug);
+  const [event, metadataLocation] = await Promise.all([
+    fetchEventForMetadata(slug),
+    resolveMetadataLocation(slug),
+  ]);
 
   const title = event?.socialTitle || event?.name || 'EventPeepo Event';
   const description =
@@ -87,20 +153,24 @@ export async function generateMetadata(
     || event?.description
     || 'Join this event on EventPeepo.';
   const image =
-    toAbsoluteMediaUrl(event?.coverImageUrl)
-    || toAbsoluteMediaUrl(event?.coverImagePath)
-    || `${SITE_BASE_URL}/og-app-eventpeepo.png`;
-  const url = `${SITE_URL}/e/${slug}`;
+    toAbsoluteMediaUrl(event?.coverImageUrl, metadataLocation.origin)
+    || toAbsoluteMediaUrl(event?.coverImagePath, metadataLocation.origin)
+    || `${metadataLocation.origin}/og-app-eventpeepo.png`;
+  const url = metadataLocation.canonicalUrl;
 
   return {
-    metadataBase: new URL(SITE_URL),
+    metadataBase: new URL(metadataLocation.origin),
     title,
     description,
+    alternates: {
+      canonical: url,
+    },
     openGraph: {
       type: 'website',
       title,
       description,
       url,
+      siteName: event?.name || 'EventPeepo',
       images: [
         {
           url: image,

@@ -39,6 +39,35 @@ const isBlockedPlatformPath = (pathname: string) =>
   || pathname === '/api'
   || pathname.startsWith('/api/');
 
+const EVENT_CHILD_ROUTE_ROOTS = new Set([
+  'booth',
+  'checkin',
+  'ended',
+  'guestbook',
+  'invitation',
+  'itinerary',
+  'leaderboard',
+  'live',
+  'nominate',
+  'nominee',
+  'nominees',
+  'rsvp',
+  'thanks',
+  'vote',
+]);
+
+const getRewriteRequestHeaders = (
+  request: NextRequest,
+  mapping: DomainMapping,
+  publicPath: string,
+) => {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-eventpeepo-custom-domain', mapping.canonicalHost);
+  requestHeaders.set('x-eventpeepo-event-slug', mapping.slug);
+  requestHeaders.set('x-eventpeepo-public-path', publicPath || '/');
+  return requestHeaders;
+};
+
 const notFound = () => new NextResponse('Not Found', {
   status: 404,
   headers: { 'Cache-Control': 'no-store' },
@@ -117,8 +146,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 308);
   }
 
-  // Never allow another event slug to be mounted beneath this customer host.
-  if (pathname === '/e' || pathname.startsWith('/e/')) return notFound();
+  // Some legacy/custom templates generated shorthand links such as
+  // /e/guestbook or /e/rsvp (without the event slug). On a custom hostname the
+  // hostname already identifies the Event, so collapse only known event-child
+  // route roots to their clean public equivalent. Unknown /e/* paths remain
+  // blocked so a customer hostname can never browse another event by slug.
+  if (pathname.startsWith('/e/')) {
+    const legacyRemainder = pathname.slice('/e/'.length);
+    const legacyRoot = legacyRemainder.split('/')[0]?.toLowerCase();
+    if (legacyRoot && EVENT_CHILD_ROUTE_ROOTS.has(legacyRoot)) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = `/${legacyRemainder}`;
+      return NextResponse.redirect(redirectUrl, 308);
+    }
+    return notFound();
+  }
+  if (pathname === '/e') return notFound();
 
   // Gifting is currently implemented at /gift/[slug], unlike the other event
   // pages under /e/[slug]. Expose it cleanly as customer-domain.com/gift.
@@ -131,7 +174,11 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/gift') {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = `/gift/${mapping.slug}`;
-    return NextResponse.rewrite(rewriteUrl);
+    return NextResponse.rewrite(rewriteUrl, {
+      request: {
+        headers: getRewriteRequestHeaders(request, mapping, pathname),
+      },
+    });
   }
 
   // Clean tenant routing:
@@ -141,7 +188,11 @@ export async function middleware(request: NextRequest) {
   // The internal rewrite never changes the URL shown in the browser.
   const rewriteUrl = request.nextUrl.clone();
   rewriteUrl.pathname = pathname === '/' ? eventPrefix : `${eventPrefix}${pathname}`;
-  return NextResponse.rewrite(rewriteUrl);
+  return NextResponse.rewrite(rewriteUrl, {
+    request: {
+      headers: getRewriteRequestHeaders(request, mapping, pathname),
+    },
+  });
 }
 
 export const config = {
