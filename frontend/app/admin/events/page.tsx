@@ -1,21 +1,36 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { adminApi, eventsApi, API_BASE_URL } from '@/lib/api';
-import { formatDate, getPhaseLabel, cn } from '@/lib/utils';
+import { adminApi, eventsApi } from '@/lib/api';
 import {
-  DashboardHeroHeader,
-  DashboardSection,
-  InsightPanel,
-  MetricStrip,
-  DashboardKpiCard,
-  SplitPanelLayout,
-} from '@/components/dashboard/ui';
-import { AppShellSectionNav } from '@/components/ui/AppShell';
+  formatCount,
+  formatDate,
+  getErrorMessage,
+  getPhaseLabel,
+  getPhaseTone,
+  resolveEventCover,
+} from '@/lib/utils';
+import {
+  EmptyState,
+  ListRow,
+  ListSkeleton,
+  PageHeader,
+  Pagination,
+  Panel,
+  SearchField,
+  SegmentedControl,
+  StatusBadge,
+  Thumb,
+  Toolbar,
+  useDebounced,
+  usePagination,
+} from '@/components/ui/Primitives';
+import { Menu, MenuItem, MenuSeparator, Modal } from '@/components/ui/Overlay';
+import { Plus } from '@/components/ui/icons';
 import toast from 'react-hot-toast';
 
-interface Event {
+interface EventRow {
   id: string;
   slug: string;
   name: string;
@@ -39,263 +54,328 @@ interface Event {
   Owner?: { id: string; name: string; email: string };
 }
 
-const toAbsoluteMediaUrl = (value: string | null | undefined) => {
-  if (!value) return null;
-  const raw = value.trim();
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
-  if (
-    raw.startsWith('/storage/v1/object/public/')
-    || raw.startsWith('/uploads/')
-    || raw.startsWith('/api/')
-    || raw.startsWith('/media/')
-    || raw.startsWith('/generated/')
-  ) {
-    return `${API_BASE_URL}${raw}`;
-  }
-  return null;
-};
-
-const resolveEventCover = (event: Event) =>
-  toAbsoluteMediaUrl(event.coverImageUrl) || toAbsoluteMediaUrl(event.coverImagePath);
+type Filter = 'active' | 'archived' | 'all';
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('active');
-  const [pendingApprovals, setPendingApprovals] = useState<Event[]>([]);
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('active');
+  const [search, setSearch] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<EventRow | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
-  useEffect(() => {
-    void fetchEvents();
-  }, [filter]);
+  const query = useDebounced(search.trim().toLowerCase(), 200);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const params: Record<string, boolean> = {};
       if (filter === 'active') params.archived = false;
       if (filter === 'archived') params.archived = true;
 
       const [response, pending] = await Promise.all([
         eventsApi.list(params),
-        adminApi.getPendingApprovals(),
+        adminApi.getPendingApprovals().catch(() => ({ data: { events: [] } })),
       ]);
-      setEvents(response.data.events);
+      setEvents(response.data.events || []);
       setPendingApprovals(pending.data?.events || []);
-    } catch {
-      toast.error('Failed to load events');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not load events.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
-  const reviewApproval = async (eventId: string, approve: boolean) => {
-    setReviewingId(eventId);
+  useEffect(() => {
+    void fetchEvents();
+  }, [fetchEvents]);
+
+  const filtered = useMemo(() => {
+    if (!query) return events;
+    return events.filter((event) =>
+      [event.name, event.slug, event.venue, event.Owner?.name].some((field) =>
+        String(field || '').toLowerCase().includes(query)
+      )
+    );
+  }, [events, query]);
+
+  const paged = usePagination(filtered, 15);
+
+  const approve = async (event: EventRow) => {
+    setBusyId(event.id);
     try {
-      if (approve) {
-        await adminApi.approveEvent(eventId);
-        toast.success('Event approved');
-      } else {
-        const reason = window.prompt('Rejection reason');
-        if (!reason) return;
-        await adminApi.rejectEvent(eventId, reason);
-        toast.success('Event rejected');
-      }
+      await adminApi.approveEvent(event.id);
+      toast.success(`${event.name} approved`);
       await fetchEvents();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Action failed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not approve the event.'));
     } finally {
-      setReviewingId(null);
+      setBusyId(null);
     }
   };
 
-  const handleArchive = async (id: string, archive: boolean) => {
+  const submitRejection = async () => {
+    if (!rejecting || !rejectReason.trim()) return;
+    setBusyId(rejecting.id);
+    try {
+      await adminApi.rejectEvent(rejecting.id, rejectReason.trim());
+      toast.success(`${rejecting.name} rejected`);
+      setRejecting(null);
+      setRejectReason('');
+      await fetchEvents();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not reject the event.'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const setArchived = async (event: EventRow, archive: boolean) => {
+    setBusyId(event.id);
     try {
       if (archive) {
-        await eventsApi.archive(id);
+        await eventsApi.archive(event.id);
         toast.success('Event archived');
       } else {
-        await eventsApi.unarchive(id);
+        await eventsApi.unarchive(event.id);
         toast.success('Event restored');
       }
       await fetchEvents();
-    } catch {
-      toast.error('Action failed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not update the event.'));
+    } finally {
+      setBusyId(null);
     }
   };
 
-  const liveCount = events.filter((event) => event.currentPhase === 'LIVE').length;
-  const archivedCount = events.filter((event) => event.isArchived).length;
-
   return (
-    <div className="mobile-stack-section">
-      <DashboardHeroHeader
-        eyebrow="Admin events"
-        title="Event management"
-        subtitle="Review approvals, monitor live activity, and move quickly into each event workspace."
+    <div className="page">
+      <PageHeader
+        title="Events"
+        actions={
+          <Link href="/admin/events/new" className="btn-primary">
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            New event
+          </Link>
+        }
+        mobileActions={
+          <Link href="/admin/events/new" className="icon-btn" aria-label="New event">
+            <Plus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          </Link>
+        }
       />
 
-      <MetricStrip>
-        <DashboardKpiCard label="In view" value={events.length} hint="Events returned by the current filter" />
-        <DashboardKpiCard label="Live" value={liveCount} tone="emerald" hint="Events currently active" />
-        <DashboardKpiCard label="Archived" value={archivedCount} tone="rose" hint="Archived events in this list" />
-        <DashboardKpiCard label="Pending review" value={pendingApprovals.length} tone="blue" hint="Owner-created events awaiting approval" />
-      </MetricStrip>
+      {pendingApprovals.length > 0 ? (
+        <Panel title={`Awaiting approval (${pendingApprovals.length})`} flush>
+          <div className="divide-y divide-surface-200">
+            {pendingApprovals.map((event) => (
+              <div key={event.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-semibold text-brand-900">{event.name}</p>
+                  <p className="mt-0.5 meta truncate">
+                    {event.Owner?.name || 'Unknown owner'}
+                    {event.Owner?.email ? ` · ${event.Owner.email}` : ''} · {formatDate(event.date, 'MMM d, yyyy')}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm flex-1 sm:flex-none"
+                    disabled={busyId === event.id}
+                    onClick={() => {
+                      setRejecting(event);
+                      setRejectReason('');
+                    }}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary btn-sm flex-1 sm:flex-none"
+                    disabled={busyId === event.id}
+                    onClick={() => void approve(event)}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
 
-      <SplitPanelLayout
-        main={(
-          <DashboardSection
-            title="All events"
-            subtitle="Open any event to manage templates, settings, public pages, or voting."
-            action={(
-              <AppShellSectionNav
-                items={[
-                  { label: 'Active', active: filter === 'active', onClick: () => setFilter('active') },
-                  { label: 'Archived', active: filter === 'archived', onClick: () => setFilter('archived') },
-                  { label: 'All', active: filter === 'all', onClick: () => setFilter('all') },
-                ]}
-              />
-            )}
-          >
-            {loading ? (
-              <div className="flex min-h-[240px] items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-900" />
-              </div>
-            ) : events.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-6 py-12 text-center">
-                <p className="text-base font-semibold text-brand-900">No events found</p>
-                <p className="mt-1 text-sm text-surface-500">{filter === 'archived' ? 'There are no archived events yet.' : 'Create a new event to get started.'}</p>
-              </div>
+      <Toolbar
+        end={
+          <SegmentedControl<Filter>
+            label="Event status"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'archived', label: 'Archived' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
+        }
+      >
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder="Search events"
+          className="w-full sm:w-72"
+        />
+        {!loading ? (
+          <span className="meta num hidden sm:inline">
+            {formatCount(filtered.length)} {filtered.length === 1 ? 'event' : 'events'}
+          </span>
+        ) : null}
+      </Toolbar>
+
+      {error ? (
+        <div className="banner-error" role="alert">
+          <span className="flex-1">{error}</span>
+          <button type="button" className="shrink-0 font-semibold underline" onClick={() => void fetchEvents()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {loading ? (
+        <ListSkeleton rows={6} />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title={query ? 'No matching events' : filter === 'archived' ? 'No archived events' : 'No events yet'}
+          hint={query ? 'Try a different name, slug, venue or owner.' : undefined}
+          action={
+            query ? (
+              <button type="button" className="btn-outline btn-sm" onClick={() => setSearch('')}>
+                Clear search
+              </button>
             ) : (
-              <div className="space-y-3">
-                {events.map((event) => {
-                  const cover = resolveEventCover(event);
-                  return (
-                    <article
-                      key={event.id}
-                      className="rounded-[28px] border border-surface-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-all hover:border-brand-200"
+              <Link href="/admin/events/new" className="btn-primary btn-sm">
+                Create event
+              </Link>
+            )
+          }
+        />
+      ) : (
+        <>
+          <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
+            {paged.rows.map((event) => (
+              <ListRow
+                key={event.id}
+                href={`/admin/events/${event.id}`}
+                media={<Thumb src={resolveEventCover(event)} alt="" className="h-11 w-11" />}
+                title={event.name}
+                status={
+                  <>
+                    <StatusBadge tone={getPhaseTone(event.currentPhase)} dot>
+                      {getPhaseLabel(event.currentPhase)}
+                    </StatusBadge>
+                    {event.isArchived ? <StatusBadge tone="neutral">Archived</StatusBadge> : null}
+                    {event.invitationOnly ? <StatusBadge tone="brand">Invite only</StatusBadge> : null}
+                  </>
+                }
+                meta={
+                  <>
+                    <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
+                    {event.venue ? (
+                      <>
+                        <span aria-hidden="true">&middot;</span>
+                        <span className="truncate">{event.venue}</span>
+                      </>
+                    ) : null}
+                    <span aria-hidden="true">&middot;</span>
+                    <span className="truncate font-mono text-[12px]">/{event.slug}</span>
+                  </>
+                }
+                metrics={
+                  <>
+                    <span className="meta num">
+                      <span className="font-semibold text-brand-900">{formatCount(event._count.rsvps)}</span> RSVPs
+                    </span>
+                    <span className="meta num">
+                      <span className="font-semibold text-brand-900">{formatCount(event._count.checkIns)}</span> in
+                    </span>
+                    <span className="meta num">
+                      <span className="font-semibold text-brand-900">{formatCount(event._count.mediaAssets)}</span> media
+                    </span>
+                  </>
+                }
+                action={
+                  <Link href={`/admin/events/${event.id}`} className="btn-outline btn-sm hidden sm:inline-flex">
+                    Manage
+                  </Link>
+                }
+                overflow={
+                  <Menu label={`Actions for ${event.name}`} sheetTitle={event.name}>
+                    <MenuItem href={`/admin/events/${event.id}`}>Manage event</MenuItem>
+                    <MenuItem href={`/e/${event.slug}`} target="_blank">
+                      View public page
+                    </MenuItem>
+                    <MenuSeparator />
+                    <MenuItem
+                      danger={!event.isArchived}
+                      disabled={busyId === event.id}
+                      onClick={() => void setArchived(event, !event.isArchived)}
                     >
-                      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(260px,0.82fr)]">
-                        <div className="min-w-0 space-y-5">
-                          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
-                            <div className="h-24 w-full shrink-0 overflow-hidden rounded-2xl border border-surface-200 bg-surface-100 sm:h-24 sm:w-32">
-                              {cover ? (
-                                <img src={cover} alt={event.name} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
-                              )}
-                            </div>
+                      {event.isArchived ? 'Restore event' : 'Archive event'}
+                    </MenuItem>
+                  </Menu>
+                }
+              />
+            ))}
+          </div>
 
-                            <div className="min-w-0 flex-1 space-y-4">
-                              <div className="space-y-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="text-[1.85rem] font-semibold tracking-tight text-brand-900">{event.name}</h3>
-                                  <span
-                                    className={cn(
-                                      'rounded-full px-2.5 py-1 text-xs font-semibold',
-                                      event.currentPhase === 'LIVE'
-                                        ? 'bg-emerald-50 text-emerald-700'
-                                        : event.currentPhase === 'PRE_EVENT'
-                                        ? 'bg-sky-50 text-sky-700'
-                                        : 'bg-surface-100 text-surface-600'
-                                    )}
-                                  >
-                                    {getPhaseLabel(event.currentPhase)}
-                                  </span>
-                                  {event.invitationOnly ? (
-                                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">
-                                      Invite only
-                                    </span>
-                                  ) : null}
-                                  {event.isArchived ? (
-                                    <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">
-                                      Archived
-                                    </span>
-                                  ) : null}
-                                </div>
+          <Pagination
+            page={paged.page}
+            pageCount={paged.pageCount}
+            total={paged.total}
+            pageSize={paged.pageSize}
+            onPageChange={paged.setPage}
+          />
+        </>
+      )}
 
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-500">
-                                  <span>{formatDate(event.date, 'MMM d, yyyy')}</span>
-                                  {event.venue ? <span>{event.venue}</span> : null}
-                                  <span className="font-mono text-xs text-surface-400">/{event.slug}</span>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-2 sm:grid-cols-3">
-                                <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVPs</p>
-                                  <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.rsvps}</p>
-                                </div>
-                                <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Check-ins</p>
-                                  <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.checkIns}</p>
-                                </div>
-                                <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Media</p>
-                                  <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.mediaAssets}</p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-1">
-                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-4 py-4">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Invitations</p>
-                            <p className="mt-1 text-xl font-semibold text-brand-900">{event._count.invitations}</p>
-                          </div>
-                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-4 py-4">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">RSVP flow</p>
-                            <p className="mt-1 text-sm font-medium text-surface-600">{event.rsvpEnabled ? 'Enabled' : 'Disabled'}</p>
-                          </div>
-                          <div className="rounded-2xl border border-surface-200 bg-surface-50/70 px-4 py-4">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Guestbook</p>
-                            <p className="mt-1 text-sm font-medium text-surface-600">{event.guestbookEnabled ? 'Enabled' : 'Disabled'}</p>
-                          </div>
-                          <div className="flex flex-col gap-2 lg:col-span-3 xl:col-span-1">
-                            <Link href={`/admin/events/${event.id}`} className="btn-primary w-full justify-center">
-                              Manage
-                            </Link>
-                            <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline w-full justify-center">
-                              Public Page
-                            </Link>
-                            <button onClick={() => handleArchive(event.id, !event.isArchived)} className="btn-ghost w-full justify-center">
-                              {event.isArchived ? 'Restore' : 'Archive'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </DashboardSection>
-        )}
-        side={(
-          <InsightPanel title="Pending approvals" subtitle="Review owner-submitted events before they go live.">
-            {pendingApprovals.length === 0 ? (
-              <div className="rounded-2xl bg-surface-50 px-4 py-6 text-sm text-surface-500">No pending owner events right now.</div>
-            ) : (
-              <div className="space-y-3">
-                {pendingApprovals.map((event) => (
-                  <div key={event.id} className="rounded-2xl border border-surface-200 bg-surface-50/70 p-4">
-                    <p className="font-semibold text-brand-900">{event.name}</p>
-                    <p className="mt-1 text-sm text-surface-500">{event.Owner?.name || 'Unknown owner'}{event.Owner?.email ? ` - ${event.Owner.email}` : ''}</p>
-                    <p className="mt-1 text-sm text-surface-500">{formatDate(event.date, 'MMM d, yyyy')}</p>
-                    <div className="mt-4 flex gap-2">
-                      <button className="btn-outline flex-1 border-rose-200 text-rose-600 hover:bg-rose-50" disabled={reviewingId === event.id} onClick={() => reviewApproval(event.id, false)}>Reject</button>
-                      <button className="btn-primary flex-1" disabled={reviewingId === event.id} onClick={() => reviewApproval(event.id, true)}>Approve</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </InsightPanel>
-        )}
-      />
+      <Modal
+        open={Boolean(rejecting)}
+        onClose={() => setRejecting(null)}
+        title={`Reject ${rejecting?.name || 'event'}?`}
+        description="The owner receives this reason and can resubmit."
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn-outline" onClick={() => setRejecting(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={!rejectReason.trim() || busyId === rejecting?.id}
+              onClick={() => void submitRejection()}
+            >
+              Reject event
+            </button>
+          </>
+        }
+      >
+        <label className="label" htmlFor="reject-reason">
+          Reason
+        </label>
+        <textarea
+          id="reject-reason"
+          data-autofocus
+          className="input"
+          rows={4}
+          value={rejectReason}
+          onChange={(event) => setRejectReason(event.target.value)}
+          placeholder="What needs to change before this event can go live?"
+        />
+      </Modal>
     </div>
   );
 }
-

@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { eventOwnerApi, API_BASE_URL } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
-import { formatDate, cn } from '@/lib/utils';
+import { cn, formatCurrencyAmount, formatDate, formatCount, getPhaseLabel, getPhaseTone, getStatusTone, humanizeEnum, getErrorMessage } from '@/lib/utils';
+import { EmptyState, PageSkeleton, StatusBadge, Tabs, Td, Th } from '@/components/ui/Primitives';
 import toast from 'react-hot-toast';
 
 // Types
@@ -257,7 +258,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
       if (!silent) setLoading(false);
       setLastUpdated(new Date());
     } catch (err: any) {
-      if (!silent) { setError(err.response?.data?.error || 'Invalid access token'); setLoading(false); }
+      if (!silent) { setError(getErrorMessage(err, 'This access link is not valid.')); setLoading(false); }
     }
   };
 
@@ -329,11 +330,11 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
   const handleSaveWallet = async () => {
     try {
       await eventOwnerApi.updateWallet(token, walletForm);
-      toast.success('Wallet saved successfully');
+      toast.success('Payout destination saved');
       setShowWalletForm(false);
       fetchWallet();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to save wallet');
+      toast.error(getErrorMessage(err, 'Failed to save wallet'));
     }
   };
 
@@ -351,7 +352,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
       fetchPayouts();
       fetchSales();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to request payout');
+      toast.error(getErrorMessage(err, 'Failed to request payout'));
     }
   };
 
@@ -362,7 +363,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
       fetchPayouts();
       fetchSales();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to cancel payout');
+      toast.error(getErrorMessage(err, 'Failed to cancel payout'));
     }
   };
 
@@ -371,7 +372,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
       await eventOwnerApi.reviewRsvp(token, rsvpId, status);
       toast.success(`RSVP ${status.toLowerCase()}`);
       fetchRsvps(); fetchEvent();
-    } catch (err: any) { toast.error(err.response?.data?.error || 'Failed'); }
+    } catch (err: any) { toast.error(getErrorMessage(err, 'Failed')); }
   };
 
   const exportRsvps = (filter: string) => {
@@ -388,7 +389,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
       { key: 'note', label: 'Note' },
       { key: 'status', label: 'Status' },
       { key: 'invitation.accessCode', label: 'Access Code' },
-      { key: 'invitation.isCheckedIn', label: 'Checked In' },
+      { key: 'invitation.isCheckedIn', label: 'Checked in' },
       { key: 'submittedAt', label: 'Submitted At' },
     ]);
     toast.success(`Exported ${filtered.length} RSVPs`);
@@ -399,7 +400,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
     exportToCSV(checkIns, 'checkins.csv', [
       { key: 'invitation.rsvp.primaryName', label: 'Guest' },
       { key: 'invitation.rsvp.guestCount', label: 'Party Size' },
-      { key: 'checkedInAt', label: 'Checked In' },
+      { key: 'checkedInAt', label: 'Checked in' },
     ]);
     toast.success(`Exported ${checkIns.length} check-ins`);
   };
@@ -418,21 +419,25 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
     return `px-2 py-0.5 rounded border text-xs font-medium ${styles[status] || 'bg-surface-50 text-surface-600 border-surface-200'}`;
   };
 
+  // Amounts follow the wallet currency rather than assuming dollars.
+  const summaryCurrency = (wallet?.currency || walletForm.currency || 'USD').toUpperCase();
+  const money = (amount: number | null | undefined) => formatCurrencyAmount(amount ?? 0, summaryCurrency);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900" />
+      <div className="min-h-screen bg-surface-100 px-4 py-6 sm:px-6">
+        <div className="mx-auto max-w-6xl">
+          <PageSkeleton />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <div className="w-14 h-14 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-4 text-red-500">{Icons.close}</div>
-          <h1 className="text-xl font-semibold text-navy-900 mb-2">Access Denied</h1>
-          <p className="text-surface-500">{error}</p>
+      <div className="flex min-h-screen items-center justify-center bg-surface-100 p-4">
+        <div className="w-full max-w-sm">
+          <EmptyState title="This link no longer works" hint={error} />
         </div>
       </div>
     );
@@ -442,83 +447,65 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
     return null;
   }
 
+  const ownerTabs = [
+    { id: 'dashboard', label: 'Overview' },
+    { id: 'rsvps', label: 'RSVPs', count: pendingCount || undefined },
+    { id: 'media', label: 'Media' },
+    { id: 'checkins', label: 'Check-ins' },
+    ...(event?.rsvpMode === 'paid'
+      ? [
+          { id: 'sales', label: 'Sales' },
+          { id: 'wallet', label: 'Wallet' },
+        ]
+      : []),
+  ];
+
   return (
-    <div className="min-h-screen bg-surface-50">
-      {/* Header */}
-      <header className="bg-white border-b border-surface-200 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-14">
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-navy-900 truncate">{event.name}</h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-surface-400 hidden sm:block">Updated {formatDate(lastUpdated.toISOString(), 'h:mm a')}</span>
-              <span className={cn(
-                'px-2 py-1 rounded text-xs font-medium',
-                event.currentPhase === 'LIVE' ? 'bg-green-50 text-green-700' : 'bg-surface-100 text-surface-600'
-              )}>
-                {event.currentPhase === 'LIVE' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />}
-                {event.currentPhase.replace('_', ' ')}
+    <div className="min-h-screen bg-surface-100">
+      <header className="sticky top-0 z-40 border-b border-surface-200 bg-white/95 backdrop-blur-xl">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex min-h-[52px] items-center justify-between gap-3">
+            <h1 className="min-w-0 truncate text-[15px] font-semibold text-brand-900">{event.name}</h1>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="hidden meta sm:inline">
+                Updated {formatDate(lastUpdated.toISOString(), 'h:mm a')}
               </span>
+              <StatusBadge tone={getPhaseTone(event.currentPhase)} dot>
+                {getPhaseLabel(event.currentPhase)}
+              </StatusBadge>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Tabs */}
-      <nav className="bg-white border-b border-surface-200 sticky top-14 z-30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex gap-1 -mb-px overflow-x-auto py-1">
-            {([
-              { id: 'dashboard', label: 'Overview', icon: Icons.rsvp },
-              { id: 'rsvps', label: 'RSVPs', icon: Icons.users, badge: pendingCount },
-              { id: 'media', label: 'Media', icon: Icons.message },
-              // Reels tab - HIDDEN for now (feature under development)
-              // ...(event?.reelEnabled ? [
-              //   { id: 'reels' as Tab, label: 'Reels', icon: Icons.reel },
-              // ] : []),
-              { id: 'checkins', label: 'Check-ins', icon: Icons.checkin },
-              // Sales & Wallet tabs only visible for paid RSVP events
-              ...(event?.rsvpMode === 'paid' ? [
-                { id: 'sales' as Tab, label: 'Sales', icon: Icons.sales },
-                { id: 'wallet' as Tab, label: 'Wallet', icon: Icons.wallet },
-              ] : []),
-            ] as { id: Tab; label: string; icon: JSX.Element; badge?: number }[]).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap',
-                  activeTab === tab.id ? 'bg-navy-900 text-white' : 'text-surface-600 hover:bg-surface-100'
-                )}
-              >
-                {tab.icon}
-                {tab.label}
-                {tab.badge !== undefined && tab.badge > 0 && (
-                  <span className={cn('px-1.5 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-white/20' : 'bg-amber-100 text-amber-700')}>{tab.badge}</span>
-                )}
-              </button>
-            ))}
-          </div>
+      <nav className="sticky top-[52px] z-30 border-b border-surface-200 bg-white">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Tabs
+            items={ownerTabs}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as Tab)}
+            label="Event sections"
+            className="border-b-0"
+          />
         </div>
       </nav>
 
       {/* Content */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
         {/* Dashboard */}
         {activeTab === 'dashboard' && (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total RSVPs', value: event._count.rsvps, icon: Icons.rsvp },
+              { label: 'RSVPs', value: event._count.rsvps, icon: Icons.rsvp },
               { label: 'Approved', value: event._count.invitations, icon: Icons.users },
-              { label: 'Checked In', value: event._count.checkIns, icon: Icons.checkin },
+              { label: 'Checked in', value: event._count.checkIns, icon: Icons.checkin },
               { label: 'Messages', value: event._count.mediaAssets, icon: Icons.message },
             ].map(stat => (
               <div key={stat.label} className="bg-white rounded-xl border border-surface-200 p-5 hover:border-surface-300 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-surface-500 mb-1">{stat.label}</p>
-                    <p className="text-2xl font-bold text-navy-900">{stat.value}</p>
+                    <p className="text-2xl font-bold text-brand-900">{stat.value}</p>
                   </div>
                   <div className="w-10 h-10 rounded-lg bg-surface-50 flex items-center justify-center text-surface-400">{stat.icon}</div>
                 </div>
@@ -527,11 +514,11 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
 
             <div className="sm:col-span-2 lg:col-span-4 bg-white rounded-xl border border-surface-200 p-5">
                 <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-navy-900">Recent Messages</h3>
+                <h3 className="font-medium text-brand-900">Recent messages</h3>
                 <button onClick={() => setActiveTab('media')} className="text-sm text-surface-500 hover:text-navy-900 transition-colors">View all</button>
               </div>
               {media.length === 0 ? (
-                <p className="text-surface-400 text-center py-8">No messages yet</p>
+                <p className="text-surface-600 text-center py-8">No messages yet</p>
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                     {media.slice(0, 6).map(m => (
@@ -583,51 +570,51 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-surface-100 bg-surface-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Details</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                    <th className="table-header">Guest</th>
+                    <th className="table-header">Contact</th>
+                    <th className="table-header">Response</th>
+                    <th className="table-header">Details</th>
+                    <th className="table-header">Status</th>
+                    <th className="table-header text-right">Actions</th>
                   </tr></thead>
                   <tbody className="divide-y divide-surface-100">
-                    {rsvps.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-surface-400">No RSVPs</td></tr> : rsvps.map(r => (
+                    {rsvps.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-surface-600">No RSVPs</td></tr> : rsvps.map(r => (
                       <tr key={r.id} className="hover:bg-surface-50 transition-colors">
                         <td className="py-3 px-4">
-                          <p className="font-medium text-navy-900">{r.primaryName}</p>
+                          <p className="font-medium text-brand-900">{r.primaryName}</p>
                           {r.secondaryName && <p className="text-sm text-surface-500">+ {r.secondaryName}</p>}
-                          <p className="text-xs text-surface-400 mt-1">{r.guestCount} guest(s)</p>
+                          <p className="text-xs text-surface-600 mt-1">{r.guestCount} guest(s)</p>
                         </td>
                         <td className="py-3 px-4">
                           {r.email && <p className="text-surface-600">{r.email}</p>}
                           {r.phone && <p className="text-surface-500">{r.phone}</p>}
-                          {!r.email && !r.phone && <span className="text-surface-400">-</span>}
+                          {!r.email && !r.phone && <span className="text-surface-600">-</span>}
                         </td>
                         <td className="py-3 px-4">
                           <span className={getStatusBadge(r.attendance)}>{r.attendance}</span>
-                          <p className="text-xs text-surface-400 mt-1">{formatDate(r.submittedAt)}</p>
+                          <p className="text-xs text-surface-600 mt-1">{formatDate(r.submittedAt)}</p>
                         </td>
                         <td className="py-3 px-4 max-w-[200px]">
                           {r.mealPreference && (
                             <p className="text-surface-600 truncate" title={r.mealPreference}>
-                              <span className="text-surface-400">Meal:</span> {r.mealPreference}
+                              <span className="text-surface-600">Meal:</span> {r.mealPreference}
                             </p>
                           )}
                           {r.dietaryNotes && (
                             <p className="text-surface-600 truncate" title={r.dietaryNotes}>
-                              <span className="text-surface-400">Diet:</span> {r.dietaryNotes}
+                              <span className="text-surface-600">Diet:</span> {r.dietaryNotes}
                             </p>
                           )}
                           {r.note && (
                             <p className="text-surface-500 text-xs truncate italic" title={r.note}>{r.note}</p>
                           )}
-                          {!r.mealPreference && !r.dietaryNotes && !r.note && <span className="text-surface-400">-</span>}
+                          {!r.mealPreference && !r.dietaryNotes && !r.note && <span className="text-surface-600">-</span>}
                         </td>
                         <td className="py-3 px-4">
                           <span className={getStatusBadge(r.status)}>{r.status}</span>
                           {r.invitation?.isCheckedIn && <p className="text-xs text-green-600 mt-1">Checked in</p>}
                           {r.invitation && !r.invitation.isCheckedIn && (
-                            <p className="text-xs text-surface-400 mt-1">Code: {r.invitation.accessCode}</p>
+                            <p className="text-xs text-surface-600 mt-1">Code: {r.invitation.accessCode}</p>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -664,13 +651,13 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
               </div>
             </div>
 
-            {/* RSVP Details Modal */}
+            {/* RSVP details Modal */}
             {viewingRsvpDetails && (
               <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setViewingRsvpDetails(null)}>
                 <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                   <div className="p-6 border-b border-surface-200">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-navy-900">RSVP Details</h3>
+                      <h3 className="text-lg font-semibold text-brand-900">RSVP details</h3>
                       <button onClick={() => setViewingRsvpDetails(null)} className="p-2 rounded-lg hover:bg-surface-100">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -682,12 +669,12 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium text-surface-500">Primary Name</label>
-                        <p className="text-navy-900 font-medium">{viewingRsvpDetails.primaryName}</p>
+                        <p className="text-brand-900 font-medium">{viewingRsvpDetails.primaryName}</p>
                       </div>
                       {viewingRsvpDetails.secondaryName && (
                         <div>
                           <label className="text-sm font-medium text-surface-500">Secondary Name</label>
-                          <p className="text-navy-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
+                          <p className="text-brand-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
                         </div>
                       )}
                       {viewingRsvpDetails.email && (
@@ -750,12 +737,12 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                       )}
                       {viewingRsvpDetails.invitation?.isCheckedIn !== undefined && (
                         <div>
-                          <label className="text-sm font-medium text-surface-500">Checked In</label>
+                          <label className="text-sm font-medium text-surface-500">Checked in</label>
                           <p className="text-navy-900">
                             {viewingRsvpDetails.invitation.isCheckedIn ? (
                               <span className="text-green-600 font-medium">Yes</span>
                             ) : (
-                              <span className="text-surface-400">No</span>
+                              <span className="text-surface-600">No</span>
                             )}
                           </p>
                         </div>
@@ -765,7 +752,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                     {/* QR Code Display */}
                     {viewingRsvpDetails.invitation?.qrCodeData && (
                       <div className="border-t border-surface-200 pt-4 mt-4">
-                        <h4 className="text-sm font-semibold text-navy-900 mb-3">QR Code</h4>
+                        <h4 className="text-sm font-semibold text-brand-900 mb-3">QR Code</h4>
                         <div className="flex flex-col items-center gap-3">
                           <img
                             src={viewingRsvpDetails.invitation.qrCodeData}
@@ -785,7 +772,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                         if (Object.keys(customFields).length > 0) {
                           return (
                             <div className="border-t border-surface-200 pt-4 mt-4">
-                              <h4 className="text-sm font-semibold text-navy-900 mb-3">Custom Fields</h4>
+                              <h4 className="text-sm font-semibold text-brand-900 mb-3">Custom Fields</h4>
                               <div className="grid sm:grid-cols-2 gap-4">
                                 {Object.entries(customFields).map(([key, value]) => (
                                   <div key={key}>
@@ -831,12 +818,12 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                     {Icons.reel}
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-navy-900">Generating Reel...</h3>
+                    <h3 className="font-semibold text-brand-900">Generating Reel...</h3>
                     <p className="text-sm text-surface-600">
                       {activeReelJob?.videoCount} video{activeReelJob?.videoCount !== 1 ? 's' : ''} being processed
                     </p>
                   </div>
-                  <span className="text-2xl font-bold text-navy-900">{activeReelJob?.progress}%</span>
+                  <span className="text-2xl font-bold text-brand-900">{activeReelJob?.progress}%</span>
                 </div>
                 <div className="w-full bg-surface-200 rounded-full h-2">
                   <div
@@ -849,14 +836,14 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
 
             {/* Completed Reels */}
             <div>
-              <h3 className="text-lg font-semibold text-navy-900 mb-4">Your Reels</h3>
+              <h3 className="text-lg font-semibold text-brand-900 mb-4">Your Reels</h3>
               {reels.filter(r => r.status === 'completed').length === 0 ? (
                 <div className="text-center py-12 bg-surface-50 rounded-xl">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface-100 flex items-center justify-center text-surface-400">
                     {Icons.reel}
                   </div>
                   <p className="text-surface-600 mb-2">No reels generated yet</p>
-                  <p className="text-sm text-surface-400">Go to the Media tab to generate a reel from your videos</p>
+                  <p className="text-sm text-surface-600">Go to the Media tab to generate a reel from your videos</p>
                 </div>
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -872,14 +859,14 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                       </div>
                       <div className="p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-navy-900">
+                          <span className="text-sm font-medium text-brand-900">
                             {reel.duration ? `${Math.floor(reel.duration / 60)}:${String(reel.duration % 60).padStart(2, '0')}` : 'Unknown duration'}
                           </span>
                           <span className="text-xs text-surface-500">
                             {reel.videoCount} video{reel.videoCount !== 1 ? 's' : ''}
                           </span>
                         </div>
-                        <p className="text-xs text-surface-400 mb-3">
+                        <p className="text-xs text-surface-600 mb-3">
                           Created {formatDate(reel.completedAt || reel.createdAt)}
                         </p>
                         <a
@@ -948,15 +935,15 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead><tr className="border-b border-surface-100 bg-surface-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Party</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Time</th>
+                    <th className="table-header">Guest</th>
+                    <th className="table-header">Party</th>
+                    <th className="table-header">Time</th>
                   </tr></thead>
                   <tbody className="divide-y divide-surface-100">
-                    {checkIns.length === 0 ? <tr><td colSpan={3} className="py-12 text-center text-surface-400">No check-ins yet</td></tr> : checkIns.map(c => (
+                    {checkIns.length === 0 ? <tr><td colSpan={3} className="py-12 text-center text-surface-600">No check-ins yet</td></tr> : checkIns.map(c => (
                       <tr key={c.id} className="hover:bg-surface-50 transition-colors">
                         <td className="py-3 px-4">
-                          <p className="font-medium text-navy-900">{c.invitation.rsvp.primaryName}</p>
+                          <p className="font-medium text-brand-900">{c.invitation.rsvp.primaryName}</p>
                           {c.invitation.rsvp.secondaryName && <p className="text-sm text-surface-500">& {c.invitation.rsvp.secondaryName}</p>}
                         </td>
                         <td className="py-3 px-4 text-surface-600">{c.invitation.rsvp.guestCount}</td>
@@ -977,37 +964,37 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white rounded-xl border border-surface-200 p-5">
                 <p className="text-sm text-surface-500 mb-1">Total Revenue</p>
-                <p className="text-2xl font-bold text-navy-900">${salesSummary?.totalGross?.toFixed(2) || '0.00'}</p>
+                <p className="text-2xl font-bold text-brand-900">{money(salesSummary?.totalGross)}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200 p-5">
                 <p className="text-sm text-surface-500 mb-1">Your Earnings</p>
-                <p className="text-2xl font-bold text-green-600">${salesSummary?.totalNet?.toFixed(2) || '0.00'}</p>
+                <p className="text-2xl font-bold text-green-600">{money(salesSummary?.totalNet)}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200 p-5">
                 <p className="text-sm text-surface-500 mb-1">Available Balance</p>
-                <p className="text-2xl font-bold text-navy-900">${salesSummary?.availableBalance?.toFixed(2) || '0.00'}</p>
+                <p className="text-2xl font-bold text-brand-900">{money(salesSummary?.availableBalance)}</p>
               </div>
               <div className="bg-white rounded-xl border border-surface-200 p-5">
                 <p className="text-sm text-surface-500 mb-1">Tickets Sold</p>
-                <p className="text-2xl font-bold text-navy-900">{salesSummary?.ticketsSold || 0}</p>
+                <p className="text-2xl font-bold text-brand-900">{salesSummary?.ticketsSold || 0}</p>
               </div>
             </div>
 
             {/* Fee Breakdown */}
             <div className="bg-white rounded-xl border border-surface-200 p-5">
-              <h3 className="font-medium text-navy-900 mb-4">Fee Breakdown</h3>
+              <h3 className="font-medium text-brand-900 mb-4">Fee Breakdown</h3>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <p className="text-sm text-surface-500">Platform Fees</p>
-                  <p className="text-lg font-semibold text-surface-700">${salesSummary?.totalPlatformFees?.toFixed(2) || '0.00'}</p>
+                  <p className="text-lg font-semibold text-surface-700">{money(salesSummary?.totalPlatformFees)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-surface-500">Processing Fees</p>
-                  <p className="text-lg font-semibold text-surface-700">${salesSummary?.totalProcessingFees?.toFixed(2) || '0.00'}</p>
+                  <p className="text-lg font-semibold text-surface-700">{money(salesSummary?.totalProcessingFees)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-surface-500">Total Payouts</p>
-                  <p className="text-lg font-semibold text-surface-700">${salesSummary?.totalPayouts?.toFixed(2) || '0.00'}</p>
+                  <p className="text-lg font-semibold text-surface-700">{money(salesSummary?.totalPayouts)}</p>
                 </div>
               </div>
             </div>
@@ -1015,20 +1002,20 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
             {/* Recent Transactions */}
             <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-surface-100">
-                <h3 className="font-medium text-navy-900">Recent Transactions</h3>
+                <h3 className="font-medium text-brand-900">Recent Transactions</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-surface-100 bg-surface-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Type</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Details</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Amount</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
+                    <th className="table-header">Date</th>
+                    <th className="table-header">Type</th>
+                    <th className="table-header">Details</th>
+                    <th className="table-header text-right">Amount</th>
+                    <th className="table-header">Status</th>
                   </tr></thead>
                   <tbody className="divide-y divide-surface-100">
                     {transactions.length === 0 ? (
-                      <tr><td colSpan={5} className="py-12 text-center text-surface-400">No transactions yet</td></tr>
+                      <tr><td colSpan={5} className="py-12 text-center text-surface-600">No transactions yet</td></tr>
                     ) : transactions.map(tx => (
                       <tr key={tx.id} className="hover:bg-surface-50 transition-colors">
                         <td className="py-3 px-4 text-surface-600">{formatDate(tx.createdAt, 'MMM d, h:mm a')}</td>
@@ -1043,16 +1030,16 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <p className="font-medium text-navy-900">{tx.buyerName || tx.ticketTypeName || '-'}</p>
+                          <p className="font-medium text-brand-900">{tx.buyerName || tx.ticketTypeName || '-'}</p>
                           {tx.buyerEmail && <p className="text-xs text-surface-500">{tx.buyerEmail}</p>}
                           {tx.ticketQuantity > 1 && <p className="text-xs text-surface-500">{tx.ticketQuantity} tickets</p>}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <p className={cn('font-medium', tx.type === 'refund' || tx.type === 'payout' ? 'text-red-600' : 'text-green-600')}>
-                            {tx.type === 'refund' || tx.type === 'payout' ? '-' : '+'}${Math.abs(tx.netAmount).toFixed(2)}
+                            {tx.type === 'refund' || tx.type === 'payout' ? '-' : '+'}{formatCurrencyAmount(Math.abs(tx.netAmount), tx.currency || summaryCurrency)}
                           </p>
                           {tx.grossAmount !== tx.netAmount && (
-                            <p className="text-xs text-surface-400">Gross: ${tx.grossAmount.toFixed(2)}</p>
+                            <p className="text-xs text-surface-600">Gross {formatCurrencyAmount(tx.grossAmount, tx.currency || summaryCurrency)}</p>
                           )}
                         </td>
                         <td className="py-3 px-4">
@@ -1078,15 +1065,15 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
         {activeTab === 'wallet' && (
           <div className="space-y-6">
             {/* Available Balance Card */}
-            <div className="bg-gradient-to-r from-navy-900 to-navy-800 rounded-xl p-6 text-white">
-              <p className="text-sm opacity-80 mb-1">Available Balance</p>
-              <p className="text-3xl font-bold mb-4">${salesSummary?.availableBalance?.toFixed(2) || '0.00'}</p>
-              <div className="flex flex-wrap gap-3">
+            <div className="panel p-4 sm:p-5">
+              <p className="text-[13px] font-medium text-surface-600">Available balance</p>
+              <p className="num mt-0.5 text-2xl font-semibold tracking-tight text-brand-900">{money(salesSummary?.availableBalance)}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={() => setActiveTab('sales')}
-                  className="px-4 py-2 bg-white/10 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors"
+                  className="btn-outline btn-sm"
                 >
-                  View Sales
+                  View sales
                 </button>
               </div>
             </div>
@@ -1094,7 +1081,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
             {/* Wallet Configuration */}
             <div className="bg-white rounded-xl border border-surface-200 p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-navy-900">Payout Wallet</h3>
+                <h3 className="font-medium text-brand-900">Payout destination</h3>
                 <button
                   onClick={() => setShowWalletForm(!showWalletForm)}
                   className="btn-outline text-sm"
@@ -1110,7 +1097,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                       {wallet.preferredMethod === 'bank' ? Icons.bank : Icons.wallet}
                     </div>
                     <div>
-                      <p className="font-medium text-navy-900">
+                      <p className="font-medium text-brand-900">
                         {wallet.preferredMethod === 'bank' ? wallet.bankName : 
                          wallet.preferredMethod === 'paypal' ? 'PayPal' :
                          wallet.preferredMethod === 'mobile' ? wallet.mobileProvider : wallet.preferredMethod}
@@ -1128,9 +1115,9 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                     )}
                   </div>
                   <div className="pt-3 border-t border-surface-100 flex items-center gap-4 text-sm">
-                    <span className="text-surface-500">Currency: <span className="font-medium text-navy-900">{wallet.currency}</span></span>
+                    <span className="text-surface-500">Currency: <span className="font-medium text-brand-900">{wallet.currency}</span></span>
                     {wallet.autoPayoutEnabled && (
-                      <span className="text-surface-500">Auto-payout at: <span className="font-medium text-navy-900">${wallet.autoPayoutThreshold}</span></span>
+                      <span className="text-surface-500">Auto-payout at: <span className="font-medium text-brand-900">${wallet.autoPayoutThreshold}</span></span>
                     )}
                   </div>
                 </div>
@@ -1290,12 +1277,12 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
             {/* Request Payout */}
             {walletConfigured && (
               <div className="bg-white rounded-xl border border-surface-200 p-5">
-                <h3 className="font-medium text-navy-900 mb-4">Request Payout</h3>
+                <h3 className="font-medium text-brand-900 mb-4">Request Payout</h3>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-surface-700 mb-1">Amount</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-600">$</span>
                       <input
                         type="number"
                         value={payoutAmount}
@@ -1306,7 +1293,7 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
                         className="w-full pl-7 pr-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
                       />
                     </div>
-                    <p className="text-xs text-surface-400 mt-1">Min: $10.00</p>
+                    <p className="text-xs text-surface-600 mt-1">Min: $10.00</p>
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-surface-700 mb-1">Notes (optional)</label>
@@ -1332,24 +1319,24 @@ export default function EventOwnerPortalPage(): JSX.Element | null {
             {/* Payout History */}
             <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-surface-100">
-                <h3 className="font-medium text-navy-900">Payout History</h3>
+                <h3 className="font-medium text-brand-900">Payout History</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-surface-100 bg-surface-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Amount</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Method</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                    <th className="table-header">Date</th>
+                    <th className="table-header">Amount</th>
+                    <th className="table-header">Method</th>
+                    <th className="table-header">Status</th>
+                    <th className="table-header text-right">Actions</th>
                   </tr></thead>
                   <tbody className="divide-y divide-surface-100">
                     {payouts.length === 0 ? (
-                      <tr><td colSpan={5} className="py-12 text-center text-surface-400">No payout requests yet</td></tr>
+                      <tr><td colSpan={5} className="py-12 text-center text-surface-600">No payout requests yet</td></tr>
                     ) : payouts.map(p => (
                       <tr key={p.id} className="hover:bg-surface-50 transition-colors">
                         <td className="py-3 px-4 text-surface-600">{formatDate(p.createdAt, 'MMM d, yyyy')}</td>
-                        <td className="py-3 px-4 font-medium text-navy-900">${p.requestedAmount.toFixed(2)} {p.currency}</td>
+                        <td className="py-3 px-4 font-medium text-brand-900">{formatCurrencyAmount(p.requestedAmount, p.currency)}</td>
                         <td className="py-3 px-4 text-surface-600 capitalize">{p.payoutMethod}</td>
                         <td className="py-3 px-4">
                           <span className={cn(

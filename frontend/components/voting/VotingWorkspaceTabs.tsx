@@ -1,10 +1,14 @@
+'use client';
+
+import { Tabs } from '@/components/ui/Primitives';
+
 type VotingWorkspaceTab = 'setup' | 'categories' | 'nominees' | 'published' | 'nominations' | 'results';
 
 const TABS: Array<{ id: VotingWorkspaceTab; label: string }> = [
   { id: 'setup', label: 'Setup' },
   { id: 'categories', label: 'Categories' },
-  { id: 'nominees', label: 'Add Nominees' },
-  { id: 'published', label: 'Published Profiles' },
+  { id: 'nominees', label: 'Nominees' },
+  { id: 'published', label: 'Profiles' },
   { id: 'nominations', label: 'Nominations' },
   { id: 'results', label: 'Results' },
 ];
@@ -17,17 +21,11 @@ export default function VotingWorkspaceTabs({
   onChange: (tab: VotingWorkspaceTab) => void;
 }) {
   return (
-    <div className="page-tabs overflow-x-auto scrollbar-hide">
-      {TABS.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          className={`page-tabs-item ${activeTab === tab.id ? 'page-tabs-item-active' : ''}`}
-          onClick={() => onChange(tab.id)}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
+    <Tabs
+      items={TABS}
+      active={activeTab}
+      onChange={(id) => onChange(id as VotingWorkspaceTab)}
+      label="Voting sections"
+    />
   );
 }

@@ -152,17 +152,16 @@ export default function VotingSetupPanel({
   };
 
   return (
-    <section className={`${containerClassName} space-y-5 p-5`}>
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Setup</p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Voting settings</h2>
-        <p className="mt-1 text-sm leading-6 text-surface-500">Control how guests verify identity, vote, nominate, and complete purchases.</p>
+    <section className={`${containerClassName} panel`}>
+      <div className="panel-header">
+        <h2 className="panel-title">Voting settings</h2>
       </div>
+      <div className="panel-body space-y-4">
       {config ? (
         <>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
             <label className="space-y-1">
-              <span className="text-xs text-surface-600">Mode</span>
+              <span className="label">Mode</span>
               <select
                 className="input"
                 value={config.mode}
@@ -181,11 +180,11 @@ export default function VotingSetupPanel({
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-surface-600">Event Currency</span>
+              <span className="label">Event Currency</span>
               <div className="input flex items-center bg-surface-50 font-semibold text-brand-900">{eventCurrency}</div>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-surface-600">Unit Price</span>
+              <span className="label">Unit Price</span>
               <input
                 className="input"
                 type="number"
@@ -196,7 +195,7 @@ export default function VotingSetupPanel({
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-surface-600">Max Votes Per Purchase</span>
+              <span className="label">Max Votes Per Purchase</span>
               <input
                 className="input"
                 type="number"
@@ -211,7 +210,7 @@ export default function VotingSetupPanel({
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.isEnabled}
@@ -219,7 +218,7 @@ export default function VotingSetupPanel({
               />
               Open Voting
             </label>
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.allowFreeVotes}
@@ -227,7 +226,7 @@ export default function VotingSetupPanel({
               />
               Free Votes
             </label>
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={electionMode ? false : config.allowPaidVotes}
@@ -236,7 +235,7 @@ export default function VotingSetupPanel({
               />
               Paid Votes
             </label>
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={config.requireOtpForElection}
@@ -244,7 +243,7 @@ export default function VotingSetupPanel({
               />
               Phone OTP Verification
             </label>
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
+            <label className="inline-flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900">
               <input
                 type="checkbox"
                 checked={verification.manualIdEnabled}
@@ -252,7 +251,7 @@ export default function VotingSetupPanel({
               />
               Manual Voter IDs
             </label>
-            <label className="inline-flex items-center gap-3 rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900 md:col-span-2">
+            <label className="inline-flex items-center gap-3 rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-brand-900 md:col-span-2">
               <input
                 type="checkbox"
                 checked={Boolean(config.allowPublicNominations)}
@@ -263,10 +262,10 @@ export default function VotingSetupPanel({
           </div>
 
           {verification.manualIdEnabled ? (
-            <section className="space-y-4 rounded-[24px] border border-surface-200 bg-surface-50 p-4">
+            <section className="space-y-4 rounded-xl border border-surface-200 bg-surface-50 p-4">
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-end">
                 <label className="space-y-1">
-                  <span className="text-xs text-surface-600">Manual ID Label</span>
+                  <span className="label">Manual ID Label</span>
                   <input
                     className="input"
                     value={verification.manualIdLabel}
@@ -293,15 +292,15 @@ export default function VotingSetupPanel({
                   </button>
                 </div>
               </div>
-              <div className="rounded-2xl border border-surface-200 bg-white px-4 py-3 text-sm text-surface-600">
+              <div className="rounded-lg border border-surface-200 bg-white px-4 py-3 text-sm text-surface-600">
                 {verification.manualIdEntries.length > 0
                   ? `${verification.manualIdEntries.length.toLocaleString()} approved voter IDs loaded`
                   : 'No voter IDs uploaded yet'}
               </div>
               {verification.manualIdEntries.length > 0 ? (
-                <div className="max-h-56 overflow-auto rounded-2xl border border-surface-200 bg-white">
+                <div className="max-h-56 overflow-auto rounded-lg border border-surface-200 bg-white">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-surface-50 text-left text-xs uppercase tracking-[0.16em] text-surface-400">
+                    <thead className="bg-surface-50 text-left text-[12px] font-semibold text-surface-600">
                       <tr>
                         <th className="px-4 py-3">ID</th>
                         <th className="px-4 py-3">Name</th>
@@ -360,8 +359,9 @@ export default function VotingSetupPanel({
           />
         </>
       ) : (
-        <p className="text-sm text-surface-500">Voting setup is not available for this event yet.</p>
+        <p className="text-sm text-surface-600">Voting setup is not available for this event yet.</p>
       )}
+      </div>
     </section>
   );
 }

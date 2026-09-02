@@ -1,4 +1,7 @@
-import Link from 'next/link';
+'use client';
+
+import { PageHeader } from '@/components/ui/Primitives';
+import { Menu, MenuItem } from '@/components/ui/Overlay';
 
 type WorkspaceAction = {
   href: string;
@@ -17,37 +20,59 @@ export default function VotingWorkspaceHeader({
   eventSlug?: string | null;
   actions: WorkspaceAction[];
 }) {
+  const visible = eventSlug ? actions : [];
+
   return (
-    <section className="app-hero">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-        <Link href={backHref} className="inline-flex items-center text-sm text-surface-600 hover:text-brand-900">
-          <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to event
-        </Link>
-        <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-700">Voting workspace</p>
-        <h1 className="mt-1 text-3xl font-display font-bold tracking-tight text-brand-900">Voting Workspace</h1>
-        <p className="mt-2 text-sm leading-6 text-surface-600">
-          {eventName} {eventSlug ? `- /e/${eventSlug}/vote` : ''}
-        </p>
-      </div>
-      {eventSlug ? (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((action) => (
-            <Link
-              key={`${action.href}:${action.label}`}
-              href={action.href}
-              className="btn-outline"
-              target={action.external ? '_blank' : undefined}
-            >
-              {action.label}
-            </Link>
-          ))}
-        </div>
-      ) : null}
-      </div>
-    </section>
+    <PageHeader
+      title={eventName ? `${eventName} · Voting` : 'Voting'}
+      backHref={backHref}
+      backLabel="Event"
+      meta={eventSlug ? <span className="truncate font-mono text-[12px]">/e/{eventSlug}/vote</span> : undefined}
+      actions={
+        visible.length > 0 ? (
+          <>
+            {visible.slice(0, 2).map((action) => (
+              <a
+                key={`${action.href}:${action.label}`}
+                href={action.href}
+                target={action.external ? '_blank' : undefined}
+                rel={action.external ? 'noopener noreferrer' : undefined}
+                className="btn-outline btn-sm"
+              >
+                {action.label}
+              </a>
+            ))}
+            {visible.length > 2 ? (
+              <Menu label="More voting links" sheetTitle="Voting links">
+                {visible.slice(2).map((action) => (
+                  <MenuItem
+                    key={`${action.href}:${action.label}`}
+                    href={action.href}
+                    target={action.external ? '_blank' : undefined}
+                  >
+                    {action.label}
+                  </MenuItem>
+                ))}
+              </Menu>
+            ) : null}
+          </>
+        ) : null
+      }
+      mobileActions={
+        visible.length > 0 ? (
+          <Menu label="Voting links" sheetTitle="Voting links">
+            {visible.map((action) => (
+              <MenuItem
+                key={`${action.href}:${action.label}`}
+                href={action.href}
+                target={action.external ? '_blank' : undefined}
+              >
+                {action.label}
+              </MenuItem>
+            ))}
+          </Menu>
+        ) : null
+      }
+    />
   );
 }

@@ -1,12 +1,30 @@
 'use client';
 
-import { ChangeEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { itineraryApi, ownerDashboardApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
-import { formatDate, getPhaseLabel, cn, copyToClipboard, formatCurrencyAmount } from '@/lib/utils';
+import { formatDate, formatCount, getPhaseLabel, getPhaseTone, getStatusTone, getErrorMessage, humanizeEnum, cn, copyToClipboard, formatCurrencyAmount } from '@/lib/utils';
+import {
+  DetailRow,
+  EmptyState,
+  ListSkeleton,
+  PageHeader,
+  Panel,
+  PublicPageRow,
+  SegmentedControl,
+  StatRow,
+  StatusBadge,
+  SubmitButton,
+  Switch,
+  Tabs,
+  Td,
+  Th,
+  Toolbar,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, MenuSeparator, Modal } from '@/components/ui/Overlay';
+import { ExternalLink } from '@/components/ui/icons';
 import toast from 'react-hot-toast';
 
 interface Event {
@@ -152,157 +170,48 @@ interface EventApproval {
 
 type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'tickets' | 'itinerary' | 'invites' | 'domains' | 'voting' | 'gifts';
 
-const Icons = {
-  back: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
-  external: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>,
-  copy: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
-  download: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
-  check: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-  close: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
-};
 
+/** Row actions for one RSVP. Uses the shared Menu so it flips, traps keys,
+ *  and becomes a bottom sheet on phones. */
 function RsvpActionMenu({
   rsvpId,
+  guestName,
   status,
   reviewing,
   onReview,
   onDetails,
 }: {
   rsvpId: string;
+  guestName: string;
   status: string;
   reviewing: boolean;
   onReview: (id: string, status: 'PENDING' | 'APPROVED' | 'REJECTED') => void;
   onDetails: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const MENU_WIDTH = 192; // w-48
-  const GAP = 4;
-  const EDGE = 8;
-
-  // The menu is portalled to <body> and positioned against the trigger, so the
-  // table's overflow-x-auto / overflow-hidden ancestors can no longer clip it.
-  const position = useCallback(() => {
-    const trigger = buttonRef.current;
-    if (!trigger) return;
-
-    const rect = trigger.getBoundingClientRect();
-    const menuHeight = menuRef.current?.offsetHeight ?? 216;
-
-    let left = rect.right - MENU_WIDTH;
-    left = Math.min(Math.max(EDGE, left), window.innerWidth - MENU_WIDTH - EDGE);
-
-    let top = rect.bottom + GAP;
-    if (top + menuHeight > window.innerHeight - EDGE) {
-      const flipped = rect.top - menuHeight - GAP;
-      top = flipped >= EDGE ? flipped : Math.max(EDGE, window.innerHeight - menuHeight - EDGE);
-    }
-
-    setCoords({ top, left });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setCoords(null);
-      return;
-    }
-
-    position();
-
-    const onDismiss = () => setOpen(false);
-    const onKeyDown = (keyEvent: KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') setOpen(false);
-    };
-
-    // capture:true so scrolling the table container (not just the window) is seen
-    window.addEventListener('scroll', position, true);
-    window.addEventListener('resize', onDismiss);
-    document.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      window.removeEventListener('scroll', position, true);
-      window.removeEventListener('resize', onDismiss);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, position]);
-
   return (
-    <div className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-600 bg-surface-50 border border-surface-200 rounded-lg hover:bg-surface-100 active:bg-surface-200 transition-colors"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
-        Actions
-      </button>
-      {open && typeof document !== 'undefined' && createPortal(
-        <>
-          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
-          <div
-            ref={menuRef}
-            role="menu"
-            style={{
-              position: 'fixed',
-              top: coords?.top ?? 0,
-              left: coords?.left ?? 0,
-              width: MENU_WIDTH,
-              visibility: coords ? 'visible' : 'hidden',
-            }}
-            className="z-[61] rounded-xl border border-surface-200 bg-white shadow-lg py-1"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { onDetails(); setOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-900 hover:bg-surface-50 transition-colors"
-            >
-              <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-              View Details
-            </button>
-            <div className="h-px bg-surface-100 my-1" />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { onReview(rsvpId, 'APPROVED'); setOpen(false); }}
-              disabled={reviewing || status === 'APPROVED'}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-40"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Approve
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { onReview(rsvpId, 'PENDING'); setOpen(false); }}
-              disabled={reviewing || status === 'PENDING'}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-yellow-700 hover:bg-yellow-50 transition-colors disabled:opacity-40"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              Set Pending
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { onReview(rsvpId, 'REJECTED'); setOpen(false); }}
-              disabled={reviewing || status === 'REJECTED'}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-700 hover:bg-rose-50 transition-colors disabled:opacity-40"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              Reject
-            </button>
-          </div>
-        </>,
-        document.body
-      )}
-    </div>
+    <Menu label={`Actions for ${guestName}`} sheetTitle={guestName}>
+      <MenuItem onClick={onDetails}>View details</MenuItem>
+      <MenuSeparator />
+      <MenuItem disabled={reviewing || status === 'APPROVED'} onClick={() => onReview(rsvpId, 'APPROVED')}>
+        Approve
+      </MenuItem>
+      <MenuItem disabled={reviewing || status === 'PENDING'} onClick={() => onReview(rsvpId, 'PENDING')}>
+        Move back to pending
+      </MenuItem>
+      <MenuItem danger disabled={reviewing || status === 'REJECTED'} onClick={() => onReview(rsvpId, 'REJECTED')}>
+        Reject
+      </MenuItem>
+    </Menu>
   );
+}
+
+/** Invite delivery states map onto the shared status tones. */
+function getInviteTone(status: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' {
+  if (status === 'RESPONDED') return 'success';
+  if (status === 'OPENED') return 'info';
+  if (status === 'SENT') return 'warning';
+  if (status === 'EXPIRED') return 'danger';
+  return 'neutral';
 }
 
 export default function OwnerEventDetailPage() {
@@ -340,6 +249,9 @@ export default function OwnerEventDetailPage() {
   const [loadingItinerary, setLoadingItinerary] = useState(false);
   const [savingItinerary, setSavingItinerary] = useState(false);
   const [savingItineraryOrder, setSavingItineraryOrder] = useState(false);
+  const [removingDomain, setRemovingDomain] = useState<Domain | null>(null);
+  const [showAddItinerary, setShowAddItinerary] = useState(false);
+  const [deletingItinerary, setDeletingItinerary] = useState<ItineraryItem | null>(null);
   const [draggingItineraryId, setDraggingItineraryId] = useState<string | null>(null);
   const [itineraryDropTargetId, setItineraryDropTargetId] = useState<string | null>(null);
   const [creatingMcSession, setCreatingMcSession] = useState(false);
@@ -391,7 +303,7 @@ export default function OwnerEventDetailPage() {
         setVotingEnabled(templateBasedVoting);
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load event');
+      toast.error(getErrorMessage(error, 'Failed to load event'));
       router.push('/owner/events');
     } finally {
       setLoading(false);
@@ -405,7 +317,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getRsvps(eventId, params);
       setRsvps(r.data.rsvps || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load RSVPs');
+      toast.error(getErrorMessage(error, 'Failed to load RSVPs'));
     }
   };
 
@@ -414,7 +326,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getMedia(eventId);
       setMedia(r.data.media || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load media');
+      toast.error(getErrorMessage(error, 'Failed to load media'));
     }
   };
 
@@ -423,7 +335,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getCheckIns(eventId);
       setCheckIns(r.data.checkIns || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load check-ins');
+      toast.error(getErrorMessage(error, 'Failed to load check-ins'));
     }
   };
 
@@ -432,7 +344,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getTickets(eventId);
       setTickets(r.data.tickets || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load tickets');
+      toast.error(getErrorMessage(error, 'Failed to load tickets'));
     }
   };
 
@@ -442,7 +354,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getEventApproval(eventId);
       setApproval(r.data.approval || null);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load approval status');
+      toast.error(getErrorMessage(error, 'Failed to load approval status'));
     } finally {
       setLoadingApproval(false);
     }
@@ -453,7 +365,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getDomains(eventId);
       setDomains(r.data.domains || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load domains');
+      toast.error(getErrorMessage(error, 'Failed to load domains'));
     }
   };
 
@@ -463,7 +375,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getGiftOrders(eventId);
       setGiftOrders(r.data.orders || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load gift orders');
+      toast.error(getErrorMessage(error, 'Failed to load gift orders'));
     } finally {
       setLoadingGifts(false);
     }
@@ -475,7 +387,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.getRsvpInvites(eventId);
       setInvites(r.data.invites || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load WhatsApp invites');
+      toast.error(getErrorMessage(error, 'Failed to load WhatsApp invites'));
     } finally {
       setLoadingInvites(false);
     }
@@ -487,7 +399,7 @@ export default function OwnerEventDetailPage() {
       const response = await itineraryApi.getItems(eventId);
       setItineraryItems(response.data.items || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load itinerary');
+      toast.error(getErrorMessage(error, 'Failed to load itinerary'));
     } finally {
       setLoadingItinerary(false);
     }
@@ -527,7 +439,7 @@ export default function OwnerEventDetailPage() {
       toast.success('Itinerary order updated');
     } catch (error: any) {
       setItineraryItems(previous);
-      toast.error(error.response?.data?.error || 'Failed to reorder itinerary');
+      toast.error(getErrorMessage(error, 'Failed to reorder itinerary'));
     } finally {
       setSavingItineraryOrder(false);
     }
@@ -569,7 +481,7 @@ export default function OwnerEventDetailPage() {
 
   const handleCopyLink = async (path: string) => {
     if (await copyToClipboard(`${window.location.origin}${path}`)) {
-      toast.success('Link copied!');
+      toast.success('Link copied');
     }
   };
 
@@ -628,7 +540,7 @@ export default function OwnerEventDetailPage() {
       );
       await Promise.all([fetchRsvps(), fetchEvent()]);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to review RSVP');
+      toast.error(getErrorMessage(error, 'Failed to review RSVP'));
     } finally {
       setReviewingRsvp(null);
     }
@@ -646,7 +558,7 @@ export default function OwnerEventDetailPage() {
       toast.success('Domain added. Complete DNS setup and verify.');
       await fetchDomains();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to add domain');
+      toast.error(getErrorMessage(error, 'Failed to add domain'));
     } finally {
       setSavingDomain(false);
     }
@@ -658,7 +570,7 @@ export default function OwnerEventDetailPage() {
       toast.success('Domain verification checked');
       await fetchDomains();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to verify domain');
+      toast.error(getErrorMessage(error, 'Failed to verify domain'));
     }
   };
 
@@ -668,18 +580,17 @@ export default function OwnerEventDetailPage() {
       toast.success('Primary domain updated');
       await fetchDomains();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to set primary domain');
+      toast.error(getErrorMessage(error, 'Failed to set primary domain'));
     }
   };
 
   const handleDeleteDomain = async (domainId: string) => {
-    if (!confirm('Remove this domain?')) return;
     try {
       await ownerDashboardApi.deleteDomain(eventId, domainId);
       toast.success('Domain removed');
       await fetchDomains();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to remove domain');
+      toast.error(getErrorMessage(error, 'Failed to remove domain'));
     }
   };
 
@@ -1019,7 +930,7 @@ export default function OwnerEventDetailPage() {
       setInviteLines('');
       await fetchInvites();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to send invites');
+      toast.error(getErrorMessage(error, 'Failed to send invites'));
     } finally {
       setSendingInvites(false);
     }
@@ -1031,7 +942,29 @@ export default function OwnerEventDetailPage() {
       toast.success('Invite resent');
       await fetchInvites();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to resend invite');
+      toast.error(getErrorMessage(error, 'Failed to resend invite'));
+    }
+  };
+
+  /** Keyboard and touch friendly reordering. Same persistence as drag and drop. */
+  const moveItineraryItem = async (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= itineraryItems.length || savingItineraryOrder) return;
+
+    const previous = itineraryItems;
+    const next = [...previous];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    setItineraryItems(next);
+
+    try {
+      setSavingItineraryOrder(true);
+      await itineraryApi.reorderItems(eventId, next.map((item) => item.id));
+    } catch (e: any) {
+      setItineraryItems(previous);
+      toast.error(getErrorMessage(e, 'Could not reorder the itinerary.'));
+    } finally {
+      setSavingItineraryOrder(false);
     }
   };
 
@@ -1068,7 +1001,7 @@ export default function OwnerEventDetailPage() {
       setShowItineraryDateTimeInputs(false);
       await fetchItinerary();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to add itinerary item');
+      toast.error(getErrorMessage(error, 'Failed to add itinerary item'));
     } finally {
       setSavingItinerary(false);
     }
@@ -1121,18 +1054,13 @@ export default function OwnerEventDetailPage() {
       handleCancelEditItineraryItem();
       await fetchItinerary();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update itinerary item');
+      toast.error(getErrorMessage(error, 'Failed to update itinerary item'));
     } finally {
       setSavingEditedItinerary(false);
     }
   };
 
   const handleDeleteItineraryItem = async (itemId: string) => {
-    const confirmed = typeof window !== 'undefined'
-      ? window.confirm('Delete this itinerary activity?')
-      : true;
-    if (!confirmed) return;
-
     setDeletingItineraryId(itemId);
     try {
       await itineraryApi.deleteItem(eventId, itemId);
@@ -1142,7 +1070,7 @@ export default function OwnerEventDetailPage() {
       }
       await fetchItinerary();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete itinerary item');
+      toast.error(getErrorMessage(error, 'Failed to delete itinerary item'));
     } finally {
       setDeletingItineraryId(null);
     }
@@ -1158,32 +1086,14 @@ export default function OwnerEventDetailPage() {
       }
       toast.success('MC control link generated');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to generate MC link');
+      toast.error(getErrorMessage(error, 'Failed to generate MC link'));
     } finally {
       setCreatingMcSession(false);
     }
   };
 
-  const getPhaseStyle = (phase: string) => {
-    switch (phase) {
-      case 'LIVE': return 'bg-emerald-100 text-emerald-700 border-emerald-300';
-      case 'PRE_EVENT': return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'POST_EVENT': return 'bg-surface-100 text-surface-700 border-surface-300';
-      default: return 'bg-surface-100 text-surface-700 border-surface-300';
-    }
-  };
 
-  const getRsvpStatusStyle = (status: string) => {
-    if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700';
-    if (status === 'REJECTED') return 'bg-rose-100 text-rose-700';
-    return 'bg-yellow-100 text-yellow-700';
-  };
 
-  const getApprovalStatusStyle = (status: string) => {
-    if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    if (status === 'REJECTED') return 'bg-rose-100 text-rose-700 border-rose-200';
-    return 'bg-amber-100 text-amber-700 border-amber-200';
-  };
 
   const inviteStats = useMemo(() => {
     const byStatus = invites.reduce((acc, invite) => {
@@ -1260,196 +1170,131 @@ export default function OwnerEventDetailPage() {
   }
 
   return (
-    <div className="space-y-7">
-      {/* Header */}
-      <div className="app-hero">
-        <Link href="/owner/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
-          {Icons.back}
-          <span className="ml-1">Back to events</span>
-        </Link>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-700">Event workspace</p>
-            <h1 className="mt-1 text-3xl font-display font-bold tracking-tight text-brand-900 truncate">{event.name}</h1>
-            <p className="text-sm leading-6 text-surface-600 mt-2">Track guest activity, open your public pages, and manage voting, invites, and media from one place.</p>
-            <div className="flex flex-wrap items-center gap-1.5 mt-3">
-              <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', getPhaseStyle(event.currentPhase))}>
-                {getPhaseLabel(event.currentPhase)}
-              </span>
-              {event.invitationOnly && <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Invite Only</span>}
-              <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
-            </div>
-          </div>
-          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline text-sm flex-shrink-0">
-            {Icons.external}
-            <span className="ml-1.5 hidden sm:inline">View Page</span>
-          </Link>
-        </div>
-      </div>
+    <div className="page">
+      <PageHeader
+        title={event.name}
+        backHref="/owner/events"
+        backLabel="Events"
+        meta={
+          <>
+            <StatusBadge tone={getPhaseTone(event.currentPhase)} dot>
+              {getPhaseLabel(event.currentPhase)}
+            </StatusBadge>
+            {event.invitationOnly ? <StatusBadge tone="brand">Invite only</StatusBadge> : null}
+            <span className="truncate font-mono text-[12px]">/{event.slug}</span>
+          </>
+        }
+        actions={
+          <a href={`/e/${event.slug}`} target="_blank" rel="noopener noreferrer" className="btn-outline">
+            View event
+          </a>
+        }
+        mobileActions={
+          <a
+            href={`/e/${event.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="icon-btn"
+            aria-label="View public event page"
+          >
+            <ExternalLink className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+          </a>
+        }
+      />
 
-      {/* Tabs */}
-      <div className="-mx-1 overflow-x-auto scrollbar-hide px-1 pb-2">
-        <nav className="page-tabs inline-flex min-w-max whitespace-nowrap pr-6">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'page-tabs-item whitespace-nowrap flex-shrink-0',
-                activeTab === tab.id
-                  ? 'page-tabs-item-active'
-                  : ''
-              )}
-            >
-              {tab.label}
-              {tab.count !== undefined && (
-                <span className={cn('ml-1.5 px-1.5 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-brand-50 text-brand-700' : 'bg-surface-100 text-surface-600')}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </div>
+      <Tabs items={tabs} active={activeTab} onChange={(id) => setActiveTab(id as Tab)} label="Event sections" />
 
       {/* Tab Content */}
       <div>
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="metric-card">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Responses</p>
-                <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.rsvps}</p>
-              </div>
-              <div className="metric-card">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Arrivals</p>
-                <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.checkIns}</p>
-              </div>
-              <div className="metric-card">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Guest Media</p>
-                <p className="text-2xl sm:text-3xl font-bold text-brand-900">{event._count.mediaAssets}</p>
-              </div>
-              <div className="metric-card">
-                <p className="text-xs font-semibold uppercase tracking-widest text-surface-400 mb-1">Date</p>
-                <p className="text-sm font-semibold text-brand-900 mt-1">{formatDate(event.date)}</p>
-              </div>
-            </div>
+          <div className="space-y-4">
+            <StatRow
+              items={[
+                { label: 'RSVPs', value: formatCount(event._count.rsvps) },
+                { label: 'Check-ins', value: formatCount(event._count.checkIns) },
+                { label: 'Media', value: formatCount(event._count.mediaAssets) },
+                { label: 'Date', value: <span className="text-lg">{formatDate(event.date, 'MMM d')}</span>, hint: formatDate(event.date, 'yyyy') },
+              ]}
+            />
 
-            <div className="detail-card">
-              <h3 className="text-lg font-semibold text-brand-900 mb-4">Approval</h3>
-              {loadingApproval ? (
-                <div className="flex items-center gap-3 text-sm text-surface-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-900" />
-                  <span>Loading approval timeline...</span>
-                </div>
-              ) : approval ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className={cn('inline-flex px-2.5 py-1 rounded-full border text-xs font-medium', getApprovalStatusStyle(approval.status))}>
-                      {approval.status.replaceAll('_', ' ')}
-                    </span>
-                    {approval.reviewedBy?.name ? (
-                      <span className="text-xs text-surface-500">
-                        Reviewed by {approval.reviewedBy.name}
-                      </span>
+            {approval && approval.status !== 'APPROVED' ? (
+              <Panel title="Approval">
+                {loadingApproval ? (
+                  <div className="space-y-2">
+                    <div className="skeleton h-4 w-32" />
+                    <div className="skeleton h-4 w-48" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge tone={getStatusTone(approval.status === 'PENDING_REVIEW' ? 'PENDING' : approval.status)}>
+                        {humanizeEnum(approval.status)}
+                      </StatusBadge>
+                      {approval.reviewedBy?.name ? (
+                        <span className="meta">Reviewed by {approval.reviewedBy.name}</span>
+                      ) : null}
+                    </div>
+                    <dl className="mt-2 divide-y divide-surface-200">
+                      <DetailRow label="Submitted">
+                        {approval.submittedAt ? formatDate(approval.submittedAt, 'MMM d, yyyy') : 'Not submitted'}
+                      </DetailRow>
+                      <DetailRow label="Reviewed">
+                        {approval.reviewedAt ? formatDate(approval.reviewedAt, 'MMM d, yyyy') : 'Awaiting review'}
+                      </DetailRow>
+                    </dl>
+                    {approval.rejectionReason ? (
+                      <div className="banner-error mt-3" role="status">
+                        <span>
+                          <span className="font-semibold">Needs changes: </span>
+                          {approval.rejectionReason}
+                        </span>
+                      </div>
                     ) : null}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
-                      <p className="text-xs uppercase tracking-wide text-surface-500">Submitted</p>
-                      <p className="mt-1 text-brand-900">
-                        {approval.submittedAt ? formatDate(approval.submittedAt) : 'Not submitted'}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
-                      <p className="text-xs uppercase tracking-wide text-surface-500">Reviewed</p>
-                      <p className="mt-1 text-brand-900">
-                        {approval.reviewedAt ? formatDate(approval.reviewedAt) : 'Awaiting admin review'}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-surface-200 bg-surface-50 p-3">
-                      <p className="text-xs uppercase tracking-wide text-surface-500">Last Updated</p>
-                      <p className="mt-1 text-brand-900">
-                        {approval.updatedAt ? formatDate(approval.updatedAt) : '-'}
-                      </p>
-                    </div>
-                  </div>
-                  {approval.rejectionReason ? (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                      <p className="font-medium">Rejection reason</p>
-                      <p className="mt-1">{approval.rejectionReason}</p>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="text-sm text-surface-500">Approval information is unavailable for this event.</p>
-              )}
-            </div>
+                  </>
+                )}
+              </Panel>
+            ) : null}
 
-            <div className="detail-card">
-              <h3 className="text-lg font-semibold text-brand-900 mb-4">Event Summary</h3>
-              <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <dt className="text-sm font-medium text-surface-600">Name</dt>
-                  <dd className="mt-1 text-sm text-brand-900">{event.name}</dd>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,1fr)]">
+              <Panel title="Guest pages" flush>
+                <div className="divide-y divide-surface-200">
+                  <PublicPageRow label="Event home" path={`/e/${event.slug}`} onCopy={handleCopyLink} />
+                  <PublicPageRow label="RSVP" path={`/e/${event.slug}/rsvp`} onCopy={handleCopyLink} />
+                  <PublicPageRow label="Gifts" path={`/gift/${event.slug}`} onCopy={handleCopyLink} />
+                  <PublicPageRow label="Vote" path={`/e/${event.slug}/vote`} onCopy={handleCopyLink} />
+                  <PublicPageRow label="Itinerary" path={`/e/${event.slug}/itinerary`} onCopy={handleCopyLink} />
                 </div>
-                {event.description && (
-                  <div>
-                    <dt className="text-sm font-medium text-surface-600">Description</dt>
-                    <dd className="mt-1 text-sm text-brand-900">{event.description}</dd>
-                  </div>
-                )}
-                <div>
-                  <dt className="text-sm font-medium text-surface-600">Date</dt>
-                  <dd className="mt-1 text-sm text-brand-900">{formatDate(event.date)}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-surface-600">Default Currency</dt>
-                  <dd className="mt-1 text-sm text-brand-900">{event.defaultCurrency || 'USD'}</dd>
-                </div>
-                {event.endDate && (
-                  <div>
-                    <dt className="text-sm font-medium text-surface-600">End Date</dt>
-                    <dd className="mt-1 text-sm text-brand-900">{formatDate(event.endDate)}</dd>
-                  </div>
-                )}
-                {event.venue && (
-                  <div>
-                    <dt className="text-sm font-medium text-surface-600">Venue</dt>
-                    <dd className="mt-1 text-sm text-brand-900">{event.venue}</dd>
-                  </div>
-                )}
-              </dl>
-              {/* Shareable Links */}
-              <div className="mt-5 pt-5 border-t border-surface-100">
-                <h4 className="text-sm font-semibold text-surface-600 mb-3">Shareable Links</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { label: 'Event Page', path: `/e/${event.slug}` },
-                    { label: 'RSVP Page', path: `/e/${event.slug}/rsvp` },
-                    { label: 'Gift Page', path: `/gift/${event.slug}` },
-                    { label: 'Vote Page', path: `/e/${event.slug}/vote` },
-                    { label: 'Itinerary', path: `/e/${event.slug}/itinerary` },
-                  ].map((link) => (
-                    <button
-                      key={link.label}
-                      onClick={() => handleCopyLink(link.path)}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                    >
-                      {Icons.copy}
-                      <span className="text-sm font-medium text-brand-900 truncate">{link.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-3">
-                  <Link
-                    href={`/owner/events/${event.id}/voting`}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
-                  >
-                    Open Voting Dashboard
-                  </Link>
-                </div>
+              </Panel>
+
+              <div className="space-y-4">
+                <Panel title="Details">
+                  <dl className="divide-y divide-surface-200">
+                    <DetailRow label="Date">{formatDate(event.date, 'MMM d, yyyy p')}</DetailRow>
+                    {event.endDate ? (
+                      <DetailRow label="Ends">{formatDate(event.endDate, 'MMM d, yyyy p')}</DetailRow>
+                    ) : null}
+                    {event.venue ? <DetailRow label="Venue">{event.venue}</DetailRow> : null}
+                    <DetailRow label="Currency">{event.defaultCurrency || 'USD'}</DetailRow>
+                    <DetailRow label="Time zone">{event.timezone}</DetailRow>
+                  </dl>
+                  {event.description ? (
+                    <p className="mt-3 border-t border-surface-200 pt-3 text-[13px] leading-5 text-surface-700">
+                      {event.description}
+                    </p>
+                  ) : null}
+                </Panel>
+
+                <Panel
+                  title="Voting"
+                  action={
+                    <Link href={`/owner/events/${event.id}/voting`} className="btn-primary btn-sm">
+                      Open
+                    </Link>
+                  }
+                >
+                  <p className="meta">Categories, nominees and live results.</p>
+                </Panel>
               </div>
             </div>
           </div>
@@ -1458,289 +1303,252 @@ export default function OwnerEventDetailPage() {
         {/* RSVPs Tab */}
         {activeTab === 'rsvps' && (
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setRsvpFilter('all')}
-                  className={cn('px-3 py-1.5 rounded-lg text-sm font-medium', rsvpFilter === 'all' ? 'bg-brand-900 text-white' : 'bg-surface-100 text-surface-700')}
-                >
-                  All
+            <Toolbar
+              end={
+                <button onClick={exportRsvpsToCSV} className="btn-outline btn-sm" disabled={rsvps.length === 0}>
+                  Export CSV
                 </button>
-                <button
-                  onClick={() => setRsvpFilter('PENDING')}
-                  className={cn('px-3 py-1.5 rounded-lg text-sm font-medium', rsvpFilter === 'PENDING' ? 'bg-brand-900 text-white' : 'bg-surface-100 text-surface-700')}
-                >
-                  Pending
-                </button>
-                <button
-                  onClick={() => setRsvpFilter('APPROVED')}
-                  className={cn('px-3 py-1.5 rounded-lg text-sm font-medium', rsvpFilter === 'APPROVED' ? 'bg-brand-900 text-white' : 'bg-surface-100 text-surface-700')}
-                >
-                  Approved
-                </button>
-                <button
-                  onClick={() => setRsvpFilter('REJECTED')}
-                  className={cn('px-3 py-1.5 rounded-lg text-sm font-medium', rsvpFilter === 'REJECTED' ? 'bg-brand-900 text-white' : 'bg-surface-100 text-surface-700')}
-                >
-                  Rejected
-                </button>
-              </div>
-              <button onClick={exportRsvpsToCSV} className="btn-outline self-start">
-                {Icons.download}
-                <span className="ml-2">Export CSV</span>
-              </button>
-            </div>
+              }
+            >
+              <SegmentedControl
+                label="RSVP status"
+                value={rsvpFilter}
+                onChange={setRsvpFilter}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'PENDING', label: 'Pending' },
+                  { value: 'APPROVED', label: 'Approved' },
+                  { value: 'REJECTED', label: 'Rejected' },
+                ]}
+              />
+              <span className="meta num hidden sm:inline">{formatCount(rsvps.length)} shown</span>
+            </Toolbar>
 
-            <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-              {rsvps.length === 0 ? (
-                <div className="px-6 py-8 text-center text-sm text-surface-500">
-                  No RSVPs found
+            {rsvps.length === 0 ? (
+              <EmptyState
+                title={rsvpFilter === 'all' ? 'No RSVPs yet' : 'No RSVPs with this status'}
+                action={
+                  rsvpFilter === 'all' ? null : (
+                    <button type="button" className="btn-outline btn-sm" onClick={() => setRsvpFilter('all')}>
+                      Show all
+                    </button>
+                  )
+                }
+              />
+            ) : (
+              <>
+                <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+                  {rsvps.map((rsvp) => (
+                    <div key={rsvp.id} className="flex items-center gap-3 px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setViewingRsvpDetails(rsvp)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-[15px] font-semibold text-brand-900">{rsvp.primaryName}</span>
+                          <StatusBadge tone={getStatusTone(rsvp.status)}>{humanizeEnum(rsvp.status)}</StatusBadge>
+                        </div>
+                        <p className="mt-0.5 meta truncate">
+                          {humanizeEnum(rsvp.attendance)} &middot; {rsvp.guestCount}{' '}
+                          {rsvp.guestCount === 1 ? 'guest' : 'guests'}
+                          {rsvp.email ? ` · ${rsvp.email}` : ''}
+                        </p>
+                      </button>
+                      <RsvpActionMenu
+                        rsvpId={rsvp.id}
+                        guestName={rsvp.primaryName}
+                        status={rsvp.status}
+                        reviewing={reviewingRsvp === rsvp.id}
+                        onReview={handleReviewRsvp}
+                        onDetails={() => setViewingRsvpDetails(rsvp)}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  {/* Mobile card view */}
-                  <div className="divide-y divide-surface-200 md:hidden">
-                    {rsvps.map(rsvp => (
-                      <div key={rsvp.id} className="p-4 space-y-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-base font-semibold text-brand-900 truncate">{rsvp.primaryName}</p>
-                            <p className="text-sm text-surface-500 truncate">{rsvp.email || '-'}</p>
-                          </div>
-                          <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded flex-shrink-0', getRsvpStatusStyle(rsvp.status))}>
-                            {rsvp.status}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-surface-600">
-                          <span>{rsvp.attendance}</span>
-                          <span>{rsvp.guestCount} guest(s)</span>
-                          <span>{formatDate(rsvp.submittedAt)}</span>
-                        </div>
-                        {/* Action dropdown */}
-                        <RsvpActionMenu
-                          rsvpId={rsvp.id}
-                          status={rsvp.status}
-                          reviewing={reviewingRsvp === rsvp.id}
-                          onReview={handleReviewRsvp}
-                          onDetails={() => setViewingRsvpDetails(rsvp)}
-                        />
-                      </div>
-                    ))}
-                  </div>
 
-                  {/* Desktop table view */}
-                  <div className="overflow-x-auto hidden md:block">
-                    <table className="min-w-full divide-y divide-surface-200">
-                      <thead className="bg-surface-50">
+                <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                  <div className="overflow-x-auto">
+                    <table className="data-table" style={{ minWidth: 780 }}>
+                      <thead>
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Name</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Email</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Attendance</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guests</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Submitted</th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                          <Th>Guest</Th>
+                          <Th>Email</Th>
+                          <Th>Response</Th>
+                          <Th align="right">Guests</Th>
+                          <Th>Status</Th>
+                          <Th>Submitted</Th>
+                          <Th align="right">Actions</Th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-surface-200">
-                        {rsvps.map(rsvp => (
-                          <tr key={rsvp.id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{rsvp.primaryName}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.email || '-'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.attendance}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{rsvp.guestCount}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', getRsvpStatusStyle(rsvp.status))}>
-                                {rsvp.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(rsvp.submittedAt)}</td>
-                            <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
-                              <RsvpActionMenu
-                                rsvpId={rsvp.id}
-                                status={rsvp.status}
-                                reviewing={reviewingRsvp === rsvp.id}
-                                onReview={handleReviewRsvp}
-                                onDetails={() => setViewingRsvpDetails(rsvp)}
-                              />
-                            </td>
+                      <tbody>
+                        {rsvps.map((rsvp) => (
+                          <tr key={rsvp.id} className="table-row">
+                            <Td className="font-medium text-brand-900">{rsvp.primaryName}</Td>
+                            <Td>{rsvp.email || <span className="text-surface-500">&mdash;</span>}</Td>
+                            <Td>{humanizeEnum(rsvp.attendance)}</Td>
+                            <Td align="right" className="num">
+                              {rsvp.guestCount}
+                            </Td>
+                            <Td>
+                              <StatusBadge tone={getStatusTone(rsvp.status)}>{humanizeEnum(rsvp.status)}</StatusBadge>
+                            </Td>
+                            <Td>{formatDate(rsvp.submittedAt, 'MMM d, yyyy')}</Td>
+                            <Td align="right">
+                              <div className="flex justify-end">
+                                <RsvpActionMenu
+                                  rsvpId={rsvp.id}
+                                  guestName={rsvp.primaryName}
+                                  status={rsvp.status}
+                                  reviewing={reviewingRsvp === rsvp.id}
+                                  onReview={handleReviewRsvp}
+                                  onDetails={() => setViewingRsvpDetails(rsvp)}
+                                />
+                              </div>
+                            </Td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {/* Check-Ins Tab */}
         {activeTab === 'checkin' && (
           <div className="space-y-4">
-            <div className="flex justify-end">
-              <button onClick={exportCheckInsToCSV} className="btn-outline">
-                {Icons.download}
-                <span className="ml-2">Export CSV</span>
-              </button>
-            </div>
+            <Toolbar
+              end={
+                <button onClick={exportCheckInsToCSV} className="btn-outline btn-sm" disabled={checkIns.length === 0}>
+                  Export CSV
+                </button>
+              }
+            >
+              <span className="meta num">{formatCount(checkIns.length)} checked in</span>
+            </Toolbar>
 
-            <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft overflow-hidden">
-              {checkIns.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-surface-500">No check-ins found</div>
-              ) : (
-                <>
-                  {/* Mobile card view */}
-                  <div className="divide-y divide-surface-100 md:hidden">
-                    {checkIns.map(checkIn => (
-                      <div key={checkIn.id} className="px-4 py-3.5 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-brand-900">{checkIn.invitation.guestName}</p>
-                          <span className="text-[10px] font-mono text-surface-500 bg-surface-100 px-1.5 py-0.5 rounded flex-shrink-0">{checkIn.invitation.accessCode}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 text-xs text-surface-500">
-                          <span>{checkIn.invitation.guestCount} guest(s)</span>
-                          <span>{checkIn.method}</span>
-                          <span>{formatDate(checkIn.checkedInAt)}</span>
-                        </div>
+            {checkIns.length === 0 ? (
+              <EmptyState title="No check-ins yet" hint="Guests appear here as they arrive." />
+            ) : (
+              <>
+                <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+                  {checkIns.map((checkIn) => (
+                    <div key={checkIn.id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="truncate text-[15px] font-semibold text-brand-900">
+                          {checkIn.invitation.guestName}
+                        </span>
+                        <span className="shrink-0 font-mono text-[12px] text-surface-600">
+                          {checkIn.invitation.accessCode}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                  {/* Desktop table view */}
-                  <div className="overflow-x-auto hidden md:block">
-                    <table className="min-w-full divide-y divide-surface-200">
-                      <thead className="bg-surface-50">
+                      <p className="mt-0.5 meta">
+                        {formatDate(checkIn.checkedInAt, 'MMM d, h:mm a')} &middot; {checkIn.invitation.guestCount}{' '}
+                        {checkIn.invitation.guestCount === 1 ? 'guest' : 'guests'} &middot; {humanizeEnum(checkIn.method)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                  <div className="overflow-x-auto">
+                    <table className="data-table" style={{ minWidth: 640 }}>
+                      <thead>
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Name</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Guests</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Code</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Checked In</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Method</th>
+                          <Th>Guest</Th>
+                          <Th align="right">Party</Th>
+                          <Th>Code</Th>
+                          <Th>Time</Th>
+                          <Th>Method</Th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-surface-100">
-                        {checkIns.map(checkIn => (
-                          <tr key={checkIn.id}>
-                            <td className="px-4 py-3 text-sm font-medium text-brand-900">{checkIn.invitation.guestName}</td>
-                            <td className="px-4 py-3 text-sm text-surface-500">{checkIn.invitation.guestCount}</td>
-                            <td className="px-4 py-3 text-sm text-surface-500 font-mono">{checkIn.invitation.accessCode}</td>
-                            <td className="px-4 py-3 text-sm text-surface-500">{formatDate(checkIn.checkedInAt)}</td>
-                            <td className="px-4 py-3 text-sm text-surface-500">{checkIn.method}</td>
+                      <tbody>
+                        {checkIns.map((checkIn) => (
+                          <tr key={checkIn.id} className="table-row">
+                            <Td className="font-medium text-brand-900">{checkIn.invitation.guestName}</Td>
+                            <Td align="right" className="num">
+                              {checkIn.invitation.guestCount}
+                            </Td>
+                            <Td className="font-mono">{checkIn.invitation.accessCode}</Td>
+                            <Td>{formatDate(checkIn.checkedInAt, 'MMM d, h:mm a')}</Td>
+                            <Td>{humanizeEnum(checkIn.method)}</Td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* RSVP Details Modal */}
-        {viewingRsvpDetails && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setViewingRsvpDetails(null)}>
-            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white border-b border-surface-200 px-6 py-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-brand-900">RSVP Details</h3>
-                <button onClick={() => setViewingRsvpDetails(null)} className="p-2 rounded-lg hover:bg-surface-100">
-                  {Icons.close}
-                </button>
-              </div>
-              <div className="p-6">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-surface-500">Primary Name</label>
-                    <p className="text-brand-900 font-medium">{viewingRsvpDetails.primaryName}</p>
-                  </div>
-                  {viewingRsvpDetails.secondaryName && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Secondary Name</label>
-                      <p className="text-brand-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
-                    </div>
-                  )}
-                  {viewingRsvpDetails.email && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Email</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.email}</p>
-                    </div>
-                  )}
-                  {viewingRsvpDetails.phone && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Phone</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.phone}</p>
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-sm font-medium text-surface-500">Attendance</label>
-                    <p className="text-brand-900">{viewingRsvpDetails.attendance}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-surface-500">Guest Count</label>
-                    <p className="text-brand-900">{viewingRsvpDetails.guestCount}</p>
-                  </div>
-                  {viewingRsvpDetails.mealPreference && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Meal Preference</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.mealPreference}</p>
-                    </div>
-                  )}
-                  {viewingRsvpDetails.dietaryNotes && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Dietary Notes</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.dietaryNotes}</p>
-                    </div>
-                  )}
-                  {viewingRsvpDetails.note && (
-                    <div className="sm:col-span-2">
-                      <label className="text-sm font-medium text-surface-500">Note</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.note}</p>
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-sm font-medium text-surface-500">Submitted At</label>
-                    <p className="text-brand-900">{formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-surface-500">Status</label>
-                    <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', getRsvpStatusStyle(viewingRsvpDetails.status))}>
-                      {viewingRsvpDetails.status}
-                    </span>
-                  </div>
-                  {viewingRsvpDetails.invitation?.accessCode && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Access Code</label>
-                      <p className="text-brand-900 font-mono">{viewingRsvpDetails.invitation.accessCode}</p>
-                    </div>
-                  )}
-                  {viewingRsvpDetails.invitation?.isCheckedIn !== undefined && (
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Checked In</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.invitation.isCheckedIn ? 'Yes' : 'No'}</p>
-                    </div>
-                  )}
+        <Modal
+          open={Boolean(viewingRsvpDetails)}
+          onClose={() => setViewingRsvpDetails(null)}
+          title={viewingRsvpDetails?.primaryName || 'RSVP'}
+          size="lg"
+        >
+          {viewingRsvpDetails ? (
+            <div className="space-y-5">
+              <dl className="divide-y divide-surface-200">
+                <DetailRow label="Response">
+                  <StatusBadge tone={getStatusTone(viewingRsvpDetails.attendance)}>
+                    {humanizeEnum(viewingRsvpDetails.attendance)}
+                  </StatusBadge>
+                </DetailRow>
+                <DetailRow label="Status">
+                  <StatusBadge tone={getStatusTone(viewingRsvpDetails.status)}>
+                    {humanizeEnum(viewingRsvpDetails.status)}
+                  </StatusBadge>
+                </DetailRow>
+                <DetailRow label="Guests">{viewingRsvpDetails.guestCount}</DetailRow>
+                {viewingRsvpDetails.secondaryName ? (
+                  <DetailRow label="Plus one">{viewingRsvpDetails.secondaryName}</DetailRow>
+                ) : null}
+                {viewingRsvpDetails.email ? (
+                  <DetailRow label="Email">
+                    <span className="break-all">{viewingRsvpDetails.email}</span>
+                  </DetailRow>
+                ) : null}
+                {viewingRsvpDetails.phone ? <DetailRow label="Phone">{viewingRsvpDetails.phone}</DetailRow> : null}
+                {viewingRsvpDetails.mealPreference ? (
+                  <DetailRow label="Meal">{viewingRsvpDetails.mealPreference}</DetailRow>
+                ) : null}
+                {viewingRsvpDetails.dietaryNotes ? (
+                  <DetailRow label="Dietary notes">{viewingRsvpDetails.dietaryNotes}</DetailRow>
+                ) : null}
+                {viewingRsvpDetails.note ? <DetailRow label="Note">{viewingRsvpDetails.note}</DetailRow> : null}
+                <DetailRow label="Submitted">
+                  {formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}
+                </DetailRow>
+                {viewingRsvpDetails.invitation?.accessCode ? (
+                  <DetailRow label="Access code">
+                    <span className="font-mono">{viewingRsvpDetails.invitation.accessCode}</span>
+                  </DetailRow>
+                ) : null}
+                {viewingRsvpDetails.invitation ? (
+                  <DetailRow label="Checked in">
+                    {viewingRsvpDetails.invitation.isCheckedIn ? 'Yes' : 'Not yet'}
+                  </DetailRow>
+                ) : null}
+              </dl>
+
+              {viewingRsvpDetails.invitation?.qrCodeData ? (
+                <div className="flex justify-center border-t border-surface-200 pt-4">
+                  <img
+                    src={viewingRsvpDetails.invitation.qrCodeData}
+                    alt={`Check-in QR code for ${viewingRsvpDetails.primaryName}`}
+                    className="h-44 w-44 rounded-lg border border-surface-200 bg-white p-2"
+                  />
                 </div>
-                
-                {/* QR Code Display */}
-                {viewingRsvpDetails.invitation?.qrCodeData && (
-                  <div className="border-t border-surface-200 pt-4 mt-4">
-                    <h4 className="text-sm font-semibold text-brand-900 mb-3">QR Code</h4>
-                    <div className="flex flex-col items-center gap-3">
-                      <img
-                        src={viewingRsvpDetails.invitation.qrCodeData}
-                        alt="QR Code"
-                        className="w-48 h-48 bg-white p-2 rounded-lg border border-surface-200"
-                      />
-                      <p className="text-xs text-surface-500 text-center">
-                        Scan this QR code for check-in
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              ) : null}
             </div>
-          </div>
-        )}
+          ) : null}
+        </Modal>
 
         {/* Media Tab */}
         {activeTab === 'media' && (
@@ -1751,58 +1559,63 @@ export default function OwnerEventDetailPage() {
 
         {/* Tickets Tab */}
         {activeTab === 'tickets' && (
-          <div className="bg-white rounded-xl border border-surface-200/80 shadow-soft overflow-hidden">
+          <div className="space-y-4">
             {tickets.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-surface-500">No tickets found</div>
+              <EmptyState title="No ticket types" hint="Your admin sets up ticket types for this event." />
             ) : (
               <>
-                {/* Mobile card view */}
-                <div className="divide-y divide-surface-100 md:hidden">
+                <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
                   {tickets.map((ticket: any) => (
-                    <div key={ticket.id} className="px-4 py-3.5 space-y-1.5">
+                    <div key={ticket.id} className="px-4 py-3">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-brand-900">{ticket.name}</p>
-                        <span className={cn('inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border leading-none flex-shrink-0', ticket.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-surface-100 text-surface-600 border-surface-200')}>
-                          {ticket.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                        <span className="truncate text-[15px] font-semibold text-brand-900">{ticket.name}</span>
+                        <StatusBadge tone={ticket.isActive ? 'success' : 'neutral'}>
+                          {ticket.isActive ? 'On sale' : 'Off'}
+                        </StatusBadge>
                       </div>
-                      <div className="flex flex-wrap gap-x-3 text-xs text-surface-500">
-                        <span className="font-semibold text-brand-900">{ticket.price > 0 ? `${ticket.currency} ${ticket.price.toFixed(2)}` : 'Free'}</span>
-                        <span>{ticket.quantitySold} / {ticket.quantityTotal} sold</span>
-                      </div>
+                      <p className="mt-0.5 meta num">
+                        {ticket.price > 0 ? formatCurrencyAmount(ticket.price, ticket.currency) : 'Free'} &middot;{' '}
+                        {formatCount(ticket.quantitySold)} of {formatCount(ticket.quantityTotal)} sold
+                      </p>
                     </div>
                   ))}
                 </div>
-                {/* Desktop table view */}
-                <div className="overflow-x-auto hidden md:block">
-                  <table className="min-w-full divide-y divide-surface-200">
-                    <thead className="bg-surface-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Price</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Sold</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Total</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-surface-100">
-                      {tickets.map((ticket: any) => (
-                        <tr key={ticket.id}>
-                          <td className="px-4 py-3 text-sm font-medium text-brand-900">{ticket.name}</td>
-                          <td className="px-4 py-3 text-sm text-surface-500">
-                            {ticket.price > 0 ? `${ticket.currency} ${ticket.price.toFixed(2)}` : 'Free'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-surface-500">{ticket.quantitySold}</td>
-                          <td className="px-4 py-3 text-sm text-surface-500">{ticket.quantityTotal}</td>
-                          <td className="px-4 py-3">
-                            <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded', ticket.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-surface-100 text-surface-600')}>
-                              {ticket.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
+
+                <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                  <div className="overflow-x-auto">
+                    <table className="data-table" style={{ minWidth: 620 }}>
+                      <thead>
+                        <tr>
+                          <Th>Ticket</Th>
+                          <Th align="right">Price</Th>
+                          <Th align="right">Sold</Th>
+                          <Th align="right">Available</Th>
+                          <Th>Status</Th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {tickets.map((ticket: any) => (
+                          <tr key={ticket.id} className="table-row">
+                            <Td className="font-medium text-brand-900">{ticket.name}</Td>
+                            <Td align="right" className="num">
+                              {ticket.price > 0 ? formatCurrencyAmount(ticket.price, ticket.currency) : 'Free'}
+                            </Td>
+                            <Td align="right" className="num">
+                              {formatCount(ticket.quantitySold)}
+                            </Td>
+                            <Td align="right" className="num">
+                              {formatCount(ticket.quantityTotal)}
+                            </Td>
+                            <Td>
+                              <StatusBadge tone={ticket.isActive ? 'success' : 'neutral'}>
+                                {ticket.isActive ? 'On sale' : 'Off'}
+                              </StatusBadge>
+                            </Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </>
             )}
@@ -1812,382 +1625,454 @@ export default function OwnerEventDetailPage() {
         {/* Itinerary Tab */}
         {activeTab === 'itinerary' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-brand-900">Event Itinerary</h3>
-                  <p className="text-sm text-surface-600">
-                    Add activities for guests and generate a secure MC control link.
-                  </p>
-                </div>
-                <button
-                  className="btn-primary"
-                  disabled={creatingMcSession}
-                  onClick={handleCreateMcControlLink}
-                >
-                  {creatingMcSession ? 'Generating...' : 'Generate MC Link'}
-                </button>
-              </div>
-              {mcControlUrl && (
-                <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
-                  <p className="text-xs uppercase tracking-wider text-surface-500 font-medium">MC Control URL</p>
-                  <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                    <input className="input text-sm" readOnly value={mcControlUrl} />
-                    <button className="btn-outline" onClick={() => copyToClipboard(mcControlUrl)}>
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <Toolbar
+              end={
+                <>
+                  <button className="btn-outline btn-sm" disabled={creatingMcSession} onClick={handleCreateMcControlLink}>
+                    {creatingMcSession ? 'Generating…' : 'MC link'}
+                  </button>
+                  <button className="btn-primary btn-sm" onClick={() => setShowAddItinerary(true)}>
+                    Add item
+                  </button>
+                </>
+              }
+            >
+              <span className="meta num">
+                {formatCount(itineraryItems.length)} {itineraryItems.length === 1 ? 'item' : 'items'}
+              </span>
+              {savingItineraryOrder ? <span className="meta">Saving order…</span> : null}
+            </Toolbar>
 
-            <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
-              <h4 className="font-medium text-brand-900">Add Item</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  className="input"
-                  placeholder="Activity title"
-                  value={newItineraryItem.title}
-                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
-                />
-                <input
-                  className="input"
-                  placeholder="Location (optional)"
-                  value={newItineraryItem.location}
-                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-brand-900">Add date/time</p>
-                  <p className="text-xs text-surface-500">Optional. Keep off for same-day activities without fixed times.</p>
+            {mcControlUrl ? (
+              <div className="surface flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-surface-900">MC control link</p>
+                  <p className="truncate font-mono text-[12px] text-surface-600">{mcControlUrl}</p>
                 </div>
                 <button
-                  type="button"
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
-                    showItineraryDateTimeInputs
-                      ? 'bg-brand-900 text-white border-brand-900'
-                      : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
-                  )}
-                  onClick={() => {
-                    const next = !showItineraryDateTimeInputs;
-                    setShowItineraryDateTimeInputs(next);
-                    if (!next) {
-                      setNewItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
-                    }
+                  className="btn-outline btn-sm shrink-0"
+                  onClick={async () => {
+                    if (await copyToClipboard(mcControlUrl)) toast.success('Link copied');
                   }}
                 >
-                  {showItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
+                  Copy
                 </button>
               </div>
-              {showItineraryDateTimeInputs && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input
-                    type="datetime-local"
-                    className="input"
-                    value={newItineraryItem.startsAt}
-                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
-                  />
-                  <input
-                    type="datetime-local"
-                    className="input"
-                    value={newItineraryItem.endsAt}
-                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
-                  />
-                </div>
-              )}
-              <textarea
-                className="input min-h-[88px]"
-                placeholder="Description (optional)"
-                value={newItineraryItem.description}
-                onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
-              />
-              <div className="flex justify-end">
-                <button className="btn-primary" disabled={savingItinerary} onClick={handleAddItineraryItem}>
-                  {savingItinerary ? 'Saving...' : 'Add Item'}
-                </button>
-              </div>
-            </div>
+            ) : null}
 
             {loadingItinerary ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
-              </div>
+              <ListSkeleton rows={4} />
             ) : itineraryItems.length === 0 ? (
-              <div className="bg-white rounded-lg border border-surface-200 p-10 text-center text-surface-500">
-                No itinerary items yet.
-              </div>
+              <EmptyState
+                title="No itinerary items"
+                action={
+                  <button className="btn-primary btn-sm" onClick={() => setShowAddItinerary(true)}>
+                    Add item
+                  </button>
+                }
+              />
             ) : (
-              <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-                <div className="px-4 py-2 border-b border-surface-200 bg-surface-50 text-xs text-surface-600 flex items-center justify-between gap-3">
-                  <span>Drag and drop itinerary items to reorder.</span>
-                  {savingItineraryOrder ? <span className="font-medium text-brand-900">Saving order...</span> : null}
-                </div>
-                <div className="divide-y divide-surface-200">
-                  {itineraryItems.map((item) => (
-                    <div
-                      key={item.id}
-                      draggable={editingItineraryId !== item.id && !savingItineraryOrder}
-                      onDragStart={() => setDraggingItineraryId(item.id)}
-                      onDragEnd={() => {
-                        setDraggingItineraryId(null);
-                        setItineraryDropTargetId(null);
-                      }}
-                      onDragOver={(e) => {
-                        if (editingItineraryId === item.id || savingItineraryOrder) return;
-                        e.preventDefault();
-                        if (itineraryDropTargetId !== item.id) {
-                          setItineraryDropTargetId(item.id);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleItineraryDrop(item.id);
-                      }}
-                      className={cn(
-                        'px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3',
-                        itineraryDropTargetId === item.id ? 'bg-brand-50' : ''
-                      )}
-                    >
-                      {editingItineraryId === item.id ? (
-                        <div className="w-full space-y-3">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
+                {itineraryItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    draggable={editingItineraryId !== item.id && !savingItineraryOrder}
+                    onDragStart={() => setDraggingItineraryId(item.id)}
+                    onDragEnd={() => {
+                      setDraggingItineraryId(null);
+                      setItineraryDropTargetId(null);
+                    }}
+                    onDragOver={(e) => {
+                      if (editingItineraryId === item.id || savingItineraryOrder) return;
+                      e.preventDefault();
+                      if (itineraryDropTargetId !== item.id) setItineraryDropTargetId(item.id);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleItineraryDrop(item.id);
+                    }}
+                    className={cn('px-4 py-3', itineraryDropTargetId === item.id && 'bg-brand-50')}
+                  >
+                    {editingItineraryId === item.id ? (
+                      <div className="space-y-3">
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="label" htmlFor={`edit-title-${item.id}`}>
+                              Title
+                            </label>
                             <input
+                              id={`edit-title-${item.id}`}
                               className="input"
-                              placeholder="Activity title"
                               value={editItineraryItem.title}
                               onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
                             />
+                          </div>
+                          <div>
+                            <label className="label" htmlFor={`edit-location-${item.id}`}>
+                              Location <span className="font-normal text-surface-600">(optional)</span>
+                            </label>
                             <input
+                              id={`edit-location-${item.id}`}
                               className="input"
-                              placeholder="Location (optional)"
                               value={editItineraryItem.location}
                               onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
                             />
                           </div>
-                          <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
+                        </div>
+
+                        <Switch
+                          label="Scheduled time"
+                          description="Leave off for activities without a fixed time."
+                          checked={editingItineraryDateTimeInputs}
+                          onChange={(next) => {
+                            setEditingItineraryDateTimeInputs(next);
+                            if (!next) setEditItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                          }}
+                        />
+
+                        {editingItineraryDateTimeInputs ? (
+                          <div className="grid gap-3 md:grid-cols-2">
                             <div>
-                              <p className="text-sm font-medium text-brand-900">Edit date/time</p>
-                              <p className="text-xs text-surface-500">Optional for this itinerary activity.</p>
-                            </div>
-                            <button
-                              type="button"
-                              className={cn(
-                                'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
-                                editingItineraryDateTimeInputs
-                                  ? 'bg-brand-900 text-white border-brand-900'
-                                  : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
-                              )}
-                              onClick={() => {
-                                const next = !editingItineraryDateTimeInputs;
-                                setEditingItineraryDateTimeInputs(next);
-                                if (!next) {
-                                  setEditItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
-                                }
-                              }}
-                            >
-                              {editingItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
-                            </button>
-                          </div>
-                          {editingItineraryDateTimeInputs && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <label className="label" htmlFor={`edit-start-${item.id}`}>
+                                Starts
+                              </label>
                               <input
+                                id={`edit-start-${item.id}`}
                                 type="datetime-local"
                                 className="input"
                                 value={editItineraryItem.startsAt}
                                 onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
                               />
+                            </div>
+                            <div>
+                              <label className="label" htmlFor={`edit-end-${item.id}`}>
+                                Ends
+                              </label>
                               <input
+                                id={`edit-end-${item.id}`}
                                 type="datetime-local"
                                 className="input"
                                 value={editItineraryItem.endsAt}
                                 onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
                               />
                             </div>
-                          )}
+                          </div>
+                        ) : null}
+
+                        <div>
+                          <label className="label" htmlFor={`edit-desc-${item.id}`}>
+                            Description <span className="font-normal text-surface-600">(optional)</span>
+                          </label>
                           <textarea
-                            className="input min-h-[80px]"
-                            placeholder="Description (optional)"
+                            id={`edit-desc-${item.id}`}
+                            className="input"
+                            rows={3}
                             value={editItineraryItem.description}
                             onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
                           />
-                          <div className="flex items-center justify-end gap-2">
-                            <button className="btn-ghost" onClick={handleCancelEditItineraryItem}>
-                              Cancel
-                            </button>
-                            <button
-                              className="btn-primary"
-                              disabled={savingEditedItinerary}
-                              onClick={() => handleUpdateItineraryItem(item.id)}
-                            >
-                              {savingEditedItinerary ? 'Saving...' : 'Save Changes'}
-                            </button>
-                          </div>
                         </div>
-                      ) : (
-                        <>
-                          <div>
-                            <div className="text-[11px] uppercase tracking-wide text-surface-400 mb-1">
-                              Drag to move
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  'w-2 h-2 rounded-full',
-                                  item.isCompleted ? 'bg-emerald-500' : 'bg-surface-300'
-                                )}
-                              />
-                              <p className={cn('font-medium', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
-                                {item.title}
-                              </p>
-                            </div>
-                            {item.description && (
-                              <p className="text-sm text-surface-600 mt-1">{item.description}</p>
-                            )}
-                            {(item.startsAt || item.location) && (
-                              <p className="text-xs text-surface-500 mt-1">
-                                {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : ''}
-                                {item.startsAt && item.location ? ' - ' : ''}
-                                {item.location ? item.location : ''}
-                              </p>
-                            )}
+
+                        <div className="flex justify-end gap-2">
+                          <button className="btn-outline btn-sm" onClick={handleCancelEditItineraryItem}>
+                            Cancel
+                          </button>
+                          <SubmitButton
+                            loading={savingEditedItinerary}
+                            className="btn-primary btn-sm"
+                            onClick={() => handleUpdateItineraryItem(item.id)}
+                          >
+                            Save
+                          </SubmitButton>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-3">
+                        <div className="flex shrink-0 flex-col">
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn-sm"
+                            aria-label={`Move ${item.title} up`}
+                            disabled={index === 0 || savingItineraryOrder}
+                            onClick={() => void moveItineraryItem(index, -1)}
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m5 15 7-7 7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn-sm"
+                            aria-label={`Move ${item.title} down`}
+                            disabled={index === itineraryItems.length - 1 || savingItineraryOrder}
+                            onClick={() => void moveItineraryItem(index, 1)}
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19 9-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              className={cn('status-dot', item.isCompleted ? 'bg-emerald-500' : 'bg-surface-400')}
+                              aria-hidden="true"
+                            />
+                            <p
+                              className={cn(
+                                'truncate text-[15px] font-semibold',
+                                item.isCompleted ? 'text-surface-600 line-through' : 'text-brand-900'
+                              )}
+                            >
+                              {item.title}
+                            </p>
+                            <StatusBadge tone={item.isCompleted ? 'success' : 'neutral'}>
+                              {item.isCompleted ? 'Done' : 'Pending'}
+                            </StatusBadge>
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="text-xs text-surface-500">
-                              {item.isCompleted
-                                ? `Completed ${item.completedAt ? formatDate(item.completedAt) : 'recently'}`
-                                : 'Pending'}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button className="btn-ghost" onClick={() => handleStartEditItineraryItem(item)}>
-                                Edit
-                              </button>
-                              <button
-                                className="btn-ghost text-rose-600 hover:text-rose-700"
-                                disabled={deletingItineraryId === item.id}
-                                onClick={() => handleDeleteItineraryItem(item.id)}
-                              >
-                                {deletingItineraryId === item.id ? 'Deleting...' : 'Delete'}
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                          {item.startsAt || item.location ? (
+                            <p className="mt-0.5 meta truncate">
+                              {item.startsAt ? formatDate(item.startsAt, 'MMM d, p') : ''}
+                              {item.startsAt && item.location ? ' · ' : ''}
+                              {item.location || ''}
+                            </p>
+                          ) : null}
+                          {item.description ? (
+                            <p className="mt-1 text-[13px] leading-5 text-surface-700">{item.description}</p>
+                          ) : null}
+                        </div>
+
+                        <Menu label={`Actions for ${item.title}`} sheetTitle={item.title}>
+                          <MenuItem onClick={() => handleStartEditItineraryItem(item)}>Edit</MenuItem>
+                          <MenuItem
+                            danger
+                            disabled={deletingItineraryId === item.id}
+                            onClick={() => setDeletingItinerary(item)}
+                          >
+                            Delete
+                          </MenuItem>
+                        </Menu>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
+
+            <Modal
+              open={showAddItinerary}
+              onClose={() => setShowAddItinerary(false)}
+              title="Add itinerary item"
+              size="md"
+              footer={
+                <>
+                  <button className="btn-outline" onClick={() => setShowAddItinerary(false)} disabled={savingItinerary}>
+                    Cancel
+                  </button>
+                  <SubmitButton loading={savingItinerary} onClick={handleAddItineraryItem}>
+                    Add item
+                  </SubmitButton>
+                </>
+              }
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="label" htmlFor="itinerary-title">
+                    Title
+                  </label>
+                  <input
+                    id="itinerary-title"
+                    data-autofocus
+                    className="input"
+                    value={newItineraryItem.title}
+                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="First dance"
+                  />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="itinerary-location">
+                    Location <span className="font-normal text-surface-600">(optional)</span>
+                  </label>
+                  <input
+                    id="itinerary-location"
+                    className="input"
+                    value={newItineraryItem.location}
+                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
+                  />
+                </div>
+
+                <Switch
+                  label="Scheduled time"
+                  description="Leave off for activities without a fixed time."
+                  checked={showItineraryDateTimeInputs}
+                  onChange={(next) => {
+                    setShowItineraryDateTimeInputs(next);
+                    if (!next) setNewItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                  }}
+                />
+
+                {showItineraryDateTimeInputs ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="label" htmlFor="itinerary-start">
+                        Starts
+                      </label>
+                      <input
+                        id="itinerary-start"
+                        type="datetime-local"
+                        className="input"
+                        value={newItineraryItem.startsAt}
+                        onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="itinerary-end">
+                        Ends
+                      </label>
+                      <input
+                        id="itinerary-end"
+                        type="datetime-local"
+                        className="input"
+                        value={newItineraryItem.endsAt}
+                        onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <label className="label" htmlFor="itinerary-desc">
+                    Description <span className="font-normal text-surface-600">(optional)</span>
+                  </label>
+                  <textarea
+                    id="itinerary-desc"
+                    className="input"
+                    rows={3}
+                    value={newItineraryItem.description}
+                    onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </Modal>
+
+            <ConfirmDialog
+              open={Boolean(deletingItinerary)}
+              onClose={() => setDeletingItinerary(null)}
+              onConfirm={() => {
+                if (deletingItinerary) handleDeleteItineraryItem(deletingItinerary.id);
+                setDeletingItinerary(null);
+              }}
+              title={`Delete "${deletingItinerary?.title || ''}"?`}
+              body="This removes the item from the public itinerary and the MC view."
+              confirmLabel="Delete item"
+              busy={Boolean(deletingItinerary && deletingItineraryId === deletingItinerary.id)}
+            />
           </div>
         )}
 
         {/* WhatsApp Invites Tab */}
         {activeTab === 'invites' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
-              <h3 className="font-semibold text-brand-900">Send RSVP Invites</h3>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-xs">
-                <div className="rounded-md border border-surface-200 bg-surface-50 px-3 py-2">
-                  <p className="text-surface-500">Total</p>
-                  <p className="font-semibold text-brand-900">{inviteStats.total}</p>
-                </div>
-                <div className="rounded-md border border-surface-200 bg-amber-50 px-3 py-2">
-                  <p className="text-amber-700">Sent</p>
-                  <p className="font-semibold text-amber-800">{inviteStats.sent}</p>
-                </div>
-                <div className="rounded-md border border-surface-200 bg-blue-50 px-3 py-2">
-                  <p className="text-blue-700">Opened</p>
-                  <p className="font-semibold text-blue-800">{inviteStats.opened}</p>
-                </div>
-                <div className="rounded-md border border-surface-200 bg-emerald-50 px-3 py-2">
-                  <p className="text-emerald-700">Responded</p>
-                  <p className="font-semibold text-emerald-800">{inviteStats.responded}</p>
-                </div>
-                <div className="rounded-md border border-surface-200 bg-rose-50 px-3 py-2">
-                  <p className="text-rose-700">Expired</p>
-                  <p className="font-semibold text-rose-800">{inviteStats.expired}</p>
-                </div>
-              </div>
+            <StatRow
+              items={[
+                { label: 'Invites', value: formatCount(inviteStats.total) },
+                { label: 'Sent', value: formatCount(inviteStats.sent) },
+                { label: 'Opened', value: formatCount(inviteStats.opened) },
+                { label: 'Responded', value: formatCount(inviteStats.responded), tone: 'positive' },
+              ]}
+            />
 
-              {/* Channel selector */}
-              <div>
-                <label className="text-sm font-medium text-surface-600 mb-1.5 block">Send via</label>
-                <div className="inline-flex rounded-lg border border-surface-200 bg-surface-100 p-1 gap-0.5">
-                  {([
-                    { value: 'whatsapp' as const, label: 'WhatsApp' },
-                    { value: 'email' as const, label: 'Email' },
-                    { value: 'both' as const, label: 'Both' },
-                  ]).map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setInviteChannel(opt.value)}
-                      className={cn(
-                        'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                        inviteChannel === opt.value
-                          ? 'bg-white text-brand-900 shadow-sm'
-                          : 'text-surface-600 hover:text-brand-900'
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <p className="text-sm text-surface-600">
-                One invite per line. Format:{' '}
-                {inviteChannel === 'whatsapp' && (
-                  <><span className="font-mono">phone</span> or <span className="font-mono">name,phone</span> or <span className="font-mono">name,phone,email</span></>
-                )}
-                {inviteChannel === 'email' && (
-                  <><span className="font-mono">email</span> or <span className="font-mono">name,email</span></>
-                )}
-                {inviteChannel === 'both' && (
-                  <><span className="font-mono">name,phone,email</span> (both phone and email required)</>
-                )}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className="btn-outline" onClick={syncContacts}>
-                  Sync Contacts
-                </button>
-                <button
-                  type="button"
-                  className="btn-outline"
-                  disabled={importingInvites}
-                  onClick={() => inviteFileInputRef.current?.click()}
+            <Panel
+              title="Send invites"
+              action={
+                <SubmitButton
+                  loading={sendingInvites}
+                  className="btn-primary btn-sm"
+                  onClick={handleSendInvites}
+                  disabled={!inviteLines.trim()}
                 >
-                  {importingInvites ? 'Importing...' : 'Import CSV/XLSX'}
-                </button>
-                <button type="button" className="btn-ghost" onClick={downloadInviteTemplate}>
-                  Download CSV Template
-                </button>
-                <input
-                  ref={inviteFileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls,text/csv"
-                  className="hidden"
-                  onChange={handleImportInviteFile}
-                />
-              </div>
-              <textarea
-                className="input min-h-[140px]"
-                placeholder={
-                  inviteChannel === 'whatsapp'
-                    ? '+233xxxxxxxxx\nAma Serwaa,+233xxxxxxxxx,ama@email.com'
-                    : inviteChannel === 'email'
-                    ? 'ama@email.com\nAma Serwaa,ama@email.com'
-                    : 'Ama Serwaa,+233xxxxxxxxx,ama@email.com'
-                }
-                value={inviteLines}
-                onChange={(e) => setInviteLines(e.target.value)}
-              />
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-surface-600">Expires in</label>
+                  Send
+                </SubmitButton>
+              }
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="label" id="invite-channel-label">
+                    Send via
+                  </label>
+                  <SegmentedControl
+                    label="Invite channel"
+                    value={inviteChannel}
+                    onChange={setInviteChannel}
+                    options={[
+                      { value: 'whatsapp' as const, label: 'WhatsApp' },
+                      { value: 'email' as const, label: 'Email' },
+                      { value: 'both' as const, label: 'Both' },
+                    ]}
+                  />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="invite-lines">
+                    Recipients
+                  </label>
+                  <textarea
+                    id="invite-lines"
+                    className="input min-h-[140px] font-mono text-[13px]"
+                    placeholder={
+                      inviteChannel === 'whatsapp'
+                        ? '+233xxxxxxxxx\nAma Serwaa,+233xxxxxxxxx'
+                        : inviteChannel === 'email'
+                        ? 'ama@email.com\nAma Serwaa,ama@email.com'
+                        : 'Ama Serwaa,+233xxxxxxxxx,ama@email.com'
+                    }
+                    value={inviteLines}
+                    onChange={(e) => setInviteLines(e.target.value)}
+                    aria-describedby="invite-format"
+                  />
+                  <p id="invite-format" className="field-hint">
+                    One per line:{' '}
+                    {inviteChannel === 'whatsapp'
+                      ? 'phone, or name,phone'
+                      : inviteChannel === 'email'
+                      ? 'email, or name,email'
+                      : 'name,phone,email'}
+                    .
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="btn-outline btn-sm" onClick={syncContacts}>
+                    Sync contacts
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm"
+                    disabled={importingInvites}
+                    onClick={() => inviteFileInputRef.current?.click()}
+                  >
+                    {importingInvites ? 'Importing…' : 'Import file'}
+                  </button>
+                  <button type="button" className="btn-ghost btn-sm" onClick={downloadInviteTemplate}>
+                    CSV template
+                  </button>
+                  <input
+                    ref={inviteFileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv"
+                    className="hidden"
+                    onChange={handleImportInviteFile}
+                  />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="invite-expiry">
+                    Link expires after
+                  </label>
                   <select
-                    className="input w-[180px]"
+                    id="invite-expiry"
+                    className="input sm:max-w-[200px]"
                     value={inviteExpiryHours}
                     onChange={(e) => setInviteExpiryHours(Math.max(1, Number(e.target.value || 240)))}
                   >
@@ -2198,121 +2083,93 @@ export default function OwnerEventDetailPage() {
                     <option value={720}>30 days</option>
                   </select>
                 </div>
-                <button className="btn-primary" disabled={sendingInvites} onClick={handleSendInvites}>
-                  {sendingInvites ? 'Sending...' : 'Send Invites'}
-                </button>
               </div>
-            </div>
+            </Panel>
 
             {loadingInvites ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
-              </div>
+              <ListSkeleton rows={4} />
+            ) : invites.length === 0 ? (
+              <EmptyState title="No invites sent yet" />
             ) : (
-              <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-                {invites.length === 0 ? (
-                  <div className="px-6 py-6 text-center text-sm text-surface-500">
-                    No invites sent yet
-                  </div>
-                ) : (
-                  <>
-                    {/* Mobile card view */}
-                    <div className="divide-y divide-surface-200 md:hidden">
-                      {invites.map((invite) => (
-                        <div key={invite.id} className="p-4 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-brand-900 truncate">{invite.inviteeName || '-'}</p>
-                              <p className="text-xs text-surface-500">{invite.inviteePhone || invite.inviteeEmail || '-'}</p>
-                            </div>
-                            <span
-                              className={cn(
-                                'inline-flex px-2 py-0.5 rounded text-xs font-medium border flex-shrink-0',
-                                invite.status === 'RESPONDED' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                invite.status === 'OPENED' && 'bg-blue-50 text-blue-700 border-blue-200',
-                                invite.status === 'SENT' && 'bg-amber-50 text-amber-700 border-amber-200',
-                                invite.status === 'EXPIRED' && 'bg-rose-50 text-rose-700 border-rose-200'
-                              )}
-                            >
-                              {invite.status}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-surface-600">
-                            <span>Channel: {(invite.channel || 'whatsapp').toUpperCase()}</span>
-                            <span>Response: {invite.initialResponse || '-'}</span>
-                            <span>Sent: {formatDate(invite.sentAt || invite.createdAt || '')}</span>
-                          </div>
-                          <button
-                            className="btn-outline !text-xs !px-2.5 !py-1.5"
-                            onClick={() => handleResendInvite(invite.id)}
-                            disabled={invite.status === 'RESPONDED'}
-                          >
-                            Resend
-                          </button>
+              <>
+                <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+                  {invites.map((invite) => (
+                    <div key={invite.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-[15px] font-semibold text-brand-900">
+                            {invite.inviteeName || invite.inviteePhone || invite.inviteeEmail || 'Guest'}
+                          </span>
+                          <StatusBadge tone={getInviteTone(invite.status)}>{humanizeEnum(invite.status)}</StatusBadge>
                         </div>
-                      ))}
+                        <p className="mt-0.5 meta truncate">
+                          {invite.inviteePhone || invite.inviteeEmail || '—'} &middot;{' '}
+                          {humanizeEnum(invite.channel || 'whatsapp')}
+                          {invite.sentAt || invite.createdAt
+                            ? ` · ${formatDate(invite.sentAt || invite.createdAt || '', 'MMM d')}`
+                            : ''}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-outline btn-sm shrink-0"
+                        onClick={() => handleResendInvite(invite.id)}
+                        disabled={invite.status === 'RESPONDED'}
+                      >
+                        Resend
+                      </button>
                     </div>
+                  ))}
+                </div>
 
-                    {/* Desktop table view */}
-                    <div className="overflow-x-auto hidden md:block">
-                      <table className="min-w-full divide-y divide-surface-200">
-                        <thead className="bg-surface-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Invitee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Channel</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Sent</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Expires</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-surface-500 uppercase tracking-wider">Action</th>
+                <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                  <div className="overflow-x-auto">
+                    <table className="data-table" style={{ minWidth: 880 }}>
+                      <thead>
+                        <tr>
+                          <Th>Invitee</Th>
+                          <Th>Contact</Th>
+                          <Th>Channel</Th>
+                          <Th>Status</Th>
+                          <Th>Response</Th>
+                          <Th>Sent</Th>
+                          <Th>Expires</Th>
+                          <Th align="right">Action</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invites.map((invite) => (
+                          <tr key={invite.id} className="table-row">
+                            <Td className="font-medium text-brand-900">{invite.inviteeName || '—'}</Td>
+                            <Td>{invite.inviteePhone || invite.inviteeEmail || '—'}</Td>
+                            <Td>{humanizeEnum(invite.channel || 'whatsapp')}</Td>
+                            <Td>
+                              <StatusBadge tone={getInviteTone(invite.status)}>{humanizeEnum(invite.status)}</StatusBadge>
+                            </Td>
+                            <Td>{invite.initialResponse ? humanizeEnum(invite.initialResponse) : '—'}</Td>
+                            <Td>
+                              {invite.sentAt || invite.createdAt
+                                ? formatDate(invite.sentAt || invite.createdAt || '', 'MMM d, yyyy')
+                                : '—'}
+                            </Td>
+                            <Td>{invite.expiresAt ? formatDate(invite.expiresAt, 'MMM d, yyyy') : '—'}</Td>
+                            <Td align="right">
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                onClick={() => handleResendInvite(invite.id)}
+                                disabled={invite.status === 'RESPONDED'}
+                              >
+                                Resend
+                              </button>
+                            </Td>
                           </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-surface-200">
-                          {invites.map((invite) => (
-                            <tr key={invite.id}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{invite.inviteeName || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{invite.inviteePhone || invite.inviteeEmail || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">{(invite.channel || 'whatsapp').toUpperCase()}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span
-                                  className={cn(
-                                    'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
-                                    invite.status === 'RESPONDED' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                    invite.status === 'OPENED' && 'bg-blue-50 text-blue-700 border-blue-200',
-                                    invite.status === 'SENT' && 'bg-amber-50 text-amber-700 border-amber-200',
-                                    invite.status === 'EXPIRED' && 'bg-rose-50 text-rose-700 border-rose-200'
-                                  )}
-                                >
-                                  {invite.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                                {invite.initialResponse || '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                                {formatDate(invite.sentAt || invite.createdAt || '')}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-600">
-                                {invite.expiresAt ? formatDate(invite.expiresAt) : '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
-                                <button
-                                  className="btn-outline"
-                                  onClick={() => handleResendInvite(invite.id)}
-                                  disabled={invite.status === 'RESPONDED'}
-                                >
-                                  Resend
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -2320,234 +2177,214 @@ export default function OwnerEventDetailPage() {
         {/* Domains Tab */}
         {activeTab === 'domains' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-surface-200 p-4">
-              <p className="text-sm text-surface-600 mb-3">Connect your own domain with TXT, CNAME and apex A records. HTTPS is provisioned automatically after verification.</p>
-              <div className="flex flex-col sm:flex-row gap-3">
+            <Panel title="Connect a domain">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   className="input flex-1"
-                  placeholder="e.g. wedding.example.com"
+                  placeholder="wedding.example.com"
+                  aria-label="Domain to connect"
                   value={domainHost}
                   onChange={(e) => setDomainHost(e.target.value)}
                 />
-                <button className="btn-primary" disabled={savingDomain} onClick={handleAddDomain}>
-                  {savingDomain ? 'Adding...' : 'Add Domain'}
-                </button>
+                <SubmitButton
+                  loading={savingDomain}
+                  className="btn-primary shrink-0"
+                  onClick={handleAddDomain}
+                  disabled={!domainHost.trim()}
+                >
+                  Connect
+                </SubmitButton>
               </div>
-            </div>
+              <p className="field-hint">
+                You will add three DNS records. HTTPS is set up automatically once they verify.
+              </p>
+            </Panel>
 
             {domains.length === 0 ? (
-              <div className="bg-white rounded-lg border border-surface-200 p-10 text-center text-surface-500">
-                No domains connected yet.
-              </div>
+              <EmptyState title="No domains connected" hint="Guests reach this event at its EventPeepo address." />
             ) : (
-              <div className="space-y-3">
+              <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
                 {domains.map((domain) => (
-                  <div key={domain.id} className="bg-white rounded-lg border border-surface-200 p-4">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-brand-900">{domain.host}</span>
-                          {domain.isPrimary && <span className="px-2 py-0.5 rounded text-xs bg-brand-100 text-brand-700">Primary</span>}
-                          <span
-                            className={cn(
-                              'px-2 py-0.5 rounded text-xs font-medium border',
-                              domain.status === 'ACTIVE' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                              domain.status === 'VERIFIED' && 'bg-amber-50 text-amber-700 border-amber-200',
-                              domain.status === 'FAILED' && 'bg-rose-50 text-rose-700 border-rose-200',
-                              domain.status === 'PENDING_VERIFICATION' && 'bg-amber-50 text-amber-700 border-amber-200'
-                            )}
-                          >
-                            {domain.status.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <div className="mt-2 text-xs text-surface-500 space-y-1">
-                          <p>TXT — Host: <span className="font-mono text-surface-700">_eventpeepo</span> · Value: <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
-                          <p>CNAME — Host: <span className="font-mono text-surface-700">www</span> · Target: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
-                          <p>A — Host: <span className="font-mono text-surface-700">@</span> · Value: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span></p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="btn-outline" onClick={() => handleVerifyDomain(domain.id)}>Verify</button>
-                        {!domain.isPrimary && (
-                          <button
-                            className="btn-outline"
-                            disabled={domain.status !== 'ACTIVE'}
-                            onClick={() => handleSetPrimaryDomain(domain.id)}
-                          >
-                            Make Primary
-                          </button>
-                        )}
-                        <button className="btn-ghost text-rose-600 hover:text-rose-700" onClick={() => handleDeleteDomain(domain.id)}>
-                          Remove
-                        </button>
-                      </div>
+                  <div key={domain.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-[15px] font-semibold text-brand-900">{domain.host}</span>
+                      {domain.isPrimary ? <StatusBadge tone="brand">Primary</StatusBadge> : null}
+                      <StatusBadge
+                        tone={
+                          domain.status === 'ACTIVE' ? 'success' : domain.status === 'FAILED' ? 'danger' : 'warning'
+                        }
+                      >
+                        {humanizeEnum(domain.status)}
+                      </StatusBadge>
+                      <span className="flex-1" />
+                      <button type="button" className="btn-outline btn-sm" onClick={() => handleVerifyDomain(domain.id)}>
+                        Verify
+                      </button>
+                      <Menu label={`Actions for ${domain.host}`} sheetTitle={domain.host}>
+                        <MenuItem
+                          disabled={domain.isPrimary || domain.status !== 'ACTIVE'}
+                          onClick={() => handleSetPrimaryDomain(domain.id)}
+                        >
+                          Make primary
+                        </MenuItem>
+                        <MenuItem danger onClick={() => setRemovingDomain(domain)}>
+                          Remove domain
+                        </MenuItem>
+                      </Menu>
                     </div>
-                    {domain.verificationNotes && (
-                      <p className={cn('text-xs mt-2', domain.status === 'VERIFIED' ? 'text-amber-700' : 'text-rose-600')}>{domain.verificationNotes}</p>
-                    )}
+
+                    {domain.verificationNotes ? (
+                      <p
+                        className={cn(
+                          'mt-1.5 text-[13px]',
+                          domain.status === 'VERIFIED' ? 'text-amber-800' : 'text-red-600'
+                        )}
+                      >
+                        {domain.verificationNotes}
+                      </p>
+                    ) : null}
+
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[13px] font-medium text-surface-700 hover:text-brand-900">
+                        DNS records
+                      </summary>
+                      <div className="mt-2 space-y-1 text-[12px] text-surface-700">
+                        <p>
+                          TXT <span className="font-mono">_eventpeepo</span> &rarr;{' '}
+                          <span className="font-mono">{domain.verificationToken}</span>
+                        </p>
+                        <p>
+                          CNAME <span className="font-mono">www</span> &rarr;{' '}
+                          <span className="font-mono">
+                            {process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}
+                          </span>
+                        </p>
+                        <p>
+                          A <span className="font-mono">@</span> &rarr;{' '}
+                          <span className="font-mono">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span>
+                        </p>
+                      </div>
+                    </details>
                   </div>
                 ))}
               </div>
             )}
+
+            <ConfirmDialog
+              open={Boolean(removingDomain)}
+              onClose={() => setRemovingDomain(null)}
+              onConfirm={() => {
+                if (removingDomain) void handleDeleteDomain(removingDomain.id);
+                setRemovingDomain(null);
+              }}
+              title={`Remove ${removingDomain?.host || 'domain'}?`}
+              body="Guests using this address will stop reaching the event until it is connected again."
+              confirmLabel="Remove domain"
+            />
           </div>
         )}
 
         {/* Voting Tab */}
         {activeTab === 'voting' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h3 className="text-lg font-semibold text-brand-900">Voting Workspace</h3>
-              <p className="text-sm text-surface-600 mt-1">
-                Manage categories, nominees, and live results from one dashboard.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href={`/owner/events/${event.id}/voting`}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 transition-colors text-sm font-medium"
-                >
-                  Open Voting Console
-                </Link>
-                <Link
-                  href={`/e/${event.slug}/vote`}
-                  target="_blank"
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-surface-200 text-surface-700 hover:bg-surface-50 transition-colors text-sm font-medium"
-                >
-                  Open Public Voting Page
-                </Link>
-              </div>
-            </div>
+            <Toolbar
+              end={
+                <>
+                  <Link href={`/e/${event.slug}/vote`} target="_blank" className="btn-outline btn-sm">
+                    Public vote page
+                  </Link>
+                  <Link href={`/owner/events/${event.id}/voting`} className="btn-primary btn-sm">
+                    Open voting console
+                  </Link>
+                </>
+              }
+            >
+              <span className="meta">Categories, nominees and results live in the voting console.</span>
+            </Toolbar>
 
-            <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h4 className="text-base font-semibold text-brand-900">Results And Access</h4>
-              <p className="mt-1 text-sm text-surface-600">
-                Open the voting console and switch to the Results tab for analytics. USSD channels and credit wallets are managed from the admin side.
-              </p>
-              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Link
-                  href={`/owner/events/${event.id}/voting`}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-200 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 transition-colors"
-                >
-                  Open Voting Analytics
-                </Link>
-                <Link
-                  href={`/e/${event.slug}/leaderboard`}
-                  target="_blank"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-sm font-medium text-surface-700 hover:bg-surface-50 transition-colors"
-                >
-                  Open Public Leaderboard
-                </Link>
-                <Link
-                  href={`/e/${event.slug}/nominees`}
-                  target="_blank"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-sm font-medium text-surface-700 hover:bg-surface-50 transition-colors"
-                >
-                  Open Nominees Directory
-                </Link>
+            <Panel title="Voting links" flush>
+              <div className="divide-y divide-surface-200">
+                <PublicPageRow label="Vote" path={`/e/${event.slug}/vote`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Nominations" path={`/e/${event.slug}/nominate`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Nominees" path={`/e/${event.slug}/nominees`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Leaderboard" path={`/e/${event.slug}/leaderboard`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Embed script" path="/embed/vote.js" onCopy={handleCopyLink} />
               </div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-surface-200 p-6">
-              <h4 className="text-base font-semibold text-brand-900">Share Voting Links</h4>
-              <p className="text-sm text-surface-600 mt-1">
-                Share direct links so guests can nominate and vote quickly.
-              </p>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleCopyLink(`/e/${event.slug}/vote`)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Hosted Voting URL</span>
-                </button>
-                <button
-                  onClick={() => handleCopyLink(`/e/${event.slug}/nominate`)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Public Nomination URL</span>
-                </button>
-                <button
-                  onClick={() => handleCopyLink('/embed/vote.js')}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Embed Script URL</span>
-                </button>
-              </div>
-            </div>
+            </Panel>
           </div>
         )}
 
-        {/* Gifts Tab */}
         {activeTab === 'gifts' && (
           <div className="space-y-4">
             {loadingGifts ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
-              </div>
+              <ListSkeleton rows={5} />
+            ) : giftOrders.length === 0 ? (
+              <EmptyState title="No gift orders yet" hint="Gifts guests send appear here." />
             ) : (
-              <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-                {giftOrders.length === 0 ? (
-                  <div className="px-6 py-6 text-center text-sm text-surface-500">No gift orders yet</div>
-                ) : (
-                  <>
-                    {/* Mobile card view */}
-                    <div className="divide-y divide-surface-200 md:hidden">
-                      {giftOrders.map((order) => (
-                        <div key={order.id} className="p-4 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-brand-900 truncate">{order.guestName}</p>
-                              <p className="text-xs text-surface-500 truncate">{order.guestEmail || order.guestPhone || '-'}</p>
-                            </div>
-                            <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium flex-shrink-0', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-                              {order.status}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                            <span className="text-surface-700">Total: {formatCurrencyAmount(order.totalAmount, order.currency)}</span>
-                            <span className="font-semibold text-brand-900">Net: {formatCurrencyAmount(order.ownerNetAmount, order.currency)}</span>
-                            <span className="text-surface-500">{formatDate(order.createdAt)}</span>
-                          </div>
+              <>
+                <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+                  {giftOrders.map((order) => (
+                    <div key={order.id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[15px] font-semibold text-brand-900">{order.guestName}</p>
+                          <p className="mt-0.5 meta truncate">
+                            {order.guestEmail || order.guestPhone || 'No contact'} &middot;{' '}
+                            {formatDate(order.createdAt, 'MMM d, yyyy')}
+                          </p>
                         </div>
-                      ))}
+                        <div className="shrink-0 text-right">
+                          <p className="num text-[15px] font-semibold text-brand-900">
+                            {formatCurrencyAmount(order.ownerNetAmount, order.currency)}
+                          </p>
+                          <StatusBadge tone={getStatusTone(order.status)} className="mt-1">
+                            {humanizeEnum(order.status)}
+                          </StatusBadge>
+                        </div>
+                      </div>
+                      <p className="mt-1 meta num">
+                        Gift total {formatCurrencyAmount(order.totalAmount, order.currency)}
+                      </p>
                     </div>
+                  ))}
+                </div>
 
-                    {/* Desktop table view */}
-                    <div className="overflow-x-auto hidden md:block">
-                      <table className="min-w-full divide-y divide-surface-200">
-                        <thead className="bg-surface-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Total Gift</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Your Net</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
+                <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                  <div className="overflow-x-auto">
+                    <table className="data-table" style={{ minWidth: 760 }}>
+                      <thead>
+                        <tr>
+                          <Th>Guest</Th>
+                          <Th>Contact</Th>
+                          <Th align="right">Gift total</Th>
+                          <Th align="right">Your net</Th>
+                          <Th>Status</Th>
+                          <Th>Date</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {giftOrders.map((order) => (
+                          <tr key={order.id} className="table-row">
+                            <Td className="font-medium text-brand-900">{order.guestName}</Td>
+                            <Td>{order.guestEmail || order.guestPhone || <span className="text-surface-500">&mdash;</span>}</Td>
+                            <Td align="right" className="num">
+                              {formatCurrencyAmount(order.totalAmount, order.currency)}
+                            </Td>
+                            <Td align="right" className="num font-semibold text-brand-900">
+                              {formatCurrencyAmount(order.ownerNetAmount, order.currency)}
+                            </Td>
+                            <Td>
+                              <StatusBadge tone={getStatusTone(order.status)}>{humanizeEnum(order.status)}</StatusBadge>
+                            </Td>
+                            <Td>{formatDate(order.createdAt, 'MMM d, yyyy')}</Td>
                           </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-surface-200">
-                          {giftOrders.map((order) => (
-                            <tr key={order.id}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-900">{order.guestName}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{order.guestEmail || order.guestPhone || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-700">{formatCurrencyAmount(order.totalAmount, order.currency)}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-brand-900">{formatCurrencyAmount(order.ownerNetAmount, order.currency)}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={cn('inline-flex px-2 py-0.5 rounded text-xs font-medium', order.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-                                  {order.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-surface-500">{formatDate(order.createdAt)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}

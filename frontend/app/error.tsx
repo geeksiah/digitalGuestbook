@@ -13,29 +13,25 @@ export default function ErrorPage({ error, reset }: Props) {
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-surface-50 via-white to-surface-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-xl rounded-2xl border border-surface-200 bg-white shadow-xl p-8 text-center">
-        <div className="inline-flex items-center rounded-full border border-surface-200 px-3 py-1 text-xs font-semibold text-surface-600">
-          HTTP 500
-        </div>
-        <h1 className="mt-4 text-3xl font-semibold text-brand-900">Something Went Wrong</h1>
-        <p className="mt-3 text-surface-600">
-          An unexpected error occurred while loading this page.
-        </p>
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={reset}
-            className="inline-flex items-center justify-center rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 transition-colors"
-          >
-            Try Again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-lg border border-surface-300 px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 transition-colors"
-          >
-            Go Home
-          </a>
+    <div className="flex min-h-screen items-center justify-center bg-surface-100 px-4 py-10">
+      <div className="w-full max-w-md">
+        <div className="panel p-5 text-center sm:p-6">
+          <h1 className="text-xl font-bold tracking-tight text-brand-900">This page did not load</h1>
+          <p className="mt-1.5 text-[13px] leading-5 text-surface-600">
+            Something went wrong on our side. Trying again usually works.
+          </p>
+          {error?.digest ? (
+            <p className="mt-2 font-mono text-[12px] text-surface-500">Reference {error.digest}</p>
+          ) : null}
+
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+            <a href="/" className="btn-outline">
+              Go home
+            </a>
+            <button type="button" onClick={reset} className="btn-primary">
+              Try again
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { PageHeader, SubmitButton } from '@/components/ui/Primitives';
 import { eventsApi, templatesApi, ownersApi, API_BASE_URL } from '@/lib/api';
-import { slugify, cn } from '@/lib/utils';
+import { slugify, cn, getErrorMessage } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 interface Template {
@@ -223,7 +224,7 @@ export default function NewEventPage() {
       setNewOwnerData({ name: '', email: '', phone: '', company: '' });
       toast.success('Owner created and selected');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create owner');
+      toast.error(getErrorMessage(error, 'Failed to create owner'));
     } finally {
       setCreatingOwner(false);
     }
@@ -306,7 +307,7 @@ export default function NewEventPage() {
       }
 
       if (followUpWarnings.length === 0) {
-        toast.success('Event created successfully!');
+        toast.success('Event created');
       } else {
         toast.success('Event created. Complete remaining setup inside event settings.');
         toast.error(`${followUpWarnings.join(' and ')} could not be completed automatically.`);
@@ -314,7 +315,7 @@ export default function NewEventPage() {
 
       router.push(`/admin/events/${createdEventId}`);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create event');
+      toast.error(getErrorMessage(error, 'Failed to create event'));
     } finally {
       setLoading(false);
     }
@@ -365,34 +366,16 @@ export default function NewEventPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="dashboard-canvas p-5 sm:p-6">
-        <Link
-          href="/admin/events"
-          className="inline-flex items-center text-surface-600 hover:text-navy-900 mb-3 text-sm font-medium"
-        >
-          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Events
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <span className="pill-accent">Event Setup</span>
-            <h1 className="text-2xl font-display font-bold text-navy-900 mt-2">Create New Event</h1>
-            <p className="text-surface-600 mt-1">Set up details, services, templates, and access controls in one flow.</p>
-          </div>
-        </div>
-      </div>
+    <div className="page mx-auto max-w-4xl">
+      <PageHeader title="New event" backHref="/admin/events" backLabel="Events" />
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Basic Info */}
-        <div className="dashboard-canvas p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">Basic Information</h2>
+        <div className="panel p-4 sm:p-5">
+          <h2 className="panel-title mb-4">Basics</h2>
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="label">Event Name *</label>
+              <label htmlFor="name" className="label">Event name</label>
               <input
                 id="name"
                 type="text"
@@ -405,7 +388,7 @@ export default function NewEventPage() {
             </div>
 
             <div>
-              <label htmlFor="slug" className="label">URL Slug *</label>
+              <label htmlFor="slug" className="label">Web address</label>
               <div className="flex items-center">
                 <span className="text-surface-500 mr-2">/e/</span>
                 <input
@@ -491,11 +474,11 @@ export default function NewEventPage() {
         </div>
 
         {/* Date & Location */}
-        <div className="dashboard-canvas p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">Date & Location</h2>
+        <div className="panel p-4 sm:p-5">
+          <h2 className="panel-title mb-4">Date and place</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="date" className="label">Event Date *</label>
+              <label htmlFor="date" className="label">Date</label>
               <input
                 id="date"
                 type="date"
@@ -519,7 +502,7 @@ export default function NewEventPage() {
             </div>
 
             <div>
-              <label htmlFor="endDate" className="label">End Date</label>
+              <label htmlFor="endDate" className="label">End date</label>
               <input
                 id="endDate"
                 type="date"
@@ -530,7 +513,7 @@ export default function NewEventPage() {
             </div>
 
             <div>
-              <label htmlFor="endTime" className="label">End Time</label>
+              <label htmlFor="endTime" className="label">End time</label>
               <input
                 id="endTime"
                 type="time"
@@ -592,8 +575,8 @@ export default function NewEventPage() {
         </div>
 
         {/* Event Owner */}
-        <div className="dashboard-canvas p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">Event Owner</h2>
+        <div className="panel p-4 sm:p-5">
+          <h2 className="panel-title mb-4">Owner</h2>
           <div className="space-y-4">
             <div className="flex gap-3">
               <button
@@ -725,12 +708,12 @@ export default function NewEventPage() {
         </div>
 
         {/* Services */}
-        <div className="dashboard-canvas p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">Services</h2>
+        <div className="panel p-4 sm:p-5">
+          <h2 className="panel-title mb-4">Services</h2>
           <div className="space-y-4">
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">Invitation Website</p>
+                <p className="font-medium text-brand-900">Invitation Website</p>
                 <p className="text-sm text-surface-600">Public event landing page</p>
               </div>
               <input
@@ -743,7 +726,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">RSVP System</p>
+                <p className="font-medium text-brand-900">RSVP System</p>
                 <p className="text-sm text-surface-600">Collect guest responses</p>
               </div>
               <input
@@ -756,7 +739,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">Digital Guestbook</p>
+                <p className="font-medium text-brand-900">Digital Guestbook</p>
                 <p className="text-sm text-surface-600">Capture video, audio & photos</p>
               </div>
               <input
@@ -774,7 +757,7 @@ export default function NewEventPage() {
                 : 'bg-surface-100 border-surface-200 opacity-60 cursor-not-allowed'
             )}>
               <div>
-                <p className="font-medium text-navy-900">Check-In System</p>
+                <p className="font-medium text-brand-900">Check-In System</p>
                 <p className="text-sm text-surface-600">
                   {formData.invitationOnly ? 'QR code and manual verification' : 'Enable invitation-only first to use check-in'}
                 </p>
@@ -790,7 +773,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-primary-50 rounded-lg cursor-pointer hover:bg-primary-100 border-2 border-primary-200">
               <div>
-                <p className="font-medium text-navy-900">Invitation-Only Event</p>
+                <p className="font-medium text-brand-900">Invitation-Only Event</p>
                 <p className="text-sm text-surface-600">RSVPs require approval before guests receive invitation passes</p>
               </div>
               <input
@@ -810,7 +793,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">Strict Invite Mode</p>
+                <p className="font-medium text-brand-900">Strict Invite Mode</p>
                 <p className="text-sm text-surface-600">Require valid invite token for RSVP submission.</p>
               </div>
               <input
@@ -823,7 +806,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">Enable Itinerary</p>
+                <p className="font-medium text-brand-900">Enable Itinerary</p>
                 <p className="text-sm text-surface-600">Activate attendee + MC synced itinerary tracking.</p>
               </div>
               <input
@@ -836,7 +819,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">Enable Gifting</p>
+                <p className="font-medium text-brand-900">Enable Gifting</p>
                 <p className="text-sm text-surface-600">Allow guests to gift via MoMo cash or packages.</p>
               </div>
               <input
@@ -849,7 +832,7 @@ export default function NewEventPage() {
 
             <label className="flex items-center justify-between p-4 bg-surface-50 rounded-lg cursor-pointer hover:bg-surface-100">
               <div>
-                <p className="font-medium text-navy-900">Enable Voting</p>
+                <p className="font-medium text-brand-900">Enable Voting</p>
                 <p className="text-sm text-surface-600">Create nomination, nominees, vote, and leaderboard pages for this event.</p>
               </div>
               <input
@@ -863,8 +846,8 @@ export default function NewEventPage() {
         </div>
 
         {/* RSVP Pricing & Ticketing */}
-        <div className="dashboard-canvas p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-navy-900 mb-4">RSVP Pricing & Ticketing</h2>
+        <div className="panel p-4 sm:p-5">
+          <h2 className="panel-title mb-4">RSVP and tickets</h2>
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
               <label className={cn(
@@ -883,7 +866,7 @@ export default function NewEventPage() {
                   {formData.rsvpMode === 'free' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
                 </div>
                 <div>
-                  <div className="font-medium text-navy-900">Free RSVP</div>
+                  <div className="font-medium text-brand-900">Free RSVP</div>
                   <div className="text-xs text-surface-500">No ticket payment required</div>
                 </div>
               </label>
@@ -903,7 +886,7 @@ export default function NewEventPage() {
                   {formData.rsvpMode === 'paid' && <div className="w-2.5 h-2.5 rounded-full bg-navy-900" />}
                 </div>
                 <div>
-                  <div className="font-medium text-navy-900">Paid RSVP</div>
+                  <div className="font-medium text-brand-900">Paid RSVP</div>
                   <div className="text-xs text-surface-500">Enable ticketing and checkout</div>
                 </div>
               </label>
@@ -924,7 +907,7 @@ export default function NewEventPage() {
                     }
                   />
                   <div>
-                    <p className="font-medium text-navy-900">Use system default fees</p>
+                    <p className="font-medium text-brand-900">Use system default fees</p>
                     <p className="text-xs text-surface-500">Disable this to configure custom fees for this event only.</p>
                   </div>
                 </label>
@@ -933,13 +916,13 @@ export default function NewEventPage() {
                   <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="rounded-lg border border-surface-200 bg-white p-3">
                       <p className="text-xs text-surface-500 mb-1">Default Platform Mode</p>
-                      <p className="font-medium text-navy-900">{defaultFeeSettings.platformFeeMode}</p>
+                      <p className="font-medium text-brand-900">{defaultFeeSettings.platformFeeMode}</p>
                     </div>
                     <div className="rounded-lg border border-surface-200 bg-white p-3">
                       <p className="text-xs text-surface-500 mb-1">
                         {defaultFeeSettings.platformFeeMode === 'FIXED' ? 'Default Platform Fee (Fixed)' : 'Default Platform Fee (%)'}
                       </p>
-                      <p className="font-medium text-navy-900">
+                      <p className="font-medium text-brand-900">
                         {defaultFeeSettings.platformFeeMode === 'FIXED'
                           ? defaultFeeSettings.platformFeeFixed
                           : defaultFeeSettings.platformFeePercent}
@@ -947,11 +930,11 @@ export default function NewEventPage() {
                     </div>
                     <div className="rounded-lg border border-surface-200 bg-white p-3">
                       <p className="text-xs text-surface-500 mb-1">Default Processing Fee (%)</p>
-                      <p className="font-medium text-navy-900">{defaultFeeSettings.processingFeePercent}</p>
+                      <p className="font-medium text-brand-900">{defaultFeeSettings.processingFeePercent}</p>
                     </div>
                     <div className="rounded-lg border border-surface-200 bg-white p-3">
                       <p className="text-xs text-surface-500 mb-1">Default Fixed Processing Fee</p>
-                      <p className="font-medium text-navy-900">{defaultFeeSettings.processingFeeFixed}</p>
+                      <p className="font-medium text-brand-900">{defaultFeeSettings.processingFeeFixed}</p>
                     </div>
                   </div>
                 ) : (
@@ -1026,10 +1009,10 @@ export default function NewEventPage() {
         </div>
 
         {/* Template Selection */}
-        <div className="dashboard-canvas p-5 sm:p-6">
+        <div className="panel p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-navy-900">Page Templates</h2>
+              <h2 className="panel-title">Templates</h2>
               <p className="text-sm text-surface-600">Select custom templates for each page type</p>
             </div>
             <Link href="/admin/templates" className="text-sm text-primary-600 hover:text-primary-700">
@@ -1165,8 +1148,8 @@ export default function NewEventPage() {
 
         {/* Guestbook Settings */}
         {formData.guestbookEnabled && (
-          <div className="dashboard-canvas p-5 sm:p-6">
-            <h2 className="text-lg font-semibold text-navy-900 mb-4">Guestbook Settings</h2>
+          <div className="panel p-4 sm:p-5">
+            <h2 className="panel-title mb-4">Capture limits</h2>
             <div className="grid sm:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="minDuration" className="label">Min Recording (sec)</label>
@@ -1193,7 +1176,7 @@ export default function NewEventPage() {
                 />
               </div>
               <div>
-                <label htmlFor="maxPhotos" className="label">Max Photos/Guest</label>
+                <label htmlFor="maxPhotos" className="label">Photos per guest</label>
                 <input
                   id="maxPhotos"
                   type="number"
@@ -1208,24 +1191,13 @@ export default function NewEventPage() {
           </div>
         )}
 
-        {/* Submit */}
-        <div className="flex items-center justify-end gap-4">
-          <Link href="/admin/events" className="btn-ghost">
+        <div className="form-actions-sticky -mx-4 sm:-mx-5">
+          <Link href="/admin/events" className="btn-outline">
             Cancel
           </Link>
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Creating...
-              </span>
-            ) : (
-              'Create Event'
-            )}
-          </button>
+          <SubmitButton type="submit" loading={loading}>
+            Create event
+          </SubmitButton>
         </div>
       </form>
     </div>

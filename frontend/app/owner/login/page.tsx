@@ -6,6 +6,8 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { ownerAuthApi } from '@/lib/api';
 import { useOwnerAuthStore } from '@/lib/store';
+import { getErrorMessage } from '@/lib/utils';
+import { SubmitButton } from '@/components/ui/Primitives';
 
 export default function OwnerLoginPage() {
   const router = useRouter();
@@ -48,14 +50,6 @@ export default function OwnerLoginPage() {
       : isRegister
         ? 'Create account'
         : 'Sign in';
-
-  const loadingLabel = isRequestReset
-    ? 'Submitting...'
-    : isSetupPassword
-      ? 'Setting password...'
-      : isRegister
-        ? 'Creating account...'
-        : 'Signing in...';
 
   const resetModeState = () => {
     setIsRegister(false);
@@ -104,7 +98,7 @@ export default function OwnerLoginPage() {
         router.push('/owner');
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || 'Request failed';
+      const errorMessage = getErrorMessage(error, 'That did not work. Try again.');
 
       if (errorMessage.includes('Account was created by admin') || errorMessage.includes('set up your password')) {
         setIsSetupPassword(true);
@@ -122,23 +116,23 @@ export default function OwnerLoginPage() {
   };
 
   return (
-    <div className="min-h-screen soft-grid-bg px-4 py-8 sm:px-6">
-      <div className="mx-auto flex min-h-screen max-w-md items-center">
-        <section className="app-shell-panel w-full p-6 sm:p-8">
-          <Link href="/" className="inline-flex items-center text-sm text-surface-600 transition-colors hover:text-brand-900">
-            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to home
-          </Link>
+    <div className="flex min-h-screen items-center justify-center bg-surface-100 px-4 py-10">
+      <div className="w-full max-w-sm">
+        <Link
+          href="/"
+          className="mb-6 inline-flex items-center gap-1 rounded text-[13px] font-medium text-surface-600 transition-colors hover:text-brand-900"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 19l-7-7 7-7" />
+          </svg>
+          Home
+        </Link>
 
-          <div className="mt-6 rounded-3xl bg-surface-50 px-5 py-5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">EventPeepo</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-brand-900">{pageTitle}</h1>
-            <p className="mt-2 text-sm leading-6 text-surface-600">{pageSubtitle}</p>
-          </div>
+        <div className="panel p-5 sm:p-6">
+          <h1 className="text-xl font-bold tracking-tight text-brand-900">{pageTitle}</h1>
+          <p className="mt-1 meta">{pageSubtitle}</p>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4" noValidate>
               {isRequestReset && (
                 <>
                   <div>
@@ -212,14 +206,14 @@ export default function OwnerLoginPage() {
                       id="password"
                       type={showPassword ? 'text' : 'password'}
                       required
-                      className="input pr-12"
+                      className="input pr-16"
                       placeholder="********"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     />
                     <button
                       type="button"
-                      className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-surface-500 transition-colors hover:text-brand-900"
+                      className="absolute inset-y-0 right-0 rounded-r-lg px-3 text-[13px] font-semibold text-surface-600 transition-colors hover:text-brand-900"
                       onClick={() => setShowPassword((prev) => !prev)}
                     >
                       {showPassword ? 'Hide' : 'Show'}
@@ -256,19 +250,9 @@ export default function OwnerLoginPage() {
                 </>
               )}
 
-              <button type="submit" disabled={loading} className="btn-accent w-full">
-                {loading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    {loadingLabel}
-                  </span>
-                ) : (
-                  submitLabel
-                )}
-              </button>
+              <SubmitButton type="submit" loading={loading} className="btn-primary btn-block">
+                {submitLabel}
+              </SubmitButton>
           </form>
 
           <div className="mt-6 space-y-2 text-center">
@@ -310,7 +294,7 @@ export default function OwnerLoginPage() {
               </button>
             )}
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );

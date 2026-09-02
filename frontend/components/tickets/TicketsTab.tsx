@@ -3,7 +3,18 @@
 import { useState, useEffect } from 'react';
 import { paymentGatewaysApi, ticketingApi, promoCodeApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
+import {
+  EmptyState,
+  ListSkeleton,
+  StatusBadge,
+  SubmitButton,
+  Switch,
+  Td,
+  Th,
+  Toolbar,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, Modal } from '@/components/ui/Overlay';
 import PaymentGatewaySelector from './PaymentGatewaySelector';
 import { CURRENCY_OPTIONS, getCurrencyOption, uniqueCurrencyCodes } from '@/lib/paymentGatewayConfig';
 
@@ -39,6 +50,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
       ? event.defaultCurrency.toUpperCase()
       : defaultCurrency;
   const [showForm, setShowForm] = useState(false);
+  const [deletingTicket, setDeletingTicket] = useState<any | null>(null);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
   const [gatewayCurrencies, setGatewayCurrencies] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -108,13 +120,12 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this ticket type?')) return;
     try {
       await ticketingApi.deleteTicketType(eventId, id);
       toast.success('Ticket type deleted');
       onRefresh();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete ticket');
+      toast.error(getErrorMessage(error, 'Failed to delete ticket'));
     }
   };
 
@@ -169,7 +180,7 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
       });
       onRefresh();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || error.message || 'Failed to save ticket');
+      toast.error(getErrorMessage(error, 'Failed to save ticket'));
     } finally {
       setSaving(false);
     }
@@ -184,192 +195,12 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
     }
   };
 
-  if (showForm) {
-    return (
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-navy-900">
-            {editingTicket ? 'Edit Ticket Type' : 'New Ticket Type'}
-          </h3>
-          <button
-            onClick={() => {
-              setShowForm(false);
-              setEditingTicket(null);
-              setFormData({
-                name: '',
-                description: '',
-                price: 0,
-                currency: pickNewTicketCurrency(),
-                quantityTotal: '',
-                maxPerOrder: '',
-                saleStartDate: '',
-                saleEndDate: '',
-                isActive: true,
-              });
-            }}
-            className="text-surface-500 hover:text-navy-900"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label">Ticket Name *</label>
-            <input
-              type="text"
-              required
-              className="input"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="General Admission"
-            />
-          </div>
-
-          <div>
-            <label className="label">Description</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Includes access to main event..."
-            />
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Price *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                className="input"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-
-            <div>
-              <label className="label">Currency *</label>
-              <select
-                required
-                className="input"
-                value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-              >
-                {availableCurrencies.map((currencyCode) => {
-                  const currency = getCurrencyOption(currencyCode);
-                  return (
-                    <option key={currency.code} value={currency.code}>
-                      {currency.code} - {currency.name}
-                    </option>
-                  );
-                })}
-              </select>
-              <p className="text-xs text-surface-500 mt-1">
-                {gatewayCurrencies.length > 0
-                  ? 'Currencies are driven by enabled event gateways.'
-                  : 'No gateway currencies found. Using fallback currency list.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Total Quantity</label>
-              <input
-                type="number"
-                min="0"
-                className="input"
-                value={formData.quantityTotal}
-                onChange={(e) => setFormData({ ...formData, quantityTotal: e.target.value })}
-                placeholder="0 = unlimited"
-              />
-              <p className="text-xs text-surface-500 mt-1">Leave 0 for unlimited</p>
-            </div>
-
-            <div>
-              <label className="label">Max Per Order</label>
-              <input
-                type="number"
-                min="1"
-                className="input"
-                value={formData.maxPerOrder}
-                onChange={(e) => setFormData({ ...formData, maxPerOrder: e.target.value })}
-                placeholder="10"
-              />
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Sale Start Date</label>
-              <input
-                type="datetime-local"
-                className="input"
-                value={formData.saleStartDate}
-                onChange={(e) => setFormData({ ...formData, saleStartDate: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="label">Sale End Date</label>
-              <input
-                type="datetime-local"
-                className="input"
-                value={formData.saleEndDate}
-                onChange={(e) => setFormData({ ...formData, saleEndDate: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="h-4 w-4 text-navy-600 focus:ring-navy-500 border-surface-300 rounded"
-            />
-            <label htmlFor="isActive" className="ml-2 block text-sm text-surface-900">
-              Active (available for purchase)
-            </label>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm(false);
-                setEditingTicket(null);
-              }}
-              className="btn-secondary flex-1"
-            >
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1">
-              {saving ? 'Saving...' : editingTicket ? 'Update Ticket' : 'Create Ticket'}
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-navy-900">Ticket Types</h3>
-            <p className="text-sm text-surface-500">Manage ticket packages and pricing</p>
-          </div>
-          {event.rsvpMode === 'paid' && (
+    <div className="space-y-4">
+      <Toolbar
+        end={
+          event.rsvpMode === 'paid' ? (
             <button
               onClick={() => {
                 setEditingTicket(null);
@@ -386,134 +217,312 @@ export default function TicketsTab({ eventId, event, tickets, loading, onRefresh
                 });
                 setShowForm(true);
               }}
-              className="btn-primary"
+              className="btn-primary btn-sm"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Ticket Type
+              New ticket type
             </button>
-          )}
+          ) : null
+        }
+      >
+        <span className="meta num">
+          {tickets.length} {tickets.length === 1 ? 'ticket type' : 'ticket types'}
+        </span>
+      </Toolbar>
+
+      {event.rsvpMode !== 'paid' ? (
+        <div className="banner-info" role="status">
+          Ticketing is off. Switch this event&rsquo;s RSVP type to &ldquo;Ticketed&rdquo; in Settings to sell tickets.
         </div>
+      ) : null}
 
-        {event.rsvpMode !== 'paid' && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> Ticketing is disabled. Enable "Paid RSVP" mode in Settings to create ticket types.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Tickets List */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
-        </div>
+        <ListSkeleton rows={3} />
       ) : tickets.length === 0 ? (
-        <div className="bg-white rounded-xl border border-surface-200 p-12 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
-            <svg className="w-6 h-6 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4v-3a2 2 0 00-2-2H5z" />
-            </svg>
-          </div>
-          <p className="text-surface-600">No ticket types yet</p>
-          <p className="text-sm text-surface-500 mt-1">
-            {event.rsvpMode === 'paid' ? 'Create your first ticket type to start selling tickets' : 'Enable paid RSVP mode to create tickets'}
-          </p>
-        </div>
+        <EmptyState
+          title="No ticket types yet"
+          hint={event.rsvpMode === 'paid' ? undefined : 'Turn on ticketed RSVP in Settings first.'}
+          action={
+            event.rsvpMode === 'paid' ? (
+              <button
+                className="btn-primary btn-sm"
+                onClick={() => {
+                  setEditingTicket(null);
+                  setShowForm(true);
+                }}
+              >
+                New ticket type
+              </button>
+            ) : null
+          }
+        />
       ) : (
-        <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-surface-200">
-            <thead className="bg-surface-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">Ticket</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">Availability</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-surface-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-surface-200">
-              {tickets.map((ticket) => (
-                <tr key={ticket.id} className="hover:bg-surface-50">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-navy-900">{ticket.name}</div>
-                    {ticket.description && (
-                      <div className="text-sm text-surface-500 mt-1">{ticket.description}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-navy-900">
-                      {formatCurrency(ticket.price, ticket.currency)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-surface-900">
-                      {ticket.quantityTotal === 0 ? (
-                        <span>Unlimited</span>
-                      ) : (
-                        <span>
-                          {ticket.quantitySold} / {ticket.quantityTotal} sold
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-surface-500 mt-1">
-                      Max {ticket.maxPerOrder} per order
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={cn(
-                        'inline-flex px-2 py-1 text-xs font-medium rounded-full',
-                        ticket.isActive
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-surface-100 text-surface-600'
-                      )}
-                    >
-                      {ticket.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEdit(ticket)}
-                      className="text-navy-600 hover:text-navy-900 mr-4"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(ticket.id)}
-                      className="text-rose-600 hover:text-rose-900"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+            {tickets.map((ticket) => (
+              <div key={ticket.id} className="flex items-start gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[15px] font-semibold text-brand-900">{ticket.name}</span>
+                    <StatusBadge tone={ticket.isActive ? 'success' : 'neutral'}>
+                      {ticket.isActive ? 'On sale' : 'Off'}
+                    </StatusBadge>
+                  </div>
+                  <p className="mt-0.5 meta num">
+                    {formatCurrency(ticket.price, ticket.currency)} &middot;{' '}
+                    {ticket.quantityTotal === 0
+                      ? 'Unlimited'
+                      : `${ticket.quantitySold} of ${ticket.quantityTotal} sold`}
+                  </p>
+                </div>
+                <Menu label={`Actions for ${ticket.name}`} sheetTitle={ticket.name}>
+                  <MenuItem onClick={() => handleEdit(ticket)}>Edit ticket</MenuItem>
+                  <MenuItem danger onClick={() => setDeletingTicket(ticket)}>
+                    Delete ticket
+                  </MenuItem>
+                </Menu>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+            <div className="overflow-x-auto">
+              <table className="data-table" style={{ minWidth: 760 }}>
+                <thead>
+                  <tr>
+                    <Th>Ticket</Th>
+                    <Th align="right">Price</Th>
+                    <Th>Availability</Th>
+                    <Th>Status</Th>
+                    <Th align="right">Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket) => (
+                    <tr key={ticket.id} className="table-row">
+                      <Td>
+                        <p className="font-medium text-brand-900">{ticket.name}</p>
+                        {ticket.description ? <p className="meta max-w-sm truncate">{ticket.description}</p> : null}
+                      </Td>
+                      <Td align="right" className="num font-medium text-brand-900">
+                        {formatCurrency(ticket.price, ticket.currency)}
+                      </Td>
+                      <Td>
+                        <p className="num">
+                          {ticket.quantityTotal === 0
+                            ? 'Unlimited'
+                            : `${ticket.quantitySold} of ${ticket.quantityTotal} sold`}
+                        </p>
+                        <p className="meta num">Max {ticket.maxPerOrder} per order</p>
+                      </Td>
+                      <Td>
+                        <StatusBadge tone={ticket.isActive ? 'success' : 'neutral'} dot>
+                          {ticket.isActive ? 'On sale' : 'Off'}
+                        </StatusBadge>
+                      </Td>
+                      <Td align="right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button className="btn-outline btn-sm" onClick={() => handleEdit(ticket)}>
+                            Edit
+                          </button>
+                          <Menu label={`Actions for ${ticket.name}`} sheetTitle={ticket.name}>
+                            <MenuItem danger onClick={() => setDeletingTicket(ticket)}>
+                              Delete ticket
+                            </MenuItem>
+                          </Menu>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deletingTicket)}
+        onClose={() => setDeletingTicket(null)}
+        onConfirm={() => {
+          if (deletingTicket) void handleDelete(deletingTicket.id);
+          setDeletingTicket(null);
+        }}
+        title={`Delete "${deletingTicket?.name || ''}"?`}
+        body="Guests can no longer buy this ticket. Tickets already sold are unaffected."
+        confirmLabel="Delete ticket"
+      />
 
       {/* Payment Gateway Selection */}
       {event.rsvpMode === 'paid' && (
-        <div className="bg-white rounded-xl border border-surface-200 p-6">
+        <div className="panel p-4 sm:p-5">
           <PaymentGatewaySelector
             eventId={eventId}
             onUpdate={() => {
               void fetchGatewayCurrencies();
               onRefresh();
             }}
-            title="Ticketing Gateways"
+            title="Ticket payments"
             description="Select which event gateways guests can use to pay for tickets."
           />
         </div>
       )}
+
+      <Modal
+        open={showForm}
+        onClose={() => {
+          setShowForm(false);
+          setEditingTicket(null);
+        }}
+        title={editingTicket ? editingTicket.name : 'New ticket type'}
+        size="md"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn-outline"
+              disabled={saving}
+              onClick={() => {
+                setShowForm(false);
+                setEditingTicket(null);
+              }}
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              loading={saving}
+              onClick={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+            >
+              {editingTicket ? 'Save' : 'Create ticket'}
+            </SubmitButton>
+          </>
+        }
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="label">Name</label>
+        <input
+          type="text"
+          required
+          className="input"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="General Admission"
+        />
+      </div>
+
+      <div>
+        <label className="label">Description</label>
+        <textarea
+          className="input"
+          rows={3}
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Includes access to main event..."
+        />
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label className="label">Price</label>
+          <input
+            type="number"
+            required
+            min="0"
+            step="0.01"
+            className="input"
+            value={formData.price}
+            onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+
+        <div>
+          <label className="label">Currency</label>
+          <select
+            required
+            className="input"
+            value={formData.currency}
+            onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+          >
+            {availableCurrencies.map((currencyCode) => {
+              const currency = getCurrencyOption(currencyCode);
+              return (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} - {currency.name}
+                </option>
+              );
+            })}
+          </select>
+          <p className="text-xs text-surface-500 mt-1">
+            {gatewayCurrencies.length > 0
+              ? 'Currencies are driven by enabled event gateways.'
+              : 'No gateway currencies found. Using fallback currency list.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label className="label">Total Quantity</label>
+          <input
+            type="number"
+            min="0"
+            className="input"
+            value={formData.quantityTotal}
+            onChange={(e) => setFormData({ ...formData, quantityTotal: e.target.value })}
+            placeholder="0 = unlimited"
+          />
+          <p className="text-xs text-surface-500 mt-1">Leave 0 for unlimited</p>
+        </div>
+
+        <div>
+          <label className="label">Max Per Order</label>
+          <input
+            type="number"
+            min="1"
+            className="input"
+            value={formData.maxPerOrder}
+            onChange={(e) => setFormData({ ...formData, maxPerOrder: e.target.value })}
+            placeholder="10"
+          />
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label className="label">Sale Start Date</label>
+          <input
+            type="datetime-local"
+            className="input"
+            value={formData.saleStartDate}
+            onChange={(e) => setFormData({ ...formData, saleStartDate: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="label">Sale End Date</label>
+          <input
+            type="datetime-local"
+            className="input"
+            value={formData.saleEndDate}
+            onChange={(e) => setFormData({ ...formData, saleEndDate: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <Switch
+        label="On sale"
+        description="Guests can buy this ticket while it is on sale."
+        checked={formData.isActive}
+        onChange={(checked) => setFormData({ ...formData, isActive: checked })}
+      />
+
+        </form>
+      </Modal>
     </div>
   );
 }
 
-// Payment Gateway Configuration Component
+// Payment gateway Component
 function PaymentGatewayConfig({ eventId }: { eventId: string }) {
   const [gateway, setGateway] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -662,7 +671,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
       setShowForm(false);
       fetchGateway();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update payment gateway');
+      toast.error(getErrorMessage(error, 'Failed to update payment gateway'));
     } finally {
       setSaving(false);
     }
@@ -670,9 +679,10 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-navy-900 mx-auto" />
+      <div className="panel p-4 sm:p-5">
+        <div className="space-y-2">
+          <div className="skeleton h-4 w-32" />
+          <div className="skeleton h-10 w-full" />
         </div>
       </div>
     );
@@ -680,9 +690,9 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
 
   if (showForm) {
     return (
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
+      <div className="panel p-4 sm:p-5">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-navy-900">Payment Gateway Configuration</h3>
+          <h3 className="panel-title">Payment gateway</h3>
           <button
             onClick={() => setShowForm(false)}
             className="text-surface-500 hover:text-navy-900"
@@ -746,7 +756,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* Stripe Fields */}
           {formData.gateway === 'stripe' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">Stripe Configuration</h4>
+              <h4 className="font-medium text-brand-900">Stripe Configuration</h4>
               <div>
                 <label className="label">Public Key</label>
                 <input
@@ -783,7 +793,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* Paystack Fields */}
           {formData.gateway === 'paystack' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">Paystack Configuration</h4>
+              <h4 className="font-medium text-brand-900">Paystack Configuration</h4>
               <div>
                 <label className="label">Public Key</label>
                 <input
@@ -810,7 +820,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* Flutterwave Fields */}
           {formData.gateway === 'flutterwave' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">Flutterwave Configuration</h4>
+              <h4 className="font-medium text-brand-900">Flutterwave Configuration</h4>
               <div>
                 <label className="label">Public Key</label>
                 <input
@@ -835,7 +845,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* MTN MoMo Fields */}
           {formData.gateway === 'mtn_momo' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">MTN MoMo Configuration</h4>
+              <h4 className="font-medium text-brand-900">MTN MoMo Configuration</h4>
               <div>
                 <label className="label">API Key</label>
                 <input
@@ -880,7 +890,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* Telecel Cash Fields */}
           {formData.gateway === 'telecel_cash' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">Telecel Cash Configuration</h4>
+              <h4 className="font-medium text-brand-900">Telecel Cash Configuration</h4>
               <div>
                 <label className="label">API Key</label>
                 <input
@@ -914,7 +924,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* Airteltigo Cash Fields */}
           {formData.gateway === 'airteltigo_cash' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">Airteltigo Cash Configuration</h4>
+              <h4 className="font-medium text-brand-900">Airteltigo Cash Configuration</h4>
               <div>
                 <label className="label">API Key</label>
                 <input
@@ -948,7 +958,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           {/* Custom Gateway Fields */}
           {formData.gateway === 'custom' && (
             <div className="space-y-4 p-4 bg-surface-50 rounded-lg">
-              <h4 className="font-medium text-navy-900">Custom Gateway Configuration</h4>
+              <h4 className="font-medium text-brand-900">Custom Gateway Configuration</h4>
               <div>
                 <label className="label">Gateway Name</label>
                 <input
@@ -1041,10 +1051,10 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-surface-200 p-6">
+    <div className="panel p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-navy-900">Payment Gateway</h3>
+          <h3 className="panel-title">Payment Gateway</h3>
           <p className="text-sm text-surface-500">Configure payment processing for ticket sales</p>
         </div>
         <button onClick={() => setShowForm(true)} className="btn-outline">
@@ -1056,7 +1066,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
             <div>
-              <p className="font-medium text-navy-900 capitalize">{gateway.gateway.replace('_', ' ')}</p>
+              <p className="font-medium text-brand-900 capitalize">{gateway.gateway.replace('_', ' ')}</p>
               <p className="text-sm text-surface-500">
                 {gateway.currency} | {gateway.isLive ? 'Live Mode' : 'Test Mode'}
               </p>
@@ -1077,6 +1087,7 @@ function PaymentGatewayConfig({ eventId }: { eventId: string }) {
           </button>
         </div>
       )}
+
     </div>
   );
 }

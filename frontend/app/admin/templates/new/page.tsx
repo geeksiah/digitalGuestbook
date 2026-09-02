@@ -1,7 +1,10 @@
 'use client';
 
+import { getErrorMessage } from '@/lib/utils';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { PageHeader, SegmentedControl } from '@/components/ui/Primitives';
 import { templatesApi, API_BASE_URL } from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -84,10 +87,10 @@ export default function NewTemplatePage() {
       }
 
       const result = await response.json();
-      toast.success('Template uploaded successfully!');
+      toast.success('Template uploaded');
       router.push('/admin/templates');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to upload template');
+      toast.error(getErrorMessage(error, 'Could not upload the template.'));
     } finally {
       setLoading(false);
     }
@@ -105,95 +108,59 @@ export default function NewTemplatePage() {
 
     try {
       await templatesApi.create(formData);
-      toast.success('Template created successfully!');
+      toast.success('Template created');
       router.push('/admin/templates');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create template');
+      toast.error(getErrorMessage(error, 'Failed to create template'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-navy-900">Create New Template</h1>
-          <p className="text-surface-500 mt-1">Add a new template to your library</p>
-        </div>
-        <button
-          onClick={() => router.back()}
-          className="btn-outline"
-        >
-          Cancel
-        </button>
+    <div className="page mx-auto max-w-3xl">
+      <PageHeader title="New template" backHref="/admin/templates" backLabel="Templates" />
+
+      <div className="panel p-4 sm:p-5">
+        <p className="label">How are you adding it?</p>
+        <SegmentedControl
+          label="Upload method"
+          value={uploadMode}
+          onChange={(value) => setUploadMode(value)}
+          options={[
+            { value: 'zip' as const, label: 'Upload a ZIP' },
+            { value: 'manual' as const, label: 'Paste HTML' },
+          ]}
+        />
       </div>
 
-      {/* Upload Mode Selector */}
-      <div className="bg-white rounded-xl border border-surface-200 p-4">
-        <label className="block text-sm font-medium text-surface-700 mb-3">Upload Method</label>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setUploadMode('zip')}
-            className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
-              uploadMode === 'zip'
-                ? 'border-navy-900 bg-navy-50 text-navy-900'
-                : 'border-surface-200 hover:border-surface-300'
-            }`}
-          >
-            <svg className="w-5 h-5 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            <span className="font-medium">Upload ZIP</span>
-            <p className="text-xs text-surface-500 mt-1">Extract from ZIP file</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setUploadMode('manual')}
-            className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
-              uploadMode === 'manual'
-                ? 'border-navy-900 bg-navy-50 text-navy-900'
-                : 'border-surface-200 hover:border-surface-300'
-            }`}
-          >
-            <svg className="w-5 h-5 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            <span className="font-medium">Manual Entry</span>
-            <p className="text-xs text-surface-500 mt-1">Enter HTML/CSS/JS directly</p>
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
+      <div className="panel p-4 sm:p-5">
         {uploadMode === 'zip' ? (
           <form onSubmit={handleZipUpload} className="space-y-6">
             {/* Basic Info */}
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Template Name *
+                <label className="label">
+                  Name
                 </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                  className="input"
                   placeholder="Elegant Wedding Invitation"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Template Type *
+                <label className="label">
+                  Type
                 </label>
                 <select
                   required
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                  className="input"
                 >
                   {Object.entries(typeLabels).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
@@ -203,21 +170,21 @@ export default function NewTemplatePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                className="input"
                 placeholder="A brief description of this template..."
               />
             </div>
 
             {/* ZIP Upload */}
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 Template ZIP File *
               </label>
               <div className="mt-2">
@@ -228,7 +195,7 @@ export default function NewTemplatePage() {
                         <svg className="w-10 h-10 text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <p className="text-sm font-medium text-navy-900">{zipFile.name}</p>
+                        <p className="text-sm font-medium text-brand-900">{zipFile.name}</p>
                         <p className="text-xs text-surface-500 mt-1">{(zipFile.size / 1024 / 1024).toFixed(2)} MB</p>
                       </>
                     ) : (
@@ -239,7 +206,7 @@ export default function NewTemplatePage() {
                         <p className="mb-2 text-sm text-surface-500">
                           <span className="font-semibold">Click to upload</span> or drag and drop
                         </p>
-                        <p className="text-xs text-surface-400">ZIP file (MAX. 50MB)</p>
+                        <p className="text-xs text-surface-600">ZIP file (MAX. 50MB)</p>
                       </>
                     )}
                   </div>
@@ -285,14 +252,14 @@ export default function NewTemplatePage() {
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="flex-1 px-4 py-2 border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors"
+                className="btn-outline flex-1"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !zipFile || !formData.name.trim()}
-                className="flex-1 px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="btn-primary flex-1"
               >
                 {loading ? 'Uploading...' : 'Upload Template'}
               </button>
@@ -303,27 +270,27 @@ export default function NewTemplatePage() {
             {/* Same basic info fields */}
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Template Name *
+                <label className="label">
+                  Name
                 </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                  className="input"
                   placeholder="Elegant Wedding Invitation"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1">
-                  Template Type *
+                <label className="label">
+                  Type
                 </label>
                 <select
                   required
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                  className="input"
                 >
                   {Object.entries(typeLabels).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
@@ -333,21 +300,21 @@ export default function NewTemplatePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                className="input"
                 placeholder="A brief description of this template..."
               />
             </div>
 
             {/* HTML Content */}
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 HTML Content *
               </label>
               <textarea
@@ -362,7 +329,7 @@ export default function NewTemplatePage() {
 
             {/* CSS Content */}
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 CSS Content
               </label>
               <textarea
@@ -376,7 +343,7 @@ export default function NewTemplatePage() {
 
             {/* JS Content */}
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 JavaScript Content
               </label>
               <textarea
@@ -405,16 +372,16 @@ export default function NewTemplatePage() {
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="flex-1 px-4 py-2 border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors"
+                className="btn-outline flex-1"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !formData.name.trim() || !formData.htmlContent.trim()}
-                className="flex-1 px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="btn-primary flex-1"
               >
-                {loading ? 'Creating...' : 'Create Template'}
+                {loading ? 'Creating…' : 'Create template'}
               </button>
             </div>
           </form>

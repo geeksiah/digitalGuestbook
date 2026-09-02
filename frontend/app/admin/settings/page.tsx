@@ -3,7 +3,19 @@
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { cn } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
+import {
+  EmptyState,
+  PageHeader,
+  PageSkeleton,
+  Panel,
+  StatusBadge,
+  SubmitButton,
+  Switch,
+  Tabs,
+  Toolbar,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, MenuSeparator, Modal } from '@/components/ui/Overlay';
 
 interface SystemSettings {
   id: string;
@@ -56,17 +68,6 @@ const WHATSAPP_PROVIDERS = [
   { id: 'custom', name: 'Custom API', description: 'Custom HTTP endpoint' },
 ];
 
-// Monochrome Icons
-const Icons = {
-  settings: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-  email: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
-  phone: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
-  message: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
-  edit: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
-  trash: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
-  check: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-  plus: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
-};
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
@@ -87,6 +88,8 @@ export default function AdminSettingsPage() {
   
   // Test state
   const [testRecipient, setTestRecipient] = useState('');
+  const [testTarget, setTestTarget] = useState<{ type: 'email' | 'sms' | 'whatsapp'; provider: Provider } | null>(null);
+  const [deletingProvider, setDeletingProvider] = useState<{ type: 'email' | 'sms' | 'whatsapp'; provider: Provider } | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
@@ -125,7 +128,7 @@ export default function AdminSettingsPage() {
       setSmsProviders(smsRes.providers);
       setWhatsappProviders(whatsappRes.providers);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load settings');
+      toast.error(getErrorMessage(error, 'Could not load settings.'));
     } finally {
       setLoading(false);
     }
@@ -136,9 +139,9 @@ export default function AdminSettingsPage() {
     setSaving(true);
     try {
       await apiCall('/', { method: 'PATCH', body: JSON.stringify(settings) });
-      toast.success('Settings saved!');
+      toast.success('Settings saved');
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -156,41 +159,40 @@ export default function AdminSettingsPage() {
     try {
       if (editingProvider) {
         await apiCall(`${endpoint}/${editingProvider.id}`, { method: 'PATCH', body: JSON.stringify(providerForm) });
-        toast.success('Provider updated!');
+        toast.success('Provider updated');
       } else {
         await apiCall(endpoint, { method: 'POST', body: JSON.stringify(providerForm) });
-        toast.success('Provider added!');
+        toast.success('Provider added');
       }
       setShowProviderModal(false);
       fetchAll();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(getErrorMessage(error));
     }
   };
 
   const deleteProvider = async (type: 'email' | 'sms' | 'whatsapp', id: string) => {
-    if (!confirm('Delete this provider?')) return;
     try {
       await apiCall(`/${type}-providers/${id}`, { method: 'DELETE' });
       toast.success('Provider deleted');
       fetchAll();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(getErrorMessage(error));
     }
   };
 
   const testProvider = async (type: 'email' | 'sms' | 'whatsapp', id: string) => {
     if (!testRecipient) {
-      toast.error(type === 'email' ? 'Enter email address' : 'Enter phone number');
+      toast.error(type === 'email' ? 'Enter an email address' : 'Enter a phone number');
       return;
     }
     setTesting(id);
     try {
       const body = type === 'email' ? { email: testRecipient } : { phone: testRecipient };
       await apiCall(`/${type}-providers/${id}/test`, { method: 'POST', body: JSON.stringify(body) });
-      toast.success('Test sent successfully!');
+      toast.success('Test sent');
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setTesting(null);
     }
@@ -202,75 +204,48 @@ export default function AdminSettingsPage() {
       toast.success('Default provider updated');
       fetchAll();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(getErrorMessage(error));
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      <div className="mx-auto max-w-5xl">
+        <PageSkeleton stats={0} rows={4} />
       </div>
     );
   }
 
   const renderProviderCard = (type: 'email' | 'sms' | 'whatsapp', provider: Provider) => (
-    <div key={provider.id} className={cn(
-      'bg-white rounded-xl border p-5 transition-all',
-      provider.isDefault ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-surface-200'
-    )}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-navy-900">{provider.name}</h4>
-            {provider.isDefault && (
-              <span className="text-xs bg-primary-500 text-navy-900 px-2 py-0.5 rounded-full font-medium">Default</span>
-            )}
-            <span className={cn(
-              'text-xs px-2 py-0.5 rounded-full',
-              provider.isActive ? 'bg-green-100 text-green-700' : 'bg-surface-100 text-surface-500'
-            )}>
-              {provider.isActive ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-          <p className="text-sm text-surface-500 capitalize">{provider.provider}</p>
+    <div key={provider.id} className="flex items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="truncate text-[15px] font-semibold text-brand-900">{provider.name}</span>
+          {provider.isDefault ? <StatusBadge tone="brand">Default</StatusBadge> : null}
+          <StatusBadge tone={provider.isActive ? 'success' : 'neutral'} dot>
+            {provider.isActive ? 'Active' : 'Inactive'}
+          </StatusBadge>
         </div>
-        <div className="flex gap-1">
-          <button onClick={() => openProviderModal(type, provider)} className="p-2 hover:bg-surface-50 rounded-lg transition-colors" title="Edit">
-            <svg className="w-4 h-4 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button onClick={() => deleteProvider(type, provider.id)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-            <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
+        <p className="mt-0.5 meta capitalize">{provider.provider}</p>
       </div>
-      
-      <div className="flex items-center gap-2 mt-4">
-        {!provider.isDefault && (
-          <button onClick={() => setAsDefault(type, provider.id)} className="text-xs text-primary-600 hover:underline">
-            Set as default
-          </button>
+      <button
+        type="button"
+        className="btn-outline btn-sm hidden shrink-0 sm:inline-flex"
+        onClick={() => openProviderModal(type, provider)}
+      >
+        Edit
+      </button>
+      <Menu label={`Actions for ${provider.name}`} sheetTitle={provider.name}>
+        <MenuItem onClick={() => openProviderModal(type, provider)}>Edit provider</MenuItem>
+        <MenuItem onClick={() => setTestTarget({ type, provider })}>Send a test</MenuItem>
+        {provider.isDefault ? null : (
+          <MenuItem onClick={() => setAsDefault(type, provider.id)}>Make default</MenuItem>
         )}
-        <div className="flex-1" />
-        <input
-          type="text"
-          placeholder={type === 'email' ? 'test@example.com' : '+1234567890'}
-          value={testRecipient}
-          onChange={(e) => setTestRecipient(e.target.value)}
-          className="text-sm border border-surface-200 rounded-lg px-2 py-1 w-40"
-        />
-        <button 
-          onClick={() => testProvider(type, provider.id)} 
-          disabled={testing === provider.id}
-          className="text-xs bg-navy-900 text-white px-3 py-1.5 rounded-lg hover:bg-navy-800 disabled:opacity-50"
-        >
-          {testing === provider.id ? 'Sending...' : 'Test'}
-        </button>
-      </div>
+        <MenuSeparator />
+        <MenuItem danger onClick={() => setDeletingProvider({ type, provider })}>
+          Delete provider
+        </MenuItem>
+      </Menu>
     </div>
   );
 
@@ -527,314 +502,317 @@ export default function AdminSettingsPage() {
     );
   };
 
-  return (
-    <div className="max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold text-navy-900 mb-6">System Settings</h1>
+  const providerLists: Record<'email' | 'sms' | 'whatsapp', Provider[]> = {
+    email: emailProviders,
+    sms: smsProviders,
+    whatsapp: whatsappProviders,
+  };
 
-      <div className="bg-white rounded-xl shadow-sm border border-surface-200">
-        <div className="border-b border-surface-200 p-4">
-          <nav className="flex space-x-1 overflow-x-auto">
-            {([
-              { id: 'general', label: 'General', icon: Icons.settings },
-              { id: 'email', label: 'Email Providers', icon: Icons.email },
-              { id: 'sms', label: 'SMS Providers', icon: Icons.phone },
-              { id: 'whatsapp', label: 'WhatsApp Providers', icon: Icons.message },
-            ] as { id: Tab; label: string; icon: React.ReactNode }[]).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2',
-                  activeTab === tab.id
-                    ? 'bg-navy-900 text-white'
-                    : 'text-surface-600 hover:bg-surface-100'
-                )}
-              >
-                {tab.icon}
-                {tab.label}
+  const channelLabels: Record<'email' | 'sms' | 'whatsapp', string> = {
+    email: 'Email',
+    sms: 'SMS',
+    whatsapp: 'WhatsApp',
+  };
+
+  const renderProviderTab = (type: 'email' | 'sms' | 'whatsapp') => {
+    const providers = providerLists[type];
+    return (
+      <div className="space-y-4">
+        <Toolbar
+          end={
+            <button onClick={() => openProviderModal(type)} className="btn-primary btn-sm">
+              Add provider
+            </button>
+          }
+        >
+          <span className="meta">
+            {channelLabels[type]} messages go out through the default provider. Add more as backups.
+          </span>
+        </Toolbar>
+
+        {providers.length === 0 ? (
+          <EmptyState
+            title={`No ${channelLabels[type]} providers`}
+            action={
+              <button onClick={() => openProviderModal(type)} className="btn-primary btn-sm">
+                Add provider
               </button>
-            ))}
-          </nav>
-        </div>
+            }
+          />
+        ) : (
+          <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
+            {providers.map((provider) => renderProviderCard(type, provider))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
-        <div className="p-6">
-          {activeTab === 'general' && settings && (
-            <div className="space-y-6">
+  return (
+    <div className="page mx-auto max-w-5xl">
+      <PageHeader
+        title="Settings"
+        actions={
+          activeTab === 'general' ? (
+            <SubmitButton loading={saving} onClick={handleSaveSettings}>
+              Save
+            </SubmitButton>
+          ) : null
+        }
+      />
+
+      <Tabs
+        items={[
+          { id: 'general', label: 'General' },
+          { id: 'email', label: 'Email', count: emailProviders.length },
+          { id: 'sms', label: 'SMS', count: smsProviders.length },
+          { id: 'whatsapp', label: 'WhatsApp', count: whatsappProviders.length },
+        ]}
+        active={activeTab}
+        onChange={(id) => setActiveTab(id as Tab)}
+        label="Settings sections"
+      />
+
+      {activeTab === 'general' && settings ? (
+        <div className="space-y-4">
+          <Panel title="Brand">
+            <div className="space-y-4">
               <div>
-                <label className="label">Site Name</label>
+                <label className="label" htmlFor="site-name">
+                  Site name
+                </label>
                 <input
+                  id="site-name"
                   type="text"
                   className="input"
                   value={settings.siteName}
                   onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="label">Site URL</label>
-                <input
-                  type="url"
-                  className="input"
-                  value={settings.siteUrl || ''}
-                  onChange={(e) => setSettings({ ...settings, siteUrl: e.target.value })}
-                  placeholder="https://yourevent.com"
-                />
-              </div>
-              <div>
-                <label className="label">Logo URL</label>
-                <input
-                  type="url"
-                  className="input"
-                  value={settings.logoUrl || ''}
-                  onChange={(e) => setSettings({ ...settings, logoUrl: e.target.value })}
-                  placeholder="https://yourevent.com/logo.png"
-                />
-              </div>
-
-              <div className="border-t border-surface-100 pt-6">
-                <h3 className="text-lg font-semibold text-navy-900 mb-4">Enable Notification Channels</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 rounded-lg bg-surface-50 cursor-pointer hover:bg-surface-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-surface-300 text-navy-900"
-                      checked={settings.emailEnabled}
-                      onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
-                    />
-                    <div className="flex items-center gap-3">
-                      <span className="text-surface-500">{Icons.email}</span>
-                      <div>
-                        <span className="font-medium text-navy-900">Email Notifications</span>
-                        <p className="text-sm text-surface-500">Send system emails (requires configured provider)</p>
-                      </div>
-                    </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="site-url">
+                    Site URL
                   </label>
-                  <label className="flex items-center gap-3 p-4 rounded-lg bg-surface-50 cursor-pointer hover:bg-surface-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-surface-300 text-navy-900"
-                      checked={settings.smsEnabled}
-                      onChange={(e) => setSettings({ ...settings, smsEnabled: e.target.checked })}
-                    />
-                    <div className="flex items-center gap-3">
-                      <span className="text-surface-500">{Icons.phone}</span>
-                      <div>
-                        <span className="font-medium text-navy-900">SMS Notifications</span>
-                        <p className="text-sm text-surface-500">Send SMS messages (requires configured provider)</p>
-                      </div>
-                    </div>
+                  <input
+                    id="site-url"
+                    type="url"
+                    className="input"
+                    value={settings.siteUrl || ''}
+                    onChange={(e) => setSettings({ ...settings, siteUrl: e.target.value })}
+                    placeholder="https://app.eventpeepo.com"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="logo-url">
+                    Logo URL
                   </label>
-                  <label className="flex items-center gap-3 p-4 rounded-lg bg-surface-50 cursor-pointer hover:bg-surface-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-surface-300 text-navy-900"
-                      checked={settings.whatsappEnabled}
-                      onChange={(e) => setSettings({ ...settings, whatsappEnabled: e.target.checked })}
-                    />
-                    <div className="flex items-center gap-3">
-                      <span className="text-surface-500">{Icons.message}</span>
-                      <div>
-                        <span className="font-medium text-navy-900">WhatsApp Notifications</span>
-                        <p className="text-sm text-surface-500">Send WhatsApp messages (requires configured provider)</p>
-                      </div>
-                    </div>
-                  </label>
+                  <input
+                    id="logo-url"
+                    type="url"
+                    className="input"
+                    value={settings.logoUrl || ''}
+                    onChange={(e) => setSettings({ ...settings, logoUrl: e.target.value })}
+                    placeholder="https://…/logo.png"
+                  />
                 </div>
               </div>
+            </div>
+          </Panel>
 
-              <div className="border-t border-surface-100 pt-6">
-                <h3 className="text-lg font-semibold text-navy-900 mb-4">Default Commerce Fees</h3>
-                <p className="text-sm text-surface-500 mb-4">
-                  These defaults apply to all events until an event enables its own fee override.
-                </p>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <label className="label">Platform Fee Mode</label>
-                    <select
-                      className="input"
-                      value={settings.platformFeeMode || 'PERCENTAGE'}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED',
-                        })
-                      }
-                    >
-                      <option value="PERCENTAGE">Percentage</option>
-                      <option value="FIXED">Fixed Amount</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">
-                      {settings.platformFeeMode === 'FIXED' ? 'Platform Fee (Fixed)' : 'Platform Fee (%)'}
-                    </label>
-                    <input
-                      type="number"
-                      step={settings.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
-                      min="0"
-                      max={settings.platformFeeMode === 'FIXED' ? undefined : '100'}
-                      className="input"
-                      value={
+          <Panel title="Notification channels">
+            <div className="space-y-1">
+              <Switch
+                label="Email"
+                description={
+                  emailProviders.length === 0 ? 'Add an email provider before turning this on.' : undefined
+                }
+                checked={settings.emailEnabled}
+                onChange={(checked) => setSettings({ ...settings, emailEnabled: checked })}
+              />
+              <Switch
+                label="SMS"
+                description={smsProviders.length === 0 ? 'Add an SMS provider before turning this on.' : undefined}
+                checked={settings.smsEnabled}
+                onChange={(checked) => setSettings({ ...settings, smsEnabled: checked })}
+              />
+              <Switch
+                label="WhatsApp"
+                description={
+                  whatsappProviders.length === 0 ? 'Add a WhatsApp provider before turning this on.' : undefined
+                }
+                checked={settings.whatsappEnabled}
+                onChange={(checked) => setSettings({ ...settings, whatsappEnabled: checked })}
+              />
+            </div>
+          </Panel>
+
+          <Panel title="Default fees">
+            <p className="field-hint mb-3 mt-0">Applies to every event that has not set its own fees.</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="label" htmlFor="fee-mode">
+                  Platform fee type
+                </label>
+                <select
+                  id="fee-mode"
+                  className="input"
+                  value={settings.platformFeeMode || 'PERCENTAGE'}
+                  onChange={(e) =>
+                    setSettings({ ...settings, platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED' })
+                  }
+                >
+                  <option value="PERCENTAGE">Percentage</option>
+                  <option value="FIXED">Fixed amount</option>
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="fee-platform">
+                  {settings.platformFeeMode === 'FIXED' ? 'Platform fee' : 'Platform fee (%)'}
+                </label>
+                <input
+                  id="fee-platform"
+                  type="number"
+                  step={settings.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
+                  min="0"
+                  max={settings.platformFeeMode === 'FIXED' ? undefined : '100'}
+                  className="input"
+                  value={
+                    settings.platformFeeMode === 'FIXED'
+                      ? settings.platformFeeFixed ?? 0
+                      : settings.platformFeePercent ?? 0
+                  }
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      platformFeePercent:
+                        settings.platformFeeMode === 'PERCENTAGE'
+                          ? parseFloat(e.target.value) || 0
+                          : settings.platformFeePercent,
+                      platformFeeFixed:
                         settings.platformFeeMode === 'FIXED'
-                          ? settings.platformFeeFixed ?? 0
-                          : settings.platformFeePercent ?? 0
-                      }
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          platformFeePercent:
-                            settings.platformFeeMode === 'PERCENTAGE'
-                              ? parseFloat(e.target.value) || 0
-                              : settings.platformFeePercent,
-                          platformFeeFixed:
-                            settings.platformFeeMode === 'FIXED'
-                              ? parseFloat(e.target.value) || 0
-                              : settings.platformFeeFixed,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Processing Fee (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      className="input"
-                      value={settings.processingFeePercent ?? 0}
-                      onChange={(e) =>
-                        setSettings({ ...settings, processingFeePercent: parseFloat(e.target.value) || 0 })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Fixed Processing Fee</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="input"
-                      value={settings.processingFeeFixed ?? 0}
-                      onChange={(e) =>
-                        setSettings({ ...settings, processingFeeFixed: parseFloat(e.target.value) || 0 })
-                      }
-                    />
-                  </div>
-                </div>
+                          ? parseFloat(e.target.value) || 0
+                          : settings.platformFeeFixed,
+                    })
+                  }
+                />
               </div>
-
-              <div className="flex justify-end pt-4">
-                <button onClick={handleSaveSettings} disabled={saving} className="btn-primary">
-                  {saving ? 'Saving...' : 'Save Settings'}
-                </button>
+              <div>
+                <label className="label" htmlFor="fee-processing">
+                  Processing fee (%)
+                </label>
+                <input
+                  id="fee-processing"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  className="input"
+                  value={settings.processingFeePercent ?? 0}
+                  onChange={(e) =>
+                    setSettings({ ...settings, processingFeePercent: parseFloat(e.target.value) || 0 })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="fee-fixed">
+                  Fixed processing fee
+                </label>
+                <input
+                  id="fee-fixed"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  value={settings.processingFeeFixed ?? 0}
+                  onChange={(e) =>
+                    setSettings({ ...settings, processingFeeFixed: parseFloat(e.target.value) || 0 })
+                  }
+                />
               </div>
             </div>
-          )}
+          </Panel>
 
-          {activeTab === 'email' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-navy-900">Email Providers</h3>
-                  <p className="text-sm text-surface-500">Configure multiple email providers for redundancy</p>
-                </div>
-                <button onClick={() => openProviderModal('email')} className="btn-primary">
-                  + Add Provider
-                </button>
-              </div>
-              
-              {emailProviders.length === 0 ? (
-                <div className="text-center py-12 bg-surface-50 rounded-xl border-2 border-dashed border-surface-200">
-                  <p className="text-surface-500">No email providers configured</p>
-                  <button onClick={() => openProviderModal('email')} className="text-primary-600 font-medium hover:underline mt-2">
-                    Add your first provider
-                  </button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {emailProviders.map(p => renderProviderCard('email', p))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'sms' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-navy-900">SMS Providers</h3>
-                  <p className="text-sm text-surface-500">Configure SMS providers for text messaging</p>
-                </div>
-                <button onClick={() => openProviderModal('sms')} className="btn-primary">
-                  + Add Provider
-                </button>
-              </div>
-              
-              {smsProviders.length === 0 ? (
-                <div className="text-center py-12 bg-surface-50 rounded-xl border-2 border-dashed border-surface-200">
-                  <p className="text-surface-500">No SMS providers configured</p>
-                  <button onClick={() => openProviderModal('sms')} className="text-primary-600 font-medium hover:underline mt-2">
-                    Add your first provider
-                  </button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {smsProviders.map(p => renderProviderCard('sms', p))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'whatsapp' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-navy-900">WhatsApp Providers</h3>
-                  <p className="text-sm text-surface-500">Configure WhatsApp Business API providers</p>
-                </div>
-                <button onClick={() => openProviderModal('whatsapp')} className="btn-primary">
-                  + Add Provider
-                </button>
-              </div>
-              
-              {whatsappProviders.length === 0 ? (
-                <div className="text-center py-12 bg-surface-50 rounded-xl border-2 border-dashed border-surface-200">
-                  <p className="text-surface-500">No WhatsApp providers configured</p>
-                  <button onClick={() => openProviderModal('whatsapp')} className="text-primary-600 font-medium hover:underline mt-2">
-                    Add your first provider
-                  </button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {whatsappProviders.map(p => renderProviderCard('whatsapp', p))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Provider Modal */}
-      {showProviderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowProviderModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-surface-200">
-              <h2 className="text-xl font-bold text-navy-900">
-                {editingProvider ? 'Edit Provider' : `Add ${providerType.charAt(0).toUpperCase() + providerType.slice(1)} Provider`}
-              </h2>
-            </div>
-            <div className="p-6">
-              {renderProviderForm()}
-            </div>
-            <div className="p-6 border-t border-surface-200 flex justify-end gap-3">
-              <button onClick={() => setShowProviderModal(false)} className="btn-outline">Cancel</button>
-              <button onClick={saveProvider} className="btn-primary">
-                {editingProvider ? 'Update' : 'Add'} Provider
-              </button>
-            </div>
+          <div className="flex justify-end">
+            <SubmitButton loading={saving} onClick={handleSaveSettings}>
+              Save settings
+            </SubmitButton>
           </div>
         </div>
-      )}
+      ) : null}
+
+      {activeTab === 'email' ? renderProviderTab('email') : null}
+      {activeTab === 'sms' ? renderProviderTab('sms') : null}
+      {activeTab === 'whatsapp' ? renderProviderTab('whatsapp') : null}
+
+      <Modal
+        open={showProviderModal}
+        onClose={() => setShowProviderModal(false)}
+        title={editingProvider ? editingProvider.name : `Add ${channelLabels[providerType]} provider`}
+        size="md"
+        footer={
+          <>
+            <button type="button" onClick={() => setShowProviderModal(false)} className="btn-outline">
+              Cancel
+            </button>
+            <button type="button" onClick={saveProvider} className="btn-primary">
+              {editingProvider ? 'Save' : 'Add provider'}
+            </button>
+          </>
+        }
+      >
+        {renderProviderForm()}
+      </Modal>
+
+      <Modal
+        open={Boolean(testTarget)}
+        onClose={() => setTestTarget(null)}
+        title="Send a test"
+        description={testTarget ? testTarget.provider.name : undefined}
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn-outline" onClick={() => setTestTarget(null)}>
+              Cancel
+            </button>
+            <SubmitButton
+              loading={Boolean(testTarget && testing === testTarget.provider.id)}
+              disabled={!testRecipient.trim()}
+              onClick={async () => {
+                if (!testTarget) return;
+                await testProvider(testTarget.type, testTarget.provider.id);
+              }}
+            >
+              Send test
+            </SubmitButton>
+          </>
+        }
+      >
+        <label className="label" htmlFor="test-recipient">
+          {testTarget?.type === 'email' ? 'Email address' : 'Phone number'}
+        </label>
+        <input
+          id="test-recipient"
+          data-autofocus
+          type={testTarget?.type === 'email' ? 'email' : 'tel'}
+          className="input"
+          placeholder={testTarget?.type === 'email' ? 'you@example.com' : '+233201234567'}
+          value={testRecipient}
+          onChange={(e) => setTestRecipient(e.target.value)}
+        />
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deletingProvider)}
+        onClose={() => setDeletingProvider(null)}
+        onConfirm={() => {
+          if (deletingProvider) void deleteProvider(deletingProvider.type, deletingProvider.provider.id);
+          setDeletingProvider(null);
+        }}
+        title={`Delete ${deletingProvider?.provider.name || 'provider'}?`}
+        body="Messages that relied on this provider stop sending until another one is set as default."
+        confirmLabel="Delete provider"
+      />
     </div>
   );
 }

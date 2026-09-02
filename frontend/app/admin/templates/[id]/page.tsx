@@ -1,6 +1,10 @@
 'use client';
 
+import { getErrorMessage } from '@/lib/utils';
+
 import { useEffect, useState } from 'react';
+import { PageHeader, PageSkeleton } from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem } from '@/components/ui/Overlay';
 import { useRouter, useParams } from 'next/navigation';
 import { templatesApi } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -51,6 +55,7 @@ export default function EditTemplatePage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [template, setTemplate] = useState<Template | null>(null);
   const [templateFiles, setTemplateFiles] = useState<TemplateFile[]>([]);
 
@@ -120,31 +125,29 @@ export default function EditTemplatePage() {
 
     try {
       await templatesApi.update(templateId, formData);
-      toast.success('Template updated successfully!');
+      toast.success('Template saved');
       router.push('/admin/templates');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update template');
+      toast.error(getErrorMessage(error, 'Failed to update template'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this template? This cannot be undone.')) return;
-
     try {
       await templatesApi.delete(templateId);
       toast.success('Template deleted');
       router.push('/admin/templates');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete template');
+      toast.error(getErrorMessage(error, 'Failed to delete template'));
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+      <div className="mx-auto max-w-3xl">
+        <PageSkeleton stats={0} rows={3} />
       </div>
     );
   }
@@ -157,55 +160,51 @@ export default function EditTemplatePage() {
   const assetFiles = templateFiles.filter(f => f.name.startsWith('assets/'));
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-navy-900">Edit Template</h1>
-          <p className="text-surface-500 mt-1">Update template details and content</p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-          >
+    <div className="page mx-auto max-w-3xl">
+      <PageHeader
+        title={formData.name || 'Template'}
+        backHref="/admin/templates"
+        backLabel="Templates"
+        actions={
+          <button onClick={() => setConfirmDelete(true)} className="btn-danger-outline">
             Delete
           </button>
-          <button
-            onClick={() => router.back()}
-            className="btn-outline"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
+        }
+        mobileActions={
+          <Menu label="Template actions" sheetTitle={formData.name || 'Template'}>
+            <MenuItem danger onClick={() => setConfirmDelete(true)}>
+              Delete template
+            </MenuItem>
+          </Menu>
+        }
+      />
 
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
+      <div className="panel p-4 sm:p-5">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
-                Template Name *
+              <label className="label">
+                Name
               </label>
               <input
                 type="text"
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                className="input"
                 placeholder="Elegant Wedding Invitation"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
-                Template Type *
+              <label className="label">
+                Type
               </label>
               <select
                 required
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+                className="input"
               >
                 {Object.entries(typeLabels).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
@@ -215,21 +214,21 @@ export default function EditTemplatePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">
+            <label className="label">
               Description
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
-              className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500"
+              className="input"
               placeholder="A brief description of this template..."
             />
           </div>
 
           {/* HTML Content */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">
+            <label className="label">
               HTML Content *
             </label>
             <textarea
@@ -244,7 +243,7 @@ export default function EditTemplatePage() {
 
           {/* CSS Content */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">
+            <label className="label">
               CSS Content
             </label>
             <textarea
@@ -258,7 +257,7 @@ export default function EditTemplatePage() {
 
           {/* JS Content */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">
+            <label className="label">
               JavaScript Content
             </label>
             <textarea
@@ -273,7 +272,7 @@ export default function EditTemplatePage() {
           {/* Assets */}
           {template?.assetsPath && assetFiles.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1">
+              <label className="label">
                 Template Assets
               </label>
               <div className="border border-surface-200 rounded-lg p-4 bg-surface-50">
@@ -298,7 +297,7 @@ export default function EditTemplatePage() {
                 <p className="text-xs text-surface-500 mt-3">
                   Assets path: {template.assetsPath}
                 </p>
-                <p className="text-xs text-surface-400 mt-1">
+                <p className="text-xs text-surface-600 mt-1">
                   Note: Assets cannot be edited here. To update assets, upload a new template ZIP.
                 </p>
               </div>
@@ -322,20 +321,32 @@ export default function EditTemplatePage() {
             <button
               type="button"
               onClick={() => router.back()}
-              className="flex-1 px-4 py-2 border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors"
+              className="btn-outline flex-1"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !formData.name.trim() || !formData.htmlContent.trim()}
-              className="flex-1 px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-primary flex-1"
             >
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? 'Saving…' : 'Save'}
             </button>
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
+        title={`Delete "${formData.name || 'template'}"?`}
+        body="Events already using this design fall back to the default."
+        confirmLabel="Delete template"
+      />
     </div>
   );
 }

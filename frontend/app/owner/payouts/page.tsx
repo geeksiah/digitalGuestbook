@@ -1,10 +1,25 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { ownerDashboardApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { formatDate, cn, formatAggregateCurrency, formatCurrencyAmount } from '@/lib/utils';
-import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/ui';
+import { formatCount, formatDate, formatAggregateCurrency, formatCurrencyAmount, humanizeEnum, getErrorMessage } from '@/lib/utils';
+import {
+  DetailRow,
+  EmptyState,
+  PageHeader,
+  PageSkeleton,
+  Panel,
+  SegmentedControl,
+  StatRow,
+  StatusBadge,
+  SubmitButton,
+  Td,
+  Th,
+  Toolbar,
+} from '@/components/ui/Primitives';
+import { Modal } from '@/components/ui/Overlay';
 
 interface Payout {
   id: string;
@@ -57,18 +72,11 @@ interface OverallTotals {
   totalPayoutCount: number;
 }
 
-const statusColors = {
-  PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  PROCESSING: 'bg-blue-100 text-blue-800 border-blue-200',
-  FULFILLED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  DELAYED: 'bg-orange-100 text-orange-800 border-orange-200',
-  REJECTED: 'bg-rose-100 text-rose-800 border-rose-200',
-};
 
 const statusLabels = {
   PENDING: 'Pending',
   PROCESSING: 'Processing',
-  FULFILLED: 'Fulfilled',
+  FULFILLED: 'Paid',
   DELAYED: 'Delayed',
   REJECTED: 'Rejected',
 };
@@ -128,7 +136,7 @@ export default function OwnerPayoutsPage() {
       setEventTotals(response.data.eventTotals || []);
       setOverallTotals(response.data.overallTotals || null);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load payouts');
+      toast.error(getErrorMessage(error, 'Failed to load payouts'));
     } finally {
       setLoading(false);
     }
@@ -143,7 +151,7 @@ export default function OwnerPayoutsPage() {
         requestedAmount: parseFloat(formData.requestedAmount),
         notes: formData.notes || undefined,
       });
-      toast.success('Payout request submitted successfully');
+      toast.success('Payout requested');
       setShowRequestForm(false);
       setFormData({
         eventId: '',
@@ -152,7 +160,7 @@ export default function OwnerPayoutsPage() {
       });
       fetchPayouts();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to request payout');
+      toast.error(getErrorMessage(error, 'Failed to request payout'));
     } finally {
       setRequesting(false);
     }
@@ -177,330 +185,322 @@ export default function OwnerPayoutsPage() {
   );
 
   if (loading) {
-    return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
-      </div>
-    );
+    return <PageSkeleton stats={4} rows={4} />;
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <DashboardPageHeader
+    <div className="page">
+      <PageHeader
         title="Payouts"
-        subtitle="View and track your payout requests"
-        action={(
-          <button
-            onClick={() => setShowRequestForm(!showRequestForm)}
-            className="btn-primary text-sm"
-          >
-            {showRequestForm ? 'Cancel' : '+ Request Payout'}
+        actions={
+          <button onClick={() => setShowRequestForm(true)} className="btn-primary">
+            Request payout
           </button>
-        )}
+        }
+        mobileActions={
+          <button onClick={() => setShowRequestForm(true)} className="btn-primary btn-sm">
+            Request
+          </button>
+        }
       />
 
-      {/* Request Payout Form */}
-      {showRequestForm && (
-        <DashboardSection title="Request Payout">
-          <form onSubmit={handleRequestPayout} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label">Event *</label>
-                <select
-                  value={formData.eventId}
-                  onChange={(e) => setFormData({ ...formData, eventId: e.target.value })}
-                  className="input"
-                  required
-                >
-                  <option value="">Select an event</option>
-                  {events.map((event) => {
-                    const eventTotal = eventTotals.find((e) => e.eventId === event.id);
-                    return (
-                      <option key={event.id} value={event.id}>
-                        {event.name} {eventTotal && `(${eventTotal.availableBalance.toFixed(2)} ${eventTotal.currency || 'USD'})`}
-                      </option>
-                    );
-                  })}
-                </select>
-                {selectedEventTotal && (
-                  <p className="text-xs text-surface-500 mt-1">
-                    Available: {formatCurrencyAmount(selectedEventTotal.availableBalance, selectedEventTotal.currency || 'USD')}
-                  </p>
-                )}
-              </div>
+      {overallTotals ? (
+        <StatRow
+          items={[
+            {
+              label: 'Available',
+              value: formatAggregateCurrency(overallTotals.availableBalance, payoutCurrencies),
+              tone: 'positive',
+            },
+            { label: 'Pending', value: formatAggregateCurrency(overallTotals.pendingAmount, payoutCurrencies) },
+            { label: 'Paid out', value: formatAggregateCurrency(overallTotals.fulfilledAmount, payoutCurrencies) },
+            { label: 'Requests', value: formatCount(overallTotals.totalPayoutCount) },
+          ]}
+        />
+      ) : null}
 
-              <div>
-                <label className="label">Amount *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={maxAmount}
-                  value={formData.requestedAmount}
-                  onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
-                  className="input"
-                  placeholder="0.00"
-                  required
-                />
-                {selectedEventTotal && (
-                  <p className="text-xs text-surface-500 mt-1">
-                    Max: {formatCurrencyAmount(maxAmount, selectedEventTotal.currency || walletSummary?.currency || 'USD')}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="label">Payout Destination</label>
-                <div className="input bg-surface-50 text-surface-600">
-                  {walletSummary
-                    ? `${walletSummary.preferredMethod.toUpperCase()} (${walletSummary.currency})`
-                    : 'Configured in Wallet settings'}
-                </div>
-                <p className="text-xs text-surface-500 mt-1">Locked to your wallet settings.</p>
-                {walletSummary?.walletMode && walletSummary.walletMode !== 'AUTOMATED' ? (
-                  <p className="text-xs text-amber-700 mt-1">
-                    Manual settlement mode is active for this account.
-                  </p>
-                ) : null}
-              </div>
-
-              <div>
-                <label className="label">Notes (Optional)</label>
-                <input
-                  type="text"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="input"
-                  placeholder="Additional notes..."
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowRequestForm(false)}
-                className="btn-outline w-full sm:w-auto"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={requesting || !formData.eventId || !formData.requestedAmount}
-                className="btn-primary w-full sm:w-auto"
-              >
-                {requesting ? 'Submitting...' : 'Submit Request'}
-              </button>
-            </div>
-          </form>
-        </DashboardSection>
-      )}
-
-      {/* Overall Totals */}
-      {overallTotals && (
-        <div className="bg-gradient-to-br from-brand-900 to-brand-800 rounded-xl p-4 sm:p-5 text-white">
-          <p className="text-xs uppercase tracking-widest font-semibold text-white/60 mb-3">Overall Summary</p>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            <div>
-              <p className="text-xs text-white/70">Available</p>
-              <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
-                {formatAggregateCurrency(overallTotals.availableBalance, payoutCurrencies)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-white/70">Fulfilled</p>
-              <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
-                {formatAggregateCurrency(overallTotals.fulfilledAmount, payoutCurrencies)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-white/70">Pending</p>
-              <p className="text-xl sm:text-2xl font-bold mt-0.5 break-all">
-                {formatAggregateCurrency(overallTotals.pendingAmount, payoutCurrencies)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-white/70">Total Payouts</p>
-              <p className="text-xl sm:text-2xl font-bold mt-0.5">{overallTotals.totalPayoutCount}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Event Totals - mobile cards + desktop table */}
-      {eventTotals.length > 0 && (
-        <DashboardSection title="Event Breakdown" contentClassName="p-0">
-          {/* Mobile card view */}
-          <div className="divide-y divide-surface-100 md:hidden">
+      {eventTotals.length > 0 ? (
+        <Panel title="By event" flush>
+          <div className="divide-y divide-surface-200 md:hidden">
             {eventTotals.map((evt) => (
-              <div key={evt.eventId} className="px-4 py-4 space-y-2">
-                <p className="text-base font-semibold text-brand-900">{evt.eventName}</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-surface-500">Net</p>
-                    <p className="font-semibold text-brand-900">{formatCurrencyAmount(evt.totalNet, evt.currency || 'USD')}</p>
-                  </div>
-                  <div>
-                    <p className="text-surface-500">Available</p>
-                    <p className="font-semibold text-brand-900">{formatCurrencyAmount(evt.availableBalance, evt.currency || 'USD')}</p>
-                  </div>
-                  <div>
-                    <p className="text-surface-500">Fulfilled</p>
-                    <p className="font-semibold text-emerald-600">{formatCurrencyAmount(evt.fulfilledAmount, evt.currency || 'USD')}</p>
-                  </div>
-                  <div>
-                    <p className="text-surface-500">Pending</p>
-                    <p className="font-semibold text-yellow-600">{formatCurrencyAmount(evt.pendingAmount, evt.currency || 'USD')}</p>
-                  </div>
-                </div>
+              <div key={evt.eventId} className="px-4 py-3">
+                <p className="truncate text-[15px] font-semibold text-brand-900">{evt.eventName}</p>
+                <dl className="mt-1 grid grid-cols-2 gap-x-4">
+                  <DetailRow label="Available">
+                    {formatCurrencyAmount(evt.availableBalance, evt.currency || 'USD')}
+                  </DetailRow>
+                  <DetailRow label="Pending">
+                    {formatCurrencyAmount(evt.pendingAmount, evt.currency || 'USD')}
+                  </DetailRow>
+                  <DetailRow label="Paid out">
+                    {formatCurrencyAmount(evt.fulfilledAmount, evt.currency || 'USD')}
+                  </DetailRow>
+                  <DetailRow label="Net">{formatCurrencyAmount(evt.totalNet, evt.currency || 'USD')}</DetailRow>
+                </dl>
               </div>
             ))}
           </div>
-          {/* Desktop table view */}
-          <div className="overflow-x-auto hidden md:block">
-            <table className="w-full">
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="data-table" style={{ minWidth: 680 }}>
               <thead>
-                <tr className="bg-surface-50 border-b border-surface-200">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Event</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Net</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Fulfilled</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Pending</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Available</th>
+                <tr>
+                  <Th>Event</Th>
+                  <Th align="right">Net</Th>
+                  <Th align="right">Paid out</Th>
+                  <Th align="right">Pending</Th>
+                  <Th align="right">Available</Th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-100">
+              <tbody>
                 {eventTotals.map((evt) => (
-                  <tr key={evt.eventId}>
-                    <td className="py-3 px-4 font-medium text-brand-900 text-sm">{evt.eventName}</td>
-                    <td className="py-3 px-4 text-right text-sm font-semibold">
+                  <tr key={evt.eventId} className="table-row">
+                    <Td className="font-medium text-brand-900">{evt.eventName}</Td>
+                    <Td align="right" className="num">
                       {formatCurrencyAmount(evt.totalNet, evt.currency || 'USD')}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-emerald-600">
+                    </Td>
+                    <Td align="right" className="num text-emerald-700">
                       {formatCurrencyAmount(evt.fulfilledAmount, evt.currency || 'USD')}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-yellow-600">
+                    </Td>
+                    <Td align="right" className="num">
                       {formatCurrencyAmount(evt.pendingAmount, evt.currency || 'USD')}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm font-semibold text-brand-900">
+                    </Td>
+                    <Td align="right" className="num font-semibold text-brand-900">
                       {formatCurrencyAmount(evt.availableBalance, evt.currency || 'USD')}
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </DashboardSection>
-      )}
+        </Panel>
+      ) : null}
 
-      {/* Filters */}
-      <div className="flex gap-1 overflow-x-auto scrollbar-hide bg-surface-100 p-1.5 rounded-xl">
-        {(['all', 'PENDING', 'PROCESSING', 'FULFILLED', 'DELAYED', 'REJECTED'] as const).map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={cn(
-              'px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px] whitespace-nowrap flex-shrink-0',
-              filter === status
-                ? 'bg-white text-brand-900 shadow-sm'
-                : 'text-surface-600 hover:text-brand-900'
-            )}
-          >
-            {status === 'all' ? 'All' : statusLabels[status]}
-          </button>
-        ))}
-      </div>
+      <Toolbar>
+        <SegmentedControl
+          label="Payout status"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all' as const, label: 'All' },
+            { value: 'PENDING' as const, label: 'Pending' },
+            { value: 'PROCESSING' as const, label: 'Processing' },
+            { value: 'FULFILLED' as const, label: 'Paid' },
+            { value: 'DELAYED' as const, label: 'Delayed' },
+            { value: 'REJECTED' as const, label: 'Rejected' },
+          ]}
+        />
+      </Toolbar>
 
-      {/* Payouts List */}
-      <DashboardSection contentClassName="p-0">
-        {filteredPayouts.length === 0 ? (
-          <div className="text-center py-10 px-4">
-            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface-100 mb-3">
-              <svg className="w-5 h-5 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <p className="text-base font-medium text-surface-600">No payouts found</p>
-            <p className="text-sm text-surface-400 mt-1">
-              {filter === 'all'
-                ? 'Request your first payout to get started'
-                : `No ${statusLabels[filter].toLowerCase()} payouts`}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Mobile card view */}
-            <div className="divide-y divide-surface-100 md:hidden">
-              {filteredPayouts.map((payout) => (
-                <div key={payout.id} className="px-4 py-4 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-brand-900 truncate">{payout.event.name}</p>
-                      <p className="text-sm text-surface-500">{formatDate(payout.createdAt)}</p>
-                    </div>
-                    <span
-                      className={cn(
-                        'inline-flex px-2 py-0.5 text-xs font-medium rounded border leading-none flex-shrink-0',
-                        statusColors[payout.status]
-                      )}
-                    >
-                      {statusLabels[payout.status]}
-                    </span>
+      {filteredPayouts.length === 0 ? (
+        <EmptyState
+          title={filter === 'all' ? 'No payouts yet' : `No ${statusLabels[filter].toLowerCase()} payouts`}
+          action={
+            filter === 'all' ? (
+              <button className="btn-primary btn-sm" onClick={() => setShowRequestForm(true)}>
+                Request payout
+              </button>
+            ) : (
+              <button className="btn-outline btn-sm" onClick={() => setFilter('all')}>
+                Show all
+              </button>
+            )
+          }
+        />
+      ) : (
+        <>
+          <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+            {filteredPayouts.map((payout) => (
+              <div key={payout.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold text-brand-900">{payout.event.name}</p>
+                    <p className="mt-0.5 meta">
+                      {formatDate(payout.createdAt, 'MMM d, yyyy')} &middot; {humanizeEnum(payout.payoutMethod)}
+                    </p>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-base font-bold text-brand-900">
+                  <div className="shrink-0 text-right">
+                    <p className="num text-[15px] font-semibold text-brand-900">
                       {formatCurrencyAmount(payout.requestedAmount, payout.currency)}
                     </p>
-                    <span className="text-sm text-surface-500 capitalize">{payout.payoutMethod.replace('_', ' ')}</span>
+                    <StatusBadge tone={payoutTone(payout.status)} className="mt-1">
+                      {statusLabels[payout.status]}
+                    </StatusBadge>
                   </div>
-                  {(payout.transactionRef || payout.notes) && (
-                    <div className="text-sm text-surface-500">
-                      {payout.transactionRef && <p className="font-mono truncate">Ref: {payout.transactionRef}</p>}
-                      {payout.notes && <p className="mt-0.5">{payout.notes}</p>}
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-            {/* Desktop table view */}
-            <div className="overflow-x-auto hidden md:block">
-              <table className="w-full">
+                {payout.transactionRef || payout.notes ? (
+                  <div className="mt-1 meta">
+                    {payout.transactionRef ? (
+                      <p className="truncate font-mono">Ref {payout.transactionRef}</p>
+                    ) : null}
+                    {payout.notes ? <p>{payout.notes}</p> : null}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+            <div className="overflow-x-auto">
+              <table className="data-table" style={{ minWidth: 800 }}>
                 <thead>
-                  <tr className="border-b border-surface-200 bg-surface-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Event</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Amount</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Method</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Status</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Date</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Details</th>
+                  <tr>
+                    <Th>Event</Th>
+                    <Th align="right">Amount</Th>
+                    <Th>Method</Th>
+                    <Th>Status</Th>
+                    <Th>Requested</Th>
+                    <Th>Details</Th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-100">
+                <tbody>
                   {filteredPayouts.map((payout) => (
-                    <tr key={payout.id} className="hover:bg-surface-50 transition-colors">
-                      <td className="py-3 px-4 text-sm font-medium text-brand-900">{payout.event.name}</td>
-                      <td className="py-3 px-4 text-sm font-semibold text-brand-900">
+                    <tr key={payout.id} className="table-row">
+                      <Td className="font-medium text-brand-900">{payout.event.name}</Td>
+                      <Td align="right" className="num font-semibold text-brand-900">
                         {formatCurrencyAmount(payout.requestedAmount, payout.currency)}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-surface-600 capitalize">{payout.payoutMethod.replace('_', ' ')}</td>
-                      <td className="py-3 px-4">
-                        <span className={cn('inline-flex px-2 py-0.5 text-xs font-medium rounded border', statusColors[payout.status])}>
+                      </Td>
+                      <Td>{humanizeEnum(payout.payoutMethod)}</Td>
+                      <Td>
+                        <StatusBadge tone={payoutTone(payout.status)} dot>
                           {statusLabels[payout.status]}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-surface-600">{formatDate(payout.createdAt)}</td>
-                      <td className="py-3 px-4 text-sm text-surface-500">
-                        {payout.transactionRef && <p className="text-xs font-mono">Ref: {payout.transactionRef}</p>}
-                        {payout.notes && <p className="text-xs mt-0.5">{payout.notes}</p>}
-                      </td>
+                        </StatusBadge>
+                      </Td>
+                      <Td>{formatDate(payout.createdAt, 'MMM d, yyyy')}</Td>
+                      <Td>
+                        {payout.transactionRef ? (
+                          <p className="font-mono text-[12px]">{payout.transactionRef}</p>
+                        ) : null}
+                        {payout.notes ? <p className="meta">{payout.notes}</p> : null}
+                        {!payout.transactionRef && !payout.notes ? <span className="text-surface-500">&mdash;</span> : null}
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
+        </>
+      )}
+
+      <Modal
+        open={showRequestForm}
+        onClose={() => setShowRequestForm(false)}
+        title="Request a payout"
+        size="md"
+        footer={
+          <>
+            <button type="button" onClick={() => setShowRequestForm(false)} className="btn-outline" disabled={requesting}>
+              Cancel
+            </button>
+            <SubmitButton
+              loading={requesting}
+              disabled={!formData.eventId || !formData.requestedAmount}
+              onClick={() => handleRequestPayout({ preventDefault: () => {} } as React.FormEvent)}
+            >
+              Submit request
+            </SubmitButton>
           </>
-        )}
-      </DashboardSection>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label" htmlFor="payout-event">
+              Event
+            </label>
+            <select
+              id="payout-event"
+              data-autofocus
+              value={formData.eventId}
+              onChange={(e) => setFormData({ ...formData, eventId: e.target.value })}
+              className="input"
+              required
+            >
+              <option value="">Select an event</option>
+              {events.map((event) => {
+                const eventTotal = eventTotals.find((e) => e.eventId === event.id);
+                return (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                    {eventTotal
+                      ? ` — ${formatCurrencyAmount(eventTotal.availableBalance, eventTotal.currency || 'USD')} available`
+                      : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="payout-amount">
+              Amount
+            </label>
+            <input
+              id="payout-amount"
+              type="number"
+              step="0.01"
+              min="0"
+              max={maxAmount}
+              value={formData.requestedAmount}
+              onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
+              className="input"
+              placeholder="0.00"
+              required
+            />
+            {selectedEventTotal ? (
+              <p className="field-hint num">
+                Up to {formatCurrencyAmount(maxAmount, selectedEventTotal.currency || walletSummary?.currency || 'USD')}
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <p className="label">Paid to</p>
+            <div className="surface-muted px-3 py-2.5 text-sm text-surface-800">
+              {walletSummary
+                ? `${humanizeEnum(walletSummary.preferredMethod)} · ${walletSummary.currency}`
+                : 'Set this up in your account'}
+            </div>
+            {walletSummary?.walletMode && walletSummary.walletMode !== 'AUTOMATED' ? (
+              <p className="field-hint text-amber-800">This account settles manually.</p>
+            ) : (
+              <p className="field-hint">
+                Change this in <Link href="/owner/account" className="font-medium underline">your account</Link>.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="label" htmlFor="payout-notes">
+              Notes <span className="font-normal text-surface-600">(optional)</span>
+            </label>
+            <input
+              id="payout-notes"
+              type="text"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="input"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
+/** Payout states mapped onto the shared status tones. */
+function payoutTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'FULFILLED':
+      return 'success';
+    case 'PROCESSING':
+      return 'info';
+    case 'PENDING':
+    case 'DELAYED':
+      return 'warning';
+    case 'REJECTED':
+      return 'danger';
+    default:
+      return 'neutral';
+  }
+}

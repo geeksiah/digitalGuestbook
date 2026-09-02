@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { formatCount, getErrorMessage } from '@/lib/utils';
+import { PageSkeleton, StatRow } from '@/components/ui/Primitives';
+import { ConfirmDialog } from '@/components/ui/Overlay';
 import VotingWorkspaceHeader from '@/components/voting/VotingWorkspaceHeader';
 import VotingWorkspaceTabs from '@/components/voting/VotingWorkspaceTabs';
 import {
@@ -217,6 +220,8 @@ export default function AdminVotingPage() {
   const [options, setOptions] = useState<VotingOption[]>([]);
   const [nominations, setNominations] = useState<VotingNomination[]>([]);
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
+  const [deletingContest, setDeletingContest] = useState<VotingContest | null>(null);
+  const [deletingNominee, setDeletingNominee] = useState<VotingOption | null>(null);
   const [selectedContestId, setSelectedContestId] = useState('');
   const [activeTab, setActiveTab] = useState<VotingTab>('setup');
   const [publishedContestFilter, setPublishedContestFilter] = useState('');
@@ -367,7 +372,7 @@ export default function AdminVotingPage() {
 
       await Promise.all([loadVotingConfig(), loadContests(), loadAnalytics(), loadNominations()]);
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to load voting dashboard');
+      toast.error(getErrorMessage(error, 'Failed to load voting dashboard'));
     } finally {
       setLoading(false);
     }
@@ -443,7 +448,7 @@ export default function AdminVotingPage() {
       setConfig(normalizeVotingConfig(response.data?.config || config));
       toast.success('Voting config updated');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to update voting config');
+      toast.error(getErrorMessage(error, 'Failed to update voting config'));
     } finally {
       setSavingConfig(false);
     }
@@ -485,7 +490,7 @@ export default function AdminVotingPage() {
       await loadAnalytics();
       toast.success('Contest created');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to create contest');
+      toast.error(getErrorMessage(error, 'Failed to create contest'));
     } finally {
       setSavingContest(false);
     }
@@ -499,7 +504,7 @@ export default function AdminVotingPage() {
       await loadContests();
       toast.success(`Contest ${contest.isActive ? 'disabled' : 'enabled'}`);
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to update contest');
+      toast.error(getErrorMessage(error, 'Failed to update contest'));
     }
   };
 
@@ -530,14 +535,13 @@ export default function AdminVotingPage() {
       cancelEditingContest();
       toast.success('Contest updated');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to update contest');
+      toast.error(getErrorMessage(error, 'Failed to update contest'));
     } finally {
       setSavingEditingContest(false);
     }
   };
 
   const deleteContest = async (contest: VotingContest) => {
-    if (!window.confirm(`Delete contest "${contest.title}" and all nominees/votes?`)) return;
     try {
       await ownerDashboardApi.deleteVotingContest(eventId, contest.id);
       if (selectedContestId === contest.id) {
@@ -547,7 +551,7 @@ export default function AdminVotingPage() {
       await loadAnalytics();
       toast.success('Contest deleted');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to delete contest');
+      toast.error(getErrorMessage(error, 'Failed to delete contest'));
     }
   };
 
@@ -595,7 +599,7 @@ export default function AdminVotingPage() {
           : `Nominee added to ${succeeded} of ${targetContestIds.length} categories`
       );
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to add nominee');
+      toast.error(getErrorMessage(error, 'Failed to add nominee'));
     } finally {
       setSavingOption(false);
     }
@@ -612,7 +616,7 @@ export default function AdminVotingPage() {
       setNewOptionImagePreview(imageUrl);
       toast.success('Nominee photo uploaded');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || error?.message || 'Failed to upload nominee photo');
+      toast.error(getErrorMessage(error, 'Failed to upload nominee photo'));
     } finally {
       setUploadingOptionImage(false);
     }
@@ -708,7 +712,7 @@ export default function AdminVotingPage() {
       cancelNomineeEdit();
       toast.success('Nominee updated');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to update nominee');
+      toast.error(getErrorMessage(error, 'Failed to update nominee'));
     } finally {
       setSavingEditingOption(false);
     }
@@ -725,7 +729,7 @@ export default function AdminVotingPage() {
       setEditingOptionImagePreview(imageUrl);
       toast.success('Nominee photo uploaded');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || error?.message || 'Failed to upload nominee photo');
+      toast.error(getErrorMessage(error, 'Failed to upload nominee photo'));
     } finally {
       setUploadingEditingOptionImage(false);
     }
@@ -739,18 +743,17 @@ export default function AdminVotingPage() {
       await Promise.all([loadOptions(selectedContestId), loadContests()]);
       toast.success(`Nominee ${option.isActive ? 'disabled' : 'enabled'}`);
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to update nominee');
+      toast.error(getErrorMessage(error, 'Failed to update nominee'));
     }
   };
 
   const deleteNominee = async (option: VotingOption) => {
-    if (!window.confirm(`Delete nominee "${option.name}"?`)) return;
     try {
       await ownerDashboardApi.deleteVotingOption(eventId, option.id);
       await Promise.all([loadOptions(selectedContestId), loadContests(), loadAnalytics()]);
       toast.success('Nominee deleted');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to delete nominee');
+      toast.error(getErrorMessage(error, 'Failed to delete nominee'));
     }
   };
 
@@ -763,7 +766,7 @@ export default function AdminVotingPage() {
       await loadNominations();
       toast.success('Nomination settings updated');
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to update nomination settings');
+      toast.error(getErrorMessage(error, 'Failed to update nomination settings'));
     } finally {
       setSavingNominationRule(false);
     }
@@ -861,7 +864,7 @@ export default function AdminVotingPage() {
       await Promise.all([loadNominations(), loadOptions(selectedContestId), loadContests(), loadAnalytics()]);
       toast.success(`Nomination ${status.toLowerCase()}`);
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to review nomination');
+      toast.error(getErrorMessage(error, 'Failed to review nomination'));
     } finally {
       setReviewingNominationId('');
     }
@@ -888,51 +891,39 @@ export default function AdminVotingPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <PageSkeleton stats={4} rows={4} />;
   }
 
   return (
-    <div className="space-y-5">
+    <div className="page">
       <VotingWorkspaceHeader
         backHref={`/owner/events/${eventId}`}
         eventName={event?.name || 'Event'}
         eventSlug={event?.slug}
         actions={[
-          { href: `/e/${event?.slug}/vote`, label: 'Open Public Voting Page', external: true },
-          { href: `/e/${event?.slug}/nominate`, label: 'Open Public Nomination Page', external: true },
-          { href: `/e/${event?.slug}/nominees`, label: 'Open Public Nominees Page', external: true },
-          { href: `/e/${event?.slug}/leaderboard`, label: 'Open Public Leaderboard Page', external: true },
+          { href: `/e/${event?.slug}/vote`, label: 'Vote page', external: true },
+          { href: `/e/${event?.slug}/leaderboard`, label: 'Leaderboard', external: true },
+          { href: `/e/${event?.slug}/nominate`, label: 'Nomination page', external: true },
+          { href: `/e/${event?.slug}/nominees`, label: 'Nominees page', external: true },
+          
         ]}
       />
 
       <VotingWorkspaceTabs activeTab={activeTab} onChange={setActiveTab} />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="metric-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Voting mode</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{config?.mode === 'ELECTION' ? 'Election' : 'Awards'}</p>
-          <p className="mt-2 text-sm text-surface-500">{config?.isEnabled ? 'Voting is open to guests.' : 'Voting is currently paused.'}</p>
-        </div>
-        <div className="metric-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Categories</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{contests.length}</p>
-          <p className="mt-2 text-sm text-surface-500">Published and draft categories for this event.</p>
-        </div>
-        <div className="metric-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nominees</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{allOptions.length}</p>
-          <p className="mt-2 text-sm text-surface-500">Total nominees across all categories.</p>
-        </div>
-        <div className="metric-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Pending nominations</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-brand-900">{pendingNominations.length}</p>
-          <p className="mt-2 text-sm text-surface-500">Submissions waiting for review.</p>
-        </div>
-      </section>
+      <StatRow
+        items={[
+          {
+            label: 'Mode',
+            value: config?.mode === 'ELECTION' ? 'Election' : 'Awards',
+            hint: config?.isEnabled ? 'Open to guests' : 'Paused',
+            tone: config?.isEnabled ? 'positive' : 'default',
+          },
+          { label: 'Categories', value: formatCount(contests.length) },
+          { label: 'Nominees', value: formatCount(allOptions.length) },
+          { label: 'Pending nominations', value: formatCount(pendingNominations.length) },
+        ]}
+      />
 
       {activeTab === 'setup' ? (
         <VotingSetupPanel
@@ -968,7 +959,7 @@ export default function AdminVotingPage() {
           onSaveEditingContest={saveEditingContest}
           onCancelEditingContest={cancelEditingContest}
           onToggleContestStatus={toggleContestStatus}
-          onDeleteContest={deleteContest}
+          onDeleteContest={setDeletingContest}
         />
       ) : null}
 
@@ -1065,7 +1056,7 @@ export default function AdminVotingPage() {
           onSaveEditingNominee={saveEditingNominee}
           onCancelEditingNominee={cancelNomineeEdit}
           onToggleNomineeStatus={toggleNomineeStatus}
-          onDeleteNominee={deleteNominee}
+          onDeleteNominee={setDeletingNominee}
         />
       ) : null}
 
@@ -1109,6 +1100,32 @@ export default function AdminVotingPage() {
           if (!file) return;
           void uploadEditingNomineeImage(file);
         }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deletingContest)}
+        onClose={() => setDeletingContest(null)}
+        onConfirm={() => {
+          const target = deletingContest;
+          setDeletingContest(null);
+          if (target) void deleteContest(target);
+        }}
+        title={`Delete "${deletingContest?.title || ''}"?`}
+        body="Its nominees and every vote cast in it are removed too."
+        confirmLabel="Delete category"
+      />
+
+      <ConfirmDialog
+        open={Boolean(deletingNominee)}
+        onClose={() => setDeletingNominee(null)}
+        onConfirm={() => {
+          const target = deletingNominee;
+          setDeletingNominee(null);
+          if (target) void deleteNominee(target);
+        }}
+        title={`Delete "${deletingNominee?.name || ''}"?`}
+        body="Votes already cast for this nominee are removed with it."
+        confirmLabel="Delete nominee"
       />
     </div>
   );

@@ -48,25 +48,22 @@ export default function VotingResultsPanel({
   containerClassName: string;
 }) {
   return (
-    <section className={`${containerClassName} p-5 space-y-5`}>
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Results</p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">Voting analytics</h2>
-      </div>
+    <section className={`${containerClassName} p-4 space-y-4 sm:p-5`}>
+      <h2 className="panel-title">Results</h2>
       {analytics ? (
         <>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-8">
-            <VotingMetricCard label="Total Votes" value={String(analytics.totals.totalVotes)} />
-            <VotingMetricCard label="Unique Voters" value={String(analytics.totals.uniqueVoters)} />
-            <VotingMetricCard label="Free Votes" value={String(analytics.totals.freeVotes)} />
-            <VotingMetricCard label="Paid Votes" value={String(analytics.totals.paidVotes)} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <VotingMetricCard label="Total votes" value={String(analytics.totals.totalVotes)} />
+            <VotingMetricCard label="Unique voters" value={String(analytics.totals.uniqueVoters)} />
+            <VotingMetricCard label="Free votes" value={String(analytics.totals.freeVotes)} />
+            <VotingMetricCard label="Paid votes" value={String(analytics.totals.paidVotes)} />
             <VotingMetricCard label="Revenue" value={formatMoney(eventCurrency, analytics.totals.paidRevenue)} />
-            <VotingMetricCard label="Voter Conversion" value={`${analytics.totals.conversionRate}%`} />
+            <VotingMetricCard label="Conversion" value={`${analytics.totals.conversionRate}%`} />
             <VotingMetricCard
               label="Intent Conversion"
               value={`${analytics.totals.paidIntentConversionRate}%`}
             />
-            <div className="kpi-tile p-3 rounded-2xl">
+            <div className="kpi-tile p-3 rounded-lg">
               <p className="text-xs text-surface-500">Nominations</p>
               <p className="text-lg font-bold text-brand-900">{analytics.totals.nominations?.total || 0}</p>
               <p className="text-[11px] text-surface-600">
@@ -76,7 +73,7 @@ export default function VotingResultsPanel({
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-3xl border border-surface-200 p-4">
+            <div className="rounded-xl border border-surface-200 p-4">
               <p className="mb-2 text-sm font-semibold text-brand-900">Contest Breakdown</p>
               <div className="space-y-2">
                 {analytics.perContest.map((contest) => (
@@ -89,7 +86,7 @@ export default function VotingResultsPanel({
                 ))}
               </div>
             </div>
-            <div className="rounded-3xl border border-surface-200 p-4">
+            <div className="rounded-xl border border-surface-200 p-4">
               <p className="mb-2 text-sm font-semibold text-brand-900">Leaderboard</p>
               <div className="space-y-2">
                 {analytics.leaderboard.map((entry, index) => (
@@ -107,7 +104,7 @@ export default function VotingResultsPanel({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-surface-200 p-4">
+          <div className="rounded-xl border border-surface-200 p-4">
             <p className="mb-2 text-sm font-semibold text-brand-900">Daily Vote Trend</p>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
               {analytics.timeSeries.byDay.slice(-18).map((day) => (

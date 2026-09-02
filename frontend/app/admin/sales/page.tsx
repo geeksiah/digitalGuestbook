@@ -4,7 +4,21 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { adminApi, eventsApi } from '@/lib/api';
-import { cn, formatDate } from '@/lib/utils';
+import { formatCount, formatDate, getStatusTone, humanizeEnum } from '@/lib/utils';
+import { Menu, MenuItem } from '@/components/ui/Overlay';
+import {
+  DetailRow,
+  EmptyState,
+  ListSkeleton,
+  PageHeader,
+  Pagination,
+  Panel,
+  StatRow,
+  StatRowSkeleton,
+  StatusBadge,
+  Td,
+  Th,
+} from '@/components/ui/Primitives';
 
 interface EventRef {
   id: string;
@@ -119,14 +133,6 @@ const aggregateMoney = (amount: number | null | undefined, currency?: string | n
   return `${value.toFixed(2)} (multi-currency)`;
 };
 
-const statusClass = (status: string) => {
-  const key = status.toLowerCase();
-  if (key === 'completed' || key === 'paid') return 'bg-emerald-100 text-emerald-800';
-  if (key === 'pending') return 'bg-yellow-100 text-yellow-800';
-  if (key === 'failed') return 'bg-rose-100 text-rose-800';
-  if (key === 'refunded') return 'bg-surface-100 text-surface-700';
-  return 'bg-surface-100 text-surface-600';
-};
 
 const typeLabel = (type: string) => {
   if (type === 'ticket_sale') return 'Ticket Sale';
@@ -252,277 +258,363 @@ export default function SalesPage() {
     URL.revokeObjectURL(url);
   };
 
+  const activeFilterCount = [filters.eventId, filters.status, filters.type, filters.startDate, filters.endDate].filter(
+    Boolean
+  ).length;
+
+  const transactionPageCount = transactionPagination
+    ? Math.max(1, Math.ceil(transactionPagination.total / (transactionPagination.limit || 50)))
+    : 1;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-navy-900">Sales Analytics</h1>
-          <p className="text-sm text-surface-500 mt-1">
-            Tickets, gift sales, and admin-earning transactions
+    <div className="page">
+      <PageHeader
+        title="Sales"
+        actions={
+          <button onClick={exportTransactions} className="btn-outline" disabled={transactions.length === 0}>
+            Export CSV
+          </button>
+        }
+        mobileActions={
+          <Menu label="Sales actions" sheetTitle="Sales">
+            <MenuItem disabled={transactions.length === 0} onClick={exportTransactions}>
+              Export CSV
+            </MenuItem>
+          </Menu>
+        }
+      />
+
+      {loading && !analytics ? (
+        <StatRowSkeleton />
+      ) : analytics ? (
+        <>
+          <StatRow
+            items={[
+              { label: 'Gross', value: aggregateMoney(analytics.totals.grossRevenue, analyticsDisplayCurrency) },
+              {
+                label: 'Platform revenue',
+                value: aggregateMoney(analytics.totals.adminRevenue, analyticsDisplayCurrency),
+                tone: 'positive',
+                hint: `${formatCount(analytics.totals.adminRevenueTransactionCount)} earning transactions`,
+              },
+              { label: 'Owner net', value: aggregateMoney(analytics.totals.ownerNet, analyticsDisplayCurrency) },
+              { label: 'Processing fees', value: aggregateMoney(analytics.totals.processingFees, analyticsDisplayCurrency) },
+            ]}
+          />
+          <p className="meta num">
+            {formatCount(analytics.totals.ticketTransactionCount)} ticket transactions ·{' '}
+            {formatCount(analytics.totals.giftTransactionCount)} gift transactions
           </p>
-        </div>
-        <button onClick={exportTransactions} className="btn-outline">
-          Export Transactions CSV
-        </button>
-      </div>
+        </>
+      ) : null}
 
-      {analytics && (
-        <div className="grid sm:grid-cols-2 xl:grid-cols-6 gap-4">
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <p className="text-xs text-surface-500 uppercase tracking-wide">Tickets</p>
-            <p className="text-2xl font-bold text-navy-900 mt-1">{analytics.totals.ticketTransactionCount}</p>
-            <p className="text-xs text-surface-500 mt-1">{aggregateMoney(analytics.totals.ticketRevenue, analyticsDisplayCurrency)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <p className="text-xs text-surface-500 uppercase tracking-wide">Gift Sales</p>
-            <p className="text-2xl font-bold text-navy-900 mt-1">{analytics.totals.giftTransactionCount}</p>
-            <p className="text-xs text-surface-500 mt-1">{aggregateMoney(analytics.totals.giftRevenue, analyticsDisplayCurrency)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <p className="text-xs text-surface-500 uppercase tracking-wide">Gross Revenue</p>
-            <p className="text-2xl font-bold text-brand-900 mt-1">{aggregateMoney(analytics.totals.grossRevenue, analyticsDisplayCurrency)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <p className="text-xs text-surface-500 uppercase tracking-wide">Admin Revenue</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{aggregateMoney(analytics.totals.adminRevenue, analyticsDisplayCurrency)}</p>
-            <p className="text-xs text-surface-500 mt-1">{analytics.totals.adminRevenueTransactionCount} earning txns</p>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <p className="text-xs text-surface-500 uppercase tracking-wide">Owner Net</p>
-            <p className="text-2xl font-bold text-navy-900 mt-1">{aggregateMoney(analytics.totals.ownerNet, analyticsDisplayCurrency)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <p className="text-xs text-surface-500 uppercase tracking-wide">Processing Fees</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{aggregateMoney(analytics.totals.processingFees, analyticsDisplayCurrency)}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl border border-surface-200 p-6">
-        <div className="grid sm:grid-cols-2 xl:grid-cols-6 gap-4">
-          <div>
-            <label className="label">Event</label>
-            <select
-              className="input"
-              value={filters.eventId}
-              onChange={(e) => setFilters((f) => ({ ...f, eventId: e.target.value, page: 1 }))}
-            >
-              <option value="">All Events</option>
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>{event.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">Status</label>
-            <select
-              className="input"
-              value={filters.status}
-              onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}
-            >
-              <option value="">All</option>
-              <option value="PAID">Paid / Completed</option>
-              <option value="PENDING">Pending</option>
-              <option value="FAILED">Failed</option>
-              <option value="REFUNDED">Refunded</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Type</label>
-            <select
-              className="input"
-              value={filters.type}
-              onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value, page: 1 }))}
-            >
-              <option value="">All Types</option>
-              <option value="ticket_sale">Ticket Sale</option>
-              <option value="gift_cash">Cash Gift</option>
-              <option value="gift_package_sale">Gift Package Sale</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Start Date</label>
-            <input
-              type="date"
-              className="input"
-              value={filters.startDate}
-              onChange={(e) => setFilters((f) => ({ ...f, startDate: e.target.value, page: 1 }))}
-            />
-          </div>
-          <div>
-            <label className="label">End Date</label>
-            <input
-              type="date"
-              className="input"
-              value={filters.endDate}
-              onChange={(e) => setFilters((f) => ({ ...f, endDate: e.target.value, page: 1 }))}
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              type="button"
-              className="btn-outline w-full"
-              onClick={() =>
-                setFilters({
-                  eventId: '',
-                  status: '',
-                  type: '',
-                  startDate: '',
-                  endDate: '',
-                  page: 1,
-                })
-              }
-            >
-              Clear Filters
-            </button>
+      <details className="panel" open={activeFilterCount > 0}>
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 sm:px-5">
+          <span className="panel-title">Filters</span>
+          {activeFilterCount > 0 ? (
+            <StatusBadge tone="brand">{activeFilterCount} active</StatusBadge>
+          ) : (
+            <span className="meta">All transactions</span>
+          )}
+        </summary>
+        <div className="border-t border-surface-200 p-4 sm:p-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div>
+              <label className="label" htmlFor="filter-event">
+                Event
+              </label>
+              <select
+                id="filter-event"
+                className="input"
+                value={filters.eventId}
+                onChange={(e) => setFilters((f) => ({ ...f, eventId: e.target.value, page: 1 }))}
+              >
+                <option value="">All events</option>
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="filter-status">
+                Status
+              </label>
+              <select
+                id="filter-status"
+                className="input"
+                value={filters.status}
+                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}
+              >
+                <option value="">Any status</option>
+                <option value="PAID">Paid</option>
+                <option value="PENDING">Pending</option>
+                <option value="FAILED">Failed</option>
+                <option value="REFUNDED">Refunded</option>
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="filter-type">
+                Type
+              </label>
+              <select
+                id="filter-type"
+                className="input"
+                value={filters.type}
+                onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value, page: 1 }))}
+              >
+                <option value="">All types</option>
+                <option value="ticket_sale">Ticket sale</option>
+                <option value="gift_cash">Cash gift</option>
+                <option value="gift_package_sale">Gift package</option>
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="filter-start">
+                From
+              </label>
+              <input
+                id="filter-start"
+                type="date"
+                className="input"
+                value={filters.startDate}
+                onChange={(e) => setFilters((f) => ({ ...f, startDate: e.target.value, page: 1 }))}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="filter-end">
+                To
+              </label>
+              <input
+                id="filter-end"
+                type="date"
+                className="input"
+                value={filters.endDate}
+                onChange={(e) => setFilters((f) => ({ ...f, endDate: e.target.value, page: 1 }))}
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="btn-outline w-full"
+                disabled={activeFilterCount === 0}
+                onClick={() =>
+                  setFilters({ eventId: '', status: '', type: '', startDate: '', endDate: '', page: 1 })
+                }
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </details>
 
-      <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-surface-200">
-          <h2 className="text-base font-semibold text-navy-900">Transactions</h2>
-          {transactionPagination ? (
-            <p className="text-xs text-surface-500 mt-1">
-              Showing {transactions.length} of {transactionPagination.total}
-            </p>
-          ) : null}
-        </div>
-
+      <Panel
+        title="Transactions"
+        action={
+          transactionPagination ? (
+            <span className="meta num">{formatCount(transactionPagination.total)} total</span>
+          ) : null
+        }
+        flush
+      >
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
-          </div>
+          <ListSkeleton rows={6} className="rounded-none border-0" />
         ) : transactions.length === 0 ? (
-          <div className="text-center py-12 text-surface-600">No transactions found.</div>
+          <div className="p-4 sm:p-5">
+            <EmptyState
+              title="No transactions"
+              hint={activeFilterCount > 0 ? 'Try widening the filters.' : undefined}
+            />
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-surface-200">
-              <thead className="bg-surface-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Event</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Buyer</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Gross</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Admin Revenue</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Owner Net</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Payment</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-surface-200">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-surface-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-surface-800">
-                      {formatDate(tx.createdAt, 'MMM dd, yyyy HH:mm')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link href={`/admin/events/${tx.event.id}`} className="text-sm font-medium text-brand-900 hover:text-brand-700">
+          <>
+            <div className="divide-y divide-surface-200 lg:hidden">
+              {transactions.map((tx) => (
+                <div key={tx.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/events/${tx.event.id}`}
+                        className="block truncate text-[15px] font-semibold text-brand-900"
+                      >
                         {tx.event.name}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-surface-900">{typeLabel(tx.type)}</div>
-                      {tx.ticketTypeName ? (
-                        <div className="text-xs text-surface-500">
-                          {tx.ticketTypeName}
-                          {tx.ticketQuantity && tx.ticketQuantity > 1 ? ` x${tx.ticketQuantity}` : ''}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-navy-900">{tx.buyerName || '-'}</div>
-                      <div className="text-xs text-surface-500">{tx.buyerEmail || '-'}</div>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-navy-900">
-                      {money(tx.grossAmount, tx.currency)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-semibold text-emerald-700">{money(tx.platformFee, tx.currency)}</div>
-                      {tx.status === 'completed' && tx.platformFee > 0 ? (
-                        <span className="inline-flex mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-100 text-emerald-700">
-                          Earning
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-surface-800">
-                      {money(tx.netAmount, tx.currency)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn('inline-flex px-2 py-1 text-xs font-medium rounded-full', statusClass(tx.status))}>
-                        {tx.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-surface-600">
-                      <div>{tx.paymentMethod || '-'}</div>
-                      <div className="text-xs font-mono text-surface-500">
-                        {tx.paymentRef ? `${tx.paymentRef.slice(0, 10)}...` : '-'}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                      <p className="mt-0.5 meta truncate">
+                        {typeLabel(tx.type)} &middot; {tx.buyerName || 'Unknown buyer'}
+                      </p>
+                      <p className="mt-0.5 meta">{formatDate(tx.createdAt, 'MMM d, yyyy p')}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="num text-[15px] font-semibold text-brand-900">{money(tx.grossAmount, tx.currency)}</p>
+                      <StatusBadge tone={getStatusTone(tx.status)} className="mt-1">
+                        {humanizeEnum(tx.status)}
+                      </StatusBadge>
+                    </div>
+                  </div>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4">
+                    <DetailRow label="Platform">{money(tx.platformFee, tx.currency)}</DetailRow>
+                    <DetailRow label="Owner net">{money(tx.netAmount, tx.currency)}</DetailRow>
+                  </dl>
+                </div>
+              ))}
+            </div>
 
-      <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-surface-200">
-          <h2 className="text-base font-semibold text-navy-900">Ticket Sales (RSVP Records)</h2>
-          <p className="text-xs text-surface-500 mt-1">
-            Backward-compatible ticket sales data from RSVP payments.
-          </p>
-        </div>
-        {legacySales.length === 0 ? (
-          <div className="text-center py-10 text-surface-600">No ticket sales records found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-surface-200">
-              <thead className="bg-surface-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Event</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Customer</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Ticket</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-surface-700 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-surface-200">
-                {legacySales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-surface-50">
-                    <td className="px-4 py-3 text-sm text-surface-800">
-                      {formatDate(sale.submittedAt, 'MMM dd, yyyy HH:mm')}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-surface-800">{sale.event.name}</td>
-                    <td className="px-4 py-3 text-sm text-surface-800">{sale.primaryName}</td>
-                    <td className="px-4 py-3 text-sm text-surface-800">
-                      {sale.ticketType || '-'}
-                      {sale.ticketQuantity ? ` x${sale.ticketQuantity}` : ''}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-navy-900">
-                      {money(sale.amountPaid || 0, sale.currency)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn('inline-flex px-2 py-1 text-xs font-medium rounded-full', statusClass(sale.paymentStatus || ''))}>
-                        {sale.paymentStatus || '-'}
-                      </span>
-                    </td>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="data-table" style={{ minWidth: 1000 }}>
+                <thead>
+                  <tr>
+                    <Th>Date</Th>
+                    <Th>Event</Th>
+                    <Th>Type</Th>
+                    <Th>Buyer</Th>
+                    <Th align="right">Gross</Th>
+                    <Th align="right">Platform</Th>
+                    <Th align="right">Owner net</Th>
+                    <Th>Status</Th>
+                    <Th>Payment</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="table-row">
+                      <Td className="whitespace-nowrap">{formatDate(tx.createdAt, 'MMM d, yyyy p')}</Td>
+                      <Td>
+                        <Link href={`/admin/events/${tx.event.id}`} className="font-medium text-brand-900 hover:underline">
+                          {tx.event.name}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <p>{typeLabel(tx.type)}</p>
+                        {tx.ticketTypeName ? (
+                          <p className="meta">
+                            {tx.ticketTypeName}
+                            {tx.ticketQuantity && tx.ticketQuantity > 1 ? ` ×${tx.ticketQuantity}` : ''}
+                          </p>
+                        ) : null}
+                      </Td>
+                      <Td>
+                        <p className="truncate">{tx.buyerName || <span className="text-surface-500">&mdash;</span>}</p>
+                        {tx.buyerEmail ? <p className="meta truncate">{tx.buyerEmail}</p> : null}
+                      </Td>
+                      <Td align="right" className="num font-medium text-brand-900">
+                        {money(tx.grossAmount, tx.currency)}
+                      </Td>
+                      <Td align="right" className="num font-semibold text-emerald-700">
+                        {money(tx.platformFee, tx.currency)}
+                      </Td>
+                      <Td align="right" className="num">
+                        {money(tx.netAmount, tx.currency)}
+                      </Td>
+                      <Td>
+                        <StatusBadge tone={getStatusTone(tx.status)}>{humanizeEnum(tx.status)}</StatusBadge>
+                      </Td>
+                      <Td>
+                        <p>{tx.paymentMethod ? humanizeEnum(tx.paymentMethod) : '—'}</p>
+                        {tx.paymentRef ? (
+                          <p className="meta truncate font-mono" title={tx.paymentRef}>
+                            {tx.paymentRef}
+                          </p>
+                        ) : null}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
-      </div>
+      </Panel>
 
-      {stats ? (
-        <div className="text-xs text-surface-500">
-          Legacy ticket totals: {stats.totalSales} sales, {money(stats.totalRevenue, legacyTotalsCurrency)} revenue.
-        </div>
+      {transactionPagination && transactionPageCount > 1 ? (
+        <Pagination
+          page={filters.page}
+          pageCount={transactionPageCount}
+          total={transactionPagination.total}
+          pageSize={transactionPagination.limit || 50}
+          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+        />
       ) : null}
+
+      <Panel
+        title="RSVP ticket payments"
+        action={
+          stats ? (
+            <span className="meta num">
+              {formatCount(stats.totalSales)} · {money(stats.totalRevenue, legacyTotalsCurrency)}
+            </span>
+          ) : null
+        }
+        flush
+      >
+        {legacySales.length === 0 ? (
+          <div className="p-4 sm:p-5">
+            <EmptyState title="No RSVP ticket payments" />
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-surface-200 md:hidden">
+              {legacySales.map((sale) => (
+                <div key={sale.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-semibold text-brand-900">{sale.primaryName}</p>
+                      <p className="mt-0.5 meta truncate">
+                        {sale.event.name} &middot; {formatDate(sale.submittedAt, 'MMM d, yyyy')}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="num text-[15px] font-semibold text-brand-900">
+                        {money(sale.amountPaid || 0, sale.currency)}
+                      </p>
+                      <StatusBadge tone={getStatusTone(sale.paymentStatus || '')} className="mt-1">
+                        {humanizeEnum(sale.paymentStatus || '') || 'Unknown'}
+                      </StatusBadge>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="data-table" style={{ minWidth: 760 }}>
+                <thead>
+                  <tr>
+                    <Th>Date</Th>
+                    <Th>Event</Th>
+                    <Th>Customer</Th>
+                    <Th>Ticket</Th>
+                    <Th align="right">Amount</Th>
+                    <Th>Status</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {legacySales.map((sale) => (
+                    <tr key={sale.id} className="table-row">
+                      <Td className="whitespace-nowrap">{formatDate(sale.submittedAt, 'MMM d, yyyy p')}</Td>
+                      <Td>{sale.event.name}</Td>
+                      <Td className="font-medium text-brand-900">{sale.primaryName}</Td>
+                      <Td>
+                        {sale.ticketType || '—'}
+                        {sale.ticketQuantity ? ` ×${sale.ticketQuantity}` : ''}
+                      </Td>
+                      <Td align="right" className="num font-medium text-brand-900">
+                        {money(sale.amountPaid || 0, sale.currency)}
+                      </Td>
+                      <Td>
+                        <StatusBadge tone={getStatusTone(sale.paymentStatus || '')}>
+                          {humanizeEnum(sale.paymentStatus || '') || 'Unknown'}
+                        </StatusBadge>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Panel>
     </div>
   );
 }

@@ -7,6 +7,10 @@ type Props = {
   reset: () => void;
 };
 
+/**
+ * Replaces the whole document, so it cannot rely on the app stylesheet being
+ * present. Everything here is inline.
+ */
 export default function GlobalError({ error, reset }: Props) {
   useEffect(() => {
     console.error('[Global Error Boundary]', error);
@@ -14,31 +18,75 @@ export default function GlobalError({ error, reset }: Props) {
 
   return (
     <html lang="en">
-      <body>
-        <div className="min-h-screen bg-gradient-to-br from-surface-50 via-white to-surface-100 flex items-center justify-center px-4">
-          <div className="w-full max-w-xl rounded-2xl border border-surface-200 bg-white shadow-xl p-8 text-center">
-            <div className="inline-flex items-center rounded-full border border-surface-200 px-3 py-1 text-xs font-semibold text-surface-600">
-              HTTP 500
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold text-brand-900">System Error</h1>
-            <p className="mt-3 text-surface-600">
-              We hit a critical error while rendering this request.
+      <body
+        style={{
+          margin: 0,
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          background: '#f5f6f7',
+          color: '#1a1a2e',
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '420px',
+            background: '#ffffff',
+            border: '1px solid #e8eaec',
+            borderRadius: '12px',
+            padding: '24px',
+            textAlign: 'center',
+          }}
+        >
+          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#063932' }}>Something broke</h1>
+          <p style={{ margin: '6px 0 0', fontSize: '13px', lineHeight: 1.5, color: '#5b6469' }}>
+            EventPeepo could not render this page. Reloading usually fixes it.
+          </p>
+          {error?.digest ? (
+            <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#6e777d', fontFamily: 'ui-monospace, monospace' }}>
+              Reference {error.digest}
             </p>
-            <div className="mt-6 flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={reset}
-                className="inline-flex items-center justify-center rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 transition-colors"
-              >
-                Retry
-              </button>
-              <a
-                href="/"
-                className="inline-flex items-center justify-center rounded-lg border border-surface-300 px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 transition-colors"
-              >
-                Go Home
-              </a>
-            </div>
+          ) : null}
+
+          <div style={{ marginTop: '20px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <a
+              href="/"
+              style={{
+                minHeight: '40px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 14px',
+                borderRadius: '8px',
+                border: '1px solid #8d979d',
+                color: '#1a1a2e',
+                fontSize: '14px',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              Go home
+            </a>
+            <button
+              type="button"
+              onClick={reset}
+              style={{
+                minHeight: '40px',
+                padding: '0 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#063932',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Try again
+            </button>
           </div>
         </div>
       </body>

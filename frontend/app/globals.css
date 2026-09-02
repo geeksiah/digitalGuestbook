@@ -2,36 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   EventPeepo design foundations
+   --------------------------------------------------------------------------
+   Geometry scale (use these, nothing else):
+     radius   rounded-full  status pills, tags, filter chips, avatars
+              rounded-lg    (8px)  buttons, inputs, tabs, menu items
+              rounded-xl    (12px) cards, panels, list rows, table shells
+              rounded-2xl   (16px) dialogs and bottom sheets
+     control  44px on touch, 40px from sm up. 32px for compact/toolbar sizes.
+     spacing  4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48
+   ========================================================================== */
+
 @layer base {
   :root {
-    --background: 250 250 252;
-    --foreground: 28 28 40;
-    --primary: 45 55 72;
-    --primary-foreground: 250 250 252;
+    --background: 247 248 248;
+    --foreground: 26 26 46;
     --muted: 248 249 250;
     --muted-foreground: 107 114 128;
     --border: 229 231 235;
     --accent: 27 212 188;
     --brand: 6 57 50;
+
+    /* Layout rails used by the app shell */
+    --sidebar-w: 244px;
+    --topbar-h: 56px;
+    --bottomnav-h: 60px;
   }
 
   * {
     @apply border-surface-200;
   }
 
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply bg-surface-50 text-navy-900 antialiased;
-    background-image:
-      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.12), transparent 28%),
-      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.07), transparent 34%),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.96), rgba(247, 250, 249, 1));
+    @apply bg-surface-100 text-navy-900 antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Professional scrollbar */
+  /* Numeric data should always be scannable */
+  .tabular,
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3, h4 {
+    @apply text-brand-900;
+    text-wrap: pretty;
+  }
+
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
@@ -39,256 +64,355 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-300 rounded-full;
+    @apply rounded-full bg-surface-300;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-surface-400;
+    background-clip: content-box;
   }
 
-  /* Form elements */
+  /* One focus treatment for the whole product */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-700/45 ring-offset-2 ring-offset-white;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    @apply h-[18px] w-[18px] cursor-pointer border-surface-300 text-brand-900 focus:ring-2 focus:ring-brand-700/40 focus:ring-offset-0;
+  }
+
   input[type="checkbox"] {
-    @apply rounded border-surface-300 text-brand-900 focus:ring-brand-900/20 focus:ring-offset-0;
+    @apply rounded;
   }
 
   select {
     @apply cursor-pointer;
   }
+
+  [disabled] {
+    @apply cursor-not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
-  /* Buttons */
+  /* ---------------------------------------------------------------- buttons */
   .btn {
-    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-semibold tracking-tight transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-sm font-semibold leading-none tracking-tight transition-colors duration-150;
+    @apply min-h-[44px] sm:min-h-[40px];
+    @apply disabled:pointer-events-none disabled:opacity-45;
   }
 
   .btn-primary {
-    @apply btn bg-brand-900 text-white shadow-[0_10px_24px_rgba(6,57,50,0.12)] hover:bg-brand-800 active:bg-brand-950 focus:ring-brand-500;
+    @apply btn bg-brand-900 text-white hover:bg-brand-800 active:bg-brand-950;
   }
 
   .btn-accent {
-    @apply btn bg-primary-500 text-brand-900 hover:bg-primary-400 active:bg-primary-600 focus:ring-primary-400;
+    @apply btn bg-primary-500 text-brand-950 hover:bg-primary-400 active:bg-primary-600;
   }
 
   .btn-secondary {
-    @apply btn bg-surface-100 text-navy-900 hover:bg-surface-200 active:bg-surface-300 focus:ring-surface-400;
+    @apply btn bg-surface-200 text-navy-900 hover:bg-surface-300;
   }
 
   .btn-outline {
-    @apply btn border border-surface-300 bg-white text-navy-900 hover:bg-surface-50 hover:border-brand-200 active:bg-surface-100 focus:ring-surface-400;
+    @apply btn border border-surface-400 bg-white text-navy-900 hover:border-surface-500 hover:bg-surface-100 active:bg-surface-200;
   }
 
   .btn-ghost {
-    @apply btn text-surface-600 hover:text-navy-900 hover:bg-surface-100 active:bg-surface-200 focus:ring-surface-400;
+    @apply btn text-surface-700 hover:bg-surface-200 hover:text-brand-900 active:bg-surface-300;
   }
 
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus:ring-red-500;
+    @apply btn bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
   }
 
-  /* Inputs */
+  .btn-danger-outline {
+    @apply btn border border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50;
+  }
+
+  /* Compact variant for toolbars and row actions */
+  .btn-sm {
+    @apply min-h-[40px] px-3 text-[13px] sm:min-h-[32px];
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  /* Icon-only control. Always pair with aria-label or title. */
+  .icon-btn {
+    @apply inline-flex shrink-0 items-center justify-center rounded-lg text-surface-500 transition-colors hover:bg-surface-200 hover:text-brand-900 active:bg-surface-300 disabled:pointer-events-none disabled:opacity-45;
+    @apply h-11 w-11 sm:h-9 sm:w-9;
+  }
+
+  .icon-btn-sm {
+    @apply h-9 w-9 sm:h-8 sm:w-8;
+  }
+
+  .icon-btn-danger {
+    @apply icon-btn hover:bg-red-50 hover:text-red-600;
+  }
+
+  /* ----------------------------------------------------------------- inputs */
   .input {
-    @apply w-full rounded-xl border border-surface-300 bg-white px-3.5 py-2.5 min-h-[44px] text-base sm:text-sm text-navy-900 placeholder-surface-400 transition-all duration-150 focus:border-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/10;
+    @apply w-full rounded-lg border border-surface-400 bg-white px-3 text-base text-navy-900 placeholder-surface-500 transition-colors duration-150 sm:text-sm;
+    @apply min-h-[44px] py-2.5 sm:min-h-[40px] sm:py-2;
+    @apply hover:border-surface-500 focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-700/20;
+    @apply disabled:bg-surface-100 disabled:text-surface-600;
   }
 
-  .input:hover:not(:focus) {
-    @apply border-surface-400;
+  textarea.input {
+    @apply min-h-[96px] py-2.5 leading-6;
   }
 
   select.input {
-    @apply pr-10 bg-no-repeat;
+    @apply bg-no-repeat pr-10;
     appearance: none;
-    background-position: right 0.9rem center;
-    background-size: 14px 14px;
+    background-position: right 0.75rem center;
+    background-size: 16px 16px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23636e72' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
-  .label {
-    @apply block text-sm font-medium text-surface-700 mb-1.5;
+  .input-error {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500/20;
   }
 
-  /* Cards */
+  .input-sm {
+    @apply min-h-[40px] py-1.5 text-sm sm:min-h-[32px];
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-surface-800;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-[13px] leading-5 text-surface-600;
+  }
+
+  .field-error {
+    @apply mt-1.5 flex items-start gap-1.5 text-[13px] font-medium leading-5 text-red-600;
+  }
+
+  .input-search {
+    @apply input pl-9;
+  }
+
+  /* ------------------------------------------------------------- containers */
   .card {
-    @apply bg-white rounded-2xl border border-surface-200/80 p-5 sm:p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-all duration-150;
+    @apply rounded-xl border border-surface-200 bg-white p-4 sm:p-5;
   }
 
   .card-hover {
-    @apply card hover:border-surface-300 hover:shadow-sm;
+    @apply card transition-colors hover:border-surface-300;
   }
 
-  .card-premium {
-    @apply bg-white rounded-3xl border border-surface-200 shadow-[0_12px_40px_rgba(15,23,42,0.06)];
-  }
-
+  .card-premium,
   .dashboard-canvas {
-    @apply bg-white rounded-[28px] border border-surface-200/90 shadow-[0_12px_40px_rgba(15,23,42,0.06)];
+    @apply rounded-xl border border-surface-200 bg-white;
   }
 
-  .phone-stage {
-    @apply bg-white rounded-3xl border border-surface-200 shadow-soft;
+  /* Bordered white surface with no padding: compose your own inside. */
+  .surface {
+    @apply rounded-xl border border-surface-200 bg-white;
   }
 
-  .phone-notch {
-    @apply mx-auto h-1.5 w-20 rounded-full bg-surface-200;
+  .surface-muted {
+    @apply rounded-xl border border-surface-200 bg-surface-50;
   }
 
-  .segmented {
-    @apply inline-grid grid-cols-3 rounded-2xl border border-surface-200 bg-surface-100 p-1 gap-1;
+  /* Panel = surface + optional header row. Replaces nested card stacks. */
+  .panel {
+    @apply overflow-hidden rounded-xl border border-surface-200 bg-white;
   }
 
-  .segmented-item {
-    @apply rounded-xl px-3 py-2 text-sm font-semibold text-surface-600 transition-colors;
+  .panel-header {
+    @apply flex flex-col gap-3 border-b border-surface-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5;
   }
 
-  .segmented-item-active {
-    @apply bg-white text-brand-900 shadow-sm;
+  .panel-title {
+    @apply text-[15px] font-semibold leading-6 tracking-tight text-brand-900;
   }
 
-  .pill-accent {
-    @apply inline-flex items-center rounded-full bg-primary-100 px-2.5 py-1 text-xs font-semibold text-brand-900;
+  .panel-body {
+    @apply p-4 sm:p-5;
   }
 
+  /* Legacy aliases kept so existing screens stay consistent, not decorative. */
+  .detail-card,
+  .metric-card,
+  .action-list-card,
   .focus-card {
-    @apply rounded-2xl border border-surface-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)];
-  }
-
-  .kpi-tile {
-    @apply rounded-2xl border border-surface-200 bg-surface-50/80;
-  }
-
-  .soft-grid-bg {
-    background-image:
-      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.10), transparent 22%),
-      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.08), transparent 26%),
-      linear-gradient(to bottom, rgba(248, 251, 250, 1), rgba(255, 255, 255, 1));
-  }
-
-  .app-shell-panel {
-    @apply rounded-[28px] border border-surface-200/80 bg-white/95 shadow-[0_14px_40px_rgba(15,23,42,0.06)];
-  }
-
-  .app-shell-nav-item {
-    @apply flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-sm font-medium transition-all;
-  }
-
-  .app-shell-nav-item-active {
-    @apply border-brand-100 bg-brand-50 text-brand-900 shadow-[0_8px_20px_rgba(6,57,50,0.06)];
-  }
-
-  .app-shell-nav-item-inactive {
-    @apply border-transparent text-surface-700 hover:border-surface-200 hover:bg-surface-50 hover:text-brand-900;
-  }
-
-  .app-hero {
-    @apply rounded-[28px] border border-surface-200/80 bg-white px-5 py-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)] sm:px-7 sm:py-7;
-    background-image:
-      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.10), transparent 26%),
-      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.06), transparent 22%);
-  }
-
-  .metric-card {
-    @apply rounded-3xl border border-surface-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)];
-  }
-
-  .action-list-card {
-    @apply rounded-3xl border border-surface-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)];
+    @apply rounded-xl border border-surface-200 bg-white p-4 sm:p-5;
   }
 
   .table-card {
-    @apply overflow-hidden rounded-[28px] border border-surface-200/80 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)];
+    @apply overflow-hidden rounded-xl border border-surface-200 bg-white;
   }
 
-  .detail-card {
-    @apply rounded-3xl border border-surface-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)];
+  .kpi-tile {
+    @apply rounded-xl border border-surface-200 bg-surface-50;
+  }
+
+  .app-shell-panel {
+    @apply rounded-xl border border-surface-200 bg-white;
+  }
+
+  .app-hero {
+    @apply rounded-xl border border-surface-200 bg-white p-4 sm:p-5;
+  }
+
+  /* ---------------------------------------------------------------- layout */
+  .page {
+    @apply space-y-4 sm:space-y-6;
   }
 
   .mobile-stack-section {
-    @apply space-y-4 sm:space-y-5 lg:space-y-6;
+    @apply space-y-4 sm:space-y-6;
   }
 
+  .page-title {
+    @apply truncate text-[22px] font-bold leading-tight tracking-tight text-brand-900 sm:text-2xl;
+  }
+
+  .section-title {
+    @apply text-[15px] font-semibold leading-6 tracking-tight text-brand-900;
+  }
+
+  .meta {
+    @apply text-[13px] leading-5 text-surface-600;
+  }
+
+  .toolbar,
+  .subtle-toolbar {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  /* --------------------------------------------------------- tabs / segments */
+  .tabs-bar {
+    @apply flex items-center gap-1 overflow-x-auto border-b border-surface-200;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .tabs-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-item {
+    @apply relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 pb-2.5 pt-2 text-sm font-medium text-surface-600 transition-colors hover:text-brand-900;
+  }
+
+  .tab-item-active {
+    @apply border-brand-900 font-semibold text-brand-900;
+  }
+
+  .tab-count {
+    @apply rounded-full bg-surface-200 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-surface-700;
+  }
+
+  .tab-item-active .tab-count {
+    @apply bg-brand-50 text-brand-800;
+  }
+
+  /* Segmented control for 2-4 mutually exclusive options */
+  .segmented {
+    @apply inline-flex rounded-lg border border-surface-300 bg-surface-100 p-0.5;
+  }
+
+  .segmented-item {
+    @apply inline-flex min-h-[36px] shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] px-3 text-[13px] font-semibold text-surface-700 transition-colors hover:text-brand-900;
+  }
+
+  .segmented-item-active {
+    @apply bg-white text-brand-900 shadow-[0_1px_2px_rgba(15,23,42,0.08)];
+  }
+
+  /* Legacy tab classes, mapped onto the segmented look */
   .page-tabs {
-    @apply inline-flex min-w-full gap-1 rounded-2xl border border-surface-200 bg-surface-100 p-1 md:min-w-0;
+    @apply inline-flex rounded-lg border border-surface-300 bg-surface-100 p-0.5;
   }
 
   .page-tabs-item {
-    @apply min-w-fit rounded-xl px-4 py-2.5 text-sm font-semibold text-surface-600 transition-colors hover:text-brand-900;
+    @apply inline-flex min-h-[36px] shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] px-3 text-[13px] font-semibold text-surface-700 transition-colors hover:text-brand-900;
   }
 
   .page-tabs-item-active {
-    @apply bg-white text-brand-900 shadow-sm;
+    @apply bg-white text-brand-900 shadow-[0_1px_2px_rgba(15,23,42,0.08)];
   }
 
-  .subtle-toolbar {
-    @apply flex flex-col gap-3 rounded-2xl border border-surface-200 bg-white/85 p-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between;
-  }
-
-  /* Badges */
-  .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
-  }
-
-  .badge-success {
-    @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200;
-  }
-
-  .badge-warning {
-    @apply badge bg-amber-50 text-amber-700 border border-amber-200;
-  }
-
-  .badge-error {
-    @apply badge bg-red-50 text-red-700 border border-red-200;
-  }
-
-  .badge-info {
-    @apply badge bg-sky-50 text-sky-700 border border-sky-200;
-  }
-
-  .badge-neutral {
-    @apply badge bg-surface-100 text-surface-600 border border-surface-200;
-  }
-
-  /* Tables */
-  .table-header {
-    @apply text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider bg-surface-50;
-  }
-
-  .table-cell {
-    @apply py-3 px-4 text-sm;
-  }
-
-  .table-row {
-    @apply border-b border-surface-100 hover:bg-surface-50 transition-colors;
-  }
-
-  /* Tabs */
   .tab {
-    @apply px-4 py-2.5 text-sm font-semibold rounded-md transition-all duration-150;
+    @apply inline-flex min-h-[36px] items-center rounded-lg px-3 text-sm font-semibold transition-colors;
   }
 
   .tab-inactive {
-    @apply tab text-surface-500 hover:text-surface-700 hover:bg-surface-100;
+    @apply tab text-surface-600 hover:bg-surface-200 hover:text-brand-900;
   }
 
   .tab-active {
     @apply tab bg-brand-900 text-white;
   }
 
-  /* Modal overlay */
-  .modal-overlay {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm;
+  /* -------------------------------------------------------------- statuses */
+  .badge {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-semibold leading-5;
   }
 
-  .modal-content {
-    @apply bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-hidden;
+  .badge-success {
+    @apply badge bg-emerald-50 text-emerald-700;
   }
 
-  /* Status indicators */
+  .badge-warning {
+    @apply badge bg-amber-50 text-amber-800;
+  }
+
+  .badge-error {
+    @apply badge bg-red-50 text-red-700;
+  }
+
+  .badge-info {
+    @apply badge bg-sky-50 text-sky-700;
+  }
+
+  .badge-neutral {
+    @apply badge bg-surface-200 text-surface-700;
+  }
+
+  .badge-brand {
+    @apply badge bg-brand-50 text-brand-800;
+  }
+
+  .pill-accent {
+    @apply badge bg-brand-50 text-brand-800;
+  }
+
+  .chip {
+    @apply inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-surface-400 bg-white px-3 text-[13px] font-medium text-surface-700 transition-colors hover:border-surface-500 hover:text-brand-900;
+  }
+
+  .chip-active {
+    @apply border-brand-900 bg-brand-900 text-white hover:border-brand-900 hover:text-white;
+  }
+
   .status-dot {
-    @apply inline-block w-2 h-2 rounded-full;
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
   }
 
   .status-live {
-    @apply status-dot bg-emerald-500 animate-pulse;
+    @apply status-dot bg-emerald-500;
   }
 
   .status-pending {
@@ -296,16 +420,171 @@
   }
 
   .status-inactive {
-    @apply status-dot bg-surface-300;
+    @apply status-dot bg-surface-400;
   }
 
-  /* Media thumbnails */
+  /* ---------------------------------------------------------------- tables */
+  .data-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .table-header {
+    @apply whitespace-nowrap border-b border-surface-200 bg-surface-50 px-4 py-2.5 text-left text-[12px] font-semibold text-surface-600;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 align-middle text-sm text-surface-800;
+  }
+
+  .table-row {
+    @apply border-b border-surface-100 transition-colors last:border-0 hover:bg-surface-50;
+  }
+
+  /* ------------------------------------------------------ overlays & menus */
+  .modal-overlay {
+    @apply fixed inset-0 z-[60] flex items-end justify-center bg-navy-900/45 backdrop-blur-[2px] sm:items-center sm:p-4;
+  }
+
+  .modal-content {
+    @apply flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:max-h-[88vh] sm:rounded-2xl;
+  }
+
+  .modal-header {
+    @apply flex shrink-0 items-start justify-between gap-3 border-b border-surface-200 px-4 py-3.5 sm:px-5;
+  }
+
+  .modal-body {
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5;
+  }
+
+  .modal-footer {
+    @apply flex shrink-0 flex-col-reverse gap-2 border-t border-surface-200 px-4 py-3 sm:flex-row sm:justify-end sm:px-5;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .sheet-handle {
+    @apply mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-surface-300 sm:hidden;
+  }
+
+  .menu {
+    @apply z-[70] min-w-[184px] overflow-hidden rounded-xl border border-surface-200 bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.14)];
+  }
+
+  .menu-item {
+    @apply flex min-h-[40px] w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium text-surface-800 transition-colors hover:bg-surface-100 hover:text-brand-900 disabled:pointer-events-none disabled:opacity-45;
+  }
+
+  .menu-item-danger {
+    @apply flex min-h-[40px] w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 disabled:pointer-events-none disabled:opacity-45;
+  }
+
+  .menu-label {
+    @apply px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-surface-500;
+  }
+
+  .menu-sep {
+    @apply my-1 h-px bg-surface-200;
+  }
+
+  /* ------------------------------------------------------------ navigation */
+  .app-shell-nav-item {
+    @apply flex min-h-[40px] items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors;
+  }
+
+  .app-shell-nav-item-active {
+    @apply bg-brand-50 font-semibold text-brand-900;
+  }
+
+  .app-shell-nav-item-inactive {
+    @apply text-surface-700 hover:bg-surface-200/70 hover:text-brand-900;
+  }
+
+  .bottom-nav {
+    @apply fixed inset-x-0 bottom-0 z-40 border-t border-surface-200 bg-white/95 backdrop-blur-xl lg:hidden;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav-item {
+    @apply flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-lg px-1 pb-1 pt-1.5 text-[11px] font-medium text-surface-600 transition-colors active:bg-surface-100;
+  }
+
+  .bottom-nav-item-active {
+    @apply font-semibold text-brand-900;
+  }
+
+  /* Mobile app bar: the page header portals its title/actions into the slot.
+     The fallback label only shows while no page has claimed the bar. */
+  .ep-bar-fallback {
+    display: none;
+  }
+
+  .ep-bar-slot:empty {
+    display: none;
+  }
+
+  .ep-bar-slot:empty ~ .ep-bar-fallback {
+    display: flex;
+  }
+
+  /* Sticky action row for long forms. Clears the mobile tab bar. */
+  .form-actions-sticky {
+    @apply sticky z-20 flex items-center justify-end gap-2 border-t border-surface-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-5;
+    bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
+  }
+
+  /* ------------------------------------------------------------- feedback */
+  .skeleton {
+    @apply animate-pulse rounded-lg bg-surface-200/80;
+  }
+
+  .empty-state {
+    @apply flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-surface-300 bg-surface-50 px-6 py-10 text-center;
+  }
+
+  .banner {
+    @apply flex items-start gap-3 rounded-xl border px-4 py-3 text-sm;
+  }
+
+  .banner-error {
+    @apply banner border-red-200 bg-red-50 text-red-800;
+  }
+
+  .banner-warning {
+    @apply banner border-amber-200 bg-amber-50 text-amber-900;
+  }
+
+  .banner-info {
+    @apply banner border-sky-200 bg-sky-50 text-sky-900;
+  }
+
+  .banner-success {
+    @apply banner border-emerald-200 bg-emerald-50 text-emerald-900;
+  }
+
+  /* ---------------------------------------------------------------- misc */
   .media-thumbnail {
-    @apply aspect-square bg-surface-100 rounded-lg overflow-hidden cursor-pointer transition-all duration-200;
+    @apply aspect-square cursor-pointer overflow-hidden rounded-lg bg-surface-200 transition-all duration-150;
   }
 
   .media-thumbnail:hover {
-    @apply ring-2 ring-brand-900/20;
+    @apply ring-2 ring-brand-700/25;
+  }
+
+  .phone-stage {
+    @apply rounded-2xl border border-surface-200 bg-white;
+  }
+
+  .phone-notch {
+    @apply mx-auto h-1 w-16 rounded-full bg-surface-300;
+  }
+
+  /* Guest-facing surfaces keep their soft brand wash. */
+  .section-gradient,
+  .soft-grid-bg {
+    background-image:
+      radial-gradient(circle at 0% 0%, rgba(27, 212, 188, 0.10), transparent 24%),
+      radial-gradient(circle at 100% 0%, rgba(6, 57, 50, 0.07), transparent 28%),
+      linear-gradient(to bottom, rgba(248, 251, 250, 1), rgba(255, 255, 255, 1));
   }
 }
 
@@ -314,6 +593,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -322,39 +602,73 @@
     text-wrap: balance;
   }
 
-  .animate-in {
-    animation: fadeIn 0.2s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  @keyframes slideUp {
-    from { transform: translateY(4px); }
-    to { transform: translateY(0); }
-  }
-
-  .animate-slide-up {
-    animation: slideUp 0.2s ease-out;
-  }
-
   .glass {
     @apply bg-white/90 backdrop-blur-md;
   }
 
-  /* Focus visible for keyboard nav */
-  .focus-visible-ring:focus-visible {
-    @apply outline-none ring-2 ring-brand-900/30 ring-offset-2;
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
-  /* Transition helpers */
+  /* Reserve room for the mobile bottom navigation */
+  .pb-bottom-nav {
+    padding-bottom: calc(var(--bottomnav-h) + 16px + env(safe-area-inset-bottom));
+  }
+
+  .animate-in {
+    animation: epFadeIn 0.15s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: epSlideUp 0.18s ease-out;
+  }
+
+  .animate-sheet-up {
+    animation: epSheetUp 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  @keyframes epFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes epSlideUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes epSheetUp {
+    from { transform: translateY(12px); opacity: 0.6; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .focus-visible-ring:focus-visible {
+    @apply outline-none ring-2 ring-brand-700/45 ring-offset-2;
+  }
+
   .transition-fast {
     @apply transition-all duration-100;
   }
 
   .transition-medium {
-    @apply transition-all duration-200;
+    @apply transition-all duration-150;
+  }
+}
+
+@media (min-width: 640px) {
+  .modal-footer {
+    padding-bottom: 0.75rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .pb-bottom-nav {
+    padding-bottom: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .form-actions-sticky {
+    bottom: 0;
   }
 }

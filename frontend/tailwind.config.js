@@ -43,20 +43,25 @@ module.exports = {
           600: '#3f527c',
           700: '#344265',
           800: '#2d3a54',
-          900: '#1a1a2e', // Primary dark
+          900: '#1a1a2e',
           950: '#16213e',
         },
+        /*
+         * Neutral ramp. 50-300 are surfaces and dividers, 400-900 are text and
+         * icon tones. 400 clears 3:1 (icons, control borders) and 500 upward
+         * clears 4.5:1 on white, so secondary copy stays readable.
+         */
         surface: {
-          50: '#fefefe',
-          100: '#f8f9fa',
-          200: '#e9ecef',
-          300: '#dee2e6',
-          400: '#ced4da',
-          500: '#adb5bd',
-          600: '#868e96',
-          700: '#636e72',
-          800: '#495057',
-          900: '#343a40',
+          50: '#fbfbfc',
+          100: '#f5f6f7',
+          200: '#e8eaec',
+          300: '#d3d8db',
+          400: '#8d979d',
+          500: '#6e777d',
+          600: '#5b6469',
+          700: '#474f54',
+          800: '#333a3e',
+          900: '#22272a',
         },
       },
       fontFamily: {
@@ -64,12 +69,15 @@ module.exports = {
         serif: ['var(--font-plus-jakarta)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
         display: ['var(--font-plus-jakarta)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
       },
+      spacing: {
+        sidebar: 'var(--sidebar-w)',
+        topbar: 'var(--topbar-h)',
+      },
       animation: {
-        'fade-in': 'fadeIn 0.5s ease-out',
-        'slide-up': 'slideUp 0.5s ease-out',
-        'slide-down': 'slideDown 0.3s ease-out',
-        'scale-in': 'scaleIn 0.3s ease-out',
-        'pulse-soft': 'pulseSoft 2s infinite',
+        'fade-in': 'fadeIn 0.15s ease-out',
+        'slide-up': 'slideUp 0.18s ease-out',
+        'slide-down': 'slideDown 0.18s ease-out',
+        'scale-in': 'scaleIn 0.15s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -77,25 +85,22 @@ module.exports = {
           '100%': { opacity: '1' },
         },
         slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         slideDown: {
-          '0%': { opacity: '0', transform: 'translateY(-10px)' },
+          '0%': { opacity: '0', transform: 'translateY(-6px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         scaleIn: {
-          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '0%': { opacity: '0', transform: 'scale(0.98)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
-        },
-        pulseSoft: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.7' },
         },
       },
       boxShadow: {
-        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-        'elegant': '0 25px 50px -12px rgba(26, 26, 46, 0.25)',
+        soft: '0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)',
+        elegant: '0 12px 32px rgba(15, 23, 42, 0.12)',
+        menu: '0 12px 32px rgba(15, 23, 42, 0.14)',
       },
     },
   },

@@ -7,7 +7,29 @@ import { eventsApi, rsvpApi, templatesApi, mediaApi, checkInApi, ticketingApi, o
 import MediaGallery from '@/components/media/MediaGallery';
 import TicketsTab from '@/components/tickets/TicketsTab';
 import PaymentGatewaySelector from '@/components/tickets/PaymentGatewaySelector';
-import { formatDate, getPhaseLabel, getStatusColor, cn, copyToClipboard, resolvePublicAssetUrl } from '@/lib/utils';
+import { formatDate, formatCount, getPhaseLabel, getPhaseTone, getStatusTone, getErrorMessage, humanizeEnum, cn, copyToClipboard, resolvePublicAssetUrl } from '@/lib/utils';
+import {
+  CopyButton,
+  DetailRow,
+  EmptyState,
+  ListSkeleton,
+  PageHeader,
+  Panel,
+  PublicPageRow,
+  SegmentedControl,
+  StatRow,
+  StatRowSkeleton,
+  StatusBadge,
+  SubmitButton,
+  Thumb,
+  Switch,
+  Tabs,
+  Td,
+  Th,
+  Toolbar,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, Modal } from '@/components/ui/Overlay';
+import { ExternalLink } from '@/components/ui/icons';
 import { CURRENCY_OPTIONS, getCurrencyOption, uniqueCurrencyCodes } from '@/lib/paymentGatewayConfig';
 import toast from 'react-hot-toast';
 
@@ -174,21 +196,6 @@ interface GiftOrder {
 
 type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'itinerary' | 'formFields' | 'sales' | 'gifts' | 'voting' | 'settings';
 
-// SVG Icons
-const Icons = {
-  back: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
-  external: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>,
-  copy: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
-  download: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
-  play: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  edit: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
-  check: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-  close: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
-  video: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
-  audio: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
-  photo: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  reel: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>,
-};
 
 const formatCurrency = (amount: number | null | undefined, currency?: string | null) => {
   const value = Number(amount || 0);
@@ -200,6 +207,117 @@ const formatCurrency = (amount: number | null | undefined, currency?: string | n
     return `${code} ${value.toFixed(2)}`;
   }
 };
+
+/** RSVP custom fields arrive as a JSON string that may be absent or invalid. */
+function parseCustomFields(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** One template slot: the page it drives, and which design it uses. */
+function TemplateAssignRow({
+  label,
+  enabled,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  enabled: boolean;
+  value: string;
+  options: Array<{ id: string; name: string; isDefault: boolean }>;
+  onChange: (value: string) => void;
+}) {
+  const id = `template-${label.replace(/s+/g, '-').toLowerCase()}`;
+  return (
+    <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <label htmlFor={id} className="truncate text-sm font-medium text-surface-900">
+          {label}
+        </label>
+        {enabled ? null : <StatusBadge tone="neutral">Off</StatusBadge>}
+      </div>
+      <select
+        id={id}
+        className="input input-sm sm:max-w-xs"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={!enabled}
+      >
+        <option value="">Default design</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+            {option.isDefault ? ' (default)' : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: 'Short text',
+  textarea: 'Long text',
+  email: 'Email',
+  phone: 'Phone',
+  number: 'Number',
+  date: 'Date',
+  select: 'Dropdown',
+  radio: 'Single choice',
+  checkbox: 'Checkbox',
+};
+
+/** Derive a stable storage key from a human question. */
+function toFieldName(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+}
+
+/** Collapsible settings group. Only the essentials are open by default. */
+function SettingsSection({
+  title,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  return (
+    <section className="panel">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-50 sm:px-5"
+      >
+        <span className="panel-title">{title}</span>
+        <svg
+          className={cn('h-5 w-5 shrink-0 text-surface-500 transition-transform', open && 'rotate-180')}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open ? <div className="border-t border-surface-200 p-4 sm:p-5">{children}</div> : null}
+    </section>
+  );
+}
+
+const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -218,9 +336,14 @@ export default function EventDetailPage() {
   const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '', company: '' });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [showDisabledPages, setShowDisabledPages] = useState(false);
+  const [showAddItinerary, setShowAddItinerary] = useState(false);
+  const [deletingItinerary, setDeletingItinerary] = useState<ItineraryItem | null>(null);
+  const [deletingFormField, setDeletingFormField] = useState<any | null>(null);
+  const [showCreateGiftPackage, setShowCreateGiftPackage] = useState(false);
+  const [removingDomain, setRemovingDomain] = useState<Domain | null>(null);
   const [rsvpFilter, setRsvpFilter] = useState<string>('all');
   const [savingTemplates, setSavingTemplates] = useState(false);
-  const [editingSettings, setEditingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [tickets, setTickets] = useState<any[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
@@ -520,7 +643,7 @@ export default function EventDetailPage() {
       const r = await eventsApi.getDomains(eventId);
       setDomains(r.data.domains || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load domains');
+      toast.error(getErrorMessage(e, 'Failed to load domains'));
     }
   };
   const fetchTemplates = async () => { try { const r = await templatesApi.list(); setTemplates(r.data.templates); } catch {} };
@@ -548,7 +671,7 @@ export default function EventDetailPage() {
       setNewOwner({ name: '', email: '', phone: '', company: '' });
       setShowNewOwnerForm(false);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to create owner');
+      toast.error(getErrorMessage(e, 'Failed to create owner'));
     }
   };
   const fetchRsvps = async () => {
@@ -559,7 +682,7 @@ export default function EventDetailPage() {
       const r = await rsvpApi.list(eventId, p);
       setRsvps(r.data.rsvps);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load RSVPs');
+      toast.error(getErrorMessage(e, 'Failed to load RSVPs'));
     } finally {
       setLoadingRsvps(false);
     }
@@ -622,7 +745,7 @@ export default function EventDetailPage() {
       setGiftPackages(packagesResponse.data.packages || []);
       setGiftOrders(ordersResponse.data.orders || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load gifting data');
+      toast.error(getErrorMessage(e, 'Failed to load gifting data'));
     } finally {
       setLoadingGifts(false);
     }
@@ -642,7 +765,7 @@ export default function EventDetailPage() {
       toast.success('Gift package assignment saved');
       await fetchGifts();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to save gift package assignment');
+      toast.error(getErrorMessage(e, 'Failed to save gift package assignment'));
     } finally {
       setSavingGiftAssignments(false);
     }
@@ -683,10 +806,11 @@ export default function EventDetailPage() {
       });
       setNewGiftPackagePhoto(null);
       setNewGiftPackagePhotoPreview(null);
+      setShowCreateGiftPackage(false);
       toast.success('Gift package created');
       await fetchGifts();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to create gift package');
+      toast.error(getErrorMessage(e, 'Failed to create gift package'));
     } finally {
       setSavingGiftPackage(false);
     }
@@ -698,7 +822,7 @@ export default function EventDetailPage() {
       toast.success(!pkg.isActive ? 'Package activated' : 'Package disabled');
       await fetchGifts();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to update package');
+      toast.error(getErrorMessage(e, 'Failed to update package'));
     }
   };
 
@@ -708,7 +832,7 @@ export default function EventDetailPage() {
       const response = await itineraryApi.getItems(eventId);
       setItineraryItems(response.data.items || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load itinerary');
+      toast.error(getErrorMessage(e, 'Failed to load itinerary'));
     } finally {
       setLoadingItinerary(false);
     }
@@ -748,7 +872,29 @@ export default function EventDetailPage() {
       toast.success('Itinerary order updated');
     } catch (e: any) {
       setItineraryItems(previous);
-      toast.error(e.response?.data?.error || 'Failed to reorder itinerary');
+      toast.error(getErrorMessage(e, 'Failed to reorder itinerary'));
+    } finally {
+      setSavingItineraryOrder(false);
+    }
+  };
+
+  /** Keyboard and touch friendly reordering. Same persistence as drag and drop. */
+  const moveItineraryItem = async (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= itineraryItems.length || savingItineraryOrder) return;
+
+    const previous = itineraryItems;
+    const next = [...previous];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    setItineraryItems(next);
+
+    try {
+      setSavingItineraryOrder(true);
+      await itineraryApi.reorderItems(eventId, next.map((item) => item.id));
+    } catch (e: any) {
+      setItineraryItems(previous);
+      toast.error(getErrorMessage(e, 'Could not reorder the itinerary.'));
     } finally {
       setSavingItineraryOrder(false);
     }
@@ -787,7 +933,7 @@ export default function EventDetailPage() {
       setShowItineraryDateTimeInputs(false);
       await fetchItinerary();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to add itinerary item');
+      toast.error(getErrorMessage(e, 'Failed to add itinerary item'));
     } finally {
       setSavingItinerary(false);
     }
@@ -802,7 +948,7 @@ export default function EventDetailPage() {
       }
       toast.success('MC control link generated');
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to generate MC link');
+      toast.error(getErrorMessage(e, 'Failed to generate MC link'));
     } finally {
       setCreatingMcSession(false);
     }
@@ -855,18 +1001,13 @@ export default function EventDetailPage() {
       handleCancelEditItineraryItem();
       await fetchItinerary();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to update itinerary item');
+      toast.error(getErrorMessage(e, 'Failed to update itinerary item'));
     } finally {
       setSavingEditedItinerary(false);
     }
   };
 
   const handleDeleteItineraryItem = async (itemId: string) => {
-    const confirmed = typeof window !== 'undefined'
-      ? window.confirm('Delete this itinerary activity?')
-      : true;
-    if (!confirmed) return;
-
     setDeletingItineraryId(itemId);
     try {
       await itineraryApi.deleteItem(eventId, itemId);
@@ -876,7 +1017,7 @@ export default function EventDetailPage() {
       }
       await fetchItinerary();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to delete itinerary item');
+      toast.error(getErrorMessage(e, 'Failed to delete itinerary item'));
     } finally {
       setDeletingItineraryId(null);
     }
@@ -892,7 +1033,7 @@ export default function EventDetailPage() {
       }));
       setFormFields(fields);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load form fields');
+      toast.error(getErrorMessage(e, 'Failed to load form fields'));
     } finally {
       setLoadingFormFields(false);
     }
@@ -910,7 +1051,7 @@ export default function EventDetailPage() {
       toast.success('Cover image updated');
       await fetchEvent();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to upload cover');
+      toast.error(getErrorMessage(e, 'Failed to upload cover'));
     } finally {
       setUploadingCover(false);
     }
@@ -922,7 +1063,7 @@ export default function EventDetailPage() {
       toast.success('Cover image removed');
       await fetchEvent();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to remove cover');
+      toast.error(getErrorMessage(e, 'Failed to remove cover'));
     }
   };
 
@@ -938,7 +1079,7 @@ export default function EventDetailPage() {
       toast.success('Domain added. Complete DNS verification next.');
       await fetchDomains();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to add domain');
+      toast.error(getErrorMessage(e, 'Failed to add domain'));
     } finally {
       setSavingDomain(false);
     }
@@ -950,7 +1091,7 @@ export default function EventDetailPage() {
       toast.success('Verification check complete');
       await fetchDomains();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to verify domain');
+      toast.error(getErrorMessage(e, 'Failed to verify domain'));
     }
   };
 
@@ -960,7 +1101,7 @@ export default function EventDetailPage() {
       toast.success('Primary domain updated');
       await fetchDomains();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to update primary domain');
+      toast.error(getErrorMessage(e, 'Failed to update primary domain'));
     }
   };
 
@@ -970,8 +1111,48 @@ export default function EventDetailPage() {
       toast.success('Domain removed');
       await fetchDomains();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to remove domain');
+      toast.error(getErrorMessage(e, 'Failed to remove domain'));
     }
+  };
+
+  const openNewFormField = () => {
+    setEditingFormField(null);
+    setFormFieldData({
+      fieldName: '',
+      label: '',
+      type: 'text',
+      placeholder: '',
+      helpText: '',
+      options: [],
+      required: false,
+      minLength: undefined,
+      maxLength: undefined,
+      pattern: '',
+      sortOrder: formFields.length,
+      isActive: true,
+      showOnConfirmation: true,
+    });
+    setShowFormFieldModal(true);
+  };
+
+  const openEditFormField = (field: any) => {
+    setEditingFormField(field);
+    setFormFieldData({
+      fieldName: field.fieldName,
+      label: field.label,
+      type: field.type,
+      placeholder: field.placeholder || '',
+      helpText: field.helpText || '',
+      options: field.options || [],
+      required: field.required,
+      minLength: field.minLength || undefined,
+      maxLength: field.maxLength || undefined,
+      pattern: field.pattern || '',
+      sortOrder: field.sortOrder,
+      isActive: field.isActive,
+      showOnConfirmation: field.showOnConfirmation,
+    });
+    setShowFormFieldModal(true);
   };
 
   const handleSaveFormField = async () => {
@@ -996,18 +1177,17 @@ export default function EventDetailPage() {
       });
       await fetchFormFields();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to save form field');
+      toast.error(getErrorMessage(e, 'Failed to save form field'));
     }
   };
 
   const handleDeleteFormField = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this field?')) return;
     try {
       await ticketingApi.deleteCustomField(eventId, id);
       toast.success('Form field deleted', { icon: '✅' });
       await fetchFormFields();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to delete form field');
+      toast.error(getErrorMessage(e, 'Failed to delete form field'));
     }
   };
 
@@ -1026,7 +1206,7 @@ export default function EventDetailPage() {
       });
       await Promise.all([fetchRsvps(), fetchEvent()]);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to review RSVP');
+      toast.error(getErrorMessage(e, 'Failed to review RSVP'));
     } finally {
       setReviewingRsvp(null);
     }
@@ -1057,7 +1237,7 @@ export default function EventDetailPage() {
         leaderboardPageTemplateId: (selectedTemplates as any).leaderboardPageTemplateId || null,
       });
       toast.success('Templates updated'); fetchEvent();
-    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
+    } catch (e: any) { toast.error(getErrorMessage(e, 'Failed')); }
     finally { setSavingTemplates(false); }
   };
 
@@ -1108,12 +1288,12 @@ export default function EventDetailPage() {
         ownerId: eventSettings.ownerId || null, ownerName: eventSettings.ownerName || null, ownerEmail: eventSettings.ownerEmail || null, ownerPhone: eventSettings.ownerPhone || null, organizationName: eventSettings.organizationName || null,
       });
       await adminVotingApi.updateVotingConfig(eventId, { isEnabled: votingEnabled });
-      toast.success('Settings saved'); setEditingSettings(false); fetchEvent();
-    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed'); }
+      toast.success('Settings saved'); fetchEvent();
+    } catch (e: any) { toast.error(getErrorMessage(e, 'Failed')); }
     finally { setSavingSettings(false); }
   };
 
-  const handleCopyLink = async (path: string) => { if (await copyToClipboard(`${window.location.origin}${path}`)) toast.success('Link copied!'); };
+  const handleCopyLink = async (path: string) => { if (await copyToClipboard(`${window.location.origin}${path}`)) toast.success('Link copied'); };
   const getTemplatesByType = (t: string) => templates.filter(x => x.type === t);
 
   const exportRsvpsToCSV = () => {
@@ -1197,231 +1377,151 @@ export default function EventDetailPage() {
     },
     { orders: 0, gross: 0, ownerNet: 0, adminRetained: 0, cash: 0, packageAmount: 0 }
   );
+  const publicPages = [
+    { label: 'Event home', path: `/e/${event.slug}`, enabled: true },
+    { label: 'Invitation', path: `/e/${event.slug}/invitation`, enabled: Boolean(event.invitationEnabled) },
+    { label: 'Live', path: `/e/${event.slug}/live`, enabled: true },
+    { label: 'RSVP', path: `/e/${event.slug}/rsvp`, enabled: Boolean(event.rsvpEnabled) },
+    { label: 'Guestbook', path: `/e/${event.slug}/guestbook`, enabled: Boolean(event.guestbookEnabled) },
+    { label: 'Guest booth', path: `/e/${event.slug}/booth`, enabled: Boolean(event.guestbookEnabled) },
+    { label: 'Check-in', path: `/e/${event.slug}/checkin`, enabled: Boolean(event.checkInEnabled) },
+    { label: 'Itinerary', path: `/e/${event.slug}/itinerary`, enabled: Boolean(event.itineraryEnabled) },
+    { label: 'Gifts', path: `/gift/${event.slug}`, enabled: Boolean(event.giftingEnabled) },
+    { label: 'Thank you', path: `/e/${event.slug}/thanks`, enabled: true },
+  ];
+  const enabledPublicPages = publicPages.filter((page) => page.enabled);
+  const disabledPublicPages = publicPages.filter((page) => !page.enabled);
   const giftCurrency = giftOrders[0]?.currency || primaryEventCurrency;
   const salesCurrency = sales[0]?.currency || event?.defaultCurrency || primaryEventCurrency;
 
   return (
-    <div className="space-y-7">
-      {/* Header */}
-      <div className="app-hero flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <Link href="/admin/events" className="inline-flex items-center text-surface-500 hover:text-brand-900 mb-2 text-sm transition-colors">
-            {Icons.back}
-            <span className="ml-1">Back to Events</span>
-          </Link>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-700">Event workspace</p>
-          <h1 className="mt-1 text-3xl font-display font-bold tracking-tight text-brand-900 truncate">{event.name}</h1>
-          <p className="text-sm leading-6 text-surface-600 mt-2">Manage content, guest flow, domains, tickets, gifting, and voting from one workspace.</p>
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            <span className={getStatusColor(event.currentPhase)}>{getPhaseLabel(event.currentPhase)}</span>
-            {event.phaseOverride && <span className="text-xs text-surface-500">(Override)</span>}
-            {event.invitationOnly && <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Invite Only</span>}
-            {event.reelEnabled && <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">Reel Enabled</span>}
-            <span className="text-xs text-surface-400 font-mono">/{event.slug}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/e/${event.slug}`} target="_blank" className="btn-outline">
-            {Icons.external}
-            <span className="ml-2">View Public Page</span>
-          </Link>
-        </div>
-      </div>
+    <div className="page">
+      <PageHeader
+        title={event.name}
+        backHref="/admin/events"
+        backLabel="Events"
+        meta={
+          <>
+            <StatusBadge tone={getPhaseTone(event.currentPhase)} dot>
+              {getPhaseLabel(event.currentPhase)}
+            </StatusBadge>
+            {event.phaseOverride ? <StatusBadge tone="neutral">Stage set manually</StatusBadge> : null}
+            {event.invitationOnly ? <StatusBadge tone="brand">Invite only</StatusBadge> : null}
+            <span className="truncate font-mono text-[12px]">/{event.slug}</span>
+            <CopyButton value={`${siteOrigin}/e/${event.slug}`} label="Copy public link" className="-my-1" />
+          </>
+        }
+        actions={
+          <a href={`/e/${event.slug}`} target="_blank" rel="noopener noreferrer" className="btn-outline">
+            View event
+          </a>
+        }
+        mobileActions={
+          <a
+            href={`/e/${event.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="icon-btn"
+            aria-label="View public event page"
+          >
+            <ExternalLink className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+          </a>
+        }
+      />
 
-      {/* Tabs */}
-      <div className="-mx-1 overflow-x-auto scrollbar-hide px-1 pb-2">
-        <nav className="page-tabs inline-flex min-w-max whitespace-nowrap pr-6">
-          {tabs.map(tab => (
-            <button 
-              key={tab.id} 
-              onClick={() => setActiveTab(tab.id)} 
-              className={cn(
-                'page-tabs-item whitespace-nowrap',
-                activeTab === tab.id 
-                  ? 'page-tabs-item-active' 
-                  : ''
-              )}
-            >
-              {tab.label}
-              {tab.count !== undefined && <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs', activeTab === tab.id ? 'bg-brand-50 text-brand-700' : 'bg-surface-100 text-surface-600')}>{tab.count}</span>}
-            </button>
-          ))}
-        </nav>
-      </div>
+      <Tabs
+        items={tabs}
+        active={activeTab}
+        onChange={(id) => setActiveTab(id as Tab)}
+        label="Event workspace sections"
+      />
 
       {/* Overview */}
       {activeTab === 'overview' && (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_320px]">
-          <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                { l: 'Guest Responses', v: event._count.rsvps, icon: Icons.check },
-                { l: 'Invites Sent', v: event._count.invitations, icon: Icons.copy },
-                { l: 'Arrivals', v: event._count.checkIns, icon: Icons.check },
-                { l: 'Guest Media', v: event._count.mediaAssets, icon: Icons.video },
-              ].map((s) => (
-                <div key={s.l} className="rounded-[24px] border border-surface-200 bg-white px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">{s.l}</p>
-                      <p className="text-2xl font-bold tracking-tight text-brand-900">{s.v}</p>
-                    </div>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-100 text-surface-500">
-                      {s.icon}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.8fr)] xl:gap-6">
+          <div className="space-y-4">
+            <StatRow
+              items={[
+                { label: 'RSVPs', value: formatCount(event._count.rsvps) },
+                { label: 'Invites', value: formatCount(event._count.invitations) },
+                { label: 'Check-ins', value: formatCount(event._count.checkIns) },
+                { label: 'Media', value: formatCount(event._count.mediaAssets) },
+              ]}
+            />
 
-            <div className="detail-card">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h3 className="font-semibold text-brand-900">Public Pages</h3>
-                  <p className="mt-1 text-sm text-surface-600">
-                    Open or copy the live pages attached to this event.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-2 md:grid-cols-2">
-                {[
-                  { l: 'Event Home', p: `/e/${event.slug}`, enabled: true },
-                  { l: 'Invitation Page', p: `/e/${event.slug}/invitation`, enabled: event.invitationEnabled },
-                  { l: 'Live Page', p: `/e/${event.slug}/live`, enabled: true },
-                  { l: 'RSVP Form', p: `/e/${event.slug}/rsvp`, enabled: event.rsvpEnabled },
-                  { l: 'Guestbook', p: `/e/${event.slug}/guestbook`, enabled: event.guestbookEnabled },
-                  { l: 'Guest Booth', p: `/e/${event.slug}/booth`, enabled: event.guestbookEnabled },
-                  { l: 'Check-In', p: `/e/${event.slug}/checkin`, enabled: event.checkInEnabled },
-                  { l: 'Itinerary', p: `/e/${event.slug}/itinerary`, enabled: event.itineraryEnabled },
-                  { l: 'Gift Page', p: `/gift/${event.slug}`, enabled: event.giftingEnabled },
-                  { l: 'Nomination Page', p: `/e/${event.slug}/nominate`, enabled: true },
-                  { l: 'Nominees Page', p: `/e/${event.slug}/nominees`, enabled: true },
-                  { l: 'Vote Page', p: `/e/${event.slug}/vote`, enabled: true },
-                  { l: 'Leaderboard Page', p: `/e/${event.slug}/leaderboard`, enabled: true },
-                  { l: 'Thank You Page', p: `/e/${event.slug}/thanks`, enabled: true },
-                  { l: 'Owner Token View', p: `/event-owner/${event.ownerAccessToken}`, enabled: true },
-                  { l: 'Owner Dashboard Login', p: `/owner/login`, enabled: true },
-                ].map((x) => (
-                  <div
-                    key={x.p}
-                    className={cn(
-                      'flex items-center justify-between rounded-2xl border px-3 py-3 transition-colors',
-                      x.enabled
-                        ? 'border-surface-200 bg-surface-50/40 text-surface-700 hover:border-brand-200 hover:bg-surface-50'
-                        : 'border-surface-200 bg-surface-50/60 text-surface-400'
-                    )}
+            <Panel
+              title="Guest pages"
+              action={
+                disabledPublicPages.length > 0 ? (
+                  <button
+                    type="button"
+                    className="btn-ghost btn-sm"
+                    onClick={() => setShowDisabledPages((value) => !value)}
+                    aria-expanded={showDisabledPages}
                   >
-                    <div className="min-w-0 pr-3">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium">{x.l}</span>
-                        {!x.enabled ? (
-                          <span className="rounded bg-surface-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-surface-500">
-                            Disabled
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <a
-                        href={x.p}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          'rounded-md p-1.5 transition-colors',
-                          x.enabled ? 'text-surface-500 hover:bg-surface-100 hover:text-brand-900' : 'text-surface-300'
-                        )}
-                        title="Open link"
-                      >
-                        {Icons.external}
-                      </a>
-                      <button
-                        onClick={() => handleCopyLink(x.p)}
-                        className={cn(
-                          'rounded-md p-1.5 transition-colors',
-                          x.enabled ? 'text-surface-500 hover:bg-surface-100 hover:text-brand-900' : 'text-surface-300'
-                        )}
-                        title="Copy link"
-                      >
-                        {Icons.copy}
-                      </button>
-                    </div>
-                  </div>
+                    {showDisabledPages ? 'Hide' : `Show ${disabledPublicPages.length} off`}
+                  </button>
+                ) : null
+              }
+              flush
+            >
+              <div className="divide-y divide-surface-200">
+                {enabledPublicPages.map((page) => (
+                  <PublicPageRow key={page.path} label={page.label} path={page.path} onCopy={handleCopyLink} />
                 ))}
+                {showDisabledPages
+                  ? disabledPublicPages.map((page) => (
+                      <PublicPageRow key={page.path} label={page.label} path={page.path} disabled onCopy={handleCopyLink} />
+                    ))
+                  : null}
               </div>
-            </div>
+            </Panel>
+
+            <Panel title="Owner access" flush>
+              <div className="divide-y divide-surface-200">
+                <PublicPageRow label="Owner view" path={`/event-owner/${event.ownerAccessToken}`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Owner sign-in" path="/owner/login" onCopy={handleCopyLink} />
+              </div>
+            </Panel>
           </div>
 
           <div className="space-y-4">
-            <div className="detail-card">
-              <h3 className="mb-4 font-semibold text-brand-900">Event Stage</h3>
-              <div className="space-y-2">
-                {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map((p) => (
+            <Panel title="Event stage">
+              <div className="segmented w-full">
+                {(['PRE_EVENT', 'LIVE', 'POST_EVENT'] as const).map((phase) => (
                   <button
-                    key={p}
-                    onClick={() => handlePhaseChange(p)}
-                    disabled={event.currentPhase === p}
+                    key={phase}
+                    type="button"
+                    onClick={() => handlePhaseChange(phase)}
+                    aria-pressed={event.currentPhase === phase}
                     className={cn(
-                      'w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
-                      event.currentPhase === p
-                        ? 'bg-brand-900 text-white'
-                        : 'bg-surface-50 text-surface-700 hover:bg-surface-100'
+                      'segmented-item flex-1',
+                      event.currentPhase === phase && 'segmented-item-active'
                     )}
                   >
-                    {getPhaseLabel(p)}
+                    {getPhaseLabel(phase)}
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="detail-card">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-brand-900">Voting Hub</h3>
-                  <p className="mt-1 text-sm text-surface-600">
-                    Manage categories, nominees, nominations, and live rankings.
-                  </p>
-                </div>
-                <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-brand-900">Voting</span>
-              </div>
-              <div className="mt-4">
-                <Link href={`/admin/events/${event.id}/voting`} className="btn-primary w-full justify-center">
-                  Open Voting Dashboard
+              <p className="field-hint">Controls which guest pages are reachable right now.</p>
+            </Panel>
+
+            <Panel
+              title="Voting"
+              action={
+                <Link href={`/admin/events/${event.id}/voting`} className="btn-primary btn-sm">
+                  Open
                 </Link>
+              }
+              flush
+            >
+              <div className="divide-y divide-surface-200">
+                <PublicPageRow label="Nominations" path={`/e/${event.slug}/nominate`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Nominees" path={`/e/${event.slug}/nominees`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Vote" path={`/e/${event.slug}/vote`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Leaderboard" path={`/e/${event.slug}/leaderboard`} onCopy={handleCopyLink} />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <a
-                  href={`/e/${event.slug}/nominate`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-outline text-xs justify-center"
-                >
-                  Nomination Page
-                </a>
-                <a
-                  href={`/e/${event.slug}/nominees`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-outline text-xs justify-center"
-                >
-                  Nominees Page
-                </a>
-                <a
-                  href={`/e/${event.slug}/vote`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-outline text-xs justify-center"
-                >
-                  Vote Page
-                </a>
-                <a
-                  href={`/e/${event.slug}/leaderboard`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-outline text-xs justify-center"
-                >
-                  Leaderboard
-                </a>
-              </div>
-            </div>
+            </Panel>
           </div>
         </div>
       )}
@@ -1429,323 +1529,361 @@ export default function EventDetailPage() {
       {/* RSVPs */}
       {activeTab === 'rsvps' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex gap-1 bg-surface-100 p-1 rounded-lg">
-              {['all', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
-                <button 
-                  key={s} 
-                  onClick={() => setRsvpFilter(s)} 
-                  className={cn(
-                    'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-                    rsvpFilter === s ? 'bg-white text-brand-900 shadow-sm' : 'text-surface-600 hover:text-surface-900'
-                  )}
-                >
-                  {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
-            <button onClick={exportRsvpsToCSV} className="btn-outline">
-              {Icons.download}
-              <span className="ml-2">Export CSV</span>
-            </button>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-            {loadingRsvps ? (
-              <div className="py-12 text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900"></div>
-                <p className="mt-4 text-surface-500">Loading RSVPs...</p>
+          <Toolbar
+            end={
+              <button onClick={exportRsvpsToCSV} className="btn-outline btn-sm" disabled={rsvps.length === 0}>
+                Export CSV
+              </button>
+            }
+          >
+            <SegmentedControl
+              label="RSVP status"
+              value={rsvpFilter}
+              onChange={setRsvpFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'PENDING', label: 'Pending' },
+                { value: 'APPROVED', label: 'Approved' },
+                { value: 'REJECTED', label: 'Rejected' },
+              ]}
+            />
+            <span className="meta num hidden sm:inline">{formatCount(rsvps.length)} shown</span>
+          </Toolbar>
+
+          {loadingRsvps ? (
+            <ListSkeleton rows={5} />
+          ) : rsvps.length === 0 ? (
+            <EmptyState
+              title={rsvpFilter === 'all' ? 'No RSVPs yet' : 'No RSVPs with this status'}
+              action={
+                rsvpFilter === 'all' ? null : (
+                  <button type="button" className="btn-outline btn-sm" onClick={() => setRsvpFilter('all')}>
+                    Show all
+                  </button>
+                )
+              }
+            />
+          ) : (
+            <>
+              {/* Compact rows on phones and tablets */}
+              <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white lg:hidden">
+                {rsvps.map((r) => (
+                  <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setViewingRsvpDetails(r)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-[15px] font-semibold text-brand-900">{r.primaryName}</span>
+                        <StatusBadge tone={getStatusTone(r.status)}>{humanizeEnum(r.status)}</StatusBadge>
+                      </div>
+                      <p className="mt-0.5 meta truncate">
+                        {humanizeEnum(r.attendance)} · {r.guestCount} {r.guestCount === 1 ? 'guest' : 'guests'}
+                        {r.email ? ` · ${r.email}` : ''}
+                      </p>
+                    </button>
+                    {r.status === 'PENDING' ? (
+                      <Menu label={`Review ${r.primaryName}`} sheetTitle={r.primaryName}>
+                        <MenuItem onClick={() => setViewingRsvpDetails(r)}>View details</MenuItem>
+                        <MenuItem
+                          disabled={reviewingRsvp === r.id}
+                          onClick={() => handleReviewRsvp(r.id, 'APPROVED')}
+                        >
+                          Approve
+                        </MenuItem>
+                        <MenuItem
+                          danger
+                          disabled={reviewingRsvp === r.id}
+                          onClick={() => handleReviewRsvp(r.id, 'REJECTED')}
+                        >
+                          Reject
+                        </MenuItem>
+                      </Menu>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-outline btn-sm shrink-0"
+                        onClick={() => setViewingRsvpDetails(r)}
+                      >
+                        Details
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead><tr className="border-b border-surface-200 bg-surface-50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Contact</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Response</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Meal & Dietary</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Notes</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-surface-100">
-                    {rsvps.length === 0 ? (
-                      <tr><td colSpan={7} className="py-12 text-center text-surface-500">No RSVPs found</td></tr>
-                    ) : rsvps.map(r => {
-                      const customFields = r.customFields ? JSON.parse(r.customFields) : null;
-                      return (
-                        <tr key={r.id} className="hover:bg-surface-50 transition-colors">
-                          <td className="py-3 px-4">
+
+              {/* Full table from lg up */}
+              <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white lg:block">
+                <div className="overflow-x-auto">
+                  <table className="data-table" style={{ minWidth: 880 }}>
+                    <thead>
+                      <tr>
+                        <Th>Guest</Th>
+                        <Th>Contact</Th>
+                        <Th>Response</Th>
+                        <Th>Meal</Th>
+                        <Th>Status</Th>
+                        <Th align="right">Actions</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rsvps.map((r) => (
+                        <tr key={r.id} className="table-row">
+                          <Td>
                             <p className="font-medium text-brand-900">{r.primaryName}</p>
-                            {r.secondaryName && <p className="text-sm text-surface-500">& {r.secondaryName}</p>}
-                          </td>
-                          <td className="py-3 px-4">
-                            {r.email && <p className="text-sm text-surface-600">{r.email}</p>}
-                            {r.phone && <p className="text-sm text-surface-500">{r.phone}</p>}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={getStatusColor(r.attendance)}>{r.attendance}</span>
-                            <p className="text-sm text-surface-500 mt-1">{r.guestCount} guest(s)</p>
-                            {r.submittedAt && (
-                              <p className="text-xs text-surface-400 mt-1">{formatDate(r.submittedAt, 'MMM d, yyyy')}</p>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-sm">
-                            {r.mealPreference && <p className="text-surface-700">Meal: <span className="font-medium">{r.mealPreference}</span></p>}
-                            {r.dietaryNotes && <p className="text-xs text-surface-600 mt-1">Dietary: {r.dietaryNotes}</p>}
-                          </td>
-                          <td className="py-3 px-4 text-sm">
-                            {r.note && <p className="text-surface-600 max-w-[200px]">{r.note}</p>}
-                            {customFields && Object.keys(customFields).length > 0 && (
-                              <details className="mt-2">
-                                <summary className="text-xs text-primary-600 cursor-pointer hover:text-primary-700">Custom Fields</summary>
-                                <div className="mt-2 text-xs text-surface-500 space-y-1">
-                                  {Object.entries(customFields).map(([key, value]) => (
-                                    <p key={key}><span className="font-medium">{key}:</span> {String(value)}</p>
-                                  ))}
-                                </div>
-                              </details>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={getStatusColor(r.status)}>{r.status}</span>
-                            {r.invitation?.isCheckedIn && (
-                              <span className="ml-2 text-xs text-green-600 flex items-center gap-1">
-                                {Icons.check} In
-                              </span>
-                            )}
-                            {r.invitation?.accessCode && (
-                              <p className="text-xs text-surface-400 mt-1 font-mono">{r.invitation.accessCode}</p>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            {r.secondaryName ? <p className="meta">&amp; {r.secondaryName}</p> : null}
+                          </Td>
+                          <Td>
+                            {r.email ? <p className="truncate">{r.email}</p> : null}
+                            {r.phone ? <p className="meta">{r.phone}</p> : null}
+                            {!r.email && !r.phone ? <span className="text-surface-500">&mdash;</span> : null}
+                          </Td>
+                          <Td>
+                            <StatusBadge tone={getStatusTone(r.attendance)}>{humanizeEnum(r.attendance)}</StatusBadge>
+                            <p className="meta num mt-1">
+                              {r.guestCount} {r.guestCount === 1 ? 'guest' : 'guests'}
+                            </p>
+                            {r.submittedAt ? (
+                              <p className="meta mt-0.5">{formatDate(r.submittedAt, 'MMM d, yyyy')}</p>
+                            ) : null}
+                          </Td>
+                          <Td>
+                            {r.mealPreference ? <p>{r.mealPreference}</p> : <span className="text-surface-500">&mdash;</span>}
+                            {r.dietaryNotes ? <p className="meta mt-0.5">{r.dietaryNotes}</p> : null}
+                          </Td>
+                          <Td>
+                            <StatusBadge tone={getStatusTone(r.status)}>{humanizeEnum(r.status)}</StatusBadge>
+                            {r.invitation?.isCheckedIn ? (
+                              <p className="meta mt-1 text-emerald-700">Checked in</p>
+                            ) : null}
+                            {r.invitation?.accessCode ? (
+                              <p className="mt-0.5 font-mono text-[12px] text-surface-600">{r.invitation.accessCode}</p>
+                            ) : null}
+                          </Td>
+                          <Td align="right">
+                            <div className="flex items-center justify-end gap-1">
                               <button
+                                type="button"
                                 onClick={() => setViewingRsvpDetails(r)}
-                                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                                title="View Details"
+                                className="btn-outline btn-sm"
                               >
                                 Details
                               </button>
-                              {r.status === 'PENDING' && (
-                                <>
-                                  <button 
-                                    onClick={() => handleReviewRsvp(r.id, 'APPROVED')} 
-                                    className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              {r.status === 'PENDING' ? (
+                                <Menu label={`Review ${r.primaryName}`} sheetTitle={r.primaryName}>
+                                  <MenuItem
                                     disabled={reviewingRsvp === r.id}
+                                    onClick={() => handleReviewRsvp(r.id, 'APPROVED')}
                                   >
-                                    {reviewingRsvp === r.id ? 'Processing...' : 'Approve'}
-                                  </button>
-                                  <button 
-                                    onClick={() => handleReviewRsvp(r.id, 'REJECTED')} 
-                                    className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    Approve
+                                  </MenuItem>
+                                  <MenuItem
+                                    danger
                                     disabled={reviewingRsvp === r.id}
+                                    onClick={() => handleReviewRsvp(r.id, 'REJECTED')}
                                   >
-                                    {reviewingRsvp === r.id ? 'Processing...' : 'Reject'}
-                                  </button>
-                                </>
-                              )}
+                                    Reject
+                                  </MenuItem>
+                                </Menu>
+                              ) : null}
                             </div>
-                          </td>
+                          </Td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* RSVP Details Modal */}
-          {viewingRsvpDetails && (
-            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setViewingRsvpDetails(null)}>
-              <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="p-6 border-b border-surface-200">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-brand-900">RSVP Details</h3>
-                    <button onClick={() => setViewingRsvpDetails(null)} className="p-2 rounded-lg hover:bg-surface-100">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Primary Name</label>
-                      <p className="text-brand-900 font-medium">{viewingRsvpDetails.primaryName}</p>
-                    </div>
-                    {viewingRsvpDetails.secondaryName && (
-                      <div>
-                        <label className="text-sm font-medium text-surface-500">Secondary Name</label>
-                        <p className="text-brand-900 font-medium">{viewingRsvpDetails.secondaryName}</p>
-                      </div>
-                    )}
-                    {viewingRsvpDetails.email && (
-                      <div>
-                        <label className="text-sm font-medium text-surface-500">Email</label>
-                        <p className="text-brand-900">{viewingRsvpDetails.email}</p>
-                      </div>
-                    )}
-                    {viewingRsvpDetails.phone && (
-                      <div>
-                        <label className="text-sm font-medium text-surface-500">Phone</label>
-                        <p className="text-brand-900">{viewingRsvpDetails.phone}</p>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Attendance</label>
-                      <p className="text-brand-900">
-                        <span className={getStatusColor(viewingRsvpDetails.attendance)}>{viewingRsvpDetails.attendance}</span>
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Guest Count</label>
-                      <p className="text-brand-900">{viewingRsvpDetails.guestCount}</p>
-                    </div>
-                    {viewingRsvpDetails.mealPreference && (
-                      <div>
-                        <label className="text-sm font-medium text-surface-500">Meal Preference</label>
-                        <p className="text-brand-900">{viewingRsvpDetails.mealPreference}</p>
-                      </div>
-                    )}
-                    {viewingRsvpDetails.dietaryNotes && (
-                      <div>
-                        <label className="text-sm font-medium text-surface-500">Dietary Notes</label>
-                        <p className="text-brand-900">{viewingRsvpDetails.dietaryNotes}</p>
-                      </div>
-                    )}
-                    {viewingRsvpDetails.note && (
-                      <div className="sm:col-span-2">
-                        <label className="text-sm font-medium text-surface-500">Note</label>
-                        <p className="text-brand-900">{viewingRsvpDetails.note}</p>
-                      </div>
-                    )}
-                    {viewingRsvpDetails.submittedAt && (
-                      <div>
-                        <label className="text-sm font-medium text-surface-500">Submitted At</label>
-                        <p className="text-brand-900">{formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}</p>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-sm font-medium text-surface-500">Status</label>
-                      <p className="text-brand-900">
-                        <span className={getStatusColor(viewingRsvpDetails.status)}>{viewingRsvpDetails.status}</span>
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {viewingRsvpDetails.customFields && (() => {
-                    try {
-                      const customFields = JSON.parse(viewingRsvpDetails.customFields);
-                      if (Object.keys(customFields).length > 0) {
-                        return (
-                          <div className="border-t border-surface-200 pt-4 mt-4">
-                            <h4 className="text-sm font-semibold text-brand-900 mb-3">Custom Fields</h4>
-                            <div className="grid sm:grid-cols-2 gap-4">
-                              {Object.entries(customFields).map(([key, value]) => (
-                                <div key={key}>
-                                  <label className="text-sm font-medium text-surface-500">{key}</label>
-                                  <p className="text-brand-900">{String(value)}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                    } catch {}
-                    return null;
-                  })()}
-
-                  {/* Invitation Details with QR Code */}
-                  {viewingRsvpDetails.invitation && (
-                    <div className="border-t border-surface-200 pt-4 mt-4">
-                      <h4 className="text-sm font-semibold text-brand-900 mb-3">Invitation Details</h4>
-                      <div className="grid sm:grid-cols-2 gap-4 text-sm mb-4">
-                        <div>
-                          <label className="text-sm font-medium text-surface-500">Access Code</label>
-                          <p className="text-brand-900 font-mono">{viewingRsvpDetails.invitation.accessCode}</p>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-surface-500">Checked In</label>
-                          <p className="text-brand-900">
-                            {viewingRsvpDetails.invitation.isCheckedIn ? (
-                              <span className="text-green-600 font-medium">Yes</span>
-                            ) : (
-                              <span className="text-surface-400">No</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      {/* QR Code Display */}
-                      {viewingRsvpDetails.invitation.qrCodeData && (
-                        <div className="mt-4">
-                          <label className="text-sm font-medium text-surface-500 mb-3 block">QR Code</label>
-                          <div className="flex flex-col items-center gap-3">
-                            <img
-                              src={viewingRsvpDetails.invitation.qrCodeData}
-                              alt="QR Code"
-                              className="w-48 h-48 bg-white p-2 rounded-lg border border-surface-200"
-                            />
-                            <p className="text-xs text-surface-500 text-center">
-                              Scan this QR code for check-in
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            </div>
+            </>
           )}
+
+          <Modal
+            open={Boolean(viewingRsvpDetails)}
+            onClose={() => setViewingRsvpDetails(null)}
+            title={viewingRsvpDetails?.primaryName || 'RSVP'}
+            size="lg"
+            footer={
+              viewingRsvpDetails?.status === 'PENDING' ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-danger-outline"
+                    disabled={reviewingRsvp === viewingRsvpDetails?.id}
+                    onClick={() => {
+                      if (viewingRsvpDetails) handleReviewRsvp(viewingRsvpDetails.id, 'REJECTED');
+                      setViewingRsvpDetails(null);
+                    }}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={reviewingRsvp === viewingRsvpDetails?.id}
+                    onClick={() => {
+                      if (viewingRsvpDetails) handleReviewRsvp(viewingRsvpDetails.id, 'APPROVED');
+                      setViewingRsvpDetails(null);
+                    }}
+                  >
+                    Approve
+                  </button>
+                </>
+              ) : null
+            }
+          >
+            {viewingRsvpDetails ? (
+              <div className="space-y-5">
+                <dl className="divide-y divide-surface-200">
+                  <DetailRow label="Response">
+                    <StatusBadge tone={getStatusTone(viewingRsvpDetails.attendance)}>
+                      {humanizeEnum(viewingRsvpDetails.attendance)}
+                    </StatusBadge>
+                  </DetailRow>
+                  <DetailRow label="Status">
+                    <StatusBadge tone={getStatusTone(viewingRsvpDetails.status)}>
+                      {humanizeEnum(viewingRsvpDetails.status)}
+                    </StatusBadge>
+                  </DetailRow>
+                  <DetailRow label="Guests">{viewingRsvpDetails.guestCount}</DetailRow>
+                  {viewingRsvpDetails.secondaryName ? (
+                    <DetailRow label="Plus one">{viewingRsvpDetails.secondaryName}</DetailRow>
+                  ) : null}
+                  {viewingRsvpDetails.email ? (
+                    <DetailRow label="Email">
+                      <span className="break-all">{viewingRsvpDetails.email}</span>
+                    </DetailRow>
+                  ) : null}
+                  {viewingRsvpDetails.phone ? <DetailRow label="Phone">{viewingRsvpDetails.phone}</DetailRow> : null}
+                  {viewingRsvpDetails.mealPreference ? (
+                    <DetailRow label="Meal">{viewingRsvpDetails.mealPreference}</DetailRow>
+                  ) : null}
+                  {viewingRsvpDetails.dietaryNotes ? (
+                    <DetailRow label="Dietary notes">{viewingRsvpDetails.dietaryNotes}</DetailRow>
+                  ) : null}
+                  {viewingRsvpDetails.note ? <DetailRow label="Note">{viewingRsvpDetails.note}</DetailRow> : null}
+                  {viewingRsvpDetails.submittedAt ? (
+                    <DetailRow label="Submitted">
+                      {formatDate(viewingRsvpDetails.submittedAt, 'MMM d, yyyy h:mm a')}
+                    </DetailRow>
+                  ) : null}
+                </dl>
+
+                {Object.entries(parseCustomFields(viewingRsvpDetails.customFields)).length > 0 ? (
+                  <div>
+                    <h3 className="section-title mb-1">Custom fields</h3>
+                    <dl className="divide-y divide-surface-200">
+                      {Object.entries(parseCustomFields(viewingRsvpDetails.customFields)).map(([key, value]) => (
+                        <DetailRow key={key} label={key}>
+                          {String(value)}
+                        </DetailRow>
+                      ))}
+                    </dl>
+                  </div>
+                ) : null}
+
+                {viewingRsvpDetails.invitation ? (
+                  <div>
+                    <h3 className="section-title mb-1">Invitation</h3>
+                    <dl className="divide-y divide-surface-200">
+                      <DetailRow label="Access code">
+                        <span className="font-mono">{viewingRsvpDetails.invitation.accessCode}</span>
+                      </DetailRow>
+                      <DetailRow label="Checked in">
+                        {viewingRsvpDetails.invitation.isCheckedIn ? 'Yes' : 'Not yet'}
+                      </DetailRow>
+                    </dl>
+                    {viewingRsvpDetails.invitation.qrCodeData ? (
+                      <div className="mt-4 flex justify-center">
+                        <img
+                          src={viewingRsvpDetails.invitation.qrCodeData}
+                          alt={`Check-in QR code for ${viewingRsvpDetails.primaryName}`}
+                          className="h-44 w-44 rounded-lg border border-surface-200 bg-white p-2"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </Modal>
         </div>
       )}
 
       {/* Check-In */}
       {activeTab === 'checkin' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <p className="text-surface-600">{checkIns.length} guest(s) checked in</p>
-            <div className="flex gap-2">
-              <button onClick={exportCheckInsToCSV} className="btn-outline">
-                {Icons.download}
-                <span className="ml-2">Export CSV</span>
-              </button>
-              <Link href={`/e/${event.slug}/checkin`} target="_blank" className="btn-primary">Open Check-In Station</Link>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead><tr className="border-b border-surface-200 bg-surface-50">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Party</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Code</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Time</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Method</th>
-                </tr></thead>
-                <tbody className="divide-y divide-surface-100">
-                  {checkIns.length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-surface-500">No check-ins yet</td></tr> : checkIns.map(c => (
-                    <tr key={c.id} className="hover:bg-surface-50 transition-colors">
-                      <td className="py-3 px-4"><p className="font-medium text-brand-900">{c.invitation.guestName}</p></td>
-                      <td className="py-3 px-4 text-surface-600">{c.invitation.guestCount}</td>
-                      <td className="py-3 px-4 font-mono text-surface-600">{c.invitation.accessCode}</td>
-                      <td className="py-3 px-4 text-surface-600">{formatDate(c.checkedInAt, 'MMM d, h:mm a')}</td>
-                      <td className="py-3 px-4">
-                        <span className={cn(
-                          'px-2 py-1 rounded text-xs font-medium',
-                          c.method === 'QR_SCAN' ? 'bg-blue-50 text-blue-700' : 'bg-surface-100 text-surface-600'
-                        )}>
-                          {c.method === 'QR_SCAN' ? 'QR' : 'Code'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <Toolbar
+            end={
+              <>
+                <button onClick={exportCheckInsToCSV} className="btn-outline btn-sm" disabled={checkIns.length === 0}>
+                  Export CSV
+                </button>
+                <Link href={`/e/${event.slug}/checkin`} target="_blank" className="btn-primary btn-sm">
+                  Open check-in station
+                </Link>
+              </>
+            }
+          >
+            <span className="meta num">{formatCount(checkIns.length)} checked in</span>
+          </Toolbar>
+
+          {checkIns.length === 0 ? (
+            <EmptyState title="No check-ins yet" hint="Guests appear here as they arrive." />
+          ) : (
+            <>
+              <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+                {checkIns.map((c) => (
+                  <div key={c.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-[15px] font-semibold text-brand-900">{c.invitation.guestName}</span>
+                      <StatusBadge tone={c.method === 'QR_SCAN' ? 'info' : 'neutral'}>
+                        {c.method === 'QR_SCAN' ? 'QR' : 'Code'}
+                      </StatusBadge>
+                    </div>
+                    <p className="mt-0.5 meta">
+                      {formatDate(c.checkedInAt, 'MMM d, h:mm a')} &middot; {c.invitation.guestCount}{' '}
+                      {c.invitation.guestCount === 1 ? 'guest' : 'guests'} &middot;{' '}
+                      <span className="font-mono">{c.invitation.accessCode}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                <div className="overflow-x-auto">
+                  <table className="data-table" style={{ minWidth: 640 }}>
+                    <thead>
+                      <tr>
+                        <Th>Guest</Th>
+                        <Th align="right">Party</Th>
+                        <Th>Code</Th>
+                        <Th>Time</Th>
+                        <Th>Method</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {checkIns.map((c) => (
+                        <tr key={c.id} className="table-row">
+                          <Td className="font-medium text-brand-900">{c.invitation.guestName}</Td>
+                          <Td align="right" className="num">
+                            {c.invitation.guestCount}
+                          </Td>
+                          <Td className="font-mono">{c.invitation.accessCode}</Td>
+                          <Td>{formatDate(c.checkedInAt, 'MMM d, h:mm a')}</Td>
+                          <Td>
+                            <StatusBadge tone={c.method === 'QR_SCAN' ? 'info' : 'neutral'}>
+                              {c.method === 'QR_SCAN' ? 'QR' : 'Code'}
+                            </StatusBadge>
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1763,185 +1901,96 @@ export default function EventDetailPage() {
 
       {/* Templates */}
       {activeTab === 'templates' && (
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-brand-900 to-brand-800 rounded-xl p-6 text-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-xl font-bold mb-2">Template Assignment</h3>
-                <p className="text-white/80 text-sm">Customize the appearance of each page for this event</p>
-              </div>
-              <Link href="/admin/templates" className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors backdrop-blur-sm">
-                Manage Templates →
-              </Link>
-            </div>
-          </div>
+        <div className="space-y-4">
+          <Toolbar
+            end={
+              <>
+                <Link href="/admin/templates" className="btn-outline btn-sm">
+                  Template library
+                </Link>
+                <SubmitButton
+                  loading={savingTemplates}
+                  onClick={handleSaveTemplates}
+                  className="btn-primary btn-sm"
+                >
+                  Save
+                </SubmitButton>
+              </>
+            }
+          >
+            <span className="meta">Choose the design used for each guest page.</span>
+          </Toolbar>
 
-          {/* Template Categories */}
-          <div className="space-y-6">
-            {/* Main Pages */}
-            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-              <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
-                <h4 className="font-semibold text-brand-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Main Pages
-                </h4>
-                <p className="text-sm text-surface-500 mt-1">Core event pages</p>
-              </div>
-              <div className="p-6 grid sm:grid-cols-2 gap-4">
+          <Panel title="Guest pages" flush>
+            <div className="divide-y divide-surface-200">
+              {[
+                { t: 'INVITATION', l: 'Invitation', f: 'invitationTemplateId', e: event.invitationEnabled },
+                { t: 'RSVP', l: 'RSVP and tickets', f: 'rsvpTemplateId', e: event.rsvpEnabled },
+                { t: 'GUESTBOOK', l: 'Guestbook', f: 'guestbookTemplateId', e: event.guestbookEnabled },
+                { t: 'THANK_YOU', l: 'Thank you', f: 'thankYouTemplateId', e: true },
+                { t: 'LIVE_LANDING', l: 'Live landing', f: 'liveLandingTemplateId', e: true },
+                { t: 'EVENT_ENDED', l: 'Event ended', f: 'eventEndedTemplateId', e: true },
+                { t: 'ITINERARY', l: 'Itinerary', f: 'itineraryPageTemplateId', e: event.itineraryEnabled },
+                { t: 'GIFTING', l: 'Gifting', f: 'giftingPageTemplateId', e: event.giftingEnabled },
+                { t: 'VOTING', l: 'Voting', f: 'votingPageTemplateId', e: true },
+                { t: 'VOTING_NOMINATION', l: 'Nominations', f: 'nominationPageTemplateId', e: true },
+                { t: 'VOTING_NOMINEES', l: 'Nominees', f: 'nomineesPageTemplateId', e: true },
+                { t: 'VOTING_LEADERBOARD', l: 'Leaderboard', f: 'leaderboardPageTemplateId', e: true },
+              ].map((x) => (
+                <TemplateAssignRow
+                  key={x.f}
+                  label={x.l}
+                  enabled={Boolean(x.e)}
+                  value={(selectedTemplates as any)[x.f] || ''}
+                  options={getTemplatesByType(x.t)}
+                  onChange={(value) => setSelectedTemplates({ ...selectedTemplates, [x.f]: value })}
+                />
+              ))}
+            </div>
+          </Panel>
+
+          {event.guestbookEnabled ? (
+            <Panel title="Guestbook recording" flush>
+              <div className="divide-y divide-surface-200">
                 {[
-                  { t: 'INVITATION', l: 'Invitation Page', f: 'invitationTemplateId', e: event.invitationEnabled, icon: '🎫', desc: 'Digital invitation pass' },
-                  { t: 'RSVP', l: 'RSVP / Ticket Page', f: 'rsvpTemplateId', e: event.rsvpEnabled, icon: '✋', desc: 'Guest response and paid ticket page' },
-                  { t: 'GUESTBOOK', l: 'Guestbook Menu', f: 'guestbookTemplateId', e: event.guestbookEnabled, icon: '📖', desc: 'Guestbook landing page' },
-                  { t: 'THANK_YOU', l: 'Thank You Page', f: 'thankYouTemplateId', e: true, icon: '🙏', desc: 'Post-submission page' },
-                  { t: 'LIVE_LANDING', l: 'Live Landing Page', f: 'liveLandingTemplateId', e: true, icon: '🎉', desc: 'During live phase' },
-                  { t: 'EVENT_ENDED', l: 'Event Ended Page', f: 'eventEndedTemplateId', e: true, icon: '🏁', desc: 'After event ends' },
-                  { t: 'ITINERARY', l: 'Itinerary Page', f: 'itineraryPageTemplateId', e: event.itineraryEnabled, icon: '🗓️', desc: 'Public itinerary tracking page' },
-                  { t: 'GIFTING', l: 'Gifting Page', f: 'giftingPageTemplateId', e: event.giftingEnabled, icon: '🎁', desc: 'Guest gifting checkout page' },
-                  { t: 'VOTING', l: 'Voting Page', f: 'votingPageTemplateId', e: true, icon: '🗳️', desc: 'Public voting page and embed flow' },
-                  { t: 'VOTING_NOMINATION', l: 'Nomination Page', f: 'nominationPageTemplateId', e: true, icon: '✍️', desc: 'Public nomination intake form' },
-                  { t: 'VOTING_NOMINEES', l: 'Nominees Page', f: 'nomineesPageTemplateId', e: true, icon: '🏆', desc: 'Category-based nominees listing with vote CTAs' },
-                  { t: 'VOTING_LEADERBOARD', l: 'Leaderboard Page', f: 'leaderboardPageTemplateId', e: true, icon: '📈', desc: 'Live ranking board by category' },
-                ].map(x => (
-                  <div key={x.f} className={cn('relative p-4 rounded-lg border-2 transition-all', !x.e ? 'opacity-50 bg-surface-50 border-surface-200' : 'bg-white border-surface-200 hover:border-brand-300 hover:shadow-md')}>
-                    <div className="flex items-start gap-3">
-                      <div className="text-2xl flex-shrink-0">{x.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <label className="block text-sm font-semibold text-brand-900 mb-1">{x.l}</label>
-                        <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
-                        <select 
-                          className={cn('w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all', !x.e && 'cursor-not-allowed bg-surface-100')} 
-                          value={(selectedTemplates as any)[x.f] || ''} 
-                          onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })} 
-                          disabled={!x.e}
-                        >
-                          <option value="">Default Template</option>
-                          {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    {!x.e && (
-                      <div className="absolute top-2 right-2 px-2 py-1 bg-surface-200 text-surface-600 text-xs font-medium rounded">
-                        Disabled
-                      </div>
-                    )}
-                  </div>
+                  { t: 'GUESTBOOK_VIDEO', l: 'Video', f: 'guestbookVideoTemplateId' },
+                  { t: 'GUESTBOOK_AUDIO', l: 'Audio', f: 'guestbookAudioTemplateId' },
+                  { t: 'GUESTBOOK_PHOTO', l: 'Photo', f: 'guestbookPhotoTemplateId' },
+                ].map((x) => (
+                  <TemplateAssignRow
+                    key={x.f}
+                    label={x.l}
+                    enabled
+                    value={(selectedTemplates as any)[x.f] || ''}
+                    options={getTemplatesByType(x.t)}
+                    onChange={(value) => setSelectedTemplates({ ...selectedTemplates, [x.f]: value })}
+                  />
                 ))}
               </div>
-            </div>
+            </Panel>
+          ) : null}
 
-            {/* Guestbook Subpages */}
-            {event.guestbookEnabled && (
-              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-                <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
-                  <h4 className="font-semibold text-brand-900 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Guestbook Recording Pages
-                  </h4>
-                  <p className="text-sm text-surface-500 mt-1">Media collection pages</p>
-                </div>
-                <div className="p-6 grid sm:grid-cols-3 gap-4">
-                  {[
-                    { t: 'GUESTBOOK_VIDEO', l: 'Video Recording', f: 'guestbookVideoTemplateId', icon: '🎥', desc: 'Video messages' },
-                    { t: 'GUESTBOOK_AUDIO', l: 'Audio Recording', f: 'guestbookAudioTemplateId', icon: '🎤', desc: 'Audio messages' },
-                    { t: 'GUESTBOOK_PHOTO', l: 'Photo Upload', f: 'guestbookPhotoTemplateId', icon: '📷', desc: 'Photo uploads' },
-                  ].map(x => (
-                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-brand-300 hover:shadow-md transition-all">
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl flex-shrink-0">{x.icon}</div>
-                        <div className="flex-1 min-w-0">
-                          <label className="block text-sm font-semibold text-brand-900 mb-1">{x.l}</label>
-                          <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
-                          <select 
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all" 
-                            value={(selectedTemplates as any)[x.f] || ''} 
-                            onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })}
-                          >
-                            <option value="">Default Template</option>
-                            {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {event.guestbookEnabled ? (
+            <Panel title="Photo booth" flush>
+              <div className="divide-y divide-surface-200">
+                {[
+                  { t: 'BOOTH', l: 'Booth menu', f: 'boothTemplateId' },
+                  { t: 'BOOTH', l: 'Booth video', f: 'boothVideoTemplateId' },
+                  { t: 'BOOTH', l: 'Booth audio', f: 'boothAudioTemplateId' },
+                  { t: 'BOOTH', l: 'Booth photo', f: 'boothPhotoTemplateId' },
+                ].map((x) => (
+                  <TemplateAssignRow
+                    key={x.f}
+                    label={x.l}
+                    enabled
+                    value={(selectedTemplates as any)[x.f] || ''}
+                    options={getTemplatesByType(x.t)}
+                    onChange={(value) => setSelectedTemplates({ ...selectedTemplates, [x.f]: value })}
+                  />
+                ))}
               </div>
-            )}
-
-            {/* Booth Pages */}
-            {event.guestbookEnabled && (
-              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-                <div className="bg-surface-50 px-6 py-4 border-b border-surface-200">
-                  <h4 className="font-semibold text-brand-900 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                    </svg>
-                    Photo Booth Pages
-                  </h4>
-                  <p className="text-sm text-surface-500 mt-1">Kiosk and booth interfaces</p>
-                </div>
-                <div className="p-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[
-                    { t: 'BOOTH', l: 'Booth Menu', f: 'boothTemplateId', icon: '🖼️', desc: 'Main menu' },
-                    { t: 'BOOTH', l: 'Booth Video', f: 'boothVideoTemplateId', icon: '📹', desc: 'Video capture' },
-                    { t: 'BOOTH', l: 'Booth Audio', f: 'boothAudioTemplateId', icon: '🎙️', desc: 'Audio capture' },
-                    { t: 'BOOTH', l: 'Booth Photo', f: 'boothPhotoTemplateId', icon: '📸', desc: 'Photo capture' },
-                  ].map(x => (
-                    <div key={x.f} className="relative p-4 rounded-lg border-2 bg-white border-surface-200 hover:border-brand-300 hover:shadow-md transition-all">
-                      <div className="flex flex-col items-center text-center">
-                        <div className="text-3xl mb-2">{x.icon}</div>
-                        <label className="block text-sm font-semibold text-brand-900 mb-1">{x.l}</label>
-                        <p className="text-xs text-surface-500 mb-3">{x.desc}</p>
-                        <select 
-                          className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all" 
-                          value={(selectedTemplates as any)[x.f] || ''} 
-                          onChange={e => setSelectedTemplates({ ...selectedTemplates, [x.f]: e.target.value })}
-                        >
-                          <option value="">Default Template</option>
-                          {getTemplatesByType(x.t).map(t => <option key={t.id} value={t.id}>{t.name}{t.isDefault && ' (Default)'}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <button 
-              onClick={handleSaveTemplates} 
-              disabled={savingTemplates} 
-              className={cn(
-                'px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2',
-                savingTemplates 
-                  ? 'bg-surface-200 text-surface-500 cursor-not-allowed' 
-                  : 'bg-brand-900 text-white hover:bg-brand-800 shadow-lg hover:shadow-xl'
-              )}
-            >
-              {savingTemplates ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Save Template Assignments
-                </>
-              )}
-            </button>
-          </div>
+            </Panel>
+          ) : null}
         </div>
       )}
 
@@ -1959,554 +2008,631 @@ export default function EventDetailPage() {
       {/* Itinerary */}
       {activeTab === 'itinerary' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-brand-900">Event Itinerary</h3>
-                <p className="text-sm text-surface-600">
-                  Manage activities and generate MC control access.
-                </p>
-              </div>
-              <button
-                className="btn-primary"
-                disabled={creatingMcSession}
-                onClick={handleCreateMcControlLink}
-              >
-                {creatingMcSession ? 'Generating...' : 'Generate MC Link'}
-              </button>
-            </div>
-            {mcControlUrl && (
-              <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
-                <p className="text-xs uppercase tracking-wider text-surface-500 font-medium">MC Control URL</p>
-                <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                  <input className="input text-sm" readOnly value={mcControlUrl} />
-                  <button className="btn-outline" onClick={() => copyToClipboard(mcControlUrl)}>
-                    Copy
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <Toolbar
+            end={
+              <>
+                <button className="btn-outline btn-sm" disabled={creatingMcSession} onClick={handleCreateMcControlLink}>
+                  {creatingMcSession ? 'Generating…' : 'MC link'}
+                </button>
+                <button className="btn-primary btn-sm" onClick={() => setShowAddItinerary(true)}>
+                  Add item
+                </button>
+              </>
+            }
+          >
+            <span className="meta num">
+              {formatCount(itineraryItems.length)} {itineraryItems.length === 1 ? 'item' : 'items'}
+            </span>
+            {savingItineraryOrder ? <span className="meta">Saving order…</span> : null}
+          </Toolbar>
 
-          <div className="bg-white rounded-lg border border-surface-200 p-4 space-y-3">
-            <h4 className="font-medium text-brand-900">Add Item</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                className="input"
-                placeholder="Activity title"
-                value={newItineraryItem.title}
-                onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
-              />
-              <input
-                className="input"
-                placeholder="Location (optional)"
-                value={newItineraryItem.location}
-                onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
-              <div>
-                <p className="text-sm font-medium text-brand-900">Add date/time</p>
-                <p className="text-xs text-surface-500">Optional. Keep off for activities without fixed schedule.</p>
+          {mcControlUrl ? (
+            <div className="surface flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-surface-900">MC control link</p>
+                <p className="truncate font-mono text-[12px] text-surface-600">{mcControlUrl}</p>
               </div>
               <button
-                type="button"
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
-                  showItineraryDateTimeInputs
-                    ? 'bg-brand-900 text-white border-brand-900'
-                    : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
-                )}
-                onClick={() => {
-                  const next = !showItineraryDateTimeInputs;
-                  setShowItineraryDateTimeInputs(next);
-                  if (!next) {
-                    setNewItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
-                  }
+                className="btn-outline btn-sm shrink-0"
+                onClick={async () => {
+                  if (await copyToClipboard(mcControlUrl)) toast.success('Link copied');
                 }}
               >
-                {showItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
+                Copy
               </button>
             </div>
-            {showItineraryDateTimeInputs && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={newItineraryItem.startsAt}
-                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
-                />
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={newItineraryItem.endsAt}
-                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
-                />
-              </div>
-            )}
-            <textarea
-              className="input min-h-[88px]"
-              placeholder="Description (optional)"
-              value={newItineraryItem.description}
-              onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
-            />
-            <div className="flex justify-end">
-              <button className="btn-primary" disabled={savingItinerary} onClick={handleAddItineraryItem}>
-                {savingItinerary ? 'Saving...' : 'Add Item'}
-              </button>
-            </div>
-          </div>
+          ) : null}
 
           {loadingItinerary ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900 mx-auto" />
-            </div>
+            <ListSkeleton rows={4} />
           ) : itineraryItems.length === 0 ? (
-            <div className="bg-white rounded-lg border border-surface-200 p-10 text-center text-surface-500">
-              No itinerary items yet.
-            </div>
+            <EmptyState
+              title="No itinerary items"
+              action={
+                <button className="btn-primary btn-sm" onClick={() => setShowAddItinerary(true)}>
+                  Add item
+                </button>
+              }
+            />
           ) : (
-            <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-              <div className="px-4 py-2 border-b border-surface-200 bg-surface-50 text-xs text-surface-600 flex items-center justify-between gap-3">
-                <span>Drag and drop itinerary items to reorder.</span>
-                {savingItineraryOrder ? <span className="font-medium text-brand-900">Saving order...</span> : null}
-              </div>
-              <div className="divide-y divide-surface-200">
-                {itineraryItems.map((item) => (
-                  <div
-                    key={item.id}
-                    draggable={editingItineraryId !== item.id && !savingItineraryOrder}
-                    onDragStart={() => setDraggingItineraryId(item.id)}
-                    onDragEnd={() => {
-                      setDraggingItineraryId(null);
-                      setItineraryDropTargetId(null);
-                    }}
-                    onDragOver={(e) => {
-                      if (editingItineraryId === item.id || savingItineraryOrder) return;
-                      e.preventDefault();
-                      if (itineraryDropTargetId !== item.id) {
-                        setItineraryDropTargetId(item.id);
-                      }
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleItineraryDrop(item.id);
-                    }}
-                    className={cn(
-                      'px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3',
-                      itineraryDropTargetId === item.id ? 'bg-brand-50' : ''
-                    )}
-                  >
-                    {editingItineraryId === item.id ? (
-                      <div className="w-full space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
+              {itineraryItems.map((item, index) => (
+                <div
+                  key={item.id}
+                  draggable={editingItineraryId !== item.id && !savingItineraryOrder}
+                  onDragStart={() => setDraggingItineraryId(item.id)}
+                  onDragEnd={() => {
+                    setDraggingItineraryId(null);
+                    setItineraryDropTargetId(null);
+                  }}
+                  onDragOver={(e) => {
+                    if (editingItineraryId === item.id || savingItineraryOrder) return;
+                    e.preventDefault();
+                    if (itineraryDropTargetId !== item.id) setItineraryDropTargetId(item.id);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleItineraryDrop(item.id);
+                  }}
+                  className={cn('px-4 py-3', itineraryDropTargetId === item.id && 'bg-brand-50')}
+                >
+                  {editingItineraryId === item.id ? (
+                    <div className="space-y-3">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <label className="label" htmlFor={`edit-title-${item.id}`}>
+                            Title
+                          </label>
                           <input
+                            id={`edit-title-${item.id}`}
                             className="input"
-                            placeholder="Activity title"
                             value={editItineraryItem.title}
                             onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
                           />
+                        </div>
+                        <div>
+                          <label className="label" htmlFor={`edit-location-${item.id}`}>
+                            Location <span className="font-normal text-surface-600">(optional)</span>
+                          </label>
                           <input
+                            id={`edit-location-${item.id}`}
                             className="input"
-                            placeholder="Location (optional)"
                             value={editItineraryItem.location}
                             onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
                           />
                         </div>
-                        <div className="flex items-center justify-between gap-3 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2">
+                      </div>
+
+                      <Switch
+                        label="Scheduled time"
+                        description="Leave off for activities without a fixed time."
+                        checked={editingItineraryDateTimeInputs}
+                        onChange={(next) => {
+                          setEditingItineraryDateTimeInputs(next);
+                          if (!next) setEditItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                        }}
+                      />
+
+                      {editingItineraryDateTimeInputs ? (
+                        <div className="grid gap-3 md:grid-cols-2">
                           <div>
-                            <p className="text-sm font-medium text-brand-900">Edit date/time</p>
-                            <p className="text-xs text-surface-500">Optional for this itinerary activity.</p>
-                          </div>
-                          <button
-                            type="button"
-                            className={cn(
-                              'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
-                              editingItineraryDateTimeInputs
-                                ? 'bg-brand-900 text-white border-brand-900'
-                                : 'bg-white text-surface-700 border-surface-200 hover:bg-surface-100'
-                            )}
-                            onClick={() => {
-                              const next = !editingItineraryDateTimeInputs;
-                              setEditingItineraryDateTimeInputs(next);
-                              if (!next) {
-                                setEditItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
-                              }
-                            }}
-                          >
-                            {editingItineraryDateTimeInputs ? 'Hide Date/Time' : 'Add Date/Time'}
-                          </button>
-                        </div>
-                        {editingItineraryDateTimeInputs && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label className="label" htmlFor={`edit-start-${item.id}`}>
+                              Starts
+                            </label>
                             <input
+                              id={`edit-start-${item.id}`}
                               type="datetime-local"
                               className="input"
                               value={editItineraryItem.startsAt}
                               onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
                             />
+                          </div>
+                          <div>
+                            <label className="label" htmlFor={`edit-end-${item.id}`}>
+                              Ends
+                            </label>
                             <input
+                              id={`edit-end-${item.id}`}
                               type="datetime-local"
                               className="input"
                               value={editItineraryItem.endsAt}
                               onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
                             />
                           </div>
-                        )}
+                        </div>
+                      ) : null}
+
+                      <div>
+                        <label className="label" htmlFor={`edit-desc-${item.id}`}>
+                          Description <span className="font-normal text-surface-600">(optional)</span>
+                        </label>
                         <textarea
-                          className="input min-h-[80px]"
-                          placeholder="Description (optional)"
+                          id={`edit-desc-${item.id}`}
+                          className="input"
+                          rows={3}
                           value={editItineraryItem.description}
                           onChange={(e) => setEditItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
                         />
-                        <div className="flex items-center justify-end gap-2">
-                          <button className="btn-ghost" onClick={handleCancelEditItineraryItem}>
-                            Cancel
-                          </button>
-                          <button
-                            className="btn-primary"
-                            disabled={savingEditedItinerary}
-                            onClick={() => handleUpdateItineraryItem(item.id)}
-                          >
-                            {savingEditedItinerary ? 'Saving...' : 'Save Changes'}
-                          </button>
-                        </div>
                       </div>
-                    ) : (
-                      <>
-                        <div>
-                          <div className="text-[11px] uppercase tracking-wide text-surface-400 mb-1">
-                            Drag to move
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                'w-2 h-2 rounded-full',
-                                item.isCompleted ? 'bg-emerald-500' : 'bg-surface-300'
-                              )}
-                            />
-                            <p className={cn('font-medium', item.isCompleted ? 'text-surface-500 line-through' : 'text-brand-900')}>
-                              {item.title}
-                            </p>
-                          </div>
-                          {item.description && (
-                            <p className="text-sm text-surface-600 mt-1">{item.description}</p>
-                          )}
-                          {(item.startsAt || item.location) && (
-                            <p className="text-xs text-surface-500 mt-1">
-                              {item.startsAt ? formatDate(item.startsAt, 'MMM d, yyyy p') : ''}
-                              {item.startsAt && item.location ? ' - ' : ''}
-                              {item.location ? item.location : ''}
-                            </p>
-                          )}
+
+                      <div className="flex justify-end gap-2">
+                        <button className="btn-outline btn-sm" onClick={handleCancelEditItineraryItem}>
+                          Cancel
+                        </button>
+                        <SubmitButton
+                          loading={savingEditedItinerary}
+                          className="btn-primary btn-sm"
+                          onClick={() => handleUpdateItineraryItem(item.id)}
+                        >
+                          Save
+                        </SubmitButton>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3">
+                      <div className="flex shrink-0 flex-col">
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn-sm"
+                          aria-label={`Move ${item.title} up`}
+                          disabled={index === 0 || savingItineraryOrder}
+                          onClick={() => void moveItineraryItem(index, -1)}
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m5 15 7-7 7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn-sm"
+                          aria-label={`Move ${item.title} down`}
+                          disabled={index === itineraryItems.length - 1 || savingItineraryOrder}
+                          onClick={() => void moveItineraryItem(index, 1)}
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19 9-7 7-7-7" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={cn('status-dot', item.isCompleted ? 'bg-emerald-500' : 'bg-surface-400')}
+                            aria-hidden="true"
+                          />
+                          <p
+                            className={cn(
+                              'truncate text-[15px] font-semibold',
+                              item.isCompleted ? 'text-surface-600 line-through' : 'text-brand-900'
+                            )}
+                          >
+                            {item.title}
+                          </p>
+                          <StatusBadge tone={item.isCompleted ? 'success' : 'neutral'}>
+                            {item.isCompleted ? 'Done' : 'Pending'}
+                          </StatusBadge>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="text-xs text-surface-500">
-                            {item.isCompleted
-                              ? `Completed ${item.completedAt ? formatDate(item.completedAt) : 'recently'}`
-                              : 'Pending'}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button className="btn-ghost" onClick={() => handleStartEditItineraryItem(item)}>
-                              Edit
-                            </button>
-                            <button
-                              className="btn-ghost text-rose-600 hover:text-rose-700"
-                              disabled={deletingItineraryId === item.id}
-                              onClick={() => handleDeleteItineraryItem(item.id)}
-                            >
-                              {deletingItineraryId === item.id ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
+                        {item.startsAt || item.location ? (
+                          <p className="mt-0.5 meta truncate">
+                            {item.startsAt ? formatDate(item.startsAt, 'MMM d, p') : ''}
+                            {item.startsAt && item.location ? ' · ' : ''}
+                            {item.location || ''}
+                          </p>
+                        ) : null}
+                        {item.description ? (
+                          <p className="mt-1 text-[13px] leading-5 text-surface-700">{item.description}</p>
+                        ) : null}
+                      </div>
+
+                      <Menu label={`Actions for ${item.title}`} sheetTitle={item.title}>
+                        <MenuItem onClick={() => handleStartEditItineraryItem(item)}>Edit</MenuItem>
+                        <MenuItem
+                          danger
+                          disabled={deletingItineraryId === item.id}
+                          onClick={() => setDeletingItinerary(item)}
+                        >
+                          Delete
+                        </MenuItem>
+                      </Menu>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
+
+          <Modal
+            open={showAddItinerary}
+            onClose={() => setShowAddItinerary(false)}
+            title="Add itinerary item"
+            size="md"
+            footer={
+              <>
+                <button className="btn-outline" onClick={() => setShowAddItinerary(false)} disabled={savingItinerary}>
+                  Cancel
+                </button>
+                <SubmitButton loading={savingItinerary} onClick={handleAddItineraryItem}>
+                  Add item
+                </SubmitButton>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="label" htmlFor="itinerary-title">
+                  Title
+                </label>
+                <input
+                  id="itinerary-title"
+                  data-autofocus
+                  className="input"
+                  value={newItineraryItem.title}
+                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="First dance"
+                />
+              </div>
+
+              <div>
+                <label className="label" htmlFor="itinerary-location">
+                  Location <span className="font-normal text-surface-600">(optional)</span>
+                </label>
+                <input
+                  id="itinerary-location"
+                  className="input"
+                  value={newItineraryItem.location}
+                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, location: e.target.value }))}
+                />
+              </div>
+
+              <Switch
+                label="Scheduled time"
+                description="Leave off for activities without a fixed time."
+                checked={showItineraryDateTimeInputs}
+                onChange={(next) => {
+                  setShowItineraryDateTimeInputs(next);
+                  if (!next) setNewItineraryItem((prev) => ({ ...prev, startsAt: '', endsAt: '' }));
+                }}
+              />
+
+              {showItineraryDateTimeInputs ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="label" htmlFor="itinerary-start">
+                      Starts
+                    </label>
+                    <input
+                      id="itinerary-start"
+                      type="datetime-local"
+                      className="input"
+                      value={newItineraryItem.startsAt}
+                      onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, startsAt: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="itinerary-end">
+                      Ends
+                    </label>
+                    <input
+                      id="itinerary-end"
+                      type="datetime-local"
+                      className="input"
+                      value={newItineraryItem.endsAt}
+                      onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, endsAt: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <label className="label" htmlFor="itinerary-desc">
+                  Description <span className="font-normal text-surface-600">(optional)</span>
+                </label>
+                <textarea
+                  id="itinerary-desc"
+                  className="input"
+                  rows={3}
+                  value={newItineraryItem.description}
+                  onChange={(e) => setNewItineraryItem((prev) => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+            </div>
+          </Modal>
+
+          <ConfirmDialog
+            open={Boolean(deletingItinerary)}
+            onClose={() => setDeletingItinerary(null)}
+            onConfirm={() => {
+              if (deletingItinerary) handleDeleteItineraryItem(deletingItinerary.id);
+              setDeletingItinerary(null);
+            }}
+            title={`Delete "${deletingItinerary?.title || ''}"?`}
+            body="This removes the item from the public itinerary and the MC view."
+            confirmLabel="Delete item"
+            busy={Boolean(deletingItinerary && deletingItineraryId === deletingItinerary.id)}
+          />
         </div>
       )}
 
       {/* Form Fields */}
       {activeTab === 'formFields' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-brand-900">RSVP Form Fields</h3>
-              <p className="text-sm text-surface-500 mt-1">Customize the fields guests see when RSVPing. Email and Phone are always present but optional by default.</p>
-            </div>
-            <button
-              onClick={() => {
-                setEditingFormField(null);
-                setFormFieldData({
-                  fieldName: '', label: '', type: 'text', placeholder: '', helpText: '',
-                  options: [], required: false, minLength: undefined, maxLength: undefined,
-                  pattern: '', sortOrder: formFields.length, isActive: true, showOnConfirmation: true,
-                });
-                setShowFormFieldModal(true);
-              }}
-              className="btn-primary"
-            >
-              + Add Field
-            </button>
-          </div>
+          <Toolbar
+            end={
+              <button onClick={openNewFormField} className="btn-primary btn-sm">
+                Add field
+              </button>
+            }
+          >
+            <span className="meta">Extra questions on the RSVP form. Email and phone are always collected.</span>
+          </Toolbar>
 
           {loadingFormFields ? (
-            <div className="py-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900"></div>
-              <p className="mt-4 text-surface-500">Loading form fields...</p>
-            </div>
+            <ListSkeleton rows={4} />
+          ) : formFields.length === 0 ? (
+            <EmptyState
+              title="No custom fields"
+              hint="Add a field to collect anything else you need from guests."
+              action={
+                <button onClick={openNewFormField} className="btn-primary btn-sm">
+                  Add field
+                </button>
+              }
+            />
           ) : (
-            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-              {formFields.length === 0 ? (
-                <div className="py-12 text-center text-surface-500">
-                  <p>No custom fields yet. Add fields to collect additional information from guests.</p>
-                  <p className="text-sm mt-2">Note: Email and Phone fields are always present but optional by default.</p>
+            <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
+              {formFields.map((field) => (
+                <div key={field.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="truncate text-[15px] font-semibold text-brand-900">{field.label}</span>
+                      {field.required ? <StatusBadge tone="brand">Required</StatusBadge> : null}
+                      {field.isActive ? null : <StatusBadge tone="neutral">Hidden</StatusBadge>}
+                    </div>
+                    <p className="mt-0.5 meta truncate">
+                      {FIELD_TYPE_LABELS[field.type] || field.type}
+                      {field.helpText ? ` · ${field.helpText}` : ''}
+                    </p>
+                  </div>
+                  <button type="button" className="btn-outline btn-sm hidden sm:inline-flex" onClick={() => openEditFormField(field)}>
+                    Edit
+                  </button>
+                  <Menu label={`Actions for ${field.label}`} sheetTitle={field.label}>
+                    <MenuItem onClick={() => openEditFormField(field)}>Edit field</MenuItem>
+                    <MenuItem danger onClick={() => setDeletingFormField(field)}>
+                      Delete field
+                    </MenuItem>
+                  </Menu>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-surface-200 bg-surface-50">
-                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Label</th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Type</th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Required</th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase">Active</th>
-                        <th className="text-right py-3 px-4 text-xs font-medium text-surface-500 uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-surface-100">
-                      {formFields.map((field) => (
-                        <tr key={field.id} className="hover:bg-surface-50 transition-colors">
-                          <td className="py-3 px-4">
-                            <p className="font-medium text-brand-900">{field.label}</p>
-                            {field.helpText && <p className="text-xs text-surface-500 mt-1">{field.helpText}</p>}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="px-2 py-1 text-xs rounded bg-surface-100 text-surface-700">{field.type}</span>
-                          </td>
-                          <td className="py-3 px-4">
-                            {field.required ? (
-                              <span className="text-green-600 font-medium">Yes</span>
-                            ) : (
-                              <span className="text-surface-400">No</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            {field.isActive ? (
-                              <span className="text-green-600 font-medium">Active</span>
-                            ) : (
-                              <span className="text-surface-400">Inactive</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => {
-                                  setEditingFormField(field);
-                                  setFormFieldData({
-                                    fieldName: field.fieldName,
-                                    label: field.label,
-                                    type: field.type,
-                                    placeholder: field.placeholder || '',
-                                    helpText: field.helpText || '',
-                                    options: field.options || [],
-                                    required: field.required,
-                                    minLength: field.minLength || undefined,
-                                    maxLength: field.maxLength || undefined,
-                                    pattern: field.pattern || '',
-                                    sortOrder: field.sortOrder,
-                                    isActive: field.isActive,
-                                    showOnConfirmation: field.showOnConfirmation,
-                                  });
-                                  setShowFormFieldModal(true);
-                                }}
-                                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFormField(field.id)}
-                                className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              ))}
             </div>
           )}
 
-          {/* Form Field Modal */}
-          {showFormFieldModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b border-surface-200">
-                  <h3 className="text-lg font-semibold text-brand-900">
-                    {editingFormField ? 'Edit Form Field' : 'Add Form Field'}
-                  </h3>
+          <Modal
+            open={showFormFieldModal}
+            onClose={() => {
+              setShowFormFieldModal(false);
+              setEditingFormField(null);
+            }}
+            title={editingFormField ? 'Edit field' : 'Add field'}
+            size="lg"
+            footer={
+              <>
+                <button
+                  className="btn-outline"
+                  onClick={() => {
+                    setShowFormFieldModal(false);
+                    setEditingFormField(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveFormField}
+                  className="btn-primary"
+                  disabled={!formFieldData.label.trim() || !formFieldData.fieldName.trim()}
+                >
+                  {editingFormField ? 'Save changes' : 'Add field'}
+                </button>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="label" htmlFor="field-label">
+                  Question
+                </label>
+                <input
+                  id="field-label"
+                  data-autofocus
+                  type="text"
+                  className="input"
+                  value={formFieldData.label}
+                  onChange={(e) => {
+                    const label = e.target.value;
+                    setFormFieldData((prev) => ({
+                      ...prev,
+                      label,
+                      // Keep the stored key in step with the question until it is edited by hand.
+                      fieldName: editingFormField ? prev.fieldName : toFieldName(label),
+                    }));
+                  }}
+                  placeholder="Company name"
+                />
+              </div>
+
+              <div>
+                <label className="label" htmlFor="field-type">
+                  Answer type
+                </label>
+                <select
+                  id="field-type"
+                  className="input"
+                  value={formFieldData.type}
+                  onChange={(e) => setFormFieldData({ ...formFieldData, type: e.target.value as any })}
+                >
+                  {Object.entries(FIELD_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {formFieldData.type === 'select' || formFieldData.type === 'radio' ? (
+                <div>
+                  <label className="label" htmlFor="field-options">
+                    Choices
+                  </label>
+                  <textarea
+                    id="field-options"
+                    className="input"
+                    rows={4}
+                    value={formFieldData.options.join('\n')}
+                    onChange={(e) =>
+                      setFormFieldData({
+                        ...formFieldData,
+                        options: e.target.value.split('\n').filter((option) => option.trim()),
+                      })
+                    }
+                    placeholder={'Option 1\nOption 2'}
+                  />
+                  <p className="field-hint">One per line.</p>
                 </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
+              ) : null}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="field-placeholder">
+                    Placeholder <span className="font-normal text-surface-600">(optional)</span>
+                  </label>
+                  <input
+                    id="field-placeholder"
+                    type="text"
+                    className="input"
+                    value={formFieldData.placeholder}
+                    onChange={(e) => setFormFieldData({ ...formFieldData, placeholder: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="field-help">
+                    Help text <span className="font-normal text-surface-600">(optional)</span>
+                  </label>
+                  <input
+                    id="field-help"
+                    type="text"
+                    className="input"
+                    value={formFieldData.helpText}
+                    onChange={(e) => setFormFieldData({ ...formFieldData, helpText: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1 border-t border-surface-200 pt-3">
+                <Switch
+                  label="Required"
+                  checked={formFieldData.required}
+                  onChange={(checked) => setFormFieldData({ ...formFieldData, required: checked })}
+                />
+                <Switch
+                  label="Show on the RSVP form"
+                  checked={formFieldData.isActive}
+                  onChange={(checked) => setFormFieldData({ ...formFieldData, isActive: checked })}
+                />
+                <Switch
+                  label="Show on the confirmation page"
+                  checked={formFieldData.showOnConfirmation}
+                  onChange={(checked) => setFormFieldData({ ...formFieldData, showOnConfirmation: checked })}
+                />
+              </div>
+
+              <details className="border-t border-surface-200 pt-3">
+                <summary className="cursor-pointer text-sm font-medium text-surface-700 hover:text-brand-900">
+                  Advanced
+                </summary>
+                <div className="mt-3 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-3">
                     <div>
-                      <label className="label">Field Name (Internal)</label>
+                      <label className="label" htmlFor="field-min">
+                        Min length
+                      </label>
                       <input
-                        type="text"
+                        id="field-min"
+                        type="number"
+                        min={0}
                         className="input"
-                        value={formFieldData.fieldName}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, fieldName: e.target.value })}
-                        placeholder="e.g., company_name"
+                        value={formFieldData.minLength ?? ''}
+                        onChange={(e) =>
+                          setFormFieldData({
+                            ...formFieldData,
+                            minLength: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                          })
+                        }
                       />
                     </div>
                     <div>
-                      <label className="label">Display Label *</label>
+                      <label className="label" htmlFor="field-max">
+                        Max length
+                      </label>
                       <input
-                        type="text"
+                        id="field-max"
+                        type="number"
+                        min={0}
                         className="input"
-                        required
-                        value={formFieldData.label}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, label: e.target.value })}
-                        placeholder="e.g., Company Name"
+                        value={formFieldData.maxLength ?? ''}
+                        onChange={(e) =>
+                          setFormFieldData({
+                            ...formFieldData,
+                            maxLength: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="field-order">
+                        Position
+                      </label>
+                      <input
+                        id="field-order"
+                        type="number"
+                        min={0}
+                        className="input"
+                        value={formFieldData.sortOrder}
+                        onChange={(e) =>
+                          setFormFieldData({ ...formFieldData, sortOrder: parseInt(e.target.value, 10) || 0 })
+                        }
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="label">Field Type *</label>
-                    <select
-                      className="input"
-                      value={formFieldData.type}
-                      onChange={(e) => setFormFieldData({ ...formFieldData, type: e.target.value as any })}
-                    >
-                      <option value="text">Text</option>
-                      <option value="email">Email</option>
-                      <option value="phone">Phone</option>
-                      <option value="number">Number</option>
-                      <option value="textarea">Textarea</option>
-                      <option value="select">Select (Dropdown)</option>
-                      <option value="radio">Radio Buttons</option>
-                      <option value="checkbox">Checkbox</option>
-                      <option value="date">Date</option>
-                    </select>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Placeholder</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={formFieldData.placeholder}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, placeholder: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Help Text</label>
-                      <input
-                        type="text"
-                        className="input"
-                        value={formFieldData.helpText}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, helpText: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  {(formFieldData.type === 'select' || formFieldData.type === 'radio') && (
-                    <div>
-                      <label className="label">Options (one per line)</label>
-                      <textarea
-                        className="input"
-                        rows={4}
-                        value={formFieldData.options.join('\n')}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, options: e.target.value.split('\n').filter(o => o.trim()) })}
-                        placeholder="Option 1&#10;Option 2&#10;Option 3"
-                      />
-                    </div>
-                  )}
-                  <div className="grid sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="label">Min Length</label>
-                      <input
-                        type="number"
-                        className="input"
-                        value={formFieldData.minLength || ''}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, minLength: e.target.value ? parseInt(e.target.value) : undefined })}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Max Length</label>
-                      <input
-                        type="number"
-                        className="input"
-                        value={formFieldData.maxLength || ''}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, maxLength: e.target.value ? parseInt(e.target.value) : undefined })}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Sort Order</label>
-                      <input
-                        type="number"
-                        className="input"
-                        value={formFieldData.sortOrder}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, sortOrder: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-surface-300"
-                        checked={formFieldData.required}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, required: e.target.checked })}
-                      />
-                      <span className="text-sm font-medium">Required Field</span>
+                    <label className="label" htmlFor="field-key">
+                      Stored key
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-surface-300"
-                        checked={formFieldData.isActive}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, isActive: e.target.checked })}
-                      />
-                      <span className="text-sm font-medium">Active</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-surface-300"
-                        checked={formFieldData.showOnConfirmation}
-                        onChange={(e) => setFormFieldData({ ...formFieldData, showOnConfirmation: e.target.checked })}
-                      />
-                      <span className="text-sm font-medium">Show on Confirmation</span>
-                    </label>
+                    <input
+                      id="field-key"
+                      type="text"
+                      className="input font-mono"
+                      value={formFieldData.fieldName}
+                      onChange={(e) => setFormFieldData({ ...formFieldData, fieldName: toFieldName(e.target.value) })}
+                    />
+                    <p className="field-hint">Used in exports and the API. Changing it on an existing field starts a new column.</p>
                   </div>
                 </div>
-                <div className="p-6 border-t border-surface-200 flex justify-end gap-3">
-                  <button
-                    onClick={() => {
-                      setShowFormFieldModal(false);
-                      setEditingFormField(null);
-                    }}
-                    className="btn-outline"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveFormField}
-                    className="btn-primary"
-                    disabled={!formFieldData.label || !formFieldData.fieldName}
-                  >
-                    {editingFormField ? 'Update Field' : 'Create Field'}
-                  </button>
-                </div>
-              </div>
+              </details>
             </div>
-          )}
+          </Modal>
+
+          <ConfirmDialog
+            open={Boolean(deletingFormField)}
+            onClose={() => setDeletingFormField(null)}
+            onConfirm={() => {
+              if (deletingFormField) void handleDeleteFormField(deletingFormField.id);
+              setDeletingFormField(null);
+            }}
+            title={`Delete "${deletingFormField?.label || ''}"?`}
+            body="Guests will stop seeing this question. Answers already submitted stay in your exports."
+            confirmLabel="Delete field"
+          />
         </div>
       )}
 
@@ -2514,110 +2640,91 @@ export default function EventDetailPage() {
       {activeTab === 'sales' && (
         <div className="space-y-4">
           {loadingSales ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto" />
-            </div>
+            <>
+              <StatRowSkeleton />
+              <ListSkeleton rows={5} />
+            </>
           ) : (
             <>
-              {/* Stats Cards */}
-              {salesStats && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white rounded-xl border border-surface-200 p-5">
-                    <p className="text-sm text-surface-500 mb-1">Total Sales</p>
-                    <p className="text-3xl font-bold text-brand-900">{salesStats.totalSales || 0}</p>
-                  </div>
-                  <div className="bg-white rounded-xl border border-surface-200 p-5">
-                    <p className="text-sm text-surface-500 mb-1">Total Revenue</p>
-                    <p className="text-3xl font-bold text-brand-900">
-                      {formatCurrency(salesStats.totalRevenue || 0, salesCurrency)}
-                    </p>
-                  </div>
-                  <div className="bg-white rounded-xl border border-surface-200 p-5">
-                    <p className="text-sm text-surface-500 mb-1">Paid</p>
-                    <p className="text-3xl font-bold text-emerald-600">{salesStats.byStatus?.PAID || 0}</p>
-                  </div>
-                  <div className="bg-white rounded-xl border border-surface-200 p-5">
-                    <p className="text-sm text-surface-500 mb-1">Pending</p>
-                    <p className="text-3xl font-bold text-yellow-600">{salesStats.byStatus?.PENDING || 0}</p>
-                  </div>
-                </div>
-              )}
+              {salesStats ? (
+                <StatRow
+                  items={[
+                    { label: 'Sales', value: formatCount(salesStats.totalSales || 0) },
+                    { label: 'Revenue', value: formatCurrency(salesStats.totalRevenue || 0, salesCurrency) },
+                    {
+                      label: 'Paid',
+                      value: formatCount(salesStats.byStatus?.PAID || 0),
+                      tone: (salesStats.byStatus?.PAID || 0) > 0 ? 'positive' : 'default',
+                    },
+                    { label: 'Pending', value: formatCount(salesStats.byStatus?.PENDING || 0) },
+                  ]}
+                />
+              ) : null}
 
-              {/* Sales Table */}
-              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-surface-200">
-                  <h3 className="text-lg font-semibold text-brand-900">Transaction History</h3>
-                </div>
-                {sales.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-surface-600">No sales found for this event</p>
-                    <p className="text-sm text-surface-500 mt-1">Ticket sales will appear here once guests purchase tickets</p>
+              {sales.length === 0 ? (
+                <EmptyState title="No sales yet" hint="Ticket purchases appear here as guests check out." />
+              ) : (
+                <>
+                  <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white md:hidden">
+                    {sales.map((sale: any) => (
+                      <div key={sale.id} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[15px] font-semibold text-brand-900">{sale.primaryName}</p>
+                            <p className="mt-0.5 meta truncate">
+                              {sale.ticketType || 'Ticket'} &middot; {formatDate(sale.submittedAt, 'MMM d, yyyy')}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="num text-[15px] font-semibold text-brand-900">
+                              {formatCurrency(sale.amountPaid || 0, sale.currency || salesCurrency)}
+                            </p>
+                            <StatusBadge tone={getStatusTone(sale.paymentStatus)} className="mt-1">
+                              {humanizeEnum(sale.paymentStatus) || 'Unknown'}
+                            </StatusBadge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-surface-200 bg-surface-50">
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                            Guest
-                          </th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                            Ticket Type
-                          </th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                            Amount
-                          </th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                            Date
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-surface-100">
-                        {sales.map((sale: any) => (
-                          <tr key={sale.id} className="hover:bg-surface-50 transition-colors">
-                            <td className="py-3 px-4">
-                              <p className="font-medium text-brand-900">{sale.primaryName}</p>
-                              {sale.email && (
-                                <p className="text-sm text-surface-500">{sale.email}</p>
-                              )}
-                            </td>
-                            <td className="py-3 px-4">
-                              <p className="text-sm text-surface-900">{sale.ticketType || 'N/A'}</p>
-                            </td>
-                            <td className="py-3 px-4">
-                              <p className="font-semibold text-brand-900">
-                                {formatCurrency(sale.amountPaid || 0, sale.currency || salesCurrency)}
-                              </p>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={cn(
-                                  'inline-flex px-2 py-1 text-xs font-medium rounded',
-                                  sale.paymentStatus === 'PAID'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : sale.paymentStatus === 'PENDING'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : 'bg-rose-100 text-rose-800'
-                                )}
-                              >
-                                {sale.paymentStatus || 'N/A'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <p className="text-sm text-surface-600">
-                                {formatDate(sale.submittedAt)}
-                              </p>
-                            </td>
+
+                  <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white md:block">
+                    <div className="overflow-x-auto">
+                      <table className="data-table" style={{ minWidth: 720 }}>
+                        <thead>
+                          <tr>
+                            <Th>Guest</Th>
+                            <Th>Ticket</Th>
+                            <Th align="right">Amount</Th>
+                            <Th>Status</Th>
+                            <Th>Date</Th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {sales.map((sale: any) => (
+                            <tr key={sale.id} className="table-row">
+                              <Td>
+                                <p className="font-medium text-brand-900">{sale.primaryName}</p>
+                                {sale.email ? <p className="meta truncate">{sale.email}</p> : null}
+                              </Td>
+                              <Td>{sale.ticketType || <span className="text-surface-500">&mdash;</span>}</Td>
+                              <Td align="right" className="num font-semibold text-brand-900">
+                                {formatCurrency(sale.amountPaid || 0, sale.currency || salesCurrency)}
+                              </Td>
+                              <Td>
+                                <StatusBadge tone={getStatusTone(sale.paymentStatus)}>
+                                  {humanizeEnum(sale.paymentStatus) || 'Unknown'}
+                                </StatusBadge>
+                              </Td>
+                              <Td>{formatDate(sale.submittedAt, 'MMM d, yyyy')}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </>
           )}
         </div>
@@ -2627,202 +2734,264 @@ export default function EventDetailPage() {
       {activeTab === 'gifts' && (
         <div className="space-y-4">
           {loadingGifts ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto" />
-            </div>
+            <>
+              <StatRowSkeleton />
+              <ListSkeleton rows={4} />
+            </>
           ) : (
             <>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl border border-surface-200 p-5">
-                  <p className="text-sm text-surface-500 mb-1">Gift Orders</p>
-                  <p className="text-3xl font-bold text-brand-900">{giftSummary.orders}</p>
-                </div>
-                <div className="bg-white rounded-xl border border-surface-200 p-5">
-                  <p className="text-sm text-surface-500 mb-1">Gross Gift Volume</p>
-                  <p className="text-3xl font-bold text-brand-900">{giftCurrency} {giftSummary.gross.toFixed(2)}</p>
-                </div>
-                <div className="bg-white rounded-xl border border-surface-200 p-5">
-                  <p className="text-sm text-surface-500 mb-1">Owner Net (Cash)</p>
-                  <p className="text-3xl font-bold text-emerald-600">{giftCurrency} {giftSummary.ownerNet.toFixed(2)}</p>
-                </div>
-                <div className="bg-white rounded-xl border border-surface-200 p-5">
-                  <p className="text-sm text-surface-500 mb-1">Admin Retained</p>
-                  <p className="text-3xl font-bold text-brand-900">{giftCurrency} {giftSummary.adminRetained.toFixed(2)}</p>
-                </div>
-              </div>
+              <StatRow
+                items={[
+                  { label: 'Gift orders', value: formatCount(giftSummary.orders) },
+                  { label: 'Gross', value: formatCurrency(giftSummary.gross, giftCurrency) },
+                  { label: 'Owner net', value: formatCurrency(giftSummary.ownerNet, giftCurrency), tone: 'positive' },
+                  { label: 'Platform', value: formatCurrency(giftSummary.adminRetained, giftCurrency) },
+                ]}
+              />
 
-              <div className="bg-white rounded-xl border border-surface-200 p-5">
+              <Panel title="Payment gateways">
                 <PaymentGatewaySelector
                   eventId={eventId}
                   onUpdate={() => {
                     fetchEventGatewayCurrencies();
                     fetchGifts();
                   }}
-                  title="Gift and Cash Collection Gateways"
-                  description="Enable event gateways for public gift checkout and cash gifting. Currency options in gift package setup follow these gateway currencies."
+                  title=""
+                  description="Gateways enabled here set which currencies gift packages can use."
                 />
-              </div>
+              </Panel>
 
-              <div className="bg-white rounded-xl border border-surface-200 p-5 space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-brand-900">Gift Packages for This Event</h3>
-                    <p className="text-sm text-surface-500">
-                      Admin controls which packages appear on the public gifting page for this event.
-                    </p>
+              <Panel
+                title="Gift packages"
+                action={
+                  <>
+                    <button className="btn-outline btn-sm" onClick={() => setShowCreateGiftPackage(true)}>
+                      New package
+                    </button>
+                    <SubmitButton
+                      loading={savingGiftAssignments}
+                      className="btn-primary btn-sm"
+                      onClick={handleSaveGiftAssignments}
+                    >
+                      Save
+                    </SubmitButton>
+                  </>
+                }
+                flush
+              >
+                {giftPackages.length === 0 ? (
+                  <div className="p-4 sm:p-5">
+                    <EmptyState
+                      title="No gift packages"
+                      action={
+                        <button className="btn-primary btn-sm" onClick={() => setShowCreateGiftPackage(true)}>
+                          Create package
+                        </button>
+                      }
+                    />
                   </div>
-                  <button
-                    className="btn-primary"
-                    disabled={savingGiftAssignments}
-                    onClick={handleSaveGiftAssignments}
-                  >
-                    {savingGiftAssignments ? 'Saving...' : 'Save Package Assignment'}
-                  </button>
-                </div>
+                ) : (
+                  <div className="divide-y divide-surface-200">
+                    {giftPackages.map((pkg) => (
+                      <div key={pkg.id} className="flex items-center gap-3 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          id={`gift-pkg-${pkg.id}`}
+                          className="shrink-0"
+                          checked={Boolean(pkg.assigned)}
+                          onChange={() => handleToggleGiftPackageAssignment(pkg.id)}
+                          aria-label={`Show ${pkg.name} on the gifting page`}
+                        />
+                        <Thumb
+                          src={resolveGiftThumbnailUrl(pkg.thumbnailPath)}
+                          alt=""
+                          className="h-11 w-11 shrink-0"
+                        />
+                        <label htmlFor={`gift-pkg-${pkg.id}`} className="min-w-0 flex-1 cursor-pointer">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-[15px] font-semibold text-brand-900">{pkg.name}</span>
+                            {pkg.isActive ? null : <StatusBadge tone="neutral">Disabled</StatusBadge>}
+                          </div>
+                          <p className="mt-0.5 meta num">{formatCurrency(Number(pkg.price || 0), pkg.currency)}</p>
+                        </label>
+                        <Menu label={`Actions for ${pkg.name}`} sheetTitle={pkg.name}>
+                          <MenuItem onClick={() => handleToggleGiftPackageActive(pkg)}>
+                            {pkg.isActive ? 'Disable package' : 'Enable package'}
+                          </MenuItem>
+                        </Menu>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Panel>
 
-                <div className="grid lg:grid-cols-3 gap-5">
-                  <div className="lg:col-span-2">
-                    <div className="rounded-xl border border-surface-200 overflow-hidden">
-                      <table className="w-full">
+              <Panel title="Gift orders" flush>
+                {giftOrders.length === 0 ? (
+                  <div className="p-4 sm:p-5">
+                    <EmptyState title="No gift orders yet" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="divide-y divide-surface-200 lg:hidden">
+                      {giftOrders.map((order) => (
+                        <div key={order.id} className="px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[15px] font-semibold text-brand-900">{order.guestName}</p>
+                              <p className="mt-0.5 meta truncate">
+                                {order.guestEmail || order.guestPhone || 'No contact'} &middot;{' '}
+                                {formatDate(order.createdAt, 'MMM d, yyyy')}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="num text-[15px] font-semibold text-brand-900">
+                                {formatCurrency(Number(order.totalAmount || 0), order.currency)}
+                              </p>
+                              <StatusBadge tone={getStatusTone(order.status)} className="mt-1">
+                                {humanizeEnum(order.status)}
+                              </StatusBadge>
+                            </div>
+                          </div>
+                          <dl className="mt-2 grid grid-cols-2 gap-x-4">
+                            <DetailRow label="Cash">
+                              {formatCurrency(Number(order.cashGiftAmount || 0), order.currency)}
+                            </DetailRow>
+                            <DetailRow label="Packages">
+                              {formatCurrency(Number(order.packageAmount || 0), order.currency)}
+                            </DetailRow>
+                            <DetailRow label="Owner net">
+                              {formatCurrency(Number(order.ownerNetAmount || 0), order.currency)}
+                            </DetailRow>
+                            <DetailRow label="Platform">
+                              {formatCurrency(Number(order.adminRetainedAmount || 0), order.currency)}
+                            </DetailRow>
+                          </dl>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto lg:block">
+                      <table className="data-table" style={{ minWidth: 900 }}>
                         <thead>
-                          <tr className="border-b border-surface-200 bg-surface-50">
-                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Show</th>
-                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Package</th>
-                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Price</th>
-                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                            <th className="py-3 px-4 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">Actions</th>
+                          <tr>
+                            <Th>Guest</Th>
+                            <Th align="right">Gross</Th>
+                            <Th align="right">Cash</Th>
+                            <Th align="right">Packages</Th>
+                            <Th align="right">Owner net</Th>
+                            <Th align="right">Platform</Th>
+                            <Th>Status</Th>
+                            <Th>Date</Th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-surface-100">
-                          {giftPackages.length === 0 ? (
-                            <tr>
-                              <td colSpan={5} className="px-4 py-8 text-center text-sm text-surface-500">
-                                No gift packages yet. Create your first package.
-                              </td>
+                        <tbody>
+                          {giftOrders.map((order) => (
+                            <tr key={order.id} className="table-row">
+                              <Td>
+                                <p className="font-medium text-brand-900">{order.guestName}</p>
+                                <p className="meta truncate">{order.guestEmail || order.guestPhone || 'No contact'}</p>
+                              </Td>
+                              <Td align="right" className="num">
+                                {formatCurrency(Number(order.totalAmount || 0), order.currency)}
+                              </Td>
+                              <Td align="right" className="num">
+                                {formatCurrency(Number(order.cashGiftAmount || 0), order.currency)}
+                              </Td>
+                              <Td align="right" className="num">
+                                {formatCurrency(Number(order.packageAmount || 0), order.currency)}
+                              </Td>
+                              <Td align="right" className="num font-semibold text-emerald-700">
+                                {formatCurrency(Number(order.ownerNetAmount || 0), order.currency)}
+                              </Td>
+                              <Td align="right" className="num font-semibold text-brand-900">
+                                {formatCurrency(Number(order.adminRetainedAmount || 0), order.currency)}
+                              </Td>
+                              <Td>
+                                <StatusBadge tone={getStatusTone(order.status)}>{humanizeEnum(order.status)}</StatusBadge>
+                              </Td>
+                              <Td>{formatDate(order.createdAt, 'MMM d, yyyy')}</Td>
                             </tr>
-                          ) : (
-                            giftPackages.map((pkg) => (
-                              <tr key={pkg.id} className="hover:bg-surface-50">
-                                <td className="py-3 px-4">
-                                  <input
-                                    type="checkbox"
-                                    className="w-4 h-4 rounded border-surface-300 text-brand-900"
-                                    checked={Boolean(pkg.assigned)}
-                                    onChange={() => handleToggleGiftPackageAssignment(pkg.id)}
-                                  />
-                                </td>
-                                <td className="py-3 px-4">
-                                  <div className="flex items-start gap-3">
-                                    <div className="w-14 h-14 rounded-lg border border-surface-200 bg-surface-100 overflow-hidden shrink-0">
-                                      {pkg.thumbnailPath ? (
-                                        <img
-                                          src={resolveGiftThumbnailUrl(pkg.thumbnailPath) || ''}
-                                          alt={pkg.name}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-[10px] text-surface-400 font-medium">
-                                          No image
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="font-medium text-brand-900 truncate">{pkg.name}</p>
-                                      {pkg.description ? <p className="text-xs text-surface-500 mt-1 line-clamp-2">{pkg.description}</p> : null}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-4 text-sm text-surface-700">
-                                  {formatCurrency(Number(pkg.price || 0), pkg.currency)}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <span
-                                    className={cn(
-                                      'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
-                                      pkg.isActive
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        : 'bg-surface-100 text-surface-600 border-surface-200'
-                                    )}
-                                  >
-                                    {pkg.isActive ? 'Active' : 'Disabled'}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4">
-                                  <button
-                                    className="btn-ghost"
-                                    onClick={() => handleToggleGiftPackageActive(pkg)}
-                                  >
-                                    {pkg.isActive ? 'Disable' : 'Enable'}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
+                          ))}
                         </tbody>
                       </table>
                     </div>
-                  </div>
+                  </>
+                )}
+              </Panel>
 
-                  <div className="rounded-xl border border-surface-200 p-4 bg-surface-50 space-y-3">
-                    <h4 className="font-semibold text-brand-900">Create Package</h4>
+              <Modal
+                open={showCreateGiftPackage}
+                onClose={() => setShowCreateGiftPackage(false)}
+                title="New gift package"
+                size="md"
+                footer={
+                  <>
+                    <button
+                      className="btn-outline"
+                      onClick={() => setShowCreateGiftPackage(false)}
+                      disabled={savingGiftPackage}
+                    >
+                      Cancel
+                    </button>
+                    <SubmitButton loading={savingGiftPackage} onClick={handleCreateGiftPackage}>
+                      Create package
+                    </SubmitButton>
+                  </>
+                }
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="label" htmlFor="gift-name">
+                      Name
+                    </label>
                     <input
+                      id="gift-name"
+                      data-autofocus
                       className="input"
-                      placeholder="Package name"
                       value={newGiftPackage.name}
                       onChange={(e) => setNewGiftPackage({ ...newGiftPackage, name: e.target.value })}
                     />
+                  </div>
+
+                  <div>
+                    <label className="label" htmlFor="gift-description">
+                      Description <span className="font-normal text-surface-600">(optional)</span>
+                    </label>
                     <textarea
-                      className="input min-h-[88px]"
-                      placeholder="Description (optional)"
+                      id="gift-description"
+                      className="input"
+                      rows={3}
                       value={newGiftPackage.description}
                       onChange={(e) => setNewGiftPackage({ ...newGiftPackage, description: e.target.value })}
                     />
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium uppercase tracking-wide text-surface-500">
-                        Package photo (optional)
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="label" htmlFor="gift-price">
+                        Price
                       </label>
                       <input
-                        type="file"
-                        accept="image/*"
-                        className="input"
-                        onChange={(e) => setNewGiftPackagePhoto(e.target.files?.[0] || null)}
-                      />
-                      {newGiftPackagePhoto ? (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-rose-600 hover:text-rose-700"
-                          onClick={() => setNewGiftPackagePhoto(null)}
-                        >
-                          Remove selected photo
-                        </button>
-                      ) : null}
-                    </div>
-                    {newGiftPackagePhotoPreview ? (
-                      <div className="rounded-lg border border-surface-200 bg-white p-2">
-                        <div className="text-xs text-surface-500 mb-2">Preview</div>
-                        <div className="w-full h-36 rounded-md overflow-hidden bg-surface-100 border border-surface-200">
-                          <img
-                            src={newGiftPackagePhotoPreview}
-                            alt="New package preview"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
+                        id="gift-price"
                         type="number"
                         min={0}
                         step="0.01"
                         className="input"
-                        placeholder="Price"
                         value={newGiftPackage.price}
                         onChange={(e) => setNewGiftPackage({ ...newGiftPackage, price: e.target.value })}
                       />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="gift-currency">
+                        Currency
+                      </label>
                       <select
+                        id="gift-currency"
                         className="input"
                         value={newGiftPackage.currency}
-                        onChange={(e) => setNewGiftPackage({ ...newGiftPackage, currency: e.target.value.toUpperCase() })}
+                        onChange={(e) =>
+                          setNewGiftPackage({ ...newGiftPackage, currency: e.target.value.toUpperCase() })
+                        }
                       >
                         {availableEventCurrencies.map((currencyCode) => {
                           const currency = getCurrencyOption(currencyCode);
@@ -2833,87 +3002,40 @@ export default function EventDetailPage() {
                           );
                         })}
                       </select>
+                      <p className="field-hint">Follows the gateways enabled for this event.</p>
                     </div>
-                    <p className="text-xs text-surface-500">
-                      Package currency follows enabled event gateway currencies.
-                    </p>
-                    <button
-                      className="btn-primary w-full justify-center"
-                      disabled={savingGiftPackage}
-                      onClick={handleCreateGiftPackage}
-                    >
-                      {savingGiftPackage ? 'Creating...' : 'Create Package'}
-                    </button>
                   </div>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-surface-200">
-                  <h3 className="text-lg font-semibold text-brand-900">Gift Order Ledger</h3>
-                  <p className="text-sm text-surface-500 mt-1">
-                    Cash gifts route owner net after platform fee. Package purchases are retained by admin.
-                  </p>
-                </div>
-                {giftOrders.length === 0 ? (
-                  <div className="text-center py-12 text-surface-500 text-sm">No gift orders yet.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-surface-200 bg-surface-50">
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Guest</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Gross</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Cash</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Packages</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Owner Net</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Admin Retained</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Status</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 uppercase tracking-wider">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-surface-100">
-                        {giftOrders.map((order) => (
-                          <tr key={order.id} className="hover:bg-surface-50">
-                            <td className="py-3 px-4">
-                              <p className="font-medium text-brand-900">{order.guestName}</p>
-                              <p className="text-xs text-surface-500">{order.guestEmail || order.guestPhone || 'No contact'}</p>
-                            </td>
-                            <td className="py-3 px-4 text-sm text-surface-700">
-                              {formatCurrency(Number(order.totalAmount || 0), order.currency)}
-                            </td>
-                            <td className="py-3 px-4 text-sm text-surface-700">
-                              {formatCurrency(Number(order.cashGiftAmount || 0), order.currency)}
-                            </td>
-                            <td className="py-3 px-4 text-sm text-surface-700">
-                              {formatCurrency(Number(order.packageAmount || 0), order.currency)}
-                            </td>
-                            <td className="py-3 px-4 text-sm font-semibold text-emerald-700">
-                              {formatCurrency(Number(order.ownerNetAmount || 0), order.currency)}
-                            </td>
-                            <td className="py-3 px-4 text-sm font-semibold text-brand-900">
-                              {formatCurrency(Number(order.adminRetainedAmount || 0), order.currency)}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={cn(
-                                  'inline-flex px-2 py-0.5 rounded text-xs font-medium border',
-                                  order.status === 'PAID'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200'
-                                )}
-                              >
-                                {order.status}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-sm text-surface-500">{formatDate(order.createdAt)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div>
+                    <label className="label" htmlFor="gift-photo">
+                      Photo <span className="font-normal text-surface-600">(optional)</span>
+                    </label>
+                    <input
+                      id="gift-photo"
+                      type="file"
+                      accept="image/*"
+                      className="input"
+                      onChange={(e) => setNewGiftPackagePhoto(e.target.files?.[0] || null)}
+                    />
+                    {newGiftPackagePhotoPreview ? (
+                      <div className="mt-2 flex items-center gap-3">
+                        <img
+                          src={newGiftPackagePhotoPreview}
+                          alt="Package preview"
+                          className="h-20 w-28 rounded-lg border border-surface-200 object-cover"
+                        />
+                        <button
+                          type="button"
+                          className="btn-outline btn-sm"
+                          onClick={() => setNewGiftPackagePhoto(null)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                )}
-              </div>
+                </div>
+              </Modal>
             </>
           )}
         </div>
@@ -2922,779 +3044,1012 @@ export default function EventDetailPage() {
       {/* Voting */}
       {activeTab === 'voting' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <h3 className="text-lg font-semibold text-brand-900">Voting Workspace</h3>
-            <p className="text-sm text-surface-600 mt-1">
-              Run your full voting program from one place, from setup to results.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link
-                href={`/admin/events/${event.id}/voting`}
-                className="btn-primary"
-              >
-                Open Voting Dashboard
-              </Link>
-              {event.ownerId ? (
-                <Link
-                  href={`/owner/events/${event.id}/voting`}
-                  target="_blank"
-                  className="btn-outline"
-                >
-                  {Icons.external}
-                  <span className="ml-2">Open Owner Voting Console</span>
+          <Toolbar
+            end={
+              <>
+                <Link href={`/e/${event.slug}/vote`} target="_blank" className="btn-outline btn-sm">
+                  Public vote page
                 </Link>
-              ) : (
-                <span className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Assign an owner to enable owner-side voting console access.
-                </span>
-              )}
-              <Link href={`/e/${event.slug}/vote`} target="_blank" className="btn-outline">
-                {Icons.external}
-                <span className="ml-2">Open Public Vote Page</span>
-              </Link>
-            </div>
-          </div>
+                <Link href={`/admin/events/${event.id}/voting`} className="btn-primary btn-sm">
+                  Open voting workspace
+                </Link>
+              </>
+            }
+          >
+            <span className="meta">Categories, nominees, results and live rankings live in the voting workspace.</span>
+          </Toolbar>
 
-          <div className="bg-white rounded-xl border border-surface-200 p-6">
+          {!event.ownerId ? (
+            <div className="banner-warning" role="status">
+              Assign an owner in Settings to give them access to the owner voting console.
+            </div>
+          ) : null}
+
+          <Panel title="Paid voting gateways">
             <PaymentGatewaySelector
               eventId={eventId}
               onUpdate={() => {
                 fetchEventGatewayCurrencies();
               }}
-              title="Payment Methods For Paid Voting"
-              description="Choose which admin-configured gateways this event can use for paid voting. These same event gateways can also power gifting and paid checkout where applicable."
+              title=""
+              description="Paid voting appears publicly only while at least one gateway here stays available."
             />
-            <div className="mt-4 rounded-xl border border-surface-200 bg-surface-50 px-4 py-3 text-sm text-surface-600">
-              Paid voting will only appear on the public voting page when this event has at least one enabled gateway that remains publicly available under the current wallet rules.
-            </div>
-          </div>
+          </Panel>
 
-          <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <h4 className="text-base font-semibold text-brand-900">USSD Credits And Analytics</h4>
-            <p className="mt-1 text-sm text-surface-600">
-              Manage channels and wallet credits in USSD Controls. Open the voting workspace to review results and live performance in the Results tab.
-            </p>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <Link href="/admin/ussd" className="btn-outline text-center">
-                Open USSD Controls
-              </Link>
-              <Link href={`/admin/events/${event.id}/voting`} className="btn-outline text-center">
-                Open Voting Analytics
-              </Link>
-              <Link href={`/e/${event.slug}/leaderboard`} target="_blank" className="btn-outline text-center">
-                Open Public Leaderboard
-              </Link>
+          <Panel title="Voting links" flush>
+            <div className="divide-y divide-surface-200">
+              <PublicPageRow label="Vote" path={`/e/${event.slug}/vote`} onCopy={handleCopyLink} />
+              <PublicPageRow label="Nominations" path={`/e/${event.slug}/nominate`} onCopy={handleCopyLink} />
+              <PublicPageRow label="Nominees" path={`/e/${event.slug}/nominees`} onCopy={handleCopyLink} />
+              <PublicPageRow label="Leaderboard" path={`/e/${event.slug}/leaderboard`} onCopy={handleCopyLink} />
+              <PublicPageRow label="Embed script" path="/embed/vote.js" onCopy={handleCopyLink} />
             </div>
-          </div>
+          </Panel>
 
-          <div className="bg-white rounded-xl border border-surface-200 p-6">
-            <h4 className="text-base font-semibold text-brand-900">Share Voting Links</h4>
-            <p className="text-sm text-surface-600 mt-1">
-              Share direct links for voting, nominations, and live leaderboard.
-            </p>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleCopyLink(`/e/${event.slug}/vote`)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Hosted Voting URL</span>
-                </button>
-                <button
-                  onClick={() => handleCopyLink(`/e/${event.slug}/nominate`)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Public Nomination URL</span>
-                </button>
-                <button
-                  onClick={() => handleCopyLink(`/e/${event.slug}/nominees`)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Nominees Listing URL</span>
-                </button>
-                <button
-                  onClick={() => handleCopyLink(`/e/${event.slug}/leaderboard`)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                  <span className="text-sm font-medium text-brand-900 truncate">Copy Leaderboard URL</span>
-                </button>
-                <button
-                  onClick={() => handleCopyLink('/embed/vote.js')}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-200 hover:bg-brand-50/30 transition-all text-left"
-                >
-                  {Icons.copy}
-                <span className="text-sm font-medium text-brand-900 truncate">Copy Embed Script URL</span>
-              </button>
+          <Panel title="Related" flush>
+            <div className="divide-y divide-surface-200">
+              <div className="flex items-center gap-3 px-4 py-2.5">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-surface-900">USSD channels and credits</span>
+                <Link href="/admin/ussd" className="btn-outline btn-sm shrink-0">
+                  Open
+                </Link>
+              </div>
+              {event.ownerId ? (
+                <div className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-surface-900">Owner voting console</span>
+                  <Link
+                    href={`/owner/events/${event.id}/voting`}
+                    target="_blank"
+                    className="btn-outline btn-sm shrink-0"
+                  >
+                    Open
+                  </Link>
+                </div>
+              ) : null}
             </div>
-          </div>
+          </Panel>
         </div>
       )}
 
       {/* Settings */}
       {activeTab === 'settings' && (
-        <div className="bg-white rounded-xl border border-surface-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-brand-900">Event Setup</h3>
-            {!editingSettings ? (
-              <button onClick={() => setEditingSettings(true)} className="btn-outline">
-                {Icons.edit}
-                <span className="ml-2">Edit Setup</span>
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={() => setEditingSettings(false)} className="btn-ghost">Cancel</button>
-                <button onClick={handleSaveSettings} disabled={savingSettings} className="btn-primary">{savingSettings ? 'Saving...' : 'Save Changes'}</button>
-              </div>
-            )}
-          </div>
-          {editingSettings ? (
-            <div className="space-y-6">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label className="label">Event Name</label><input type="text" className="input" value={eventSettings.name} onChange={e => setEventSettings({ ...eventSettings, name: e.target.value })} /></div>
-                <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} className="input" value={eventSettings.description} onChange={e => setEventSettings({ ...eventSettings, description: e.target.value })} /></div>
-                <div><label className="label">Event Date</label><input type="date" className="input" value={eventSettings.date} onChange={e => setEventSettings({ ...eventSettings, date: e.target.value })} /></div>
-                <div><label className="label">Start Time</label><input type="time" className="input" value={eventSettings.time} onChange={e => setEventSettings({ ...eventSettings, time: e.target.value })} /></div>
-                <div><label className="label">End Date</label><input type="date" className="input" value={eventSettings.endDate} onChange={e => setEventSettings({ ...eventSettings, endDate: e.target.value })} /></div>
-                <div><label className="label">End Time</label><input type="time" className="input" value={eventSettings.endTime} onChange={e => setEventSettings({ ...eventSettings, endTime: e.target.value })} /></div>
-                <div className="sm:col-span-2"><label className="label">Venue</label><input type="text" className="input" value={eventSettings.venue} onChange={e => setEventSettings({ ...eventSettings, venue: e.target.value })} /></div>
-                <div><label className="label">Timezone</label><select className="input" value={eventSettings.timezone} onChange={e => setEventSettings({ ...eventSettings, timezone: e.target.value })}><option value="UTC">UTC</option><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option><option value="Europe/London">London</option><option value="Africa/Accra">Ghana (GMT)</option></select></div>
-                <div><label className="label">Default Currency</label><select className="input" value={eventSettings.defaultCurrency} onChange={e => setEventSettings({ ...eventSettings, defaultCurrency: e.target.value })}><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="GHS">GHS</option><option value="KES">KES</option><option value="NGN">NGN</option></select></div>
-              </div>
+        <div className="space-y-4">
+          <Toolbar
+            end={
+              <>
+                <button type="button" className="btn-outline btn-sm" onClick={fetchEvent} disabled={savingSettings}>
+                  Discard changes
+                </button>
+                <SubmitButton loading={savingSettings} className="btn-primary btn-sm" onClick={handleSaveSettings}>
+                  Save
+                </SubmitButton>
+              </>
+            }
+          >
+            <span className="meta">Changes apply once you save.</span>
+          </Toolbar>
 
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Social Metadata & Cover</h4>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="label">Social Title</label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="Title for social cards"
-                      value={eventSettings.socialTitle}
-                      onChange={(e) => setEventSettings({ ...eventSettings, socialTitle: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Cover Alt Text</label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="Describe the cover image"
-                      value={eventSettings.coverImageAlt}
-                      onChange={(e) => setEventSettings({ ...eventSettings, coverImageAlt: e.target.value })}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="label">Social Description</label>
-                    <textarea
-                      rows={2}
-                      className="input"
-                      placeholder="Description shown on social shares"
-                      value={eventSettings.socialDescription}
-                      onChange={(e) => setEventSettings({ ...eventSettings, socialDescription: e.target.value })}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="label">Cover Image Upload</label>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="input flex-1"
-                        onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-                      />
-                      <button
-                        type="button"
-                        className="btn-outline"
-                        disabled={!coverFile || uploadingCover}
-                        onClick={handleUploadCover}
-                      >
-                        {uploadingCover ? 'Uploading...' : 'Upload Cover'}
-                      </button>
-                      {event.coverImagePath && (
-                        <button
-                          type="button"
-                          className="btn-ghost text-red-600 hover:text-red-700"
-                          onClick={handleDeleteCover}
-                        >
-                          Remove Cover
-                        </button>
+          <SettingsSection title="Basics" defaultOpen>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="set-name">
+                  Event name
+                </label>
+                <input
+                  id="set-name"
+                  type="text"
+                  className="input"
+                  value={eventSettings.name}
+                  onChange={(e) => setEventSettings({ ...eventSettings, name: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="set-description">
+                  Description
+                </label>
+                <textarea
+                  id="set-description"
+                  rows={3}
+                  className="input"
+                  value={eventSettings.description}
+                  onChange={(e) => setEventSettings({ ...eventSettings, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="set-date">
+                  Starts
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="set-date"
+                    type="date"
+                    className="input"
+                    value={eventSettings.date}
+                    onChange={(e) => setEventSettings({ ...eventSettings, date: e.target.value })}
+                  />
+                  <input
+                    type="time"
+                    className="input"
+                    aria-label="Start time"
+                    value={eventSettings.time}
+                    onChange={(e) => setEventSettings({ ...eventSettings, time: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label" htmlFor="set-end-date">
+                  Ends <span className="font-normal text-surface-600">(optional)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="set-end-date"
+                    type="date"
+                    className="input"
+                    value={eventSettings.endDate}
+                    onChange={(e) => setEventSettings({ ...eventSettings, endDate: e.target.value })}
+                  />
+                  <input
+                    type="time"
+                    className="input"
+                    aria-label="End time"
+                    value={eventSettings.endTime}
+                    onChange={(e) => setEventSettings({ ...eventSettings, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="set-venue">
+                  Venue
+                </label>
+                <input
+                  id="set-venue"
+                  type="text"
+                  className="input"
+                  value={eventSettings.venue}
+                  onChange={(e) => setEventSettings({ ...eventSettings, venue: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="set-timezone">
+                  Time zone
+                </label>
+                <select
+                  id="set-timezone"
+                  className="input"
+                  value={eventSettings.timezone}
+                  onChange={(e) => setEventSettings({ ...eventSettings, timezone: e.target.value })}
+                >
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">Eastern Time</option>
+                  <option value="America/Chicago">Central Time</option>
+                  <option value="America/Denver">Mountain Time</option>
+                  <option value="America/Los_Angeles">Pacific Time</option>
+                  <option value="Europe/London">London</option>
+                  <option value="Africa/Accra">Ghana (GMT)</option>
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="set-currency">
+                  Currency
+                </label>
+                <select
+                  id="set-currency"
+                  className="input"
+                  value={eventSettings.defaultCurrency}
+                  onChange={(e) => setEventSettings({ ...eventSettings, defaultCurrency: e.target.value })}
+                >
+                  {['USD', 'EUR', 'GBP', 'GHS', 'KES', 'NGN'].map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <dl className="divide-y divide-surface-200 border-t border-surface-200 pt-1">
+                  <DetailRow label="Web address">
+                    <span className="font-mono">/e/{event.slug}</span>
+                  </DetailRow>
+                </dl>
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection title="What guests can do">
+            <div className="space-y-1">
+              <Switch
+                label="Invitations"
+                description="Digital invitation passes."
+                checked={eventSettings.invitationEnabled}
+                onChange={(checked) => setEventSettings({ ...eventSettings, invitationEnabled: checked })}
+              />
+              <Switch
+                label="RSVP"
+                description="Collect guest responses."
+                checked={eventSettings.rsvpEnabled}
+                onChange={(checked) =>
+                  setEventSettings({
+                    ...eventSettings,
+                    rsvpEnabled: checked,
+                    rsvpMode: checked ? eventSettings.rsvpMode : 'free',
+                    ticketingEnabled: checked && eventSettings.rsvpMode === 'paid',
+                  })
+                }
+              />
+              <Switch
+                label="Guestbook"
+                description="Video, audio and photo messages."
+                checked={eventSettings.guestbookEnabled}
+                onChange={(checked) => setEventSettings({ ...eventSettings, guestbookEnabled: checked })}
+              />
+              <Switch
+                label="Check-in"
+                description={
+                  eventSettings.invitationOnly
+                    ? 'Track arrivals at the door.'
+                    : 'Available on invitation-only events.'
+                }
+                disabled={!eventSettings.invitationOnly}
+                checked={eventSettings.checkInEnabled && eventSettings.invitationOnly}
+                onChange={(checked) => setEventSettings({ ...eventSettings, checkInEnabled: checked })}
+              />
+              <Switch
+                label="Itinerary"
+                description="Guests follow the running order; the MC marks items done."
+                checked={eventSettings.itineraryEnabled}
+                onChange={(checked) => setEventSettings({ ...eventSettings, itineraryEnabled: checked })}
+              />
+              <Switch
+                label="Gifting"
+                description="Cash gifts and gift packages."
+                checked={eventSettings.giftingEnabled}
+                onChange={(checked) => setEventSettings({ ...eventSettings, giftingEnabled: checked })}
+              />
+              <Switch
+                label="Voting"
+                description="Nominations, voting and the leaderboard."
+                checked={votingEnabled}
+                onChange={setVotingEnabled}
+              />
+              <Switch
+                label="Reels"
+                description="Generate a video compilation from guest videos."
+                checked={eventSettings.reelEnabled}
+                onChange={(checked) => setEventSettings({ ...eventSettings, reelEnabled: checked })}
+              />
+            </div>
+
+            {eventSettings.rsvpEnabled ? (
+              <div className="mt-4 border-t border-surface-200 pt-4">
+                <p className="label">RSVP type</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    { value: 'free', label: 'Free', hint: 'Guests RSVP without paying.' },
+                    { value: 'paid', label: 'Ticketed', hint: 'Guests buy a ticket to RSVP.' },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className={cn(
+                        'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                        eventSettings.rsvpMode === option.value
+                          ? 'border-brand-900 bg-brand-50'
+                          : 'border-surface-300 hover:bg-surface-50'
                       )}
-                    </div>
-                    <p className="text-xs text-surface-500 mt-2">
-                      Use JPG/PNG/WEBP, minimum 800x420 (recommended 2000px wide). Covers are auto-cropped to 1200x630 for social sharing.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 rounded-xl border border-surface-200 bg-white overflow-hidden">
-                  <div className="aspect-[1200/630] bg-surface-100">
-                    {event.coverImageUrl ? (
-                      <img src={event.coverImageUrl} alt={event.coverImageAlt || event.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-brand-900 to-brand-700" />
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <p className="text-xs uppercase tracking-wider text-surface-500 font-semibold">Live Social Preview</p>
-                    <p className="font-semibold text-brand-900 mt-1">{eventSettings.socialTitle || eventSettings.name || 'Untitled Event'}</p>
-                    <p className="text-sm text-surface-600 mt-1">{eventSettings.socialDescription || eventSettings.description || 'No social description set.'}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Event Owner</h4>
-                <p className="text-sm text-surface-500 mb-4">Assign an owner account or enter contact information. Notifications will be sent to this contact.</p>
-                
-                <div className="mb-4">
-                  <label className="label">Select Owner Account</label>
-                  <div className="flex gap-2">
-                    <select 
-                      className="input flex-1" 
-                      value={eventSettings.ownerId || ''} 
-                      onChange={e => {
-                        const ownerId = e.target.value;
-                        if (ownerId) {
-                          const owner = owners.find(o => o.id === ownerId);
-                          if (owner) {
-                            setEventSettings({ 
-                              ...eventSettings, 
-                              ownerId, 
-                              ownerName: owner.name, 
-                              ownerEmail: owner.email, 
-                              ownerPhone: owner.phone || '', 
-                              organizationName: owner.company || '' 
-                            });
-                          }
-                        } else {
-                          setEventSettings({ ...eventSettings, ownerId: '' });
-                        }
-                      }}
                     >
-                      <option value="">No owner account (use contact info below)</option>
-                      {owners.map(o => (
-                        <option key={o.id} value={o.id}>{o.name} {o.email && `(${o.email})`}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowNewOwnerForm(!showNewOwnerForm)}
-                      className="px-4 py-2 bg-surface-100 hover:bg-surface-200 text-surface-700 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {showNewOwnerForm ? 'Cancel' : '+ New Owner'}
-                    </button>
-                  </div>
-                </div>
-
-                {showNewOwnerForm && (
-                  <div className="mb-4 p-4 bg-surface-50 rounded-lg border border-surface-200">
-                    <h5 className="font-medium text-brand-900 mb-3">Create New Owner</h5>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <div><label className="label text-xs">Name *</label><input type="text" className="input text-sm" placeholder="John Smith" value={newOwner.name} onChange={e => setNewOwner({ ...newOwner, name: e.target.value })} /></div>
-                      <div><label className="label text-xs">Email *</label><input type="email" className="input text-sm" placeholder="owner@example.com" value={newOwner.email} onChange={e => setNewOwner({ ...newOwner, email: e.target.value })} /></div>
-                      <div><label className="label text-xs">Phone</label><input type="tel" className="input text-sm" placeholder="+1234567890" value={newOwner.phone} onChange={e => setNewOwner({ ...newOwner, phone: e.target.value })} /></div>
-                      <div><label className="label text-xs">Company</label><input type="text" className="input text-sm" placeholder="Company Name" value={newOwner.company} onChange={e => setNewOwner({ ...newOwner, company: e.target.value })} /></div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCreateOwner}
-                      className="mt-3 px-4 py-2 bg-brand-900 hover:bg-brand-800 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Create Owner
-                    </button>
-                  </div>
-                )}
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div><label className="label">Owner Name</label><input type="text" className="input" placeholder="e.g., John Smith" value={eventSettings.ownerName} onChange={e => setEventSettings({ ...eventSettings, ownerName: e.target.value })} /></div>
-                  <div><label className="label">Organization</label><input type="text" className="input" placeholder="e.g., Smith Events" value={eventSettings.organizationName} onChange={e => setEventSettings({ ...eventSettings, organizationName: e.target.value })} /></div>
-                  <div><label className="label">Email</label><input type="email" className="input" placeholder="owner@example.com" value={eventSettings.ownerEmail} onChange={e => setEventSettings({ ...eventSettings, ownerEmail: e.target.value })} /></div>
-                  <div><label className="label">Phone</label><input type="tel" className="input" placeholder="+1234567890" value={eventSettings.ownerPhone} onChange={e => setEventSettings({ ...eventSettings, ownerPhone: e.target.value })} /></div>
-                </div>
-              </div>
-
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Event Colors</h4>
-                <p className="text-sm text-surface-500 mb-4">Used for invitations, reel generation, and branding.</p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="label">Primary Color</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" className="w-10 h-10 rounded border border-surface-300 cursor-pointer" value={eventSettings.primaryColor} onChange={e => setEventSettings({ ...eventSettings, primaryColor: e.target.value })} />
-                      <input type="text" className="input flex-1" value={eventSettings.primaryColor} onChange={e => setEventSettings({ ...eventSettings, primaryColor: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Secondary Color</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" className="w-10 h-10 rounded border border-surface-300 cursor-pointer" value={eventSettings.secondaryColor} onChange={e => setEventSettings({ ...eventSettings, secondaryColor: e.target.value })} />
-                      <input type="text" className="input flex-1" value={eventSettings.secondaryColor} onChange={e => setEventSettings({ ...eventSettings, secondaryColor: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Accent Color</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" className="w-10 h-10 rounded border border-surface-300 cursor-pointer" value={eventSettings.accentColor} onChange={e => setEventSettings({ ...eventSettings, accentColor: e.target.value })} />
-                      <input type="text" className="input flex-1" value={eventSettings.accentColor} onChange={e => setEventSettings({ ...eventSettings, accentColor: e.target.value })} />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 p-4 rounded-lg flex items-center gap-4" style={{ backgroundColor: eventSettings.primaryColor, color: eventSettings.secondaryColor }}>
-                  <span className="text-sm font-medium">Preview:</span>
-                  <span className="text-lg font-semibold">{eventSettings.name || 'Event Name'}</span>
-                  <span className="px-3 py-1 rounded-full text-sm font-medium" style={{ backgroundColor: eventSettings.secondaryColor, color: eventSettings.accentColor }}>Sample Button</span>
-                </div>
-              </div>
-
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Event Features</h4>
-                <p className="text-sm text-surface-500 mb-4">Enable or disable specific event features.</p>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.invitationEnabled} onChange={e => setEventSettings({ ...eventSettings, invitationEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-brand-900">Invitations</span><p className="text-xs text-surface-500">Digital invitation passes</p></div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.rsvpEnabled} onChange={e => {
-                      const enabled = e.target.checked;
-                      setEventSettings({ 
-                        ...eventSettings, 
-                        rsvpEnabled: enabled,
-                        // Reset RSVP mode when disabled
-                        rsvpMode: enabled ? eventSettings.rsvpMode : 'free',
-                        ticketingEnabled: enabled && eventSettings.rsvpMode === 'paid'
-                      });
-                    }} />
-                    <div><span className="font-medium text-brand-900">RSVP</span><p className="text-xs text-surface-500">Guest response collection {eventSettings.invitationOnly ? '(Mandatory when invitation-only)' : '(Optional)'}</p></div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.guestbookEnabled} onChange={e => setEventSettings({ ...eventSettings, guestbookEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-brand-900">Guestbook</span><p className="text-xs text-surface-500">Video, audio, photo messages</p></div>
-                  </label>
-                  <label className={`flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors ${eventSettings.invitationOnly ? '' : 'opacity-50 cursor-not-allowed'}`}>
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 rounded border-surface-300 text-brand-900" 
-                      checked={eventSettings.checkInEnabled && eventSettings.invitationOnly} 
-                      disabled={!eventSettings.invitationOnly}
-                      onChange={e => setEventSettings({ ...eventSettings, checkInEnabled: e.target.checked })} 
-                    />
-                    <div>
-                      <span className="font-medium text-brand-900">Check-in</span>
-                      <p className="text-xs text-surface-500">
-                        {eventSettings.invitationOnly 
-                          ? 'Guest arrival tracking' 
-                          : 'Only available for invitation-only events'}
-                      </p>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-surface-300 text-brand-900"
-                      checked={votingEnabled}
-                      onChange={e => setVotingEnabled(e.target.checked)}
-                    />
-                    <div>
-                      <span className="font-medium text-brand-900">Voting</span>
-                      <p className="text-xs text-surface-500">Enable nomination, nominees, voting, and leaderboard flows.</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* RSVP Mode */}
-              {eventSettings.rsvpEnabled && (
-                <div className="border-t border-surface-100 pt-6">
-                  <h4 className="font-medium text-brand-900 mb-4">RSVP Mode</h4>
-                  <p className="text-sm text-surface-500 mb-4">
-                    {eventSettings.invitationOnly 
-                      ? 'RSVP is mandatory. Choose whether RSVPs are free or require ticket purchases.' 
-                      : 'RSVP is optional. Choose whether RSVPs are free or require ticket purchases. Guests can access other features without RSVP.'}
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-3 mb-4">
-                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'free' ? 'border-brand-900 bg-brand-50' : 'border-surface-200 hover:bg-surface-50'}`}>
-                      <input type="radio" name="rsvpMode" value="free" checked={eventSettings.rsvpMode === 'free'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'free' })} className="sr-only" />
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'free' ? 'border-brand-900' : 'border-surface-300'}`}>
-                        {eventSettings.rsvpMode === 'free' && <div className="w-2.5 h-2.5 rounded-full bg-brand-900" />}
-                      </div>
-                      <div>
-                        <span className="font-medium text-brand-900">Free RSVP</span>
-                        <p className="text-xs text-surface-500">Guests can RSVP without payment</p>
-                      </div>
-                    </label>
-                    <label className={`flex items-center gap-3 cursor-pointer p-4 rounded-lg border-2 transition-colors ${eventSettings.rsvpMode === 'paid' ? 'border-brand-900 bg-brand-50' : 'border-surface-200 hover:bg-surface-50'}`}>
-                      <input type="radio" name="rsvpMode" value="paid" checked={eventSettings.rsvpMode === 'paid'} onChange={() => setEventSettings({ ...eventSettings, rsvpMode: 'paid', ticketingEnabled: true })} className="sr-only" />
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${eventSettings.rsvpMode === 'paid' ? 'border-brand-900' : 'border-surface-300'}`}>
-                        {eventSettings.rsvpMode === 'paid' && <div className="w-2.5 h-2.5 rounded-full bg-brand-900" />}
-                      </div>
-                      <div>
-                        <span className="font-medium text-brand-900">Paid RSVP (Ticketing)</span>
-                        <p className="text-xs text-surface-500">Guests purchase tickets to RSVP</p>
-                      </div>
-                    </label>
-                  </div>
-
-                </div>
-              )}
-
-              {(eventSettings.giftingEnabled || (eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid')) && (
-                <div className="border-t border-surface-100 pt-6">
-                  <h4 className="font-medium text-brand-900 mb-4">Commerce Fees</h4>
-                  <div className="bg-surface-50 rounded-lg p-4 space-y-4">
-                    <p className="text-xs text-surface-500">
-                      These fees apply to enabled paid flows:
-                      {(eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid') ? ' ticketing' : ''}
-                      {(eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid' && eventSettings.giftingEnabled) ? ' and ' : ''}
-                      {eventSettings.giftingEnabled ? 'gifting' : ''}.
-                    </p>
-                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-surface-200 bg-white">
                       <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-surface-300 text-brand-900"
-                        checked={!eventSettings.feeOverridesEnabled}
-                        onChange={(e) =>
+                        type="radio"
+                        name="rsvpMode"
+                        className="mt-0.5"
+                        value={option.value}
+                        checked={eventSettings.rsvpMode === option.value}
+                        onChange={() =>
                           setEventSettings({
                             ...eventSettings,
-                            feeOverridesEnabled: !e.target.checked,
+                            rsvpMode: option.value as 'free' | 'paid',
+                            ticketingEnabled: option.value === 'paid',
                           })
                         }
                       />
-                      <div>
-                        <p className="text-sm font-medium text-brand-900">Use system default fees for this event</p>
-                        <p className="text-xs text-surface-500">Turn off to set custom fee values only for this event.</p>
-                      </div>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-brand-900">{option.label}</span>
+                        <span className="block text-[13px] leading-5 text-surface-600">{option.hint}</span>
+                      </span>
                     </label>
-
-                    {!eventSettings.feeOverridesEnabled ? (
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-white border border-surface-200 rounded-lg p-3">
-                          <p className="text-xs text-surface-500 mb-1">Default Platform Mode</p>
-                          <p className="text-sm font-semibold text-brand-900">{defaultFeeSettings.platformFeeMode}</p>
-                        </div>
-                        <div className="bg-white border border-surface-200 rounded-lg p-3">
-                          <p className="text-xs text-surface-500 mb-1">
-                            {defaultFeeSettings.platformFeeMode === 'FIXED' ? `Default Platform Fee (${primaryEventCurrency})` : 'Default Platform Fee (%)'}
-                          </p>
-                          <p className="text-sm font-semibold text-brand-900">
-                            {defaultFeeSettings.platformFeeMode === 'FIXED'
-                              ? defaultFeeSettings.platformFeeFixed
-                              : defaultFeeSettings.platformFeePercent}
-                          </p>
-                        </div>
-                        <div className="bg-white border border-surface-200 rounded-lg p-3">
-                          <p className="text-xs text-surface-500 mb-1">Default Processing Fee (%)</p>
-                          <p className="text-sm font-semibold text-brand-900">{defaultFeeSettings.processingFeePercent}</p>
-                        </div>
-                        <div className="bg-white border border-surface-200 rounded-lg p-3">
-                          <p className="text-xs text-surface-500 mb-1">Default Fixed Fee ({primaryEventCurrency})</p>
-                          <p className="text-sm font-semibold text-brand-900">{defaultFeeSettings.processingFeeFixed}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                          <label className="block text-xs font-medium text-surface-600 mb-1">Platform Fee Mode</label>
-                          <select
-                            value={eventSettings.platformFeeMode}
-                            onChange={(e) =>
-                              setEventSettings({
-                                ...eventSettings,
-                                platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED',
-                              })
-                            }
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
-                          >
-                            <option value="PERCENTAGE">Percentage</option>
-                            <option value="FIXED">Fixed Amount</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-surface-600 mb-1">
-                            {eventSettings.platformFeeMode === 'FIXED' ? `Platform Fee (${primaryEventCurrency})` : 'Platform Fee (%)'}
-                          </label>
-                          <input
-                            type="number"
-                            step={eventSettings.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
-                            min="0"
-                            max={eventSettings.platformFeeMode === 'FIXED' ? undefined : '100'}
-                            value={
-                              eventSettings.platformFeeMode === 'FIXED'
-                                ? eventSettings.platformFeeFixed ?? 0
-                                : eventSettings.platformFeePercent
-                            }
-                            onChange={(e) =>
-                              setEventSettings({
-                                ...eventSettings,
-                                platformFeePercent:
-                                  eventSettings.platformFeeMode === 'PERCENTAGE'
-                                    ? parseFloat(e.target.value) || 0
-                                    : eventSettings.platformFeePercent,
-                                platformFeeFixed:
-                                  eventSettings.platformFeeMode === 'FIXED'
-                                    ? parseFloat(e.target.value) || 0
-                                    : eventSettings.platformFeeFixed,
-                              })
-                            }
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-surface-600 mb-1">Processing Fee (%)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            value={eventSettings.processingFeePercent}
-                            onChange={(e) => setEventSettings({ ...eventSettings, processingFeePercent: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-surface-600 mb-1">
-                            Fixed Fee ({primaryEventCurrency})
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={eventSettings.processingFeeFixed}
-                            onChange={(e) => setEventSettings({ ...eventSettings, processingFeeFixed: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid' ? (
-                      <p className="text-xs text-surface-500">Manage ticket types in the Ticketing section after saving.</p>
-                    ) : null}
-                  </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            ) : null}
+          </SettingsSection>
 
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Access & Options</h4>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 rounded border-surface-300 text-brand-900" 
-                      checked={eventSettings.invitationOnly} 
-                      onChange={e => {
-                        const invitationOnly = e.target.checked;
-                        setEventSettings({ 
-                          ...eventSettings, 
-                          invitationOnly,
-                          // Disable check-in when invitation-only is unchecked
-                          checkInEnabled: invitationOnly ? eventSettings.checkInEnabled : false
+          <SettingsSection title="Access">
+            <div className="space-y-1">
+              <Switch
+                label="Invitation only"
+                description="Guests must be approved before they can use event features."
+                checked={eventSettings.invitationOnly}
+                onChange={(checked) =>
+                  setEventSettings({
+                    ...eventSettings,
+                    invitationOnly: checked,
+                    checkInEnabled: checked ? eventSettings.checkInEnabled : false,
+                  })
+                }
+              />
+              <Switch
+                label="Require an invite link"
+                description="Public RSVP only works from a valid invite link."
+                checked={eventSettings.strictInviteOnly}
+                onChange={(checked) => setEventSettings({ ...eventSettings, strictInviteOnly: checked })}
+              />
+            </div>
+          </SettingsSection>
+
+          <SettingsSection title="Owner">
+            <div className="space-y-4">
+              <div>
+                <label className="label" htmlFor="set-owner">
+                  Owner account
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    id="set-owner"
+                    className="input flex-1"
+                    value={eventSettings.ownerId || ''}
+                    onChange={(e) => {
+                      const ownerId = e.target.value;
+                      if (!ownerId) {
+                        setEventSettings({ ...eventSettings, ownerId: '' });
+                        return;
+                      }
+                      const owner = owners.find((o) => o.id === ownerId);
+                      if (owner) {
+                        setEventSettings({
+                          ...eventSettings,
+                          ownerId,
+                          ownerName: owner.name,
+                          ownerEmail: owner.email,
+                          ownerPhone: owner.phone || '',
+                          organizationName: owner.company || '',
                         });
-                      }} 
-                    />
-                    <div><span className="font-medium text-brand-900">Invitation Only</span><p className="text-sm text-surface-500">Guests must be approved before accessing event features</p></div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.reelEnabled} onChange={e => setEventSettings({ ...eventSettings, reelEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-brand-900">Enable Reel Generation</span><p className="text-sm text-surface-500">Allow generating video compilations from guest videos</p></div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.strictInviteOnly} onChange={e => setEventSettings({ ...eventSettings, strictInviteOnly: e.target.checked })} />
-                    <div><span className="font-medium text-brand-900">Strict Invite Mode</span><p className="text-sm text-surface-500">Public RSVP requires valid invite token context.</p></div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.itineraryEnabled} onChange={e => setEventSettings({ ...eventSettings, itineraryEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-brand-900">Enable Itinerary</span><p className="text-sm text-surface-500">Guests can follow schedule progress; MC can control completion.</p></div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-surface-50 transition-colors">
-                    <input type="checkbox" className="w-5 h-5 rounded border-surface-300 text-brand-900" checked={eventSettings.giftingEnabled} onChange={e => setEventSettings({ ...eventSettings, giftingEnabled: e.target.checked })} />
-                    <div><span className="font-medium text-brand-900">Enable Gifting</span><p className="text-sm text-surface-500">Allow MoMo cash gifts and gift package checkout for this event.</p></div>
-                  </label>
+                      }
+                    }}
+                  >
+                    <option value="">No account — use the contact details below</option>
+                    {owners.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                        {o.email ? ` (${o.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => setShowNewOwnerForm(true)} className="btn-outline shrink-0">
+                    New
+                  </button>
                 </div>
               </div>
 
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Custom Domains</h4>
-                <p className="text-sm text-surface-500 mb-4">Map client-owned domains to this event. Verification uses TXT, CNAME and apex A records; HTTPS is provisioned automatically.</p>
-
-                <div className="flex flex-col sm:flex-row gap-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="set-owner-name">
+                    Contact name
+                  </label>
                   <input
+                    id="set-owner-name"
                     type="text"
+                    className="input"
+                    value={eventSettings.ownerName}
+                    onChange={(e) => setEventSettings({ ...eventSettings, ownerName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="set-org">
+                    Organisation
+                  </label>
+                  <input
+                    id="set-org"
+                    type="text"
+                    className="input"
+                    value={eventSettings.organizationName}
+                    onChange={(e) => setEventSettings({ ...eventSettings, organizationName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="set-owner-email">
+                    Email
+                  </label>
+                  <input
+                    id="set-owner-email"
+                    type="email"
+                    className="input"
+                    value={eventSettings.ownerEmail}
+                    onChange={(e) => setEventSettings({ ...eventSettings, ownerEmail: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="set-owner-phone">
+                    Phone
+                  </label>
+                  <input
+                    id="set-owner-phone"
+                    type="tel"
+                    className="input"
+                    value={eventSettings.ownerPhone}
+                    onChange={(e) => setEventSettings({ ...eventSettings, ownerPhone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="field-hint">Event notifications go to this contact.</p>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection title="Branding and sharing">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="set-social-title">
+                  Share title
+                </label>
+                <input
+                  id="set-social-title"
+                  type="text"
+                  className="input"
+                  value={eventSettings.socialTitle}
+                  onChange={(e) => setEventSettings({ ...eventSettings, socialTitle: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="set-cover-alt">
+                  Cover description
+                </label>
+                <input
+                  id="set-cover-alt"
+                  type="text"
+                  className="input"
+                  value={eventSettings.coverImageAlt}
+                  onChange={(e) => setEventSettings({ ...eventSettings, coverImageAlt: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="set-social-desc">
+                  Share description
+                </label>
+                <textarea
+                  id="set-social-desc"
+                  rows={2}
+                  className="input"
+                  value={eventSettings.socialDescription}
+                  onChange={(e) => setEventSettings({ ...eventSettings, socialDescription: e.target.value })}
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="set-cover">
+                  Cover image
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    id="set-cover"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
                     className="input flex-1"
-                    placeholder="e.g. wedding.example.com"
-                    value={domainHost}
-                    onChange={(e) => setDomainHost(e.target.value)}
+                    onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
                   />
                   <button
                     type="button"
-                    className="btn-primary"
-                    disabled={savingDomain}
-                    onClick={handleAddDomain}
+                    className="btn-outline shrink-0"
+                    disabled={!coverFile || uploadingCover}
+                    onClick={handleUploadCover}
                   >
-                    {savingDomain ? 'Adding...' : 'Add Domain'}
+                    {uploadingCover ? 'Uploading…' : 'Upload'}
                   </button>
+                  {event.coverImagePath ? (
+                    <button type="button" className="btn-danger-outline shrink-0" onClick={handleDeleteCover}>
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
+                <p className="field-hint">JPG, PNG or WEBP, at least 800&times;420. Cropped to 1200&times;630 for sharing.</p>
+              </div>
 
-                <div className="mt-4 space-y-3">
-                  {domains.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-surface-300 bg-surface-50 px-4 py-5 text-sm text-surface-500">
-                      No domains connected yet.
-                    </div>
+              <div className="sm:col-span-2 overflow-hidden rounded-xl border border-surface-200">
+                <div className="aspect-[1200/630] bg-surface-200">
+                  {event.coverImageUrl ? (
+                    <img
+                      src={event.coverImageUrl}
+                      alt={event.coverImageAlt || event.name}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    domains.map((domain) => (
-                      <div key={domain.id} className="rounded-xl border border-surface-200 p-4 bg-white">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-brand-900">{domain.host}</span>
-                              {domain.isPrimary && <span className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-700">Primary</span>}
-                              <span
-                                className={cn(
-                                  'px-2 py-0.5 rounded text-xs font-medium border',
-                                  domain.status === 'ACTIVE' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                  domain.status === 'VERIFIED' && 'bg-amber-50 text-amber-700 border-amber-200',
-                                  domain.status === 'FAILED' && 'bg-rose-50 text-rose-700 border-rose-200',
-                                  domain.status === 'PENDING_VERIFICATION' && 'bg-amber-50 text-amber-700 border-amber-200'
-                                )}
-                              >
-                                {domain.status.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-xs text-surface-500 space-y-1">
-                              <p>TXT — Host: <span className="font-mono text-surface-700">_eventpeepo</span> · Value: <span className="font-mono text-surface-700">{domain.verificationToken}</span></p>
-                              <p>CNAME — Host: <span className="font-mono text-surface-700">www</span> · Target: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}</span></p>
-                              <p>A — Host: <span className="font-mono text-surface-700">@</span> · Value: <span className="font-mono text-surface-700">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span></p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button type="button" className="btn-outline" onClick={() => handleVerifyDomain(domain.id)}>
-                              Verify
-                            </button>
-                            {!domain.isPrimary && (
-                              <button
-                                type="button"
-                                className="btn-outline"
-                                onClick={() => handleSetPrimaryDomain(domain.id)}
-                                disabled={domain.status !== 'ACTIVE'}
-                              >
-                                Make Primary
-                              </button>
-                            )}
-                            <button type="button" className="btn-ghost text-rose-600 hover:text-rose-700" onClick={() => handleDeleteDomain(domain.id)}>
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                        {domain.verificationNotes && (
-                          <p className={cn('mt-2 text-xs', domain.status === 'VERIFIED' ? 'text-amber-700' : 'text-rose-600')}>{domain.verificationNotes}</p>
-                        )}
-                      </div>
-                    ))
+                    <div className="h-full w-full bg-gradient-to-br from-brand-900 to-brand-700" />
                   )}
                 </div>
-              </div>
-
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Notifications</h4>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-surface-600 mb-3">Send notifications when:</p>
-                    <div className="grid sm:grid-cols-3 gap-3">
-                      <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-brand-900" checked={eventSettings.notifyOnRsvp} onChange={e => setEventSettings({ ...eventSettings, notifyOnRsvp: e.target.checked })} />
-                        <span className="text-sm font-medium">New RSVP</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-brand-900" checked={eventSettings.notifyOnCheckIn} onChange={e => setEventSettings({ ...eventSettings, notifyOnCheckIn: e.target.checked })} />
-                        <span className="text-sm font-medium">Guest Check-in</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-brand-900" checked={eventSettings.notifyOnGuestbook} onChange={e => setEventSettings({ ...eventSettings, notifyOnGuestbook: e.target.checked })} />
-                        <span className="text-sm font-medium">Guestbook Entry</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-surface-600 mb-3">Notification channels:</p>
-                    <div className="grid sm:grid-cols-3 gap-3">
-                      <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-emerald-600" checked={eventSettings.emailNotifications} onChange={e => setEventSettings({ ...eventSettings, emailNotifications: e.target.checked })} />
-                        <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                        <span className="text-sm font-medium">Email</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-blue-600" checked={eventSettings.smsNotifications} onChange={e => setEventSettings({ ...eventSettings, smsNotifications: e.target.checked })} />
-                        <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                        <span className="text-sm font-medium">SMS</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-3 rounded-lg border border-surface-200 hover:bg-surface-50 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-green-600" checked={eventSettings.whatsappNotifications} onChange={e => setEventSettings({ ...eventSettings, whatsappNotifications: e.target.checked })} />
-                        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                        <span className="text-sm font-medium">WhatsApp</span>
-                      </label>
-                    </div>
-                    <p className="text-xs text-surface-400 mt-2">Configure channels in Admin → Settings</p>
-                  </div>
+                <div className="p-4">
+                  <p className="text-[15px] font-semibold text-brand-900">
+                    {eventSettings.socialTitle || eventSettings.name || 'Untitled event'}
+                  </p>
+                  <p className="mt-0.5 meta">
+                    {eventSettings.socialDescription || eventSettings.description || 'No share description set.'}
+                  </p>
                 </div>
               </div>
 
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Guestbook Limits</h4>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <div><label className="label">Min Recording (sec)</label><input type="number" min="10" max="60" className="input" value={eventSettings.minRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, minRecordingDuration: parseInt(e.target.value) })} /></div>
-                  <div><label className="label">Max Recording (sec)</label><input type="number" min="30" max="300" className="input" value={eventSettings.maxRecordingDuration} onChange={e => setEventSettings({ ...eventSettings, maxRecordingDuration: parseInt(e.target.value) })} /></div>
-                  <div><label className="label">Max Photos/Guest</label><input type="number" min="1" max="20" className="input" value={eventSettings.maxPhotosPerGuest} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerGuest: parseInt(e.target.value) })} /></div>
+              <div className="sm:col-span-2 border-t border-surface-200 pt-4">
+                <p className="label">Event colours</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    { key: 'primaryColor' as const, label: 'Primary' },
+                    { key: 'secondaryColor' as const, label: 'Secondary' },
+                    { key: 'accentColor' as const, label: 'Accent' },
+                  ].map((color) => (
+                    <div key={color.key}>
+                      <label className="label text-[13px]" htmlFor={`color-${color.key}`}>
+                        {color.label}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`color-${color.key}`}
+                          type="color"
+                          className="h-10 w-10 shrink-0 cursor-pointer rounded-lg border border-surface-300"
+                          value={eventSettings[color.key]}
+                          onChange={(e) => setEventSettings({ ...eventSettings, [color.key]: e.target.value })}
+                        />
+                        <input
+                          type="text"
+                          className="input font-mono"
+                          aria-label={`${color.label} colour hex`}
+                          value={eventSettings[color.key]}
+                          onChange={(e) => setEventSettings({ ...eventSettings, [color.key]: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              <div className="border-t border-surface-100 pt-6">
-                <h4 className="font-medium text-brand-900 mb-4">Booth/Kiosk Settings</h4>
-                <p className="text-sm text-surface-500 mb-4">Configure the photo booth experience for guests.</p>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div><label className="label">Max Photos Per Session</label><input type="number" min="1" max="50" className="input" value={eventSettings.maxPhotosPerBoothSession} onChange={e => setEventSettings({ ...eventSettings, maxPhotosPerBoothSession: parseInt(e.target.value) || 10 })} /></div>
-                  <div><label className="label">Shutter Countdown (sec)</label><input type="number" min="1" max="10" className="input" value={eventSettings.boothShutterCountdown} onChange={e => setEventSettings({ ...eventSettings, boothShutterCountdown: parseInt(e.target.value) || 3 })} /></div>
+                <div
+                  className="mt-3 flex flex-wrap items-center gap-3 rounded-lg p-4"
+                  style={{ backgroundColor: eventSettings.primaryColor, color: eventSettings.secondaryColor }}
+                >
+                  <span className="text-[15px] font-semibold">{eventSettings.name || 'Event name'}</span>
+                  <span
+                    className="rounded-full px-3 py-1 text-[13px] font-semibold"
+                    style={{ backgroundColor: eventSettings.secondaryColor, color: eventSettings.accentColor }}
+                  >
+                    Sample button
+                  </span>
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="grid lg:grid-cols-2 gap-8">
-              <div className="space-y-3">
-                {[
-                  { l: 'Slug', v: `/${event.slug}` },
-                  { l: 'Date', v: formatDate(event.date, 'PPP') },
-                  { l: 'Venue', v: event.venue || '-' },
-                  { l: 'Timezone', v: event.timezone },
-                  { l: 'Default Currency', v: event.defaultCurrency || 'USD' },
-                ].map((r, i) => (
-                  <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
-                    <span className="text-surface-500">{r.l}</span>
-                    <span className="font-medium text-brand-900">{r.v}</span>
+          </SettingsSection>
+
+          {eventSettings.giftingEnabled || (eventSettings.rsvpEnabled && eventSettings.rsvpMode === 'paid') ? (
+            <SettingsSection title="Fees">
+              <Switch
+                label="Use the platform default fees"
+                description="Turn off to set fees just for this event."
+                checked={!eventSettings.feeOverridesEnabled}
+                onChange={(checked) => setEventSettings({ ...eventSettings, feeOverridesEnabled: !checked })}
+              />
+
+              <div className="mt-4">
+                {!eventSettings.feeOverridesEnabled ? (
+                  <dl className="divide-y divide-surface-200">
+                    <DetailRow label="Platform fee">
+                      {defaultFeeSettings.platformFeeMode === 'FIXED'
+                        ? formatCurrency(defaultFeeSettings.platformFeeFixed, primaryEventCurrency)
+                        : `${defaultFeeSettings.platformFeePercent}%`}
+                    </DetailRow>
+                    <DetailRow label="Processing fee">{defaultFeeSettings.processingFeePercent}%</DetailRow>
+                    <DetailRow label="Fixed fee">
+                      {formatCurrency(defaultFeeSettings.processingFeeFixed, primaryEventCurrency)}
+                    </DetailRow>
+                  </dl>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <label className="label" htmlFor="fee-mode">
+                        Platform fee type
+                      </label>
+                      <select
+                        id="fee-mode"
+                        className="input"
+                        value={eventSettings.platformFeeMode}
+                        onChange={(e) =>
+                          setEventSettings({
+                            ...eventSettings,
+                            platformFeeMode: e.target.value as 'PERCENTAGE' | 'FIXED',
+                          })
+                        }
+                      >
+                        <option value="PERCENTAGE">Percentage</option>
+                        <option value="FIXED">Fixed amount</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="fee-platform">
+                        {eventSettings.platformFeeMode === 'FIXED'
+                          ? `Platform fee (${primaryEventCurrency})`
+                          : 'Platform fee (%)'}
+                      </label>
+                      <input
+                        id="fee-platform"
+                        type="number"
+                        className="input"
+                        step={eventSettings.platformFeeMode === 'FIXED' ? '0.01' : '0.1'}
+                        min="0"
+                        max={eventSettings.platformFeeMode === 'FIXED' ? undefined : '100'}
+                        value={
+                          eventSettings.platformFeeMode === 'FIXED'
+                            ? eventSettings.platformFeeFixed ?? 0
+                            : eventSettings.platformFeePercent
+                        }
+                        onChange={(e) =>
+                          setEventSettings({
+                            ...eventSettings,
+                            platformFeePercent:
+                              eventSettings.platformFeeMode === 'PERCENTAGE'
+                                ? parseFloat(e.target.value) || 0
+                                : eventSettings.platformFeePercent,
+                            platformFeeFixed:
+                              eventSettings.platformFeeMode === 'FIXED'
+                                ? parseFloat(e.target.value) || 0
+                                : eventSettings.platformFeeFixed,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="fee-processing">
+                        Processing fee (%)
+                      </label>
+                      <input
+                        id="fee-processing"
+                        type="number"
+                        className="input"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        value={eventSettings.processingFeePercent}
+                        onChange={(e) =>
+                          setEventSettings({ ...eventSettings, processingFeePercent: parseFloat(e.target.value) || 0 })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="fee-fixed">
+                        Fixed fee ({primaryEventCurrency})
+                      </label>
+                      <input
+                        id="fee-fixed"
+                        type="number"
+                        className="input"
+                        step="0.01"
+                        min="0"
+                        value={eventSettings.processingFeeFixed}
+                        onChange={(e) =>
+                          setEventSettings({ ...eventSettings, processingFeeFixed: parseFloat(e.target.value) || 0 })
+                        }
+                      />
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
-              <div className="space-y-3">
-                {[
-                  { l: 'Invitation Only', v: event.invitationOnly ? 'Yes' : 'No' },
-                  { l: 'Strict Invite Mode', v: event.strictInviteOnly ? 'Enabled' : 'Disabled' },
-                  { l: 'Itinerary', v: event.itineraryEnabled ? 'Enabled' : 'Disabled' },
-                  { l: 'Gifting', v: event.giftingEnabled ? 'Enabled' : 'Disabled' },
-                  { l: 'Voting', v: votingEnabled ? 'Enabled' : 'Disabled' },
-                  { l: 'Reel Generation', v: event.reelEnabled ? 'Enabled' : 'Disabled' },
-                  { l: 'Recording Limits', v: `${event.minRecordingDuration}s - ${event.maxRecordingDuration}s` },
-                  { l: 'Max Photos/Guest', v: event.maxPhotosPerGuest },
-                  { l: 'Custom Domains', v: domains.length || 0 },
-                ].map((r, i) => (
-                  <div key={i} className="flex justify-between py-2 border-b border-surface-100 last:border-0">
-                    <span className="text-surface-500">{r.l}</span>
-                    <span className="font-medium text-brand-900">{r.v}</span>
-                  </div>
-                ))}
+            </SettingsSection>
+          ) : null}
+
+          <SettingsSection title="Custom domains">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                className="input flex-1"
+                placeholder="wedding.example.com"
+                aria-label="Domain to connect"
+                value={domainHost}
+                onChange={(e) => setDomainHost(e.target.value)}
+              />
+              <SubmitButton
+                loading={savingDomain}
+                className="btn-primary shrink-0"
+                onClick={handleAddDomain}
+                disabled={!domainHost.trim()}
+              >
+                Connect
+              </SubmitButton>
+            </div>
+
+            <div className="mt-4">
+              {domains.length === 0 ? (
+                <EmptyState title="No domains connected" hint="Guests reach this event at its EventPeepo address." />
+              ) : (
+                <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200">
+                  {domains.map((domain) => (
+                    <div key={domain.id} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-[15px] font-semibold text-brand-900">{domain.host}</span>
+                        {domain.isPrimary ? <StatusBadge tone="brand">Primary</StatusBadge> : null}
+                        <StatusBadge
+                          tone={
+                            domain.status === 'ACTIVE'
+                              ? 'success'
+                              : domain.status === 'FAILED'
+                              ? 'danger'
+                              : 'warning'
+                          }
+                        >
+                          {humanizeEnum(domain.status)}
+                        </StatusBadge>
+                        <span className="flex-1" />
+                        <button type="button" className="btn-outline btn-sm" onClick={() => handleVerifyDomain(domain.id)}>
+                          Verify
+                        </button>
+                        <Menu label={`Actions for ${domain.host}`} sheetTitle={domain.host}>
+                          <MenuItem
+                            disabled={domain.isPrimary || domain.status !== 'ACTIVE'}
+                            onClick={() => handleSetPrimaryDomain(domain.id)}
+                          >
+                            Make primary
+                          </MenuItem>
+                          <MenuItem danger onClick={() => setRemovingDomain(domain)}>
+                            Remove domain
+                          </MenuItem>
+                        </Menu>
+                      </div>
+
+                      {domain.verificationNotes ? (
+                        <p
+                          className={cn(
+                            'mt-1.5 text-[13px]',
+                            domain.status === 'VERIFIED' ? 'text-amber-800' : 'text-red-600'
+                          )}
+                        >
+                          {domain.verificationNotes}
+                        </p>
+                      ) : null}
+
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-[13px] font-medium text-surface-700 hover:text-brand-900">
+                          DNS records
+                        </summary>
+                        <div className="mt-2 space-y-1 text-[12px] text-surface-700">
+                          <p>
+                            TXT <span className="font-mono">_eventpeepo</span> &rarr;{' '}
+                            <span className="font-mono">{domain.verificationToken}</span>
+                          </p>
+                          <p>
+                            CNAME <span className="font-mono">www</span> &rarr;{' '}
+                            <span className="font-mono">
+                              {process.env.NEXT_PUBLIC_DOMAIN_CNAME_TARGET || 'cname.eventpeepo.com'}
+                            </span>
+                          </p>
+                          <p>
+                            A <span className="font-mono">@</span> &rarr;{' '}
+                            <span className="font-mono">{process.env.NEXT_PUBLIC_DOMAIN_APEX_IP || '75.2.60.5'}</span>
+                          </p>
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </SettingsSection>
+
+          <SettingsSection title="Notifications">
+            <p className="label">Notify the owner when</p>
+            <div className="space-y-1">
+              <Switch
+                label="A guest RSVPs"
+                checked={eventSettings.notifyOnRsvp}
+                onChange={(checked) => setEventSettings({ ...eventSettings, notifyOnRsvp: checked })}
+              />
+              <Switch
+                label="A guest checks in"
+                checked={eventSettings.notifyOnCheckIn}
+                onChange={(checked) => setEventSettings({ ...eventSettings, notifyOnCheckIn: checked })}
+              />
+              <Switch
+                label="A guestbook entry arrives"
+                checked={eventSettings.notifyOnGuestbook}
+                onChange={(checked) => setEventSettings({ ...eventSettings, notifyOnGuestbook: checked })}
+              />
+            </div>
+
+            <p className="label mt-4 border-t border-surface-200 pt-4">Send via</p>
+            <div className="space-y-1">
+              <Switch
+                label="Email"
+                checked={eventSettings.emailNotifications}
+                onChange={(checked) => setEventSettings({ ...eventSettings, emailNotifications: checked })}
+              />
+              <Switch
+                label="SMS"
+                checked={eventSettings.smsNotifications}
+                onChange={(checked) => setEventSettings({ ...eventSettings, smsNotifications: checked })}
+              />
+              <Switch
+                label="WhatsApp"
+                checked={eventSettings.whatsappNotifications}
+                onChange={(checked) => setEventSettings({ ...eventSettings, whatsappNotifications: checked })}
+              />
+            </div>
+            <p className="field-hint">
+              Providers are configured in <Link href="/admin/settings" className="font-medium underline">Settings</Link>.
+            </p>
+          </SettingsSection>
+
+          <SettingsSection title="Capture limits">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="label" htmlFor="lim-min">
+                  Shortest recording (s)
+                </label>
+                <input
+                  id="lim-min"
+                  type="number"
+                  min="10"
+                  max="60"
+                  className="input"
+                  value={eventSettings.minRecordingDuration}
+                  onChange={(e) =>
+                    setEventSettings({ ...eventSettings, minRecordingDuration: parseInt(e.target.value, 10) || 10 })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="lim-max">
+                  Longest recording (s)
+                </label>
+                <input
+                  id="lim-max"
+                  type="number"
+                  min="30"
+                  max="300"
+                  className="input"
+                  value={eventSettings.maxRecordingDuration}
+                  onChange={(e) =>
+                    setEventSettings({ ...eventSettings, maxRecordingDuration: parseInt(e.target.value, 10) || 30 })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="lim-photos">
+                  Photos per guest
+                </label>
+                <input
+                  id="lim-photos"
+                  type="number"
+                  min="1"
+                  max="20"
+                  className="input"
+                  value={eventSettings.maxPhotosPerGuest}
+                  onChange={(e) =>
+                    setEventSettings({ ...eventSettings, maxPhotosPerGuest: parseInt(e.target.value, 10) || 1 })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="lim-booth-photos">
+                  Booth photos per session
+                </label>
+                <input
+                  id="lim-booth-photos"
+                  type="number"
+                  min="1"
+                  max="50"
+                  className="input"
+                  value={eventSettings.maxPhotosPerBoothSession}
+                  onChange={(e) =>
+                    setEventSettings({
+                      ...eventSettings,
+                      maxPhotosPerBoothSession: parseInt(e.target.value, 10) || 10,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="lim-countdown">
+                  Booth countdown (s)
+                </label>
+                <input
+                  id="lim-countdown"
+                  type="number"
+                  min="1"
+                  max="10"
+                  className="input"
+                  value={eventSettings.boothShutterCountdown}
+                  onChange={(e) =>
+                    setEventSettings({
+                      ...eventSettings,
+                      boothShutterCountdown: parseInt(e.target.value, 10) || 3,
+                    })
+                  }
+                />
               </div>
             </div>
-          )}
+          </SettingsSection>
+
+          <Modal
+            open={showNewOwnerForm}
+            onClose={() => setShowNewOwnerForm(false)}
+            title="New owner"
+            size="md"
+            footer={
+              <>
+                <button type="button" className="btn-outline" onClick={() => setShowNewOwnerForm(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleCreateOwner}
+                  disabled={!newOwner.name.trim() || !newOwner.email.trim()}
+                >
+                  Create owner
+                </button>
+              </>
+            }
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="new-owner-name">
+                  Name
+                </label>
+                <input
+                  id="new-owner-name"
+                  data-autofocus
+                  type="text"
+                  className="input"
+                  value={newOwner.name}
+                  onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="new-owner-email">
+                  Email
+                </label>
+                <input
+                  id="new-owner-email"
+                  type="email"
+                  className="input"
+                  value={newOwner.email}
+                  onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="new-owner-phone">
+                  Phone <span className="font-normal text-surface-600">(optional)</span>
+                </label>
+                <input
+                  id="new-owner-phone"
+                  type="tel"
+                  className="input"
+                  value={newOwner.phone}
+                  onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="new-owner-company">
+                  Company <span className="font-normal text-surface-600">(optional)</span>
+                </label>
+                <input
+                  id="new-owner-company"
+                  type="text"
+                  className="input"
+                  value={newOwner.company}
+                  onChange={(e) => setNewOwner({ ...newOwner, company: e.target.value })}
+                />
+              </div>
+            </div>
+          </Modal>
+
+          <ConfirmDialog
+            open={Boolean(removingDomain)}
+            onClose={() => setRemovingDomain(null)}
+            onConfirm={() => {
+              if (removingDomain) void handleDeleteDomain(removingDomain.id);
+              setRemovingDomain(null);
+            }}
+            title={`Remove ${removingDomain?.host || 'domain'}?`}
+            body="Guests using this address will stop reaching the event until it is connected again."
+            confirmLabel="Remove domain"
+          />
         </div>
       )}
 

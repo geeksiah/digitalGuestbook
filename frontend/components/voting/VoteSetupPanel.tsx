@@ -38,7 +38,7 @@ export default function VoteSetupPanel({
   return (
     <section className="detail-card space-y-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Paid voting</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-600">Paid voting</p>
         <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">{title}</h2>
         <p className="mt-1 text-sm leading-6 text-surface-500">{helperText}</p>
       </div>

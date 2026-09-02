@@ -2,14 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ownersApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import Link from 'next/link';
+import { getErrorMessage } from '@/lib/utils';
+import { PageHeader, Panel, SubmitButton } from '@/components/ui/Primitives';
+
+const COUNTRIES = [
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'GH', name: 'Ghana' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'ZA', name: 'South Africa' },
+];
 
 export default function NewOwnerPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formError, setFormError] = useState<string | null>(null);
+  const [form, setForm] = useState({
     name: '',
     email: '',
     phone: '',
@@ -17,103 +29,99 @@ export default function NewOwnerPage() {
     countryCode: 'US',
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
+    setFormError(null);
 
     try {
       await ownersApi.create({
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone || undefined,
-        company: formData.company || undefined,
-        countryCode: formData.countryCode,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || undefined,
+        company: form.company.trim() || undefined,
+        countryCode: form.countryCode,
       });
-      toast.success('Owner created successfully');
+      toast.success('Owner created');
       router.push('/admin/owners');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create owner');
+    } catch (error) {
+      // Values stay on screen so nothing typed is lost.
+      setFormError(getErrorMessage(error, 'Could not create this owner.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <Link
-          href="/admin/owners"
-          className="text-surface-600 hover:text-navy-900 inline-flex items-center mb-4"
-        >
-          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Owners
-        </Link>
-        <h1 className="text-2xl font-bold text-navy-900">New Owner</h1>
-        <p className="text-surface-600 mt-1">Create a new owner or client account</p>
-      </div>
+    <div className="page mx-auto max-w-2xl">
+      <PageHeader title="New owner" backHref="/admin/owners" backLabel="Owners" />
 
-      {/* Form */}
-      <div className="bg-white rounded-lg border border-surface-200 p-6">
-        <form onSubmit={handleSubmit} className="space-y-5">
+      <Panel>
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {formError ? (
+            <div className="banner-error" role="alert">
+              {formError}
+            </div>
+          ) : null}
+
           <div>
             <label htmlFor="name" className="label">
-              Name *
+              Name
             </label>
             <input
               id="name"
               type="text"
               required
+              autoFocus
               className="input"
-              placeholder="John Doe"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Ama Serwaa"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
 
           <div>
             <label htmlFor="email" className="label">
-              Email *
+              Email
             </label>
             <input
               id="email"
               type="email"
               required
               className="input"
-              placeholder="john@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="ama@example.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
+            <p className="field-hint">A welcome email with sign-in details goes to this address.</p>
           </div>
 
-          <div>
-            <label htmlFor="phone" className="label">
-              Phone
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              className="input"
-              placeholder="+1 (555) 123-4567"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="phone" className="label">
+                Phone <span className="font-normal text-surface-600">(optional)</span>
+              </label>
+              <input
+                id="phone"
+                type="tel"
+                className="input"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </div>
 
-          <div>
-            <label htmlFor="company" className="label">
-              Company
-            </label>
-            <input
-              id="company"
-              type="text"
-              className="input"
-              placeholder="Acme Corporation"
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-            />
+            <div>
+              <label htmlFor="company" className="label">
+                Company <span className="font-normal text-surface-600">(optional)</span>
+              </label>
+              <input
+                id="company"
+                type="text"
+                className="input"
+                value={form.company}
+                onChange={(e) => setForm({ ...form, company: e.target.value })}
+              />
+            </div>
           </div>
 
           <div>
@@ -123,29 +131,28 @@ export default function NewOwnerPage() {
             <select
               id="countryCode"
               className="input"
-              value={formData.countryCode}
-              onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+              value={form.countryCode}
+              onChange={(e) => setForm({ ...form, countryCode: e.target.value })}
             >
-              <option value="US">United States (US)</option>
-              <option value="GB">United Kingdom (GB)</option>
-              <option value="GH">Ghana (GH)</option>
-              <option value="NG">Nigeria (NG)</option>
-              <option value="KE">Kenya (KE)</option>
-              <option value="ZA">South Africa (ZA)</option>
+              {COUNTRIES.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
             </select>
+            <p className="field-hint">Sets the default payout options available to this owner.</p>
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <Link href="/admin/owners" className="btn-secondary flex-1 text-center">
+          <div className="flex flex-col-reverse gap-2 border-t border-surface-200 pt-4 sm:flex-row sm:justify-end">
+            <Link href="/admin/owners" className="btn-outline">
               Cancel
             </Link>
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
-              {loading ? 'Creating...' : 'Create Owner'}
-            </button>
+            <SubmitButton type="submit" loading={loading} disabled={!form.name.trim() || !form.email.trim()}>
+              Create owner
+            </SubmitButton>
           </div>
         </form>
-      </div>
+      </Panel>
     </div>
   );
 }
-

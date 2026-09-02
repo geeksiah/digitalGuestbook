@@ -3,7 +3,19 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { templatesApi, API_BASE_URL } from '@/lib/api';
-import { formatDate, cn } from '@/lib/utils';
+import { cn, formatCount, formatDate, getErrorMessage } from '@/lib/utils';
+import {
+  EmptyState,
+  ListSkeleton,
+  PageHeader,
+  SearchField,
+  StatusBadge,
+  Td,
+  Th,
+  Toolbar,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, Modal } from '@/components/ui/Overlay';
+import { Plus } from '@/components/ui/icons';
 import toast from 'react-hot-toast';
 
 interface Template {
@@ -42,48 +54,7 @@ const typeLabels: Record<string, string> = {
   VOTING_NOMINEES: 'Voting Nominees',
   VOTING_LEADERBOARD: 'Voting Leaderboard',
 };
-const typeColors: Record<string, string> = {
-  INVITATION: 'bg-blue-100 text-blue-700 border-blue-200',
-  RSVP: 'bg-green-100 text-green-700 border-green-200',
-  GUESTBOOK: 'bg-purple-100 text-purple-700 border-purple-200',
-  GUESTBOOK_VIDEO: 'bg-red-100 text-red-700 border-red-200',
-  GUESTBOOK_AUDIO: 'bg-amber-100 text-amber-700 border-amber-200',
-  GUESTBOOK_PHOTO: 'bg-teal-100 text-teal-700 border-teal-200',
-  THANK_YOU: 'bg-orange-100 text-orange-700 border-orange-200',
-  BOOTH: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  BOOTH_VIDEO: 'bg-pink-100 text-pink-700 border-pink-200',
-  BOOTH_AUDIO: 'bg-cyan-100 text-cyan-700 border-cyan-200',
-  BOOTH_PHOTO: 'bg-lime-100 text-lime-700 border-lime-200',
-  LIVE_LANDING: 'bg-violet-100 text-violet-700 border-violet-200',
-  EVENT_ENDED: 'bg-rose-100 text-rose-700 border-rose-200',
-  ITINERARY: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  GIFTING: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
-  VOTING: 'bg-sky-100 text-sky-700 border-sky-200',
-  VOTING_NOMINATION: 'bg-orange-100 text-orange-700 border-orange-200',
-  VOTING_NOMINEES: 'bg-red-100 text-red-700 border-red-200',
-  VOTING_LEADERBOARD: 'bg-amber-100 text-amber-700 border-amber-200',
-};
-const typeIconColors: Record<string, string> = {
-  INVITATION: 'bg-blue-500',
-  RSVP: 'bg-green-500',
-  GUESTBOOK: 'bg-purple-500',
-  GUESTBOOK_VIDEO: 'bg-red-500',
-  GUESTBOOK_AUDIO: 'bg-amber-500',
-  GUESTBOOK_PHOTO: 'bg-teal-500',
-  BOOTH: 'bg-indigo-500',
-  BOOTH_VIDEO: 'bg-pink-500',
-  BOOTH_AUDIO: 'bg-cyan-500',
-  BOOTH_PHOTO: 'bg-lime-500',
-  THANK_YOU: 'bg-orange-500',
-  LIVE_LANDING: 'bg-violet-500',
-  EVENT_ENDED: 'bg-rose-500',
-  ITINERARY: 'bg-emerald-500',
-  GIFTING: 'bg-fuchsia-500',
-  VOTING: 'bg-sky-500',
-  VOTING_NOMINATION: 'bg-orange-500',
-  VOTING_NOMINEES: 'bg-red-500',
-  VOTING_LEADERBOARD: 'bg-amber-500',
-};
+
 type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'type' | 'created' | 'updated' | 'usage';
 
@@ -95,6 +66,8 @@ export default function TemplatesPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortBy>('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [deletingTemplate, setDeletingTemplate] = useState<Template | null>(null);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -109,7 +82,7 @@ export default function TemplatesPage() {
       const response = await templatesApi.list(undefined, true);
       setTemplates(response.data.templates);
     } catch (error) {
-      toast.error('Failed to load templates');
+      toast.error(getErrorMessage(error, 'Could not load templates.'));
     } finally {
       setLoading(false);
     }
@@ -156,7 +129,7 @@ export default function TemplatesPage() {
         const response = await templatesApi.get(template.id);
         setPreviewTemplate(response.data.template);
       } catch (error) {
-        toast.error('Failed to load template preview');
+        toast.error(getErrorMessage(error, 'Could not load the preview.'));
       }
     }
   };
@@ -169,25 +142,24 @@ export default function TemplatesPage() {
       toast.success('Template duplicated');
       fetchTemplates();
     } catch (error) {
-      toast.error('Failed to duplicate template');
+      toast.error(getErrorMessage(error, 'Could not duplicate this template.'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
     try {
       await templatesApi.delete(id);
       toast.success('Template deleted');
       fetchTemplates();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete template');
+      toast.error(getErrorMessage(error, 'Could not delete this template.'));
     }
   };
 
   const handleBulkDelete = async () => {
     if (selectedTemplates.size === 0) return;
-    if (!confirm(`Delete ${selectedTemplates.size} template(s)?`)) return;
-    
+
+
     let deleted = 0;
     for (const id of Array.from(selectedTemplates)) {
       try {
@@ -256,375 +228,384 @@ export default function TemplatesPage() {
     votingLeaderboard: templates.filter(t => t.type === 'VOTING_LEADERBOARD').length,
   };
 
+  const typeCounts = Object.entries(typeLabels).map(([type, label]) => ({
+    type,
+    label,
+    count: templates.filter((template) => template.type === type).length,
+  }));
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-navy-900">Template Library</h1>
-          <p className="text-surface-600 mt-1">{stats.total} templates in your library</p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="page">
+      <PageHeader
+        title="Templates"
+        meta={<span className="num">{formatCount(stats.total)} in the library</span>}
+        actions={
           <Link href="/admin/templates/new" className="btn-primary">
-            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            New Template
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            New template
           </Link>
-        </div>
-      </div>
+        }
+        mobileActions={
+          <Link href="/admin/templates/new" className="icon-btn" aria-label="New template">
+            <Plus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          </Link>
+        }
+      />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-        <button
-          onClick={() => setFilter('all')}
-          className={cn(
-            'p-3 rounded-xl border-2 transition-all text-left',
-            filter === 'all' ? 'border-primary-500 bg-primary-50' : 'border-surface-200 hover:border-surface-300'
-          )}
-        >
-          <p className="text-xl font-bold text-navy-900">{stats.total}</p>
-          <p className="text-xs text-surface-600">All</p>
-        </button>
-        {[
-          { type: 'INVITATION', count: stats.invitation },
-          { type: 'RSVP', count: stats.rsvp },
-          { type: 'GUESTBOOK', count: stats.guestbook },
-          { type: 'GUESTBOOK_VIDEO', count: stats.guestbookVideo },
-          { type: 'GUESTBOOK_AUDIO', count: stats.guestbookAudio },
-          { type: 'GUESTBOOK_PHOTO', count: stats.guestbookPhoto },
-          { type: 'THANK_YOU', count: stats.thankYou },
-          { type: 'ITINERARY', count: stats.itinerary },
-          { type: 'GIFTING', count: stats.gifting },
-          { type: 'VOTING', count: stats.votingVote },
-          { type: 'VOTING_NOMINATION', count: stats.votingNomination },
-          { type: 'VOTING_NOMINEES', count: stats.votingNominees },
-          { type: 'VOTING_LEADERBOARD', count: stats.votingLeaderboard },
-        ].map(({ type, count }) => (
-          <button
-            key={type}
-            onClick={() => setFilter(type)}
-            className={cn(
-              'p-3 rounded-xl border-2 transition-all text-left',
-              filter === type ? 'border-primary-500 bg-primary-50' : 'border-surface-200 hover:border-surface-300'
-            )}
-          >
-            <p className="text-xl font-bold text-navy-900">{count}</p>
-            <p className="text-xs text-surface-600 truncate">{typeLabels[type]}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-white p-4 rounded-xl border border-surface-200">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Sort */}
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [field, order] = e.target.value.split('-');
-              setSortBy(field as SortBy);
-              setSortOrder(order as 'asc' | 'desc');
-            }}
-            className="px-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-          >
-            <option value="updated-desc">Recently Updated</option>
-            <option value="created-desc">Newest First</option>
-            <option value="created-asc">Oldest First</option>
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="usage-desc">Most Used</option>
-            <option value="type-asc">By Type</option>
-          </select>
-
-          {/* View Toggle */}
-          <div className="flex bg-surface-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={cn(
-                'p-2 rounded-md transition-colors',
-                viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-surface-200'
-              )}
-              title="Grid view"
+      <Toolbar
+        end={
+          <>
+            <label className="sr-only" htmlFor="template-type">
+              Type
+            </label>
+            <select
+              id="template-type"
+              className="input input-sm w-full sm:w-48"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
             >
-              <svg className="w-5 h-5 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={cn(
-                'p-2 rounded-md transition-colors',
-                viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-surface-200'
-              )}
-              title="List view"
-            >
-              <svg className="w-5 h-5 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
+              <option value="all">All types ({stats.total})</option>
+              {typeCounts.map(({ type, label, count }) => (
+                <option key={type} value={type}>
+                  {label} ({count})
+                </option>
+              ))}
+            </select>
 
-      {/* Bulk Actions */}
-      {selectedTemplates.size > 0 && (
-        <div className="flex items-center gap-4 bg-navy-900 text-white p-4 rounded-xl">
-          <span className="font-medium">{selectedTemplates.size} selected</span>
-          <button onClick={() => setSelectedTemplates(new Set())} className="text-surface-300 hover:text-white">
+            <label className="sr-only" htmlFor="template-sort">
+              Sort
+            </label>
+            <select
+              id="template-sort"
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [field, order] = e.target.value.split('-');
+                setSortBy(field as SortBy);
+                setSortOrder(order as 'asc' | 'desc');
+              }}
+              className="input input-sm w-full sm:w-44"
+            >
+              <option value="updated-desc">Recently updated</option>
+              <option value="created-desc">Newest</option>
+              <option value="created-asc">Oldest</option>
+              <option value="name-asc">Name A-Z</option>
+              <option value="name-desc">Name Z-A</option>
+              <option value="usage-desc">Most used</option>
+              <option value="type-asc">By type</option>
+            </select>
+
+            <div className="segmented shrink-0" role="radiogroup" aria-label="View">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === 'grid'}
+                onClick={() => setViewMode('grid')}
+                className={cn('segmented-item px-2.5', viewMode === 'grid' && 'segmented-item-active')}
+                title="Grid view"
+              >
+                <span className="sr-only">Grid view</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.8}
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+                className={cn('segmented-item px-2.5', viewMode === 'list' && 'segmented-item-active')}
+                title="List view"
+              >
+                <span className="sr-only">List view</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </>
+        }
+      >
+        <SearchField
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search templates"
+          className="w-full sm:w-72"
+        />
+      </Toolbar>
+
+      {selectedTemplates.size > 0 ? (
+        <div className="flex items-center gap-3 rounded-xl border border-surface-300 bg-white px-4 py-2.5">
+          <span className="num text-sm font-semibold text-brand-900">{selectedTemplates.size} selected</span>
+          <button type="button" onClick={() => setSelectedTemplates(new Set())} className="btn-ghost btn-sm">
             Clear
           </button>
           <div className="flex-1" />
-          <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-sm font-medium">
-            Delete Selected
+          <button type="button" onClick={() => setShowBulkDelete(true)} className="btn-danger-outline btn-sm">
+            Delete
           </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
-        </div>
+        <ListSkeleton rows={6} />
       ) : filteredTemplates.length === 0 ? (
-        <div className="card text-center py-12">
-          <svg className="w-12 h-12 mx-auto text-surface-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-          </svg>
-          <h3 className="text-lg font-medium text-navy-900 mb-1">
-            {searchQuery ? 'No templates found' : 'No templates yet'}
-          </h3>
-          <p className="text-surface-600 mb-4">
-            {searchQuery ? 'Try adjusting your search' : 'Create your first template to get started'}
-          </p>
-          {!searchQuery && (
-            <Link href="/admin/templates/new" className="btn-primary">Create Template</Link>
-          )}
-        </div>
+        <EmptyState
+          title={searchQuery || filter !== 'all' ? 'No matching templates' : 'No templates yet'}
+          action={
+            searchQuery || filter !== 'all' ? (
+              <button
+                type="button"
+                className="btn-outline btn-sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilter('all');
+                }}
+              >
+                Clear filters
+              </button>
+            ) : (
+              <Link href="/admin/templates/new" className="btn-primary btn-sm">
+                Create template
+              </Link>
+            )
+          }
+        />
       ) : viewMode === 'grid' ? (
-        /* Grid View */
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredTemplates.map((template) => (
-            <div 
-              key={template.id} 
+            <article
+              key={template.id}
               className={cn(
-                'bg-white rounded-xl border-2 overflow-hidden transition-all hover:shadow-lg',
-                selectedTemplates.has(template.id) ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-surface-200'
+                'overflow-hidden rounded-xl border bg-white transition-colors',
+                selectedTemplates.has(template.id) ? 'border-brand-700 ring-1 ring-brand-700/30' : 'border-surface-200'
               )}
             >
-              {/* Thumbnail */}
-              <div 
-                className="relative h-36 bg-surface-100 overflow-hidden cursor-pointer group"
-                onClick={() => handlePreview(template)}
-              >
-                {template.thumbnailPath ? (
-                  <>
-                    <img 
-                      src={template.thumbnailPath.startsWith('http://') || template.thumbnailPath.startsWith('https://') 
-                        ? template.thumbnailPath 
-                        : `${API_BASE_URL}${template.thumbnailPath.startsWith('/') ? '' : '/'}${template.thumbnailPath}`}
-                      alt={template.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        // Fallback to preview if thumbnail fails
-                        const target = e.currentTarget;
-                        target.style.display = 'none';
-                        const parent = target.parentElement;
-                        const fallback = parent?.querySelector('.preview-fallback') as HTMLElement;
-                        if (fallback) {
-                          fallback.style.display = 'block';
-                          fallback.style.position = 'absolute';
-                          fallback.style.inset = '0';
-                        }
-                      }}
-                    />
-                    <div className="preview-fallback hidden absolute inset-0 overflow-hidden bg-surface-100">
-                      <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
-                        <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin allow-scripts" title={template.name} />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="absolute inset-0 overflow-hidden bg-surface-100">
-                    <div className="w-[400%] h-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
-                      <iframe srcDoc={getPreviewContent(template)} className="w-full h-full border-0" sandbox="allow-same-origin allow-scripts" title={template.name} />
-                    </div>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-navy-900/0 group-hover:bg-navy-900/60 transition-colors flex items-center justify-center">
-                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white font-medium">Preview</span>
-                </div>
-                
-                {/* Type Badge */}
-                <div className={cn('absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-medium', typeColors[template.type])}>
-                  {typeLabels[template.type]}
-                </div>
-                
-                {/* Selection Checkbox */}
-                <div className="absolute top-2 right-2">
+              <div className="relative h-36 overflow-hidden bg-surface-200">
+                <button
+                  type="button"
+                  className="group absolute inset-0 h-full w-full"
+                  onClick={() => handlePreview(template)}
+                  aria-label={`Preview ${template.name}`}
+                >
+                  <TemplateThumb template={template} getPreviewContent={getPreviewContent} />
+                  <span className="absolute inset-0 flex items-center justify-center bg-navy-900/0 text-sm font-semibold text-white opacity-0 transition-all group-hover:bg-navy-900/55 group-hover:opacity-100">
+                    Preview
+                  </span>
+                </button>
+
+                <span className="pointer-events-none absolute left-2 top-2">
+                  <StatusBadge tone="neutral">{typeLabels[template.type]}</StatusBadge>
+                </span>
+
+                <label className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-white/90">
+                  <span className="sr-only">Select {template.name}</span>
                   <input
                     type="checkbox"
                     checked={selectedTemplates.has(template.id)}
                     onChange={() => toggleSelect(template.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-5 h-5 rounded border-2 border-white bg-white/80 text-primary-500 focus:ring-primary-500"
                   />
-                </div>
-                
-                {template.isDefault && (
-                  <div className="absolute bottom-2 right-2 px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-700">
-                    Default
-                  </div>
-                )}
+                </label>
+
+                {template.isDefault ? (
+                  <span className="pointer-events-none absolute bottom-2 right-2">
+                    <StatusBadge tone="success">Default</StatusBadge>
+                  </span>
+                ) : null}
               </div>
 
-              {/* Info */}
-              <div className="p-4">
-                <h3 className="font-semibold text-navy-900 truncate mb-1">{template.name}</h3>
-                <p className="text-xs text-surface-500 mb-3">
-                  {template.usageCount} event{template.usageCount !== 1 ? 's' : ''} • Updated {formatDate(template.updatedAt, 'MMM d')}
+              <div className="p-3">
+                <h3 className="truncate text-[15px] font-semibold text-brand-900">{template.name}</h3>
+                <p className="mt-0.5 meta num">
+                  {formatCount(template.usageCount)} {template.usageCount === 1 ? 'event' : 'events'} · updated{' '}
+                  {formatDate(template.updatedAt, 'MMM d')}
                 </p>
-                
-                <div className="flex gap-2">
-                  <button onClick={() => handlePreview(template)} className="btn-ghost flex-1 text-sm py-1.5">Preview</button>
-                  <Link href={`/admin/templates/${template.id}`} className="btn-ghost text-sm py-1.5 px-3">Edit</Link>
-                  <button onClick={() => handleDuplicate(template.id)} className="btn-ghost text-sm py-1.5 px-2" title="Duplicate">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
+
+                <div className="mt-3 flex items-center gap-1">
+                  <Link href={`/admin/templates/${template.id}`} className="btn-outline btn-sm flex-1 justify-center">
+                    Edit
+                  </Link>
+                  <Menu label={`Actions for ${template.name}`} sheetTitle={template.name}>
+                    <MenuItem onClick={() => handlePreview(template)}>Preview</MenuItem>
+                    <MenuItem onClick={() => handleDuplicate(template.id)}>Duplicate</MenuItem>
+                    {template.usageCount === 0 ? (
+                      <MenuItem danger onClick={() => setDeletingTemplate(template)}>
+                        Delete
+                      </MenuItem>
+                    ) : null}
+                  </Menu>
                 </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       ) : (
-        /* List View */
-        <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-surface-50 border-b border-surface-200">
-                <th className="w-10 p-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedTemplates.size === filteredTemplates.length && filteredTemplates.length > 0}
-                    onChange={selectAll}
-                    className="w-4 h-4 rounded border-surface-300 text-primary-500"
-                  />
-                </th>
-                <th className="text-left p-4 text-sm font-medium text-surface-600">Template</th>
-                <th className="text-left p-4 text-sm font-medium text-surface-600">Type</th>
-                <th className="text-left p-4 text-sm font-medium text-surface-600">Usage</th>
-                <th className="text-left p-4 text-sm font-medium text-surface-600">Updated</th>
-                <th className="text-right p-4 text-sm font-medium text-surface-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTemplates.map((template) => (
-                <tr key={template.id} className="border-b border-surface-100 hover:bg-surface-50">
-                  <td className="p-4">
+        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white">
+          <div className="overflow-x-auto">
+            <table className="data-table" style={{ minWidth: 820 }}>
+              <thead>
+                <tr>
+                  <Th className="w-10">
+                    <span className="sr-only">Select</span>
                     <input
                       type="checkbox"
-                      checked={selectedTemplates.has(template.id)}
-                      onChange={() => toggleSelect(template.id)}
-                      className="w-4 h-4 rounded border-surface-300 text-primary-500"
+                      aria-label="Select all templates"
+                      checked={selectedTemplates.size === filteredTemplates.length && filteredTemplates.length > 0}
+                      onChange={selectAll}
                     />
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center text-white', typeIconColors[template.type])}>
-                        <span className="text-lg">{template.name.charAt(0)}</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-navy-900">{template.name}</p>
-                        {template.description && (
-                          <p className="text-sm text-surface-500 truncate max-w-xs">{template.description}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <span className={cn('px-2 py-1 rounded-md text-xs font-medium', typeColors[template.type])}>
-                      {typeLabels[template.type]}
-                    </span>
-                    {template.isDefault && (
-                      <span className="ml-2 px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-700">
-                        Default
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-surface-600">{template.usageCount} event{template.usageCount !== 1 ? 's' : ''}</td>
-                  <td className="p-4 text-surface-600">{formatDate(template.updatedAt, 'MMM d, yyyy')}</td>
-                  <td className="p-4">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => handlePreview(template)} className="btn-ghost text-sm py-1.5 px-3">Preview</button>
-                      <Link href={`/admin/templates/${template.id}`} className="btn-ghost text-sm py-1.5 px-3">Edit</Link>
-                      <button onClick={() => handleDuplicate(template.id)} className="btn-ghost text-sm py-1.5 px-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      {template.usageCount === 0 && (
-                        <button onClick={() => handleDelete(template.id)} className="btn-ghost text-red-600 hover:bg-red-50 text-sm py-1.5 px-2">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  </Th>
+                  <Th>Template</Th>
+                  <Th>Type</Th>
+                  <Th align="right">Usage</Th>
+                  <Th>Updated</Th>
+                  <Th align="right">Actions</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Preview Modal */}
-      {previewTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closePreview}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-3 border-b border-surface-200 flex-shrink-0">
-              <div>
-                <h2 className="text-lg font-semibold text-navy-900">{previewTemplate.name}</h2>
-                <p className="text-sm text-surface-500">{typeLabels[previewTemplate.type]} Template</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link href={`/admin/templates/${previewTemplate.id}`} className="btn-outline">Edit</Link>
-                <button onClick={closePreview} className="p-2 rounded-lg hover:bg-surface-100 text-surface-500">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 bg-surface-100 p-4 overflow-hidden">
-              <div className="w-full h-full bg-white rounded-lg shadow-inner overflow-hidden">
-                <iframe ref={iframeRef} srcDoc={getPreviewContent(previewTemplate)} className="w-full h-full border-0" sandbox="allow-same-origin allow-scripts" title={previewTemplate.name} />
-              </div>
-            </div>
-            <div className="px-6 py-2 border-t border-surface-200 bg-surface-50 flex-shrink-0">
-              <p className="text-sm text-surface-500 text-center">Preview with sample data</p>
-            </div>
+              </thead>
+              <tbody>
+                {filteredTemplates.map((template) => (
+                  <tr key={template.id} className="table-row">
+                    <Td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${template.name}`}
+                        checked={selectedTemplates.has(template.id)}
+                        onChange={() => toggleSelect(template.id)}
+                      />
+                    </Td>
+                    <Td>
+                      <p className="font-medium text-brand-900">{template.name}</p>
+                      {template.description ? <p className="meta max-w-xs truncate">{template.description}</p> : null}
+                    </Td>
+                    <Td>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge tone="neutral">{typeLabels[template.type]}</StatusBadge>
+                        {template.isDefault ? <StatusBadge tone="success">Default</StatusBadge> : null}
+                      </div>
+                    </Td>
+                    <Td align="right" className="num">
+                      {formatCount(template.usageCount)}
+                    </Td>
+                    <Td>{formatDate(template.updatedAt, 'MMM d, yyyy')}</Td>
+                    <Td align="right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link href={`/admin/templates/${template.id}`} className="btn-outline btn-sm">
+                          Edit
+                        </Link>
+                        <Menu label={`Actions for ${template.name}`} sheetTitle={template.name}>
+                          <MenuItem onClick={() => handlePreview(template)}>Preview</MenuItem>
+                          <MenuItem onClick={() => handleDuplicate(template.id)}>Duplicate</MenuItem>
+                          {template.usageCount === 0 ? (
+                            <MenuItem danger onClick={() => setDeletingTemplate(template)}>
+                              Delete
+                            </MenuItem>
+                          ) : null}
+                        </Menu>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
+
+      <Modal
+        open={Boolean(previewTemplate)}
+        onClose={closePreview}
+        title={previewTemplate?.name || 'Preview'}
+        description={previewTemplate ? `${typeLabels[previewTemplate.type]} · sample data` : undefined}
+        size="full"
+        bodyClassName="p-0 bg-surface-100"
+        footer={
+          previewTemplate ? (
+            <Link href={`/admin/templates/${previewTemplate.id}`} className="btn-primary">
+              Edit template
+            </Link>
+          ) : null
+        }
+      >
+        {previewTemplate ? (
+          <iframe
+            ref={iframeRef}
+            srcDoc={getPreviewContent(previewTemplate)}
+            className="h-[70vh] w-full border-0 bg-white"
+            sandbox="allow-same-origin allow-scripts"
+            title={previewTemplate.name}
+          />
+        ) : null}
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deletingTemplate)}
+        onClose={() => setDeletingTemplate(null)}
+        onConfirm={() => {
+          if (deletingTemplate) void handleDelete(deletingTemplate.id);
+          setDeletingTemplate(null);
+        }}
+        title={`Delete "${deletingTemplate?.name || ''}"?`}
+        body="This template is not used by any event, so nothing goes offline."
+        confirmLabel="Delete template"
+      />
+
+      <ConfirmDialog
+        open={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={() => {
+          setShowBulkDelete(false);
+          void handleBulkDelete();
+        }}
+        title={`Delete ${selectedTemplates.size} ${selectedTemplates.size === 1 ? 'template' : 'templates'}?`}
+        body="Templates still in use by an event are skipped."
+        confirmLabel="Delete"
+      />
     </div>
   );
 }
 
+/** Thumbnail with a live template render as the fallback. */
+function TemplateThumb({
+  template,
+  getPreviewContent,
+}: {
+  template: Template;
+  getPreviewContent: (template: Template) => string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const thumbnail = template.thumbnailPath
+    ? template.thumbnailPath.startsWith('http://') || template.thumbnailPath.startsWith('https://')
+      ? template.thumbnailPath
+      : `${API_BASE_URL}${template.thumbnailPath.startsWith('/') ? '' : '/'}${template.thumbnailPath}`
+    : null;
+
+  if (thumbnail && !failed) {
+    return (
+      <img
+        src={thumbnail}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="h-full w-full object-cover"
+      />
+    );
+  }
+
+  return (
+    <span className="absolute inset-0 block overflow-hidden bg-surface-200">
+      <span className="block h-[400%] w-[400%] origin-top-left" style={{ transform: 'scale(0.25)' }}>
+        <iframe
+          srcDoc={getPreviewContent(template)}
+          className="h-full w-full border-0"
+          sandbox="allow-same-origin allow-scripts"
+          title=""
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      </span>
+    </span>
+  );
+}

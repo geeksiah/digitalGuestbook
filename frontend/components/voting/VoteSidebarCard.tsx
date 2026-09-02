@@ -37,7 +37,7 @@ export default function VoteSidebarCard({
         </div>
 
         <div className="rounded-3xl border border-surface-200 bg-surface-50 px-4 py-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Selected nominee</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-600">Selected nominee</p>
           <p className="mt-2 text-lg font-semibold tracking-tight text-brand-900">{selectedNomineeName}</p>
           <p className="mt-1 text-sm text-surface-500">{selectedNomineeVotesLabel}</p>
         </div>

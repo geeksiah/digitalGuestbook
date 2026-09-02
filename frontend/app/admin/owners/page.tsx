@@ -1,10 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ownersApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { cn } from '@/lib/utils';
+import { formatCount, getErrorMessage } from '@/lib/utils';
+import {
+  Avatar,
+  EmptyState,
+  ListSkeleton,
+  PageHeader,
+  Pagination,
+  SearchField,
+  SegmentedControl,
+  StatusBadge,
+  SubmitButton,
+  Switch,
+  Td,
+  Th,
+  Toolbar,
+  useDebounced,
+  usePagination,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, MenuSeparator, Modal } from '@/components/ui/Overlay';
+import { Plus } from '@/components/ui/icons';
 
 interface Owner {
   id: string;
@@ -21,516 +40,541 @@ interface Owner {
     preferredMethod: string;
     currency: string;
     isVerified: boolean;
-    bankName?: string;
-    accountName?: string;
-    paypalEmail?: string;
-    mobileProvider?: string;
-    mobileNumber?: string;
   } | null;
 }
 
-const Icons = {
-  plus: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
-  search: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
-  edit: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
-  user: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
-  building: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
-  mail: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
-  phone: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
-};
+type ActiveFilter = 'all' | 'active' | 'inactive';
+
+const COUNTRIES = [
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'GH', name: 'Ghana' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'ZA', name: 'South Africa' },
+];
 
 export default function OwnersPage() {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
-  const [editingOwner, setEditingOwner] = useState<Owner | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [passwordModalOwner, setPasswordModalOwner] = useState<Owner | null>(null);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [filter, setFilter] = useState<ActiveFilter>('all');
 
-  useEffect(() => {
-    fetchOwners();
-  }, [search, filterActive]);
+  const [editing, setEditing] = useState<Owner | null>(null);
+  const [passwordFor, setPasswordFor] = useState<Owner | null>(null);
+  const [deleting, setDeleting] = useState<Owner | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const fetchOwners = async () => {
+  const query = useDebounced(search.trim(), 300);
+
+  const fetchOwners = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      const params: any = {};
-      if (search) params.search = search;
-      if (filterActive !== undefined) params.isActive = filterActive;
-      
+      const params: Record<string, unknown> = {};
+      if (query) params.search = query;
+      if (filter !== 'all') params.isActive = filter === 'active';
       const response = await ownersApi.list(params);
-      setOwners(response.data.owners);
-    } catch (error) {
-      toast.error('Failed to load owners');
+      setOwners(response.data.owners || []);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not load owners.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [query, filter]);
 
-  const handleEdit = (owner: Owner) => {
-    setEditingOwner(owner);
-    setShowEditModal(true);
-  };
+  useEffect(() => {
+    void fetchOwners();
+  }, [fetchOwners]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this owner? This will only work if they have no associated events.')) {
-      return;
-    }
+  const paged = usePagination(owners, 20);
 
-    try {
-      await ownersApi.delete(id);
-      toast.success('Owner deleted');
-      fetchOwners();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete owner');
-    }
-  };
-
-  const handleResendWelcomeEmail = async (owner: Owner) => {
+  const resendWelcome = async (owner: Owner) => {
     try {
       await ownersApi.resendWelcomeEmail(owner.id);
-      toast.success('Welcome email sent successfully');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to send email');
+      toast.success(`Welcome email sent to ${owner.email}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not send the email.'));
     }
   };
 
-  if (showEditModal && editingOwner) {
-    return (
-      <EditOwnerModal
-        owner={editingOwner}
-        onClose={() => {
-          setShowEditModal(false);
-          setEditingOwner(null);
-        }}
-        onSave={() => {
-          setShowEditModal(false);
-          setEditingOwner(null);
-          fetchOwners();
-        }}
-      />
-    );
-  }
-
-  if (showPasswordModal && passwordModalOwner) {
-    return (
-      <PasswordManagementModal
-        owner={passwordModalOwner}
-        onClose={() => {
-          setShowPasswordModal(false);
-          setPasswordModalOwner(null);
-        }}
-      />
-    );
-  }
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await ownersApi.delete(deleting.id);
+      toast.success('Owner deleted');
+      setDeleting(null);
+      await fetchOwners();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not delete this owner.'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-navy-900">Owners & Clients</h1>
-          <p className="text-surface-600 mt-1">Manage event owners and clients</p>
-        </div>
-        <Link href="/admin/owners/new" className="btn-primary">
-          {Icons.plus}
-          <span className="ml-2">New Owner</span>
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="flex-1 relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            {Icons.search}
-          </div>
-          <input
-            type="text"
-            placeholder="Search by name, email, or company..."
-            className="input pl-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setFilterActive(undefined)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              filterActive === undefined
-                ? 'bg-navy-900 text-white'
-                : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-            )}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilterActive(true)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              filterActive === true
-                ? 'bg-navy-900 text-white'
-                : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-            )}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setFilterActive(false)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              filterActive === false
-                ? 'bg-navy-900 text-white'
-                : 'bg-surface-100 text-surface-700 hover:bg-surface-200'
-            )}
-          >
-            Inactive
-          </button>
-        </div>
-      </div>
-
-      {/* Owners List */}
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-900 mx-auto" />
-        </div>
-      ) : owners.length === 0 ? (
-        <div className="text-center py-12 bg-surface-50 rounded-lg border-2 border-dashed border-surface-200">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-100 mb-4">
-            {Icons.user}
-          </div>
-          <p className="text-surface-600">No owners found</p>
-          <Link href="/admin/owners/new" className="btn-primary mt-4 inline-flex">
-            {Icons.plus}
-            <span className="ml-2">Create First Owner</span>
+    <div className="page">
+      <PageHeader
+        title="Owners"
+        actions={
+          <Link href="/admin/owners/new" className="btn-primary">
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            New owner
           </Link>
+        }
+        mobileActions={
+          <Link href="/admin/owners/new" className="icon-btn" aria-label="New owner">
+            <Plus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          </Link>
+        }
+      />
+
+      <Toolbar
+        end={
+          <SegmentedControl<ActiveFilter>
+            label="Owner status"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+            ]}
+          />
+        }
+      >
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder="Search name, email or company"
+          className="w-full sm:w-80"
+        />
+      </Toolbar>
+
+      {error ? (
+        <div className="banner-error" role="alert">
+          <span className="flex-1">{error}</span>
+          <button type="button" className="shrink-0 font-semibold underline" onClick={() => void fetchOwners()}>
+            Retry
+          </button>
         </div>
+      ) : null}
+
+      {loading ? (
+        <ListSkeleton rows={6} />
+      ) : owners.length === 0 ? (
+        <EmptyState
+          title={query || filter !== 'all' ? 'No matching owners' : 'No owners yet'}
+          action={
+            query || filter !== 'all' ? (
+              <button
+                type="button"
+                className="btn-outline btn-sm"
+                onClick={() => {
+                  setSearch('');
+                  setFilter('all');
+                }}
+              >
+                Clear filters
+              </button>
+            ) : (
+              <Link href="/admin/owners/new" className="btn-primary btn-sm">
+                Create owner
+              </Link>
+            )
+          }
+        />
       ) : (
-        <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-surface-200">
-            <thead className="bg-surface-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">
-                  Owner
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">
-                  Contact
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">
-                  Events
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-surface-700 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-surface-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-surface-200">
-              {owners.map((owner) => (
-                <tr key={owner.id} className="hover:bg-surface-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-navy-100 flex items-center justify-center">
-                        <span className="text-navy-700 font-medium">
-                          {owner.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-navy-900">{owner.name}</div>
-                        {owner.company && (
-                          <div className="text-sm text-surface-500 flex items-center mt-0.5">
-                            {Icons.building}
-                            <span className="ml-1">{owner.company}</span>
+        <>
+          {/* Compact rows on phones */}
+          <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white lg:hidden">
+            {paged.rows.map((owner) => (
+              <div key={owner.id} className="flex items-center gap-3 px-4 py-3">
+                <Avatar name={owner.name} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[15px] font-semibold text-brand-900">{owner.name}</span>
+                    {owner.isActive ? null : <StatusBadge tone="neutral">Inactive</StatusBadge>}
+                  </div>
+                  <p className="mt-0.5 meta truncate">
+                    {owner.email}
+                    {owner.company ? ` · ${owner.company}` : ''}
+                  </p>
+                </div>
+                <OwnerActions
+                  owner={owner}
+                  onEdit={() => setEditing(owner)}
+                  onPassword={() => setPasswordFor(owner)}
+                  onResend={() => void resendWelcome(owner)}
+                  onDelete={() => setDeleting(owner)}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Full table from lg up */}
+          <div className="hidden overflow-hidden rounded-xl border border-surface-200 bg-white lg:block">
+            <div className="overflow-x-auto">
+              <table className="data-table" style={{ minWidth: 860 }}>
+                <thead>
+                  <tr>
+                    <Th>Owner</Th>
+                    <Th>Contact</Th>
+                    <Th>Payouts</Th>
+                    <Th align="right">Events</Th>
+                    <Th>Status</Th>
+                    <Th align="right">Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.rows.map((owner) => (
+                    <tr key={owner.id} className="table-row">
+                      <Td>
+                        <div className="flex items-center gap-3">
+                          <Avatar name={owner.name} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-brand-900">{owner.name}</p>
+                            {owner.company ? <p className="meta truncate">{owner.company}</p> : null}
                           </div>
+                        </div>
+                      </Td>
+                      <Td>
+                        <p className="truncate">{owner.email}</p>
+                        {owner.phone ? <p className="meta">{owner.phone}</p> : null}
+                      </Td>
+                      <Td>
+                        {owner.wallet ? (
+                          <StatusBadge tone={owner.wallet.isVerified ? 'success' : 'warning'}>
+                            {owner.wallet.isVerified ? 'Verified' : 'Pending'}
+                          </StatusBadge>
+                        ) : (
+                          <span className="text-surface-500">Not set up</span>
                         )}
-                        {owner.countryCode ? (
-                          <div className="text-xs text-surface-500 mt-0.5">Country: {owner.countryCode}</div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-surface-900 flex items-center">
-                      {Icons.mail}
-                      <span className="ml-2">{owner.email}</span>
-                    </div>
-                    {owner.phone && (
-                      <div className="text-sm text-surface-500 flex items-center mt-1">
-                        {Icons.phone}
-                        <span className="ml-2">{owner.phone}</span>
-                      </div>
-                    )}
-                    {owner.wallet && (
-                      <div className="text-xs text-emerald-600 flex items-center mt-1">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span className="ml-1">Wallet: {owner.wallet.preferredMethod} {owner.wallet.isVerified ? '(Verified)' : '(Pending)'}</span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-surface-900 font-medium">
-                      {owner.eventCount || 0} event{owner.eventCount !== 1 ? 's' : ''}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={cn(
-                        'inline-flex px-2 py-1 text-xs font-medium rounded-full',
-                        owner.isActive
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-surface-100 text-surface-600'
-                      )}
-                    >
-                      {owner.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleEdit(owner)}
-                        className="text-navy-600 hover:text-navy-900"
-                        title="Edit"
-                      >
-                        {Icons.edit}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPasswordModalOwner(owner);
-                          setShowPasswordModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Password Management"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleResendWelcomeEmail(owner)}
-                        className="text-emerald-600 hover:text-emerald-900"
-                        title="Resend Welcome Email"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(owner.id)}
-                        className="text-rose-600 hover:text-rose-900"
-                        title="Delete"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      </Td>
+                      <Td align="right" className="num">
+                        {formatCount(owner.eventCount || 0)}
+                      </Td>
+                      <Td>
+                        <StatusBadge tone={owner.isActive ? 'success' : 'neutral'} dot>
+                          {owner.isActive ? 'Active' : 'Inactive'}
+                        </StatusBadge>
+                      </Td>
+                      <Td align="right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button type="button" className="btn-outline btn-sm" onClick={() => setEditing(owner)}>
+                            Edit
+                          </button>
+                          <OwnerActions
+                            owner={owner}
+                            hideEdit
+                            onEdit={() => setEditing(owner)}
+                            onPassword={() => setPasswordFor(owner)}
+                            onResend={() => void resendWelcome(owner)}
+                            onDelete={() => setDeleting(owner)}
+                          />
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <Pagination
+            page={paged.page}
+            pageCount={paged.pageCount}
+            total={paged.total}
+            pageSize={paged.pageSize}
+            onPageChange={paged.setPage}
+          />
+        </>
       )}
+
+      <EditOwnerModal
+        owner={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          void fetchOwners();
+        }}
+      />
+
+      <PasswordModal owner={passwordFor} onClose={() => setPasswordFor(null)} />
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => void confirmDelete()}
+        busy={busy}
+        title={`Delete ${deleting?.name || 'owner'}?`}
+        body="This permanently removes the account. It only works while the owner has no events."
+        confirmLabel="Delete owner"
+      />
     </div>
   );
 }
 
-// Edit Owner Modal Component
+function OwnerActions({
+  owner,
+  hideEdit,
+  onEdit,
+  onPassword,
+  onResend,
+  onDelete,
+}: {
+  owner: Owner;
+  hideEdit?: boolean;
+  onEdit: () => void;
+  onPassword: () => void;
+  onResend: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Menu label={`Actions for ${owner.name}`} sheetTitle={owner.name}>
+      {hideEdit ? null : <MenuItem onClick={onEdit}>Edit owner</MenuItem>}
+      <MenuItem onClick={onPassword}>Set password</MenuItem>
+      <MenuItem onClick={onResend}>Resend welcome email</MenuItem>
+      <MenuSeparator />
+      <MenuItem danger onClick={onDelete}>
+        Delete owner
+      </MenuItem>
+    </Menu>
+  );
+}
+
 function EditOwnerModal({
   owner,
   onClose,
-  onSave,
+  onSaved,
 }: {
-  owner: Owner;
+  owner: Owner | null;
   onClose: () => void;
-  onSave: () => void;
+  onSaved: () => void;
 }) {
-  const [formData, setFormData] = useState({
-    name: owner.name,
-    email: owner.email,
-    phone: owner.phone || '',
-    company: owner.company || '',
-    countryCode: owner.countryCode || 'US',
-    isActive: owner.isActive,
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    countryCode: 'US',
+    isActive: true,
   });
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  useEffect(() => {
+    if (!owner) return;
+    setForm({
+      name: owner.name,
+      email: owner.email,
+      phone: owner.phone || '',
+      company: owner.company || '',
+      countryCode: owner.countryCode || 'US',
+      isActive: owner.isActive,
+    });
+    setFormError(null);
+  }, [owner]);
 
-    try {
-      await ownersApi.update(owner.id, {
-        ...formData,
-        phone: formData.phone || undefined,
-        company: formData.company || undefined,
-        countryCode: formData.countryCode || undefined,
-      });
-      toast.success('Owner updated');
-      onSave();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update owner');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h2 className="text-xl font-bold text-navy-900 mb-4">Edit Owner</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label">Name *</label>
-            <input
-              type="text"
-              required
-              className="input"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Email *</label>
-            <input
-              type="email"
-              required
-              className="input"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Phone</label>
-            <input
-              type="tel"
-              className="input"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Company</label>
-            <input
-              type="text"
-              className="input"
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Country</label>
-            <select
-              className="input"
-              value={formData.countryCode}
-              onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
-            >
-              <option value="US">United States (US)</option>
-              <option value="GB">United Kingdom (GB)</option>
-              <option value="GH">Ghana (GH)</option>
-              <option value="NG">Nigeria (NG)</option>
-              <option value="KE">Kenya (KE)</option>
-              <option value="ZA">South Africa (ZA)</option>
-            </select>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="h-4 w-4 text-navy-600 focus:ring-navy-500 border-surface-300 rounded"
-            />
-            <label htmlFor="isActive" className="ml-2 block text-sm text-surface-900">
-              Active
-            </label>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              Cancel
-            </button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// Password Management Modal Component
-function PasswordManagementModal({
-  owner,
-  onClose,
-}: {
-  owner: Owner;
-  onClose: () => void;
-}) {
-  const [newPassword, setNewPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+  const submit = async () => {
+    if (!owner) return;
+    if (!form.name.trim() || !form.email.trim()) {
+      setFormError('Name and email are required.');
       return;
     }
-    setLoading(true);
+    setSaving(true);
+    setFormError(null);
     try {
-      await ownersApi.changePassword(owner.id, newPassword);
-      toast.success('Password changed successfully');
-      setNewPassword('');
-      onClose();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to change password');
+      await ownersApi.update(owner.id, {
+        ...form,
+        phone: form.phone || undefined,
+        company: form.company || undefined,
+        countryCode: form.countryCode || undefined,
+      });
+      toast.success('Owner updated');
+      onSaved();
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Could not update this owner.'));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h2 className="text-xl font-bold text-navy-900 mb-4">Password Management</h2>
-        <p className="text-sm text-surface-600 mb-4">Owner: {owner.name} ({owner.email})</p>
-        
-        <form onSubmit={handleChangePassword} className="space-y-4 mb-6">
+    <Modal
+      open={Boolean(owner)}
+      onClose={onClose}
+      title={owner?.name || 'Owner'}
+      size="md"
+      footer={
+        <>
+          <button type="button" className="btn-outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <SubmitButton loading={saving} onClick={() => void submit()}>
+            Save
+          </SubmitButton>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {formError ? (
+          <div className="banner-error" role="alert">
+            {formError}
+          </div>
+        ) : null}
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="label">New Password *</label>
+            <label className="label" htmlFor="owner-name">
+              Name
+            </label>
             <input
-              type="password"
-              required
-              minLength={6}
+              id="owner-name"
+              data-autofocus
+              type="text"
               className="input"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password (min 6 characters)"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full"
-          >
-            {loading ? 'Changing...' : 'Change Password'}
-          </button>
-        </form>
+          <div>
+            <label className="label" htmlFor="owner-email">
+              Email
+            </label>
+            <input
+              id="owner-email"
+              type="email"
+              className="input"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="owner-phone">
+              Phone <span className="font-normal text-surface-600">(optional)</span>
+            </label>
+            <input
+              id="owner-phone"
+              type="tel"
+              className="input"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="owner-company">
+              Company <span className="font-normal text-surface-600">(optional)</span>
+            </label>
+            <input
+              id="owner-company"
+              type="text"
+              className="input"
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="owner-country">
+              Country
+            </label>
+            <select
+              id="owner-country"
+              className="input"
+              value={form.countryCode}
+              onChange={(e) => setForm({ ...form, countryCode: e.target.value })}
+            >
+              {COUNTRIES.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-        <div className="border-t border-surface-200 pt-4">
-          <button
-            onClick={onClose}
-            className="btn-secondary w-full"
-          >
-            Close
-          </button>
+        <div className="border-t border-surface-200 pt-3">
+          <Switch
+            label="Active"
+            description="Inactive owners cannot sign in."
+            checked={form.isActive}
+            onChange={(checked) => setForm({ ...form, isActive: checked })}
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
+function PasswordModal({ owner, onClose }: { owner: Owner | null; onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPassword('');
+    setFormError(null);
+  }, [owner]);
+
+  const submit = async () => {
+    if (!owner) return;
+    if (password.length < 6) {
+      setFormError('Use at least 6 characters.');
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      await ownersApi.changePassword(owner.id, password);
+      toast.success('Password changed');
+      onClose();
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Could not change the password.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={Boolean(owner)}
+      onClose={onClose}
+      title="Set password"
+      description={owner ? `${owner.name} · ${owner.email}` : undefined}
+      size="sm"
+      footer={
+        <>
+          <button type="button" className="btn-outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <SubmitButton loading={saving} onClick={() => void submit()}>
+            Set password
+          </SubmitButton>
+        </>
+      }
+    >
+      <label className="label" htmlFor="owner-password">
+        New password
+      </label>
+      <input
+        id="owner-password"
+        data-autofocus
+        type="password"
+        autoComplete="new-password"
+        minLength={6}
+        className={formError ? 'input input-error' : 'input'}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      {formError ? (
+        <p className="field-error" role="alert">
+          {formError}
+        </p>
+      ) : (
+        <p className="field-hint">At least 6 characters. The owner is not notified automatically.</p>
+      )}
+    </Modal>
+  );
+}

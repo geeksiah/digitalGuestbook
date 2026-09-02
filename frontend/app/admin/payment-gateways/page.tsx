@@ -3,6 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { paymentGatewaysApi } from '@/lib/api';
+import { getErrorMessage, humanizeEnum } from '@/lib/utils';
+import {
+  EmptyState,
+  PageHeader,
+  PageSkeleton,
+  StatusBadge,
+  SubmitButton,
+  Switch,
+} from '@/components/ui/Primitives';
+import { ConfirmDialog, Menu, MenuItem, Modal } from '@/components/ui/Overlay';
+import { Plus } from '@/components/ui/icons';
 import {
   GATEWAY_OPTIONS,
   GatewayType,
@@ -30,6 +41,7 @@ export default function PaymentGatewaysPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingGateway, setEditingGateway] = useState<PaymentGateway | null>(null);
+  const [deletingGateway, setDeletingGateway] = useState<PaymentGateway | null>(null);
 
   useEffect(() => {
     void fetchGateways();
@@ -48,112 +60,113 @@ export default function PaymentGatewaysPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this payment gateway?')) return;
     try {
       await paymentGatewaysApi.delete(id);
       toast.success('Gateway deleted');
       await fetchGateways();
     } catch (error: any) {
       console.error('Failed to delete gateway:', error);
-      toast.error(error?.response?.data?.error || 'Failed to delete gateway');
+      toast.error(getErrorMessage(error, 'Could not delete this gateway.'));
     }
   };
 
   if (loading) {
-    return (
-      <div className="p-6">
-        <div className="text-center text-surface-500">Loading payment gateways...</div>
-      </div>
-    );
+    return <PageSkeleton stats={0} rows={4} />;
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-900">Payment Gateways</h1>
-          <p className="text-sm text-surface-600 mt-1">
-            Configure system gateways and their currency. Events can then enable gateways per event.
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingGateway(null);
-            setShowModal(true);
-          }}
-          className="btn-primary"
-        >
-          Add Gateway
-        </button>
-      </div>
+    <div className="page">
+      <PageHeader
+        title="Payment gateways"
+        actions={
+          <button
+            onClick={() => {
+              setEditingGateway(null);
+              setShowModal(true);
+            }}
+            className="btn-primary"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            Add gateway
+          </button>
+        }
+        mobileActions={
+          <button
+            onClick={() => {
+              setEditingGateway(null);
+              setShowModal(true);
+            }}
+            className="icon-btn"
+            aria-label="Add gateway"
+          >
+            <Plus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          </button>
+        }
+      />
 
       {gateways.length === 0 ? (
-        <div className="rounded-xl border border-surface-200 bg-white p-8 text-center">
-          <p className="text-surface-700 font-medium">No gateways configured yet.</p>
-          <p className="text-sm text-surface-500 mt-1">Create your first gateway to start enabling event payments.</p>
-        </div>
+        <EmptyState
+          title="No gateways yet"
+          hint="Add a gateway here, then enable it on the events that should use it."
+          action={
+            <button
+              className="btn-primary btn-sm"
+              onClick={() => {
+                setEditingGateway(null);
+                setShowModal(true);
+              }}
+            >
+              Add gateway
+            </button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
           {gateways.map((gateway) => (
-            <div key={gateway.id} className="rounded-xl border border-surface-200 bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="font-semibold text-brand-900 truncate">{gateway.name}</h2>
-                  {gateway.description ? (
-                    <p className="text-sm text-surface-600 mt-1 line-clamp-2">{gateway.description}</p>
-                  ) : null}
+            <div key={gateway.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="truncate text-[15px] font-semibold text-brand-900">{gateway.name}</span>
+                  <StatusBadge tone={gateway.isActive ? 'success' : 'neutral'} dot>
+                    {gateway.isActive ? 'Active' : 'Inactive'}
+                  </StatusBadge>
+                  <StatusBadge tone={gateway.isLive ? 'warning' : 'info'}>
+                    {gateway.isLive ? 'Live keys' : 'Test keys'}
+                  </StatusBadge>
                 </div>
-                <span className="text-xs rounded-full bg-surface-100 border border-surface-200 px-2 py-1 uppercase tracking-wide">
-                  {gateway.gateway}
-                </span>
+                <p className="mt-0.5 meta truncate">
+                  {humanizeEnum(gateway.gateway)} &middot; {gateway.currency}
+                  {gateway.description ? ` · ${gateway.description}` : ''}
+                </p>
               </div>
-
-              <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <span
-                  className={[
-                    'rounded-full px-2 py-1 border',
-                    gateway.isActive
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-surface-100 text-surface-600 border-surface-200',
-                  ].join(' ')}
-                >
-                  {gateway.isActive ? 'Active' : 'Inactive'}
-                </span>
-                <span
-                  className={[
-                    'rounded-full px-2 py-1 border',
-                    gateway.isLive
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200',
-                  ].join(' ')}
-                >
-                  {gateway.isLive ? 'Live' : 'Test'}
-                </span>
-                <span className="rounded-full px-2 py-1 border border-surface-200 bg-white text-surface-700">
-                  {gateway.currency}
-                </span>
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <button
+              <button
+                className="btn-outline btn-sm hidden shrink-0 sm:inline-flex"
+                onClick={() => {
+                  setEditingGateway(gateway);
+                  setShowModal(true);
+                }}
+              >
+                Edit
+              </button>
+              <Menu label={`Actions for ${gateway.name}`} sheetTitle={gateway.name}>
+                <MenuItem
                   onClick={() => {
                     setEditingGateway(gateway);
                     setShowModal(true);
                   }}
-                  className="btn-outline"
                 >
-                  Edit
-                </button>
-                <button onClick={() => handleDelete(gateway.id)} className="btn-ghost text-rose-600">
-                  Delete
-                </button>
-              </div>
+                  Edit gateway
+                </MenuItem>
+                <MenuItem danger onClick={() => setDeletingGateway(gateway)}>
+                  Delete gateway
+                </MenuItem>
+              </Menu>
             </div>
           ))}
         </div>
       )}
 
-      {showModal && (
+      {showModal ? (
         <PaymentGatewayModal
           gateway={editingGateway}
           onClose={() => {
@@ -166,7 +179,19 @@ export default function PaymentGatewaysPage() {
             await fetchGateways();
           }}
         />
-      )}
+      ) : null}
+
+      <ConfirmDialog
+        open={Boolean(deletingGateway)}
+        onClose={() => setDeletingGateway(null)}
+        onConfirm={() => {
+          if (deletingGateway) void handleDelete(deletingGateway.id);
+          setDeletingGateway(null);
+        }}
+        title={`Delete ${deletingGateway?.name || 'gateway'}?`}
+        body="Events using this gateway will stop accepting payments through it."
+        confirmLabel="Delete gateway"
+      />
     </div>
   );
 }
@@ -266,7 +291,7 @@ function PaymentGatewayModal({
       onSuccess();
     } catch (error: any) {
       console.error('Failed to save gateway:', error);
-      toast.error(error?.response?.data?.error || 'Failed to save gateway');
+      toast.error(getErrorMessage(error, 'Failed to save gateway'));
     } finally {
       setSaving(false);
     }
@@ -413,104 +438,153 @@ function PaymentGatewayModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/45 p-3 sm:p-6 overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-surface-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-200">
-          <h2 className="text-lg font-semibold text-brand-900">
-            {gateway ? 'Edit Gateway' : 'Create Gateway'}
-          </h2>
-          <button className="btn-ghost" onClick={onClose}>Close</button>
+    <Modal
+      open
+      onClose={onClose}
+      title={gateway ? gateway.name : 'New gateway'}
+      size="lg"
+      footer={
+        <>
+          <button type="button" className="btn-outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <SubmitButton
+            loading={saving}
+            onClick={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+            disabled={!formData.name.trim()}
+          >
+            {gateway ? 'Save' : 'Add gateway'}
+          </SubmitButton>
+        </>
+      }
+    >
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4"
+        onKeyDown={(event) => {
+          // Enter inside a text field should not submit past the footer button.
+          if (event.key === 'Enter' && (event.target as HTMLElement).tagName !== 'TEXTAREA') {
+            event.preventDefault();
+          }
+        }}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Name" htmlFor="gw-name">
+            <input
+              id="gw-name"
+              data-autofocus
+              required
+              type="text"
+              className="input"
+              value={formData.name}
+              onChange={(e) => setField('name', e.target.value)}
+              placeholder="Primary Paystack"
+            />
+          </Field>
+          <Field label="Provider" htmlFor="gw-type">
+            <select
+              id="gw-type"
+              required
+              className="input"
+              value={formData.gateway}
+              onChange={(e) => setField('gateway', e.target.value as GatewayType)}
+            >
+              {GATEWAY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Gateway Name *">
-              <input required type="text" className="input" value={formData.name} onChange={(e) => setField('name', e.target.value)} placeholder="Primary Paystack" />
-            </Field>
-            <Field label="Gateway Type *">
-              <select
-                required
-                className="input"
-                value={formData.gateway}
-                onChange={(e) => setField('gateway', e.target.value as GatewayType)}
-              >
-                {GATEWAY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+        <Field label="Description" htmlFor="gw-description" optional>
+          <textarea
+            id="gw-description"
+            className="input"
+            rows={2}
+            value={formData.description}
+            onChange={(e) => setField('description', e.target.value)}
+            placeholder="Where this gateway is used."
+          />
+        </Field>
 
-          <Field label="Description">
-            <textarea className="input min-h-[78px]" value={formData.description} onChange={(e) => setField('description', e.target.value)} placeholder="Where and how this gateway is used." />
-          </Field>
+        <Field label="Currency" htmlFor="gw-currency">
+          <select
+            id="gw-currency"
+            className="input md:max-w-xs"
+            value={normalizeCurrencyCode(formData.currency)}
+            onChange={(e) => setField('currency', e.target.value)}
+          >
+            {currencyOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.code} - {option.name}
+              </option>
+            ))}
+          </select>
+          <p className="field-hint">The list follows the selected provider.</p>
+        </Field>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Currency *">
-              <select
-                className="input"
-                value={normalizeCurrencyCode(formData.currency)}
-                onChange={(e) => setField('currency', e.target.value)}
-              >
-                {currencyOptions.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.code} - {option.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-surface-500 mt-1">
-                Currency list adjusts to the selected gateway.
-              </p>
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="rounded-lg border border-surface-200 px-3 py-2 text-sm flex items-center gap-2">
-                <input type="checkbox" checked={formData.isActive} onChange={(e) => setField('isActive', e.target.checked)} />
-                Active
-              </label>
-              <label className="rounded-lg border border-surface-200 px-3 py-2 text-sm flex items-center gap-2">
-                <input type="checkbox" checked={formData.isLive} onChange={(e) => setField('isLive', e.target.checked)} />
-                Live mode
-              </label>
-            </div>
-          </div>
+        <div className="space-y-1 border-t border-surface-200 pt-3">
+          <Switch
+            label="Active"
+            description="Events can only enable gateways that are active."
+            checked={formData.isActive}
+            onChange={(checked) => setField('isActive', checked)}
+          />
+          <Switch
+            label="Live mode"
+            description="Off means test keys and no real money moves."
+            checked={formData.isLive}
+            onChange={(checked) => setField('isLive', checked)}
+          />
+        </div>
 
-          <div className="rounded-xl border border-surface-200 p-4 bg-surface-50">
-            <p className="text-sm font-semibold text-brand-900 mb-3">Gateway Credentials</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{renderGatewayFields()}</div>
-          </div>
-
+        <div className="border-t border-surface-200 pt-4">
+          <p className="label">Credentials</p>
+          <div className="grid gap-4 md:grid-cols-2">{renderGatewayFields()}</div>
           {gateway ? (
-            <p className="text-xs text-surface-500">
-              Existing secret values are masked. Leave secret fields empty to keep current values.
-            </p>
+            <p className="field-hint">Saved secrets stay hidden. Leave a secret field empty to keep it.</p>
           ) : null}
-
-          <div className="flex justify-end gap-3 pt-1">
-            <button type="button" className="btn-outline" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Saving...' : gateway ? 'Update Gateway' : 'Create Gateway'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
 function Field({
   label,
+  htmlFor,
+  optional,
   children,
 }: {
   label: string;
+  htmlFor?: string;
+  optional?: boolean;
   children: React.ReactNode;
 }) {
+  const text = (
+    <>
+      {label}
+      {optional ? <span className="font-normal text-surface-600"> (optional)</span> : null}
+    </>
+  );
+
+  // Without an explicit id, wrap the control so the label is still associated.
+  if (!htmlFor) {
+    return (
+      <label className="block">
+        <span className="label">{text}</span>
+        {children}
+      </label>
+    );
+  }
+
   return (
     <div>
-      <label className="block text-sm font-medium text-surface-700 mb-1">{label}</label>
+      <label className="label" htmlFor={htmlFor}>
+        {text}
+      </label>
       {children}
     </div>
   );

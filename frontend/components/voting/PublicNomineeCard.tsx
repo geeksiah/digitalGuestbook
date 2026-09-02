@@ -42,7 +42,7 @@ export default function PublicNomineeCard({
             </Link>
             <span className="rounded-full bg-surface-100 px-2.5 py-1 text-xs font-semibold text-surface-600">{badgeLabel}</span>
           </div>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{categoryLabel}</p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-600">{categoryLabel}</p>
           <p className="mt-2 text-sm font-medium text-brand-900">{votesLabel}</p>
           <p
             className="mt-2 text-sm leading-6 text-surface-500"

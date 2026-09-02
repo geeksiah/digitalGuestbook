@@ -81,14 +81,16 @@ function SectionCard({
   description?: string;
   children: ReactNode;
 }) {
+  // `eyebrow` is retained for call sites; the title alone carries the identity.
   return (
-    <section className="detail-card space-y-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">{eyebrow}</p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-900">{title}</h2>
-        {description ? <p className="mt-1 text-sm leading-6 text-surface-500">{description}</p> : null}
+    <section className="panel">
+      <div className="panel-header">
+        <div className="min-w-0">
+          <h2 className="panel-title">{title}</h2>
+          {description ? <p className="mt-0.5 meta">{description}</p> : null}
+        </div>
       </div>
-      {children}
+      <div className="panel-body space-y-4">{children}</div>
     </section>
   );
 }
@@ -166,7 +168,7 @@ export function VotingCategoryPanel({
       title="Organize voting categories"
       description="Create each award, election, or contest here. Keep categories clean, active, and easy to manage."
     >
-      <div className="grid gap-3 rounded-3xl border border-surface-200 bg-surface-50/80 p-4 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
+      <div className="grid gap-3 rounded-xl border border-surface-200 bg-surface-50/80 p-4 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
         <input
           className="input"
           placeholder="Category title"
@@ -187,7 +189,7 @@ export function VotingCategoryPanel({
       </div>
 
       {contests.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
+        <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
           No categories yet. Create the first category to start collecting nominees and votes.
         </div>
       ) : (
@@ -195,7 +197,7 @@ export function VotingCategoryPanel({
           {contests.map((contest) => (
             <article
               key={contest.id}
-              className={`rounded-3xl border p-5 transition ${
+              className={`rounded-xl border p-5 transition ${
                 selectedContestId === contest.id
                   ? 'border-brand-300 bg-brand-50/40 shadow-[0_12px_32px_rgba(6,57,50,0.08)]'
                   : 'border-surface-200 bg-white'
@@ -234,12 +236,12 @@ export function VotingCategoryPanel({
                         </span>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Nominees</p>
+                        <div className="rounded-lg bg-surface-50 px-3 py-3">
+                          <p className="text-[13px] font-medium text-surface-600">Nominees</p>
                           <p className="mt-1 text-lg font-semibold text-brand-900">{contest.options?.length || 0}</p>
                         </div>
-                        <div className="rounded-2xl bg-surface-50 px-3 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Public nominations</p>
+                        <div className="rounded-lg bg-surface-50 px-3 py-3">
+                          <p className="text-[13px] font-medium text-surface-600">Public nominations</p>
                           <p className="mt-1 text-sm font-semibold text-brand-900">
                             {contest.allowPublicNominations ? 'Open' : 'Closed'}
                           </p>
@@ -373,8 +375,8 @@ export function VotingNomineePanel({
               : 'Select a category first, then add nominee details and photo.'
           }
         >
-          <div className="rounded-3xl border border-surface-200 bg-surface-50/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Assign to categories</p>
+          <div className="rounded-xl border border-surface-200 bg-surface-50/80 p-4">
+            <p className="text-[13px] font-medium text-surface-600">Assign to categories</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {contests.map((contest) => (
                 <TogglePill
@@ -402,9 +404,9 @@ export function VotingNomineePanel({
               onChange={(event) => onOptionDescriptionChange(event.target.value)}
               disabled={!selectedContestId}
             />
-            <div className="rounded-3xl border border-dashed border-surface-300 bg-surface-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Nominee photo</p>
-              <div className="mt-3 overflow-hidden rounded-2xl border border-surface-200 bg-white">
+            <div className="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-4">
+              <p className="text-[13px] font-medium text-surface-600">Nominee photo</p>
+              <div className="mt-3 overflow-hidden rounded-lg border border-surface-200 bg-white">
                 {newOptionImagePreview ? (
                   <img src={newOptionImagePreview} alt="Nominee preview" className="h-48 w-full object-cover" />
                 ) : (
@@ -443,7 +445,7 @@ export function VotingNomineePanel({
           title="Control public nominations"
           description="Open or close public nominations for this category and define the extra details nominees must submit."
         >
-          <div className="flex flex-col gap-3 rounded-3xl border border-surface-200 bg-surface-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-xl border border-surface-200 bg-surface-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-brand-900">
                 {selectedContestAllowsPublicNominations ? 'Public nominations are open' : 'Public nominations are closed'}
@@ -457,7 +459,7 @@ export function VotingNomineePanel({
             </button>
           </div>
 
-          <div className="grid gap-3 rounded-3xl border border-surface-200 bg-white p-4">
+          <div className="grid gap-3 rounded-xl border border-surface-200 bg-white p-4">
             <div className="grid gap-3 md:grid-cols-2">
               <input
                 className="input"
@@ -517,7 +519,7 @@ export function VotingNomineePanel({
           </div>
 
           {selectedNominationFields.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-8 text-sm text-surface-500">
+            <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 px-5 py-8 text-sm text-surface-500">
               No custom fields yet. Add fields if you want nominations to collect more than name, description, and photo.
             </div>
           ) : (
@@ -525,7 +527,7 @@ export function VotingNomineePanel({
               {selectedNominationFields.map((field) => {
                 const isEditing = editingFieldId === field.id && editingFieldDraft;
                 return (
-                  <div key={field.id} className="rounded-3xl border border-surface-200 bg-white p-4">
+                  <div key={field.id} className="rounded-xl border border-surface-200 bg-white p-4">
                     {isEditing ? (
                       <div className="space-y-3">
                         <div className="grid gap-3 md:grid-cols-2">
@@ -703,7 +705,7 @@ export function VotingPublishedNomineesPanel({
           : 'Manage nominees across all categories and filter when needed.'
       }
     >
-      <div className="grid gap-3 rounded-3xl border border-surface-200 bg-surface-50/80 p-4 md:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-3 rounded-xl border border-surface-200 bg-surface-50/80 p-4 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="text-sm text-surface-500">
           Showing {visibleOptions.length} published profile{visibleOptions.length === 1 ? '' : 's'}
         </div>
@@ -722,13 +724,13 @@ export function VotingPublishedNomineesPanel({
       </div>
 
       {visibleOptions.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
+        <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
           No published nominees match this filter.
         </div>
       ) : (
         <div className="grid gap-3">
           {visibleOptions.map((option) => (
-            <article key={option.id} className="rounded-3xl border border-surface-200 bg-white p-4">
+            <article key={option.id} className="rounded-xl border border-surface-200 bg-white p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
                   {resolvePublicAssetUrl(
@@ -743,10 +745,10 @@ export function VotingPublishedNomineesPanel({
                         ) || ''
                       }
                       alt={option.name}
-                      className="h-16 w-16 rounded-2xl border border-surface-200 object-cover"
+                      className="h-16 w-16 rounded-lg border border-surface-200 object-cover"
                     />
                   ) : (
-                    <div className="h-16 w-16 rounded-2xl border border-surface-200 bg-surface-100" />
+                    <div className="h-16 w-16 rounded-lg border border-surface-200 bg-surface-100" />
                   )}
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -775,8 +777,8 @@ export function VotingPublishedNomineesPanel({
                           onChange={(event) => onEditingOptionDescriptionChange(event.target.value)}
                           placeholder="Full nominee profile"
                         />
-                        <div className="rounded-2xl border border-surface-200 bg-surface-50 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Assigned categories</p>
+                        <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
+                          <p className="text-[13px] font-medium text-surface-600">Assigned categories</p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             {contests.map((contest) => (
                               <TogglePill
@@ -808,7 +810,7 @@ export function VotingPublishedNomineesPanel({
                       <>
                         <p className="mt-1 text-sm leading-6 text-surface-500">{option.description || 'Nominee profile'}</p>
                         {option.contestTitle ? (
-                          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{option.contestTitle}</p>
+                          <p className="mt-2 text-[13px] font-medium text-surface-600">{option.contestTitle}</p>
                         ) : null}
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                           <div className="rounded-full bg-surface-50 px-3 py-2 text-surface-600">
@@ -894,14 +896,14 @@ export function VotingNominationsPanel({
       </div>
 
       {nominations.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
+        <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 px-5 py-12 text-sm text-surface-500">
           No nominations yet.
         </div>
       ) : (
         <div className="grid gap-3">
           {nominations.map((nomination) => {
             return (
-              <article key={nomination.id} className="rounded-3xl border border-surface-200 bg-white p-4">
+              <article key={nomination.id} className="rounded-xl border border-surface-200 bg-white p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -956,7 +958,7 @@ export function VotingNominationsPanel({
                         </button>
                       </>
                     ) : nomination.approvedOption ? (
-                      <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                      <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                         Published as {nomination.approvedOption.name}
                       </div>
                     ) : null}
@@ -970,10 +972,10 @@ export function VotingNominationsPanel({
 
       {selectedNomination && selectedNominationView ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-950/45 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-surface-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-surface-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">Nomination details</p>
+                <p className="text-[13px] font-medium text-surface-600">Nomination details</p>
                 <h3 className="mt-1 text-2xl font-semibold tracking-tight text-brand-900">{selectedNomination.nomineeName}</h3>
                 <p className="mt-1 text-sm text-surface-500">
                   {selectedNomination.contest?.title || selectedNomination.contestId}
@@ -995,37 +997,37 @@ export function VotingNominationsPanel({
                     ) || ''
                   }
                   alt={selectedNomination.nomineeName}
-                  className="h-40 w-40 rounded-[24px] border border-surface-200 object-cover"
+                  className="h-40 w-40 rounded-xl border border-surface-200 object-cover"
                 />
               ) : (
-                <div className="h-40 w-40 rounded-[24px] border border-surface-200 bg-surface-100" />
+                <div className="h-40 w-40 rounded-xl border border-surface-200 bg-surface-100" />
               )}
 
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Sender</p>
+                  <div className="rounded-lg bg-surface-50 px-4 py-3">
+                    <p className="text-[13px] font-medium text-surface-600">Sender</p>
                     <p className="mt-1 text-sm font-semibold text-brand-900">{selectedNomination.submitterName}</p>
                   </div>
-                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Submitted</p>
+                  <div className="rounded-lg bg-surface-50 px-4 py-3">
+                    <p className="text-[13px] font-medium text-surface-600">Submitted</p>
                     <p className="mt-1 text-sm font-semibold text-brand-900">
                       {selectedNomination.createdAt ? formatDate(selectedNomination.createdAt, 'MMM d, yyyy p') : 'Unknown'}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Email</p>
+                  <div className="rounded-lg bg-surface-50 px-4 py-3">
+                    <p className="text-[13px] font-medium text-surface-600">Email</p>
                     <p className="mt-1 text-sm text-brand-900">{selectedNomination.submitterEmail || 'Not provided'}</p>
                   </div>
-                  <div className="rounded-2xl bg-surface-50 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Phone</p>
+                  <div className="rounded-lg bg-surface-50 px-4 py-3">
+                    <p className="text-[13px] font-medium text-surface-600">Phone</p>
                     <p className="mt-1 text-sm text-brand-900">{selectedNomination.submitterPhone || 'Not provided'}</p>
                   </div>
                 </div>
 
                 {selectedNomination.nomineeDescription ? (
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Nominee profile</p>
+                    <p className="text-[13px] font-medium text-surface-600">Nominee profile</p>
                     <p className="mt-2 text-sm leading-6 text-surface-600">{selectedNomination.nomineeDescription}</p>
                   </div>
                 ) : null}
@@ -1033,8 +1035,8 @@ export function VotingNominationsPanel({
                 {selectedNominationView.customFieldRows.length ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     {selectedNominationView.customFieldRows.map((row) => (
-                      <div key={`${selectedNomination.id}:${row.key}`} className="rounded-2xl bg-surface-50 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">{row.label}</p>
+                      <div key={`${selectedNomination.id}:${row.key}`} className="rounded-lg bg-surface-50 px-4 py-3">
+                        <p className="text-[13px] font-medium text-surface-600">{row.label}</p>
                         <p className="mt-1 text-sm text-brand-900">{row.value}</p>
                       </div>
                     ))}
