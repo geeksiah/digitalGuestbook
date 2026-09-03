@@ -30,6 +30,13 @@ interface SystemSettings {
   platformFeeFixed: number | null;
   processingFeePercent: number;
   processingFeeFixed: number;
+  // Null on any of these means the category inherits the platform fee above.
+  giftItemFeeMode: 'PERCENTAGE' | 'FIXED' | null;
+  giftItemFeePercent: number | null;
+  giftItemFeeFixed: number | null;
+  cashGiftFeeMode: 'PERCENTAGE' | 'FIXED' | null;
+  cashGiftFeePercent: number | null;
+  cashGiftFeeFixed: number | null;
 }
 
 interface Provider {
@@ -68,6 +75,98 @@ const WHATSAPP_PROVIDERS = [
   { id: 'custom', name: 'Custom API', description: 'Custom HTTP endpoint' },
 ];
 
+
+
+type CategoryFeeValue = {
+  mode: 'PERCENTAGE' | 'FIXED' | null;
+  percent: number | null;
+  fixed: number | null;
+};
+
+/**
+ * Pricing for one gift category. Turning the switch off clears every field to
+ * null, which is what makes the backend fall back to the platform fee.
+ */
+function CategoryFeeFields({
+  id,
+  label,
+  hint,
+  value,
+  fallbackLabel,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: CategoryFeeValue;
+  fallbackLabel: string;
+  onChange: (next: CategoryFeeValue) => void;
+}) {
+  const overridden = value.mode !== null || value.percent !== null || value.fixed !== null;
+  const mode = value.mode || 'PERCENTAGE';
+
+  return (
+    <div className="rounded-xl border border-surface-200 p-4">
+      <Switch
+        label={label}
+        description={hint}
+        checked={overridden}
+        onChange={(checked) =>
+          onChange(
+            checked
+              ? { mode: 'PERCENTAGE', percent: 0, fixed: 0 }
+              : { mode: null, percent: null, fixed: null }
+          )
+        }
+      />
+
+      {overridden ? (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor={`${id}-mode`}>
+              Fee type
+            </label>
+            <select
+              id={`${id}-mode`}
+              className="input"
+              value={mode}
+              onChange={(e) =>
+                onChange({ ...value, mode: e.target.value as 'PERCENTAGE' | 'FIXED' })
+              }
+            >
+              <option value="PERCENTAGE">Percentage</option>
+              <option value="FIXED">Fixed amount</option>
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor={`${id}-amount`}>
+              {mode === 'FIXED' ? 'Fee per gift' : 'Fee (%)'}
+            </label>
+            <input
+              id={`${id}-amount`}
+              type="number"
+              step={mode === 'FIXED' ? '0.01' : '0.1'}
+              min="0"
+              max={mode === 'FIXED' ? undefined : '100'}
+              className="input"
+              value={(mode === 'FIXED' ? value.fixed : value.percent) ?? 0}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value) || 0;
+                onChange(
+                  mode === 'FIXED'
+                    ? { ...value, fixed: parsed }
+                    : { ...value, percent: parsed }
+                );
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <p className="field-hint mt-3">Currently charging {fallbackLabel}.</p>
+      )}
+    </div>
+  );
+}
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
@@ -215,6 +314,12 @@ export default function AdminSettingsPage() {
       </div>
     );
   }
+
+  // What a gift category charges while it has no fee of its own.
+  const feeFallbackLabel =
+    settings?.platformFeeMode === 'FIXED'
+      ? `a flat ${settings?.platformFeeFixed ?? 0} per transaction`
+      : `${settings?.platformFeePercent ?? 0}% (the platform fee)`;
 
   const renderProviderCard = (type: 'email' | 'sms' | 'whatsapp', provider: Provider) => (
     <div key={provider.id} className="flex items-center gap-3 px-4 py-3">
@@ -730,6 +835,53 @@ export default function AdminSettingsPage() {
                   }
                 />
               </div>
+            </div>
+          </Panel>
+
+          <Panel title="Gifting fees">
+            <p className="field-hint mb-3 mt-0">
+              Gift items settle to the platform in full. Cash gifts reach the event owner
+              minus the fee set here and the payment processor cut.
+            </p>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <CategoryFeeFields
+                id="fee-gift-item"
+                label="Separate fee for gift items"
+                hint="Charged on catalogue gift purchases."
+                fallbackLabel={feeFallbackLabel}
+                value={{
+                  mode: settings.giftItemFeeMode ?? null,
+                  percent: settings.giftItemFeePercent ?? null,
+                  fixed: settings.giftItemFeeFixed ?? null,
+                }}
+                onChange={(next) =>
+                  setSettings({
+                    ...settings,
+                    giftItemFeeMode: next.mode,
+                    giftItemFeePercent: next.percent,
+                    giftItemFeeFixed: next.fixed,
+                  })
+                }
+              />
+              <CategoryFeeFields
+                id="fee-cash-gift"
+                label="Separate fee for cash gifts"
+                hint="Deducted from the gift before it reaches the owner."
+                fallbackLabel={feeFallbackLabel}
+                value={{
+                  mode: settings.cashGiftFeeMode ?? null,
+                  percent: settings.cashGiftFeePercent ?? null,
+                  fixed: settings.cashGiftFeeFixed ?? null,
+                }}
+                onChange={(next) =>
+                  setSettings({
+                    ...settings,
+                    cashGiftFeeMode: next.mode,
+                    cashGiftFeePercent: next.percent,
+                    cashGiftFeeFixed: next.fixed,
+                  })
+                }
+              />
             </div>
           </Panel>
 

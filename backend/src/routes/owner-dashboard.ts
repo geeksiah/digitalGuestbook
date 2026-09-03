@@ -30,6 +30,10 @@ import {
   resolvePaystackAccount,
   updatePaystackSubaccount,
 } from '../services/paystack.js';
+import {
+  getPayoutAccountProvider,
+  listPayoutAccountGateways,
+} from '../services/payoutAccounts.js';
 import { queuePaystackTransferForPayout } from '../services/payoutAutomation.js';
 import {
   getAvailableWalletTypes,
@@ -2080,13 +2084,61 @@ router.delete('/wallet/:walletId', asyncHandler(async (req, res) => {
  * GET /api/owner-dashboard/wallet/paystack/banks
  * List banks from Paystack for easy owner setup
  */
-router.get('/wallet/paystack/banks', asyncHandler(async (req, res) => {
-  const country = String(req.query.country || 'ghana').trim().toLowerCase();
+/**
+ * GET /api/owner-dashboard/wallet/gateways
+ * Which gateways can confirm a payout account before it is saved.
+ */
+router.get('/wallet/gateways', asyncHandler(async (_req, res) => {
+  res.json({ gateways: listPayoutAccountGateways() });
+}));
+
+/**
+ * GET /api/owner-dashboard/wallet/:gateway/banks
+ * Destination banks for a gateway, in that gateway's own vocabulary.
+ */
+router.get('/wallet/:gateway/banks', asyncHandler(async (req, res) => {
+  const provider = getPayoutAccountProvider(req.params.gateway);
+  const country = String(req.query.country || '').trim().toLowerCase() || undefined;
   const currency = String(req.query.currency || '').trim().toUpperCase() || undefined;
 
-  const banks = await getPaystackBanks({ country, currency });
-  res.json({ banks });
+  const banks = await provider.listBanks({ country, currency });
+  res.json({
+    banks,
+    supportsAccountLookup: provider.supportsAccountLookup,
+    unsupportedReason: provider.unsupportedReason || null,
+  });
 }));
+
+/**
+ * POST /api/owner-dashboard/wallet/:gateway/resolve-account
+ * Confirm who owns a payout account before the owner commits to it. This is
+ * a read-only check: nothing is created until the connect call runs.
+ */
+router.post('/wallet/:gateway/resolve-account', asyncHandler(async (req, res) => {
+  const provider = getPayoutAccountProvider(req.params.gateway);
+  if (!provider.supportsAccountLookup) {
+    throw new AppError(
+      provider.unsupportedReason || 'This gateway cannot confirm accounts automatically',
+      400
+    );
+  }
+
+  const schema = z.object({
+    accountNumber: z.string().min(4, 'Account number is required'),
+    bankCode: z.string().min(1, 'Bank is required'),
+    currency: z.string().optional(),
+  });
+  const input = schema.parse(req.body);
+
+  const account = await provider.resolveAccount({
+    accountNumber: input.accountNumber.replace(/\s+/g, ''),
+    bankCode: input.bankCode.trim(),
+    currency: input.currency,
+  });
+
+  res.json({ account });
+}));
+
 
 /**
  * POST /api/owner-dashboard/wallet/paystack/connect

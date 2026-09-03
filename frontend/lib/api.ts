@@ -510,6 +510,20 @@ export const ownerDashboardApi = {
       params,
       headers: ownerHeaders(),
     }),
+  // Gateway-agnostic payout account lookup. The gateway segment decides which
+  // provider answers, so adding Stripe Connect later needs no change here.
+  getPayoutBanks: (gateway: string, params?: { country?: string; currency?: string }) =>
+    axios.get(`${API_BASE_URL}/api/owner-dashboard/wallet/${gateway}/banks`, {
+      params,
+      headers: ownerHeaders(),
+    }),
+  resolvePayoutAccount: (
+    gateway: string,
+    data: { accountNumber: string; bankCode: string; currency?: string }
+  ) =>
+    axios.post(`${API_BASE_URL}/api/owner-dashboard/wallet/${gateway}/resolve-account`, data, {
+      headers: ownerHeaders(),
+    }),
   connectPaystackWallet: (data: {
     bankCode: string;
     accountNumber: string;

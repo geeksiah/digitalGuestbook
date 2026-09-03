@@ -18,6 +18,7 @@ const notifications_js_1 = require("../services/notifications.js");
 const invitation_js_1 = require("../services/invitation.js");
 const ownerNotifications_js_1 = require("../services/ownerNotifications.js");
 const paystack_js_1 = require("../services/paystack.js");
+const payoutAccounts_js_1 = require("../services/payoutAccounts.js");
 const payoutAutomation_js_1 = require("../services/payoutAutomation.js");
 const walletPolicy_js_1 = require("../utils/walletPolicy.js");
 const router = (0, express_1.Router)();
@@ -1848,11 +1849,50 @@ router.delete('/wallet/:walletId', (0, errorHandler_js_1.asyncHandler)(async (re
  * GET /api/owner-dashboard/wallet/paystack/banks
  * List banks from Paystack for easy owner setup
  */
-router.get('/wallet/paystack/banks', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
-    const country = String(req.query.country || 'ghana').trim().toLowerCase();
+/**
+ * GET /api/owner-dashboard/wallet/gateways
+ * Which gateways can confirm a payout account before it is saved.
+ */
+router.get('/wallet/gateways', (0, errorHandler_js_1.asyncHandler)(async (_req, res) => {
+    res.json({ gateways: (0, payoutAccounts_js_1.listPayoutAccountGateways)() });
+}));
+/**
+ * GET /api/owner-dashboard/wallet/:gateway/banks
+ * Destination banks for a gateway, in that gateway's own vocabulary.
+ */
+router.get('/wallet/:gateway/banks', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const provider = (0, payoutAccounts_js_1.getPayoutAccountProvider)(req.params.gateway);
+    const country = String(req.query.country || '').trim().toLowerCase() || undefined;
     const currency = String(req.query.currency || '').trim().toUpperCase() || undefined;
-    const banks = await (0, paystack_js_1.getPaystackBanks)({ country, currency });
-    res.json({ banks });
+    const banks = await provider.listBanks({ country, currency });
+    res.json({
+        banks,
+        supportsAccountLookup: provider.supportsAccountLookup,
+        unsupportedReason: provider.unsupportedReason || null,
+    });
+}));
+/**
+ * POST /api/owner-dashboard/wallet/:gateway/resolve-account
+ * Confirm who owns a payout account before the owner commits to it. This is
+ * a read-only check: nothing is created until the connect call runs.
+ */
+router.post('/wallet/:gateway/resolve-account', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const provider = (0, payoutAccounts_js_1.getPayoutAccountProvider)(req.params.gateway);
+    if (!provider.supportsAccountLookup) {
+        throw new errorHandler_js_1.AppError(provider.unsupportedReason || 'This gateway cannot confirm accounts automatically', 400);
+    }
+    const schema = zod_1.z.object({
+        accountNumber: zod_1.z.string().min(4, 'Account number is required'),
+        bankCode: zod_1.z.string().min(1, 'Bank is required'),
+        currency: zod_1.z.string().optional(),
+    });
+    const input = schema.parse(req.body);
+    const account = await provider.resolveAccount({
+        accountNumber: input.accountNumber.replace(/\s+/g, ''),
+        bankCode: input.bankCode.trim(),
+        currency: input.currency,
+    });
+    res.json({ account });
 }));
 /**
  * POST /api/owner-dashboard/wallet/paystack/connect

@@ -105,6 +105,14 @@ export default function OwnerAccountPage() {
     accountNumber: '',
     businessName: '',
   });
+  // The account is confirmed with the gateway before anything is created,
+  // so the owner sees whose account they are about to connect.
+  const [resolvedAccount, setResolvedAccount] = useState<{
+    accountName: string;
+    bankName?: string | null;
+  } | null>(null);
+  const [resolvingAccount, setResolvingAccount] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const [walletMode, setWalletMode] = useState<WalletMode>('MANUAL_FALLBACK');
   const [availableWalletTypes, setAvailableWalletTypes] = useState<WalletType[]>(['manual', 'offline']);
   const [ownerWallets, setOwnerWallets] = useState<OwnerPayoutWallet[]>([]);
@@ -264,6 +272,43 @@ export default function OwnerAccountPage() {
       setSupportLoading(false);
     }
   };
+
+  // Confirm the destination as the owner types. Debounced so a 10-digit
+  // account number costs one lookup, not ten.
+  useEffect(() => {
+    const { bankCode, accountNumber, currency } = paystackSetup;
+    setResolvedAccount(null);
+    setResolveError(null);
+
+    if (!bankCode || accountNumber.length < 10) {
+      setResolvingAccount(false);
+      return;
+    }
+
+    let cancelled = false;
+    setResolvingAccount(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await ownerDashboardApi.resolvePayoutAccount('paystack', {
+          accountNumber,
+          bankCode,
+          currency,
+        });
+        if (cancelled) return;
+        setResolvedAccount(response.data.account);
+      } catch (error) {
+        if (cancelled) return;
+        setResolveError(getErrorMessage(error, 'Could not confirm this account'));
+      } finally {
+        if (!cancelled) setResolvingAccount(false);
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [paystackSetup.bankCode, paystackSetup.accountNumber, paystackSetup.currency]);
 
   const fetchPaystackBanks = async (country: string, currency?: string, notify = true) => {
     try {
@@ -965,11 +1010,32 @@ export default function OwnerAccountPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    {resolvingAccount ? (
+                      <p className="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2.5 text-[13px] text-surface-700">
+                        Confirming account&hellip;
+                      </p>
+                    ) : resolvedAccount ? (
+                      <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5">
+                        <p className="text-[13px] font-semibold text-brand-900">
+                          {resolvedAccount.accountName}
+                        </p>
+                        <p className="mt-0.5 text-[12px] text-brand-800">
+                          {resolvedAccount.bankName
+                            ? `${resolvedAccount.bankName} - confirmed with Paystack`
+                            : 'Confirmed with Paystack'}
+                        </p>
+                      </div>
+                    ) : resolveError ? (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900">
+                        {resolveError}
+                      </p>
+                    ) : null}
+
+                    <div className="actions-row">
                       <button
                         type="button"
                         className="btn-primary"
-                        disabled={paystackLoading || disablePaystackConnect}
+                        disabled={paystackLoading || disablePaystackConnect || !resolvedAccount}
                         onClick={handleConnectPaystack}
                       >
                         {paystackLoading ? 'Connecting...' : 'Connect Paystack'}

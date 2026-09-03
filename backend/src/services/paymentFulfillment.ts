@@ -36,6 +36,19 @@ type GiftPaymentMetadata = {
   deliveryDate?: string;
   cashGiftAmount?: number;
   packageItems?: GiftItem[];
+  /** Settlement frozen at checkout by createPaymentIntent. */
+  giftSettlement?: {
+    packageAmount: number;
+    cashGiftAmount: number;
+    totalAmount: number;
+    platformFeeAmount: number;
+    processingFeeAmount: number;
+    cashProcessingFee: number;
+    ownerNetAmount: number;
+  };
+  payoutRouting?: 'ADMIN_MANUAL' | 'OWNER_AUTOMATED';
+  ownerWalletId?: string;
+  routedWalletType?: string;
 };
 
 type VotePaymentMetadata = {
@@ -233,6 +246,19 @@ export const fulfillGiftPurchase = async (intent: PaymentIntent, tx: Transaction
       });
     }
 
+    // The settlement was frozen at checkout. Falling back to the raw amounts
+    // keeps older intents (written before this field existed) fulfillable.
+    const settlement = metadata.giftSettlement || {
+      packageAmount: packageTotal,
+      cashGiftAmount,
+      totalAmount: packageTotal + cashGiftAmount,
+      platformFeeAmount: 0,
+      processingFeeAmount: 0,
+      cashProcessingFee: 0,
+      ownerNetAmount: cashGiftAmount,
+    };
+    const payoutRouting = metadata.payoutRouting === 'OWNER_AUTOMATED' ? 'OWNER_AUTOMATED' : 'ADMIN_MANUAL';
+
     const order = await db.giftOrder.create({
       data: {
         eventId: intent.eventId,
@@ -247,6 +273,11 @@ export const fulfillGiftPurchase = async (intent: PaymentIntent, tx: Transaction
         currency: intent.currency,
         totalAmount: tx.grossAmount,
         cashGiftAmount: cashGiftAmount > 0 ? cashGiftAmount : null,
+        packageAmount: settlement.packageAmount,
+        platformFeeAmount: settlement.platformFeeAmount,
+        processingFeeAmount: settlement.processingFeeAmount,
+        ownerNetAmount: settlement.ownerNetAmount,
+        payoutRouting,
         status: 'PAID',
       },
     });
@@ -264,6 +295,52 @@ export const fulfillGiftPurchase = async (intent: PaymentIntent, tx: Transaction
       });
     }
 
+    // Payout balances are built from TransactionLegacy. Gift items settle
+    // wholly to the platform (netAmount 0); the cash gift carries the owner
+    // net. Rows already split at the gateway are recorded as OWNER_AUTOMATED
+    // so the owner cannot also request a payout for money already sent.
+    if (settlement.packageAmount > 0) {
+      await db.transactionLegacy.create({
+        data: {
+          eventId: intent.eventId,
+          type: 'gift_package_sale',
+          grossAmount: settlement.packageAmount,
+          platformFee: settlement.packageAmount,
+          processingFee: Math.max(0, settlement.processingFeeAmount - settlement.cashProcessingFee),
+          netAmount: 0,
+          currency: intent.currency,
+          paymentMethod: intent.gateway,
+          paymentRef: tx.providerTransactionId,
+          payoutRouting: 'ADMIN_MANUAL',
+          buyerName: metadata.guestName,
+          buyerEmail: metadata.guestEmail || null,
+          status: 'completed',
+        },
+      });
+    }
+
+    if (cashGiftAmount > 0) {
+      await db.transactionLegacy.create({
+        data: {
+          eventId: intent.eventId,
+          type: 'gift_cash',
+          grossAmount: cashGiftAmount,
+          platformFee: Math.max(0, cashGiftAmount - settlement.ownerNetAmount - settlement.cashProcessingFee),
+          processingFee: settlement.cashProcessingFee,
+          netAmount: settlement.ownerNetAmount,
+          currency: intent.currency,
+          paymentMethod: intent.gateway,
+          paymentRef: tx.providerTransactionId,
+          payoutRouting,
+          routedWalletType: metadata.routedWalletType || null,
+          ownerWalletId: metadata.ownerWalletId || null,
+          buyerName: metadata.guestName,
+          buyerEmail: metadata.guestEmail || null,
+          status: 'completed',
+        },
+      });
+    }
+
     await db.auditLog.create({
       data: {
         eventId: intent.eventId,
@@ -276,6 +353,8 @@ export const fulfillGiftPurchase = async (intent: PaymentIntent, tx: Transaction
           packageTotal,
           cashGiftAmount,
           totalAmount: tx.grossAmount,
+          settlement,
+          payoutRouting,
         }),
       },
     });

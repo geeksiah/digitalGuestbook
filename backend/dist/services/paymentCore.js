@@ -127,6 +127,12 @@ const createPaymentIntent = async (input) => {
             platformFeeFixed: true,
             processingFeePercent: true,
             processingFeeFixed: true,
+            giftItemFeeMode: true,
+            giftItemFeePercent: true,
+            giftItemFeeFixed: true,
+            cashGiftFeeMode: true,
+            cashGiftFeePercent: true,
+            cashGiftFeeFixed: true,
             eventPaymentGateways: {
                 where: {
                     paymentGatewayId: input.paymentGatewayId,
@@ -159,14 +165,61 @@ const createPaymentIntent = async (input) => {
         processingFeePercent: event.processingFeePercent,
         processingFeeFixed: event.processingFeeFixed,
     };
-    const fees = await (0, fees_js_1.computeFees)(amount, feeConfigEvent);
-    const chargeAmount = roundMoney(amount + fees.platformFeeAmount + fees.processingEstimate);
+    const isGift = input.purpose === 'GIFT';
+    // Tickets and votes add the fees on top of the price, so the organiser
+    // receives the full face value. Gifts work the other way round: the guest
+    // pays exactly the gift they chose and the fees come out of the cash
+    // portion, per the settlement rule in utils/fees.ts.
+    let chargeAmount;
+    let platformFeeAmount;
+    let organizerAmount;
+    let processingEstimate;
+    let giftSettlement = null;
+    if (isGift) {
+        const giftDefaults = await (0, fees_js_1.getGiftFeeDefaults)();
+        const giftConfig = (0, fees_js_1.resolveGiftFeeConfig)(event, giftDefaults);
+        const breakdown = input.giftBreakdown || { packageAmount: 0, cashGiftAmount: amount };
+        giftSettlement = (0, fees_js_1.computeGiftSettlement)({
+            packageAmount: breakdown.packageAmount,
+            cashGiftAmount: breakdown.cashGiftAmount,
+            config: giftConfig,
+        });
+        chargeAmount = amount;
+        platformFeeAmount = giftSettlement.platformFeeAmount;
+        organizerAmount = giftSettlement.ownerNetAmount;
+        processingEstimate = giftSettlement.processingFeeAmount;
+    }
+    else {
+        const fees = await (0, fees_js_1.computeFees)(amount, feeConfigEvent);
+        chargeAmount = roundMoney(amount + fees.platformFeeAmount + fees.processingEstimate);
+        platformFeeAmount = fees.platformFeeAmount;
+        organizerAmount = fees.organizerAmount;
+        processingEstimate = fees.processingEstimate;
+    }
+    // A split is only attempted when the owner has a verified account on the
+    // same gateway the guest is paying with and there is something to send.
+    const requestedAccount = input.ownerConnectedAccount;
+    const split = isGift &&
+        organizerAmount > 0 &&
+        requestedAccount?.accountId &&
+        String(requestedAccount.gateway || '').toLowerCase() === gatewayType
+        ? {
+            gateway: gatewayType,
+            destinationAccountId: requestedAccount.accountId,
+            ownerAmount: organizerAmount,
+            bearer: 'platform',
+        }
+        : null;
     const idempotencyKey = input.idempotencyKey || buildIdempotencyKey(input, event.ownerId);
     const metadataPayload = {
         ...(input.metadata || {}),
         paymentGatewayId: selectedGateway.id,
         baseAmount: amount,
-        processingEstimate: fees.processingEstimate,
+        processingEstimate,
+        // Frozen at checkout so fulfilment and the ledger agree with what the
+        // guest was shown, even if admin edits fee settings in between.
+        ...(giftSettlement ? { giftSettlement } : {}),
+        ...(split ? { payoutRouting: 'OWNER_AUTOMATED', splitAccountId: split.destinationAccountId } : {}),
     };
     let intent;
     try {
@@ -179,8 +232,8 @@ const createPaymentIntent = async (input) => {
                 amount: chargeAmount,
                 currency,
                 status: 'PENDING',
-                platformFeeAmount: fees.platformFeeAmount,
-                organizerAmount: fees.organizerAmount,
+                platformFeeAmount,
+                organizerAmount,
                 metadataJson: toJsonString(metadataPayload),
                 idempotencyKey,
             },
@@ -204,6 +257,7 @@ const createPaymentIntent = async (input) => {
         amount: intent.amount,
         currency: intent.currency,
         metadata: metadataPayload,
+        split,
     };
     let nextAction = { type: 'NONE', reference: intent.gatewayReference || undefined };
     if (!intent.gatewayReference || intent.status === 'PENDING') {

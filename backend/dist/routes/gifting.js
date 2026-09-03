@@ -52,21 +52,48 @@ const assignmentSchema = zod_1.z.object({
     packageIds: zod_1.z.array(zod_1.z.string().uuid()).default([]),
 });
 const roundMoney = (value) => Math.round(value * 100) / 100;
-const computeSettlement = (input) => {
-    const cashGiftAmount = Math.max(0, Number(input.cashGiftAmount || 0));
-    const packageAmount = Math.max(0, Number(input.packageAmount || 0));
-    const mode = String(input.platformFeeMode || 'PERCENTAGE').toUpperCase();
-    const percent = Math.max(0, Number(input.platformFeePercent || 0));
-    const fixed = Math.max(0, Number(input.platformFeeFixed || 0));
-    const ownerFee = mode === 'FIXED'
-        ? Math.min(cashGiftAmount, fixed)
-        : (cashGiftAmount * percent) / 100;
-    const ownerNetAmount = roundMoney(Math.max(0, cashGiftAmount - ownerFee));
-    const adminRetainedAmount = roundMoney(packageAmount + ownerFee);
+/**
+ * Orders written since gift settlement was introduced carry their own frozen
+ * figures, so changing fee settings never restates history. Older orders have
+ * no stored settlement, so they are recomputed from the fee config once, as a
+ * best-effort reconstruction.
+ */
+const enrichGiftOrder = (order, feeDefaults) => {
+    const packageAmount = order.items
+        .filter((item) => item.type === 'PACKAGE')
+        .reduce((sum, item) => sum + item.lineTotal, 0);
+    const cashGiftAmount = Number(order.cashGiftAmount || 0);
+    const feeConfig = (0, fees_js_1.resolveGiftFeeConfig)(order.event, feeDefaults);
+    const hasStoredSettlement = Number(order.ownerNetAmount || 0) > 0 ||
+        Number(order.platformFeeAmount || 0) > 0 ||
+        Number(order.processingFeeAmount || 0) > 0;
+    const settlement = hasStoredSettlement
+        ? {
+            packageAmount: Number(order.packageAmount || packageAmount),
+            cashGiftAmount,
+            platformFeeAmount: Number(order.platformFeeAmount || 0),
+            processingFeeAmount: Number(order.processingFeeAmount || 0),
+            ownerNetAmount: Number(order.ownerNetAmount || 0),
+        }
+        : (0, fees_js_1.computeGiftSettlement)({ packageAmount, cashGiftAmount, config: feeConfig });
     return {
-        ownerFee: roundMoney(ownerFee),
-        ownerNetAmount,
-        adminRetainedAmount,
+        ...order,
+        platformFeeMode: feeConfig.platformFeeMode,
+        platformFeePercent: feeConfig.platformFeePercent,
+        platformFeeFixed: feeConfig.platformFeeFixed,
+        giftItemFee: feeConfig.giftItem,
+        cashGiftFee: feeConfig.cashGift,
+        packageAmount: settlement.packageAmount,
+        platformFeeAmount: settlement.platformFeeAmount,
+        processingFeeAmount: settlement.processingFeeAmount,
+        ownerNetAmount: settlement.ownerNetAmount,
+        // What the platform keeps: gift items in full, plus the fee taken from
+        // the cash gift, less the processor cost.
+        adminRetainedAmount: roundMoney(Math.max(0, settlement.packageAmount +
+            cashGiftAmount -
+            settlement.ownerNetAmount -
+            settlement.processingFeeAmount)),
+        settlementFrozen: hasStoredSettlement,
     };
 };
 // ============================================
@@ -92,24 +119,6 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
         throw new errorHandler_js_1.AppError('Event not found', 404);
     if (!event.giftingEnabled)
         throw new errorHandler_js_1.AppError('Gifting is disabled for this event', 404);
-    const configuredGateways = await prisma_js_1.default.eventPaymentGateway.findMany({
-        where: {
-            eventId: event.id,
-            isActive: true,
-            paymentGateway: { isActive: true },
-        },
-        select: {
-            paymentGatewayId: true,
-            paymentGateway: {
-                select: {
-                    id: true,
-                    gateway: true,
-                    currency: true,
-                },
-            },
-        },
-        orderBy: { sortOrder: 'asc' },
-    });
     const eventPackageLinks = await prisma_js_1.default.eventGiftPackage.findMany({
         where: { eventId: event.id },
         select: { giftPackageId: true },
@@ -159,6 +168,7 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
                         isActive: true,
                         isVerified: true,
                         currency: true,
+                        providerAccountId: true,
                         paystackSubaccount: true,
                         paystackRecipientCode: true,
                     },
@@ -183,7 +193,9 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
         settlementPolicy: {
             cashGift: walletState.mode === 'AUTOMATED' ? 'owner_wallet_routing' : 'platform_settlement',
             packagePurchase: 'platform_only',
-            mixedPaystackCheckoutAllowed: false,
+            // The gateway split is computed from the cash portion alone, so items
+            // and a cash gift can safely share one checkout.
+            mixedPaystackCheckoutAllowed: true,
         },
         paymentGateways: visibleGateways.map((eventGateway) => {
             const gateway = eventGateway.paymentGateway;
@@ -232,6 +244,12 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
             platformFeeFixed: true,
             processingFeePercent: true,
             processingFeeFixed: true,
+            giftItemFeeMode: true,
+            giftItemFeePercent: true,
+            giftItemFeeFixed: true,
+            cashGiftFeeMode: true,
+            cashGiftFeePercent: true,
+            cashGiftFeeFixed: true,
             Owner: {
                 select: {
                     countryCode: true,
@@ -243,6 +261,7 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
                             isActive: true,
                             isVerified: true,
                             currency: true,
+                            providerAccountId: true,
                             paystackSubaccount: true,
                             paystackRecipientCode: true,
                         },
@@ -349,12 +368,21 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
     });
     const idempotencyKey = String(req.get('Idempotency-Key') || '').trim() ||
         (0, crypto_1.createHash)('sha256').update(idempotencySeed).digest('hex');
+    // Cash gifts settle to the owner when they have a verified account on the
+    // gateway being paid with. Everything else settles to the platform.
+    const selectedGatewayType = String(selectedGateway.paymentGateway.gateway || '').toLowerCase();
+    const ownerWallet = ownerWalletState.walletByType.get(selectedGatewayType) || null;
+    const ownerConnectedAccountId = (0, walletPolicy_js_1.connectedAccountIdForWallet)(ownerWallet, selectedGatewayType);
     const { intent, nextAction } = await (0, paymentCore_js_1.createPaymentIntent)({
         eventId: event.id,
         purpose: 'GIFT',
         amount: totalAmount,
         currency,
         paymentGatewayId: selectedGateway.paymentGatewayId,
+        giftBreakdown: { packageAmount: packagesTotal, cashGiftAmount },
+        ownerConnectedAccount: cashGiftAmount > 0 && ownerConnectedAccountId
+            ? { gateway: selectedGatewayType, accountId: ownerConnectedAccountId }
+            : null,
         metadata: {
             guestName: data.guestName.trim(),
             guestPhone: data.guestPhone?.trim() || undefined,
@@ -366,6 +394,8 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
                 giftPackageId: item.giftPackageId,
                 quantity: item.quantity,
             })),
+            ownerWalletId: ownerConnectedAccountId ? ownerWallet?.id : undefined,
+            routedWalletType: ownerConnectedAccountId ? selectedGatewayType : undefined,
         },
         idempotencyKey,
     });
@@ -380,7 +410,11 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
             packageAmount: packagesTotal,
             cashGiftAmount,
             settlementPolicy: {
-                cashGift: cashGiftAmount > 0 ? 'pending_webhook_confirmation' : 'none',
+                cashGift: cashGiftAmount <= 0
+                    ? 'none'
+                    : ownerConnectedAccountId
+                        ? 'owner_split'
+                        : 'platform_settlement',
                 packagePurchase: packagesTotal > 0 ? 'platform_only' : 'none',
             },
         },
@@ -535,7 +569,7 @@ router.put('/events/:eventId/packages', auth_js_1.authenticateAdmin, (0, errorHa
 router.get('/orders', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const eventId = req.query.eventId ? String(req.query.eventId) : undefined;
     const where = eventId ? { eventId } : {};
-    const feeDefaults = await (0, fees_js_1.getSystemFeeDefaults)();
+    const feeDefaults = await (0, fees_js_1.getGiftFeeDefaults)();
     const orders = await prisma_js_1.default.giftOrder.findMany({
         where,
         include: {
@@ -548,40 +582,26 @@ router.get('/orders', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHa
                     platformFeeMode: true,
                     platformFeePercent: true,
                     platformFeeFixed: true,
+                    processingFeePercent: true,
+                    processingFeeFixed: true,
+                    giftItemFeeMode: true,
+                    giftItemFeePercent: true,
+                    giftItemFeeFixed: true,
+                    cashGiftFeeMode: true,
+                    cashGiftFeePercent: true,
+                    cashGiftFeeFixed: true,
                 },
             },
             items: { include: { giftPackage: { select: { id: true, name: true } } } },
         },
         orderBy: { createdAt: 'desc' },
     });
-    const enrichedOrders = orders.map((order) => {
-        const feeConfig = (0, fees_js_1.resolveEventFeeConfig)(order.event, feeDefaults);
-        const packageAmount = order.items
-            .filter((item) => item.type === 'PACKAGE')
-            .reduce((sum, item) => sum + item.lineTotal, 0);
-        const cashGiftAmount = Number(order.cashGiftAmount || 0);
-        const settlement = computeSettlement({
-            cashGiftAmount,
-            packageAmount,
-            platformFeeMode: feeConfig.platformFeeMode,
-            platformFeePercent: feeConfig.platformFeePercent,
-            platformFeeFixed: feeConfig.platformFeeFixed,
-        });
-        return {
-            ...order,
-            platformFeeMode: feeConfig.platformFeeMode,
-            platformFeePercent: feeConfig.platformFeePercent,
-            platformFeeFixed: feeConfig.platformFeeFixed,
-            packageAmount,
-            ownerNetAmount: settlement.ownerNetAmount,
-            adminRetainedAmount: settlement.adminRetainedAmount,
-        };
-    });
+    const enrichedOrders = orders.map((order) => enrichGiftOrder(order, feeDefaults));
     res.json({ orders: enrichedOrders });
 }));
 router.get('/owner/orders', auth_js_1.authenticateOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const ownerId = req.ownerId;
-    const feeDefaults = await (0, fees_js_1.getSystemFeeDefaults)();
+    const feeDefaults = await (0, fees_js_1.getGiftFeeDefaults)();
     const orders = await prisma_js_1.default.giftOrder.findMany({
         where: {
             event: { ownerId },
@@ -596,35 +616,21 @@ router.get('/owner/orders', auth_js_1.authenticateOwnerAccount, (0, errorHandler
                     platformFeeMode: true,
                     platformFeePercent: true,
                     platformFeeFixed: true,
+                    processingFeePercent: true,
+                    processingFeeFixed: true,
+                    giftItemFeeMode: true,
+                    giftItemFeePercent: true,
+                    giftItemFeeFixed: true,
+                    cashGiftFeeMode: true,
+                    cashGiftFeePercent: true,
+                    cashGiftFeeFixed: true,
                 },
             },
             items: { include: { giftPackage: { select: { id: true, name: true } } } },
         },
         orderBy: { createdAt: 'desc' },
     });
-    const enrichedOrders = orders.map((order) => {
-        const feeConfig = (0, fees_js_1.resolveEventFeeConfig)(order.event, feeDefaults);
-        const packageAmount = order.items
-            .filter((item) => item.type === 'PACKAGE')
-            .reduce((sum, item) => sum + item.lineTotal, 0);
-        const cashGiftAmount = Number(order.cashGiftAmount || 0);
-        const settlement = computeSettlement({
-            cashGiftAmount,
-            packageAmount,
-            platformFeeMode: feeConfig.platformFeeMode,
-            platformFeePercent: feeConfig.platformFeePercent,
-            platformFeeFixed: feeConfig.platformFeeFixed,
-        });
-        return {
-            ...order,
-            platformFeeMode: feeConfig.platformFeeMode,
-            platformFeePercent: feeConfig.platformFeePercent,
-            platformFeeFixed: feeConfig.platformFeeFixed,
-            packageAmount,
-            ownerNetAmount: settlement.ownerNetAmount,
-            adminRetainedAmount: settlement.adminRetainedAmount,
-        };
-    });
+    const enrichedOrders = orders.map((order) => enrichGiftOrder(order, feeDefaults));
     res.json({ orders: enrichedOrders });
 }));
 exports.default = router;

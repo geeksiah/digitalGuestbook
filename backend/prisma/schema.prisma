@@ -431,6 +431,15 @@ model Event {
   processingFeePercent Float   @default(2.9) // Payment processing fee %
   processingFeeFixed   Float   @default(0.30) // Fixed processing fee per txn
 
+  // Per-category gift fees. Null falls back to the platformFee* values above,
+  // so rows written before gifting had its own fees keep their behaviour.
+  giftItemFeeMode    String?
+  giftItemFeePercent Float?
+  giftItemFeeFixed   Float?
+  cashGiftFeeMode    String?
+  cashGiftFeePercent Float?
+  cashGiftFeeFixed   Float?
+
   // Booth/Kiosk Template IDs (for video/audio/photo pages)
   boothVideoTemplateId String?
   boothAudioTemplateId String?
@@ -1507,6 +1516,11 @@ model GiftOrder {
   currency         String    @default("USD")
   totalAmount      Float     @default(0)
   cashGiftAmount   Float?
+  packageAmount       Float  @default(0)
+  platformFeeAmount   Float  @default(0)
+  processingFeeAmount Float  @default(0)
+  ownerNetAmount      Float  @default(0)
+  payoutRouting       String @default("ADMIN_MANUAL") // ADMIN_MANUAL | OWNER_AUTOMATED
   status           String    @default("PENDING") // PENDING | PAID | FAILED | REFUNDED | CANCELLED
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -1873,6 +1887,15 @@ model SystemSettings {
   platformFeeFixed     Float? // Optional fixed fee amount
   processingFeePercent Float  @default(2.9) // Processor fee percentage
   processingFeeFixed   Float  @default(0.30) // Processor fixed fee
+
+  // Per-category gift fees. Null falls back to the platformFee* values above,
+  // so rows written before gifting had its own fees keep their behaviour.
+  giftItemFeeMode    String?
+  giftItemFeePercent Float?
+  giftItemFeeFixed   Float?
+  cashGiftFeeMode    String?
+  cashGiftFeePercent Float?
+  cashGiftFeeFixed   Float?
 
   // Default providers (reference by id)
   defaultEmailProviderId    String?

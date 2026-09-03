@@ -39,4 +39,12 @@ export declare const resolveRoutingForMethod: (params: {
     payoutRouting: "ADMIN_MANUAL";
     wallet: null;
 };
+/**
+ * The provider-side account id that receives a split for this wallet. Each
+ * gateway stores it in a different column, so callers building a split ask
+ * here rather than reaching for a provider-specific field.
+ */
+export declare const connectedAccountIdForWallet: (wallet: (OwnerPayoutWalletRecord & {
+    providerAccountId?: string | null;
+}) | null | undefined, gateway: string) => string | null;
 //# sourceMappingURL=walletPolicy.d.ts.map

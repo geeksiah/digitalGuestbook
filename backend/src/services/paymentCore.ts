@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'crypto';
 import type { PaymentIntent, PaymentIntentStatus, Prisma, Transaction } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
 import prisma from '../utils/prisma.js';
-import { computeFees } from '../utils/fees.js';
+import {
+  computeFees,
+  computeGiftSettlement,
+  getGiftFeeDefaults,
+  resolveGiftFeeConfig,
+} from '../utils/fees.js';
 import {
   fulfillGiftPurchase,
   fulfillTicketPurchase,
@@ -29,6 +34,16 @@ type CreatePaymentIntentInput = {
   paymentGatewayId: string;
   metadata?: Record<string, unknown>;
   idempotencyKey?: string;
+  /**
+   * How a GIFT total divides between catalogue items and cash. Required for
+   * gifts because the two categories are priced and settled differently.
+   */
+  giftBreakdown?: { packageAmount: number; cashGiftAmount: number };
+  /**
+   * Owner's verified connected account, when the charge should be split at
+   * the gateway instead of settling wholly to the platform.
+   */
+  ownerConnectedAccount?: { gateway: string; accountId: string } | null;
 };
 
 type CreatePaymentIntentResult = {
@@ -183,6 +198,12 @@ export const createPaymentIntent = async (
       platformFeeFixed: true,
       processingFeePercent: true,
       processingFeeFixed: true,
+      giftItemFeeMode: true,
+      giftItemFeePercent: true,
+      giftItemFeeFixed: true,
+      cashGiftFeeMode: true,
+      cashGiftFeePercent: true,
+      cashGiftFeeFixed: true,
       eventPaymentGateways: {
         where: {
           paymentGatewayId: input.paymentGatewayId,
@@ -217,14 +238,65 @@ export const createPaymentIntent = async (
     processingFeeFixed: event.processingFeeFixed,
   };
 
-  const fees = await computeFees(amount, feeConfigEvent);
-  const chargeAmount = roundMoney(amount + fees.platformFeeAmount + fees.processingEstimate);
+  const isGift = input.purpose === 'GIFT';
+
+  // Tickets and votes add the fees on top of the price, so the organiser
+  // receives the full face value. Gifts work the other way round: the guest
+  // pays exactly the gift they chose and the fees come out of the cash
+  // portion, per the settlement rule in utils/fees.ts.
+  let chargeAmount: number;
+  let platformFeeAmount: number;
+  let organizerAmount: number;
+  let processingEstimate: number;
+  let giftSettlement: ReturnType<typeof computeGiftSettlement> | null = null;
+
+  if (isGift) {
+    const giftDefaults = await getGiftFeeDefaults();
+    const giftConfig = resolveGiftFeeConfig(event, giftDefaults);
+    const breakdown = input.giftBreakdown || { packageAmount: 0, cashGiftAmount: amount };
+    giftSettlement = computeGiftSettlement({
+      packageAmount: breakdown.packageAmount,
+      cashGiftAmount: breakdown.cashGiftAmount,
+      config: giftConfig,
+    });
+    chargeAmount = amount;
+    platformFeeAmount = giftSettlement.platformFeeAmount;
+    organizerAmount = giftSettlement.ownerNetAmount;
+    processingEstimate = giftSettlement.processingFeeAmount;
+  } else {
+    const fees = await computeFees(amount, feeConfigEvent);
+    chargeAmount = roundMoney(amount + fees.platformFeeAmount + fees.processingEstimate);
+    platformFeeAmount = fees.platformFeeAmount;
+    organizerAmount = fees.organizerAmount;
+    processingEstimate = fees.processingEstimate;
+  }
+
+  // A split is only attempted when the owner has a verified account on the
+  // same gateway the guest is paying with and there is something to send.
+  const requestedAccount = input.ownerConnectedAccount;
+  const split =
+    isGift &&
+    organizerAmount > 0 &&
+    requestedAccount?.accountId &&
+    String(requestedAccount.gateway || '').toLowerCase() === gatewayType
+      ? {
+          gateway: gatewayType,
+          destinationAccountId: requestedAccount.accountId,
+          ownerAmount: organizerAmount,
+          bearer: 'platform' as const,
+        }
+      : null;
+
   const idempotencyKey = input.idempotencyKey || buildIdempotencyKey(input, event.ownerId);
   const metadataPayload = {
     ...(input.metadata || {}),
     paymentGatewayId: selectedGateway.id,
     baseAmount: amount,
-    processingEstimate: fees.processingEstimate,
+    processingEstimate,
+    // Frozen at checkout so fulfilment and the ledger agree with what the
+    // guest was shown, even if admin edits fee settings in between.
+    ...(giftSettlement ? { giftSettlement } : {}),
+    ...(split ? { payoutRouting: 'OWNER_AUTOMATED', splitAccountId: split.destinationAccountId } : {}),
   };
 
   let intent: PaymentIntent;
@@ -238,8 +310,8 @@ export const createPaymentIntent = async (
         amount: chargeAmount,
         currency,
         status: 'PENDING',
-        platformFeeAmount: fees.platformFeeAmount,
-        organizerAmount: fees.organizerAmount,
+        platformFeeAmount,
+        organizerAmount,
         metadataJson: toJsonString(metadataPayload),
         idempotencyKey,
       },
@@ -261,6 +333,7 @@ export const createPaymentIntent = async (
     amount: intent.amount,
     currency: intent.currency,
     metadata: metadataPayload,
+    split,
   } as const;
 
   let nextAction: PaymentNextAction = { type: 'NONE', reference: intent.gatewayReference || undefined };

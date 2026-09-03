@@ -152,3 +152,20 @@ export const resolveRoutingForMethod = (params: {
     wallet: null,
   };
 };
+
+/**
+ * The provider-side account id that receives a split for this wallet. Each
+ * gateway stores it in a different column, so callers building a split ask
+ * here rather than reaching for a provider-specific field.
+ */
+export const connectedAccountIdForWallet = (
+  wallet: (OwnerPayoutWalletRecord & { providerAccountId?: string | null }) | null | undefined,
+  gateway: string
+): string | null => {
+  if (!wallet) return null;
+  const type = normalizeWalletType(gateway);
+  if (type === 'paystack') return wallet.paystackSubaccount || null;
+  // Stripe (and any future connect-style gateway) keeps the connected account
+  // id in the generic column.
+  return wallet.providerAccountId || null;
+};

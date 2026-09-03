@@ -8,6 +8,22 @@ type CreatePaymentIntentInput = {
     paymentGatewayId: string;
     metadata?: Record<string, unknown>;
     idempotencyKey?: string;
+    /**
+     * How a GIFT total divides between catalogue items and cash. Required for
+     * gifts because the two categories are priced and settled differently.
+     */
+    giftBreakdown?: {
+        packageAmount: number;
+        cashGiftAmount: number;
+    };
+    /**
+     * Owner's verified connected account, when the charge should be split at
+     * the gateway instead of settling wholly to the platform.
+     */
+    ownerConnectedAccount?: {
+        gateway: string;
+        accountId: string;
+    } | null;
 };
 type CreatePaymentIntentResult = {
     intent: PaymentIntent;

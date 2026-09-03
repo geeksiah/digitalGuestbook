@@ -26,6 +26,28 @@ const toFormBody = (pairs: Record<string, string | number | undefined | null>) =
   return params;
 };
 
+
+/**
+ * Stripe splits a Checkout charge with `transfer_data[destination]` (the
+ * connected account) plus `application_fee_amount` (the platform's cut in
+ * minor units). `ownerAmount` already has platform and processing fees
+ * withheld, so the application fee is the rest of the charge — the same
+ * arithmetic the Paystack adapter does with `transaction_charge`.
+ */
+const buildSplitFields = (intent: AdapterIntent, amountMinor: number) => {
+  const split = intent.split;
+  if (!split || split.gateway !== 'stripe' || !split.destinationAccountId) return {};
+
+  const ownerMinor = Math.round(split.ownerAmount * 100);
+  if (!Number.isFinite(ownerMinor) || ownerMinor <= 0) return {};
+  const applicationFeeMinor = Math.max(0, amountMinor - Math.min(ownerMinor, amountMinor));
+
+  return {
+    'payment_intent_data[transfer_data][destination]': split.destinationAccountId,
+    'payment_intent_data[application_fee_amount]': applicationFeeMinor,
+  };
+};
+
 const initializeStripe = async (
   intent: AdapterIntent,
   gatewayConfig: AdapterGatewayConfig
@@ -50,6 +72,7 @@ const initializeStripe = async (
     'metadata[paymentIntentId]': intent.id,
     'metadata[eventId]': intent.eventId,
     'metadata[purpose]': intent.purpose,
+    ...buildSplitFields(intent, amountMinor),
   });
 
   const response = await fetch(`${STRIPE_BASE_URL}/checkout/sessions`, {

@@ -18,6 +18,30 @@ const resolveSecret = (gatewayConfig) => {
     }
     return secret;
 };
+/**
+ * Paystack splits a charge by naming a subaccount and a `transaction_charge`:
+ * the flat amount (in minor units) kept by the main account, with the
+ * remainder settling to the subaccount. Because `ownerAmount` already has the
+ * platform and processing fees withheld, the charge is simply the difference.
+ */
+const buildSplitFields = (intent) => {
+    const split = intent.split;
+    if (!split || split.gateway !== 'paystack' || !split.destinationAccountId)
+        return {};
+    const totalMinor = Math.round(intent.amount * 100);
+    const ownerMinor = Math.round(split.ownerAmount * 100);
+    if (!Number.isFinite(ownerMinor) || ownerMinor <= 0)
+        return {};
+    // Never let rounding hand the subaccount more than was charged.
+    const platformMinor = Math.max(0, totalMinor - Math.min(ownerMinor, totalMinor));
+    return {
+        subaccount: split.destinationAccountId,
+        transaction_charge: platformMinor,
+        // The platform account carries Paystack's fee; the owner share was
+        // already reduced by the processing estimate withheld at checkout.
+        bearer: split.bearer === 'destination' ? 'subaccount' : 'account',
+    };
+};
 const initializePaystack = async (intent, gatewayConfig) => {
     const secret = resolveSecret(gatewayConfig);
     const callbackUrl = buildCallbackUrl(gatewayConfig);
@@ -37,6 +61,7 @@ const initializePaystack = async (intent, gatewayConfig) => {
             currency: intent.currency,
             reference,
             callback_url: callbackUrl,
+            ...buildSplitFields(intent),
             metadata: {
                 paymentIntentId: intent.id,
                 eventId: intent.eventId,

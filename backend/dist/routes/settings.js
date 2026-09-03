@@ -31,6 +31,10 @@ router.get('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)
     }
     res.json({ settings });
 }));
+const toOptionalFee = (value) => value === null || value === undefined || value === ''
+    ? null
+    : toNonNegativeNumber(value, 0);
+const toOptionalFeeMode = (value) => value === null || value === undefined || value === '' ? null : normalizeFeeMode(value);
 router.patch('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const body = req.body || {};
     const data = {
@@ -50,6 +54,13 @@ router.patch('/', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyncHandle
             : toNonNegativeNumber(body.platformFeeFixed, 0),
         processingFeePercent: toNonNegativeNumber(body.processingFeePercent, 2.9),
         processingFeeFixed: toNonNegativeNumber(body.processingFeeFixed, 0.3),
+        // Gift categories are priced separately from the general platform fee.
+        giftItemFeeMode: toOptionalFeeMode(body.giftItemFeeMode),
+        giftItemFeePercent: toOptionalFee(body.giftItemFeePercent),
+        giftItemFeeFixed: toOptionalFee(body.giftItemFeeFixed),
+        cashGiftFeeMode: toOptionalFeeMode(body.cashGiftFeeMode),
+        cashGiftFeePercent: toOptionalFee(body.cashGiftFeePercent),
+        cashGiftFeeFixed: toOptionalFee(body.cashGiftFeeFixed),
         ownerMobileLatestVersion: body.ownerMobileLatestVersion,
         ownerMobileMinimumVersion: body.ownerMobileMinimumVersion,
         ownerMobileAndroidStoreUrl: body.ownerMobileAndroidStoreUrl,

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveRoutingForMethod = exports.filterEventGatewaysForOwner = exports.resolveOwnerWalletState = exports.getAvailableWalletTypes = exports.isGatewaySupportedInCountry = exports.isGatewayConfigured = exports.isManualWalletType = exports.walletTypeForGateway = exports.normalizeWalletType = void 0;
+exports.connectedAccountIdForWallet = exports.resolveRoutingForMethod = exports.filterEventGatewaysForOwner = exports.resolveOwnerWalletState = exports.getAvailableWalletTypes = exports.isGatewaySupportedInCountry = exports.isGatewayConfigured = exports.isManualWalletType = exports.walletTypeForGateway = exports.normalizeWalletType = void 0;
 const MANUAL_TYPES = new Set(['manual', 'offline']);
 const GATEWAY_TO_WALLET_TYPE = {
     stripe: 'stripe',
@@ -138,4 +138,20 @@ const resolveRoutingForMethod = (params) => {
     };
 };
 exports.resolveRoutingForMethod = resolveRoutingForMethod;
+/**
+ * The provider-side account id that receives a split for this wallet. Each
+ * gateway stores it in a different column, so callers building a split ask
+ * here rather than reaching for a provider-specific field.
+ */
+const connectedAccountIdForWallet = (wallet, gateway) => {
+    if (!wallet)
+        return null;
+    const type = (0, exports.normalizeWalletType)(gateway);
+    if (type === 'paystack')
+        return wallet.paystackSubaccount || null;
+    // Stripe (and any future connect-style gateway) keeps the connected account
+    // id in the generic column.
+    return wallet.providerAccountId || null;
+};
+exports.connectedAccountIdForWallet = connectedAccountIdForWallet;
 //# sourceMappingURL=walletPolicy.js.map
