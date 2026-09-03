@@ -36,6 +36,8 @@ const isBlockedPlatformPath = (pathname: string) =>
   || pathname.startsWith('/event-owner/')
   || pathname === '/invite'
   || pathname.startsWith('/invite/')
+  || pathname === '/mc'
+  || pathname.startsWith('/mc/')
   || pathname === '/api'
   || pathname.startsWith('/api/');
 

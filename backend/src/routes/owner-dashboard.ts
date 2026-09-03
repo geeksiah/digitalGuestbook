@@ -15,7 +15,7 @@ import { calculateEventPhase } from '../utils/phase.js';
 import { featureFlags } from '../utils/featureFlags.js';
 import { buildSiteUrl } from '../utils/siteUrl.js';
 import { z } from 'zod';
-import { sendInvitationNotifications, sendWhatsAppRsvpInvite, sendEmailRsvpInvite } from '../services/notifications.js';
+import { sendInvitationNotifications, sendWhatsAppRsvpInvite, sendEmailRsvpInvite, sendSmsRsvpInvite } from '../services/notifications.js';
 import { generateInvitationPass } from '../services/invitation.js';
 import {
   getOrCreateOwnerNotificationPreference,
@@ -108,6 +108,27 @@ const rsvpStatusSchema = z.object({
   reason: z.string().max(400).optional(),
 });
 
+export type InviteChannel = 'whatsapp' | 'sms' | 'email';
+
+const INVITE_CHANNELS: InviteChannel[] = ['whatsapp', 'sms', 'email'];
+
+/**
+ * Invite channels are stored in one string column so any combination works
+ * without a migration: "whatsapp", "sms,email", and so on. "both" is the
+ * legacy value for WhatsApp + email and is still accepted.
+ */
+const parseInviteChannels = (value: unknown): InviteChannel[] => {
+  const raw = String(value || 'whatsapp').toLowerCase();
+  if (raw === 'both') return ['whatsapp', 'email'];
+
+  const parsed = raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part): part is InviteChannel => INVITE_CHANNELS.includes(part as InviteChannel));
+
+  return parsed.length ? Array.from(new Set(parsed)) : ['whatsapp'];
+};
+
 const inviteValidateSchema = z.object({
   invites: z.array(
     z.object({
@@ -116,7 +137,8 @@ const inviteValidateSchema = z.object({
       email: z.string().trim().optional(),
     })
   ),
-  channel: z.enum(['whatsapp', 'email', 'both']).optional().default('whatsapp'),
+  // Accepts one channel, a comma-separated set, or the legacy "both".
+  channel: z.string().optional().default('whatsapp'),
 });
 
 type InviteValidateRow = {
@@ -1058,8 +1080,9 @@ router.get('/events/:eventId/rsvp-invites', asyncHandler(async (req, res) => {
 const buildInviteValidation = (invitesInput: Array<{ name?: string; phone?: string; email?: string }>, channel: string = 'whatsapp') => {
   const rows: InviteValidateRow[] = [];
   const seen = new Set<string>();
-  const needsPhone = channel === 'whatsapp' || channel === 'both';
-  const needsEmail = channel === 'email' || channel === 'both';
+  const channels = parseInviteChannels(channel);
+  const needsPhone = channels.includes('whatsapp') || channels.includes('sms');
+  const needsEmail = channels.includes('email');
 
   invitesInput.forEach((invite, index) => {
     const normalizedPhone = normalizePhone(invite.phone);
@@ -1150,8 +1173,11 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
   });
   if (!event) throw new AppError('Event not found', 404);
 
-  const sendViaWhatsApp = channel === 'whatsapp' || channel === 'both';
-  const sendViaEmail = channel === 'email' || channel === 'both';
+  const channels = parseInviteChannels(channel);
+  const sendViaWhatsApp = channels.includes('whatsapp');
+  const sendViaSms = channels.includes('sms');
+  const sendViaEmail = channels.includes('email');
+  const storedChannel = channels.join(',');
 
   const created: any[] = [];
   const failed: Array<{ phone: string; reason: string; index: number }> = [];
@@ -1202,7 +1228,7 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
         inviteeName,
         inviteePhone,
         inviteeEmail,
-        channel,
+        channel: storedChannel,
         expiresAt,
         status: 'SENT',
         sentByOwnerId: ownerId,
@@ -1224,6 +1250,19 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
         }
       }
 
+
+      if (sendViaSms && inviteePhone) {
+        const smsDelivery = await sendSmsRsvpInvite(inviteePhone, {
+          eventName: event.name,
+          inviteUrl,
+          token: invite.token,
+          inviteeName: inviteeName || undefined,
+        });
+        if (!smsDelivery.success) {
+          deliveryErrors.push(smsDelivery.error || 'SMS send failed');
+        }
+      }
+
       if (sendViaEmail && inviteeEmail) {
         const emailDelivery = await sendEmailRsvpInvite(inviteeEmail, {
           eventName: event.name,
@@ -1236,7 +1275,12 @@ router.post('/events/:eventId/rsvp-invites/batch', asyncHandler(async (req, res)
         }
       }
 
-      if (deliveryErrors.length && ((sendViaWhatsApp && sendViaEmail) ? deliveryErrors.length >= 2 : true)) {
+      // Only a total failure counts: one channel getting through is a success.
+      const attemptedChannels =
+        (sendViaWhatsApp && inviteePhone ? 1 : 0)
+        + (sendViaSms && inviteePhone ? 1 : 0)
+        + (sendViaEmail && inviteeEmail ? 1 : 0);
+      if (deliveryErrors.length > 0 && deliveryErrors.length >= attemptedChannels) {
         failed.push({
           index: row.index,
           phone: inviteePhone || inviteeEmail || '',
@@ -1300,11 +1344,11 @@ router.post('/events/:eventId/rsvp-invites/:inviteId/resend', asyncHandler(async
   if (!invite) throw new AppError('Invite not found', 404);
 
   const inviteUrl = getInvitePublicUrl(invite.token);
-  const inviteChannel = (invite as any).channel || 'whatsapp';
+  const resendChannels = parseInviteChannels((invite as any).channel);
   let delivered = false;
   let lastError = '';
 
-  if ((inviteChannel === 'whatsapp' || inviteChannel === 'both') && invite.inviteePhone) {
+  if (resendChannels.includes('whatsapp') && invite.inviteePhone) {
     const waDelivery = await sendWhatsAppRsvpInvite(invite.inviteePhone, {
       eventName: event.name,
       inviteUrl,
@@ -1315,7 +1359,19 @@ router.post('/events/:eventId/rsvp-invites/:inviteId/resend', asyncHandler(async
     else lastError = ('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed';
   }
 
-  if ((inviteChannel === 'email' || inviteChannel === 'both') && invite.inviteeEmail) {
+  if (resendChannels.includes('sms') && invite.inviteePhone) {
+    const smsDelivery = await sendSmsRsvpInvite(invite.inviteePhone, {
+      eventName: event.name,
+      inviteUrl,
+      token: invite.token,
+      reminder: true,
+      inviteeName: invite.inviteeName || undefined,
+    });
+    if (smsDelivery.success) delivered = true;
+    else lastError = smsDelivery.error || 'SMS send failed';
+  }
+
+  if (resendChannels.includes('email') && invite.inviteeEmail) {
     const emailDelivery = await sendEmailRsvpInvite(invite.inviteeEmail, {
       eventName: event.name,
       inviteUrl,

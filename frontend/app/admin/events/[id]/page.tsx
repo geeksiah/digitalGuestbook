@@ -2099,7 +2099,7 @@ export default function EventDetailPage() {
                 {mcControlUrl.replace(/^https?:\/\//, '')}
               </p>
 
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="actions-split mt-2">
                 <a
                   href={mcControlUrl}
                   target="_blank"
@@ -3845,35 +3845,55 @@ export default function EventDetailPage() {
                 <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200">
                   {domains.map((domain) => (
                     <div key={domain.id} className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[15px] font-semibold text-brand-900">{domain.host}</span>
-                        {domain.isPrimary ? <StatusBadge tone="brand">Primary</StatusBadge> : null}
-                        <StatusBadge
-                          tone={
-                            domain.status === 'ACTIVE'
-                              ? 'success'
-                              : domain.status === 'FAILED'
-                              ? 'danger'
-                              : 'warning'
-                          }
-                        >
-                          {humanizeEnum(domain.status)}
-                        </StatusBadge>
-                        <span className="flex-1" />
-                        <button type="button" className="btn-outline btn-sm" onClick={() => handleVerifyDomain(domain.id)}>
-                          Verify
-                        </button>
-                        <Menu label={`Actions for ${domain.host}`} sheetTitle={domain.host}>
-                          <MenuItem
-                            disabled={domain.isPrimary || domain.status !== 'ACTIVE'}
-                            onClick={() => handleSetPrimaryDomain(domain.id)}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="truncate text-[15px] font-semibold text-brand-900">{domain.host}</span>
+                          {domain.isPrimary ? <StatusBadge tone="brand">Primary</StatusBadge> : null}
+                          <StatusBadge
+                            tone={
+                              domain.status === 'ACTIVE'
+                                ? 'success'
+                                : domain.status === 'FAILED'
+                                ? 'danger'
+                                : 'warning'
+                            }
                           >
-                            Make primary
-                          </MenuItem>
-                          <MenuItem danger onClick={() => setRemovingDomain(domain)}>
-                            Remove domain
-                          </MenuItem>
-                        </Menu>
+                            {humanizeEnum(domain.status)}
+                          </StatusBadge>
+                        </div>
+                        <span className="hidden flex-1 sm:block" />
+                        <div className="flex items-center gap-2">
+                          {/* ACTIVE means DNS and HTTPS are both done, so there is nothing
+                              left to verify. VERIFIED still needs its HTTPS check to land. */}
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm flex-1 sm:flex-none"
+                            disabled={domain.status === 'ACTIVE'}
+                            title={
+                              domain.status === 'ACTIVE'
+                                ? 'This domain is live'
+                                : 'Check the DNS records for this domain'
+                            }
+                            onClick={() => handleVerifyDomain(domain.id)}
+                          >
+                            {domain.status === 'ACTIVE'
+                              ? 'Verified'
+                              : domain.status === 'VERIFIED'
+                              ? 'Recheck'
+                              : 'Verify'}
+                          </button>
+                          <Menu label={`Actions for ${domain.host}`} sheetTitle={domain.host}>
+                            <MenuItem
+                              disabled={domain.isPrimary || domain.status !== 'ACTIVE'}
+                              onClick={() => handleSetPrimaryDomain(domain.id)}
+                            >
+                              Make primary
+                            </MenuItem>
+                            <MenuItem danger onClick={() => setRemovingDomain(domain)}>
+                              Remove domain
+                            </MenuItem>
+                          </Menu>
+                        </div>
                       </div>
 
                       {domain.verificationNotes ? (

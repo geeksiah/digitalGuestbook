@@ -11,6 +11,7 @@ exports.sendEmail = sendEmail;
 exports.sendSMS = sendSMS;
 exports.sendWhatsApp = sendWhatsApp;
 exports.sendWhatsAppRsvpInvite = sendWhatsAppRsvpInvite;
+exports.sendSmsRsvpInvite = sendSmsRsvpInvite;
 exports.sendEmailRsvpInvite = sendEmailRsvpInvite;
 exports.sendBroadcast = sendBroadcast;
 exports.sendRsvpConfirmation = sendRsvpConfirmation;
@@ -576,6 +577,34 @@ async function sendWhatsAppRsvpInvite(to, input) {
         ...fallback,
         mode: 'text',
     };
+}
+/**
+ * RSVP invite over SMS.
+ *
+ * Uses the same Admin SMS configuration as every other text the platform
+ * sends: the global SMS switch plus the default SMS provider. Kept short
+ * because a long link pushes the message into extra segments.
+ */
+async function sendSmsRsvpInvite(to, input) {
+    console.log('[SMS RSVP Invite] Sending invite to:', to);
+    const opener = input.reminder
+        ? `Reminder: RSVP for ${input.eventName}.`
+        : `You're invited to ${input.eventName}.`;
+    const greeting = input.inviteeName ? `${input.inviteeName}, ` : '';
+    const message = `${greeting}${opener} RSVP: ${input.inviteUrl}`;
+    try {
+        // sendSMS already checks systemSettings.smsEnabled and resolves the
+        // default provider configured in Admin > Settings > SMS.
+        const result = await sendSMS(to, message);
+        return {
+            success: result.success !== false,
+            mode: 'sms',
+            error: result.success === false ? result.error : undefined,
+        };
+    }
+    catch (error) {
+        return { success: false, mode: 'sms', error: error.message };
+    }
 }
 async function sendEmailRsvpInvite(to, input) {
     console.log('[Email RSVP Invite] Sending invite to:', to);

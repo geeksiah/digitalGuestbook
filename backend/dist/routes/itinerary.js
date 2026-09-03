@@ -222,9 +222,10 @@ router.post('/events/:eventId/items/reorder', auth_js_1.authenticateAdminOrOwner
 router.post('/events/:eventId/mc-session', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
     await requireManagedEvent(req, eventId);
-    // 128 bits of entropy is ample for a session token and keeps the URL short
-    // enough to read out loud or paste into a chat.
-    const token = (0, crypto_1.randomBytes)(16).toString('hex');
+    // The MC opens this on a phone at the venue, often typed or read aloud, so
+    // the link is kept short: base64url instead of hex (22 chars rather than 32)
+    // still carries 128 bits of entropy.
+    const token = (0, crypto_1.randomBytes)(16).toString('base64url');
     const expiresAt = req.body?.expiresInHours
         ? new Date(Date.now() + Number(req.body.expiresInHours) * 60 * 60 * 1000)
         : null;
@@ -236,16 +237,9 @@ router.post('/events/:eventId/mc-session', auth_js_1.authenticateAdminOrOwnerAcc
             expiresAt,
         },
     });
-    const event = await prisma_js_1.default.event.findUnique({
-        where: { id: eventId },
-        select: {
-            slug: true,
-            domains: { select: { host: true, status: true, isPrimary: true } },
-        },
-    });
-    // Always absolute: the MC opens this on their own phone, so a bare path is
-    // useless. Uses the event's connected domain when it has one.
-    const mcUrl = (0, siteUrl_js_1.buildEventPublicUrl)(event?.slug || '', `/itinerary/mc/${token}`, event?.domains);
+    // /mc/<token> is a platform route: the token already identifies the event,
+    // so no slug is needed and the URL stays as short as it can be.
+    const mcUrl = (0, siteUrl_js_1.buildSiteUrl)(`/mc/${token}`);
     res.status(201).json({ session, mcUrl });
 }));
 // ============================================

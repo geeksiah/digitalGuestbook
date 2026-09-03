@@ -74,6 +74,15 @@ interface Event {
   }>;
 }
 
+/** Delivery channels an RSVP invite can go out on. Any combination is valid. */
+type InviteChannel = 'whatsapp' | 'sms' | 'email';
+
+const INVITE_CHANNEL_OPTIONS: Array<{ value: InviteChannel; label: string }> = [
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'email', label: 'Email' },
+];
+
 interface Domain {
   id: string;
   host: string;
@@ -244,7 +253,7 @@ export default function OwnerEventDetailPage() {
   const [sendingInvites, setSendingInvites] = useState(false);
   const [inviteLines, setInviteLines] = useState('');
   const [inviteExpiryHours, setInviteExpiryHours] = useState(240);
-  const [inviteChannel, setInviteChannel] = useState<'whatsapp' | 'email' | 'both'>('whatsapp');
+  const [inviteChannels, setInviteChannels] = useState<InviteChannel[]>(['whatsapp']);
   const [importingInvites, setImportingInvites] = useState(false);
   const inviteFileInputRef = useRef<HTMLInputElement | null>(null);
   const [itineraryItems, setItineraryItems] = useState<ItineraryItem[]>([]);
@@ -658,19 +667,23 @@ export default function OwnerEventDetailPage() {
     return cols;
   };
 
+  // Which contact details a recipient row must carry, given the chosen channels.
+  const inviteNeedsPhone = inviteChannels.includes('whatsapp') || inviteChannels.includes('sms');
+  const inviteNeedsEmail = inviteChannels.includes('email');
+
   const buildInviteLine = (name: string, phone: string, email: string) => {
-    if (inviteChannel === 'whatsapp') {
+    if (inviteNeedsPhone && inviteNeedsEmail) {
+      return name && phone && email ? `${name},${phone},${email}` : '';
+    }
+    if (inviteNeedsPhone) {
       if (name && phone && email) return `${name},${phone},${email}`;
       if (name && phone) return `${name},${phone}`;
-      if (phone) return phone;
-      return '';
+      return phone || '';
     }
-    if (inviteChannel === 'email') {
+    if (inviteNeedsEmail) {
       if (name && email) return `${name},${email}`;
-      if (email) return email;
-      return '';
+      return email || '';
     }
-    if (name && phone && email) return `${name},${phone},${email}`;
     return '';
   };
 
@@ -938,7 +951,7 @@ export default function OwnerEventDetailPage() {
       const r = await ownerDashboardApi.sendRsvpInvites(eventId, {
         invites: parsedInvites,
         expiresInHours: inviteExpiryHours,
-        channel: inviteChannel,
+        channel: inviteChannels.join(','),
       });
       toast.success(`Sent ${r.data.sentCount || 0} invite(s)`);
       setInviteLines('');
@@ -1713,7 +1726,7 @@ export default function OwnerEventDetailPage() {
                   {mcControlUrl.replace(/^https?:\/\//, '')}
                 </p>
 
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="actions-split mt-2">
                   <a
                     href={mcControlUrl}
                     target="_blank"
@@ -2079,19 +2092,39 @@ export default function OwnerEventDetailPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="label" id="invite-channel-label">
-                    Send via
-                  </label>
-                  <SegmentedControl
-                    label="Invite channel"
-                    value={inviteChannel}
-                    onChange={setInviteChannel}
-                    options={[
-                      { value: 'whatsapp' as const, label: 'WhatsApp' },
-                      { value: 'email' as const, label: 'Email' },
-                      { value: 'both' as const, label: 'Both' },
-                    ]}
-                  />
+                  <p className="label">Send via</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {INVITE_CHANNEL_OPTIONS.map((option) => {
+                      const checked = inviteChannels.includes(option.value);
+                      return (
+                        <label
+                          key={option.value}
+                          className={cn(
+                            'flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border px-3 transition-colors',
+                            checked ? 'border-brand-900 bg-brand-50' : 'border-surface-300 hover:bg-surface-50'
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            className="shrink-0"
+                            checked={checked}
+                            onChange={(event) => {
+                              // Keep at least one channel selected.
+                              setInviteChannels((current) => {
+                                if (event.target.checked) return [...current, option.value];
+                                const next = current.filter((entry) => entry !== option.value);
+                                return next.length ? next : current;
+                              });
+                            }}
+                          />
+                          <span className="text-sm font-medium text-brand-900">{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="field-hint">
+                    SMS and WhatsApp use the providers set up by your EventPeepo admin.
+                  </p>
                 </div>
 
                 <div>
@@ -2102,11 +2135,11 @@ export default function OwnerEventDetailPage() {
                     id="invite-lines"
                     className="input min-h-[140px] font-mono text-[13px]"
                     placeholder={
-                      inviteChannel === 'whatsapp'
+                      inviteNeedsPhone && inviteNeedsEmail
+                        ? 'Ama Serwaa,+233xxxxxxxxx,ama@email.com'
+                        : inviteNeedsPhone
                         ? '+233xxxxxxxxx\nAma Serwaa,+233xxxxxxxxx'
-                        : inviteChannel === 'email'
-                        ? 'ama@email.com\nAma Serwaa,ama@email.com'
-                        : 'Ama Serwaa,+233xxxxxxxxx,ama@email.com'
+                        : 'ama@email.com\nAma Serwaa,ama@email.com'
                     }
                     value={inviteLines}
                     onChange={(e) => setInviteLines(e.target.value)}
@@ -2114,16 +2147,16 @@ export default function OwnerEventDetailPage() {
                   />
                   <p id="invite-format" className="field-hint">
                     One per line:{' '}
-                    {inviteChannel === 'whatsapp'
+                    {inviteNeedsPhone && inviteNeedsEmail
+                      ? 'name,phone,email'
+                      : inviteNeedsPhone
                       ? 'phone, or name,phone'
-                      : inviteChannel === 'email'
-                      ? 'email, or name,email'
-                      : 'name,phone,email'}
+                      : 'email, or name,email'}
                     .
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="actions-row">
                   <button type="button" className="btn-outline btn-sm" onClick={syncContacts}>
                     Sync contacts
                   </button>
@@ -2288,31 +2321,51 @@ export default function OwnerEventDetailPage() {
               <div className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-white">
                 {domains.map((domain) => (
                   <div key={domain.id} className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-[15px] font-semibold text-brand-900">{domain.host}</span>
-                      {domain.isPrimary ? <StatusBadge tone="brand">Primary</StatusBadge> : null}
-                      <StatusBadge
-                        tone={
-                          domain.status === 'ACTIVE' ? 'success' : domain.status === 'FAILED' ? 'danger' : 'warning'
-                        }
-                      >
-                        {humanizeEnum(domain.status)}
-                      </StatusBadge>
-                      <span className="flex-1" />
-                      <button type="button" className="btn-outline btn-sm" onClick={() => handleVerifyDomain(domain.id)}>
-                        Verify
-                      </button>
-                      <Menu label={`Actions for ${domain.host}`} sheetTitle={domain.host}>
-                        <MenuItem
-                          disabled={domain.isPrimary || domain.status !== 'ACTIVE'}
-                          onClick={() => handleSetPrimaryDomain(domain.id)}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="truncate text-[15px] font-semibold text-brand-900">{domain.host}</span>
+                        {domain.isPrimary ? <StatusBadge tone="brand">Primary</StatusBadge> : null}
+                        <StatusBadge
+                          tone={
+                            domain.status === 'ACTIVE' ? 'success' : domain.status === 'FAILED' ? 'danger' : 'warning'
+                          }
                         >
-                          Make primary
-                        </MenuItem>
-                        <MenuItem danger onClick={() => setRemovingDomain(domain)}>
-                          Remove domain
-                        </MenuItem>
-                      </Menu>
+                          {humanizeEnum(domain.status)}
+                        </StatusBadge>
+                      </div>
+                      <span className="hidden flex-1 sm:block" />
+                      <div className="flex items-center gap-2">
+                        {/* ACTIVE means DNS and HTTPS are both done, so there is nothing
+                            left to verify. VERIFIED still needs its HTTPS check to land. */}
+                        <button
+                          type="button"
+                          className="btn-outline btn-sm flex-1 sm:flex-none"
+                          disabled={domain.status === 'ACTIVE'}
+                          title={
+                            domain.status === 'ACTIVE'
+                              ? 'This domain is live'
+                              : 'Check the DNS records for this domain'
+                          }
+                          onClick={() => handleVerifyDomain(domain.id)}
+                        >
+                          {domain.status === 'ACTIVE'
+                            ? 'Verified'
+                            : domain.status === 'VERIFIED'
+                            ? 'Recheck'
+                            : 'Verify'}
+                        </button>
+                        <Menu label={`Actions for ${domain.host}`} sheetTitle={domain.host}>
+                          <MenuItem
+                            disabled={domain.isPrimary || domain.status !== 'ACTIVE'}
+                            onClick={() => handleSetPrimaryDomain(domain.id)}
+                          >
+                            Make primary
+                          </MenuItem>
+                          <MenuItem danger onClick={() => setRemovingDomain(domain)}>
+                            Remove domain
+                          </MenuItem>
+                        </Menu>
+                      </div>
                     </div>
 
                     {domain.verificationNotes ? (

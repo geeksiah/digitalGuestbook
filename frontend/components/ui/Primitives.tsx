@@ -106,7 +106,11 @@ export function Toolbar({
   return (
     <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', className)}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
-      {end ? <div className="flex shrink-0 flex-wrap items-center gap-2">{end}</div> : null}
+      {end ? (
+        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:flex-wrap [&>*]:flex-1 sm:[&>*]:flex-none">
+          {end}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -210,7 +214,9 @@ export function Panel({
       {title || action ? (
         <div className="panel-header">
           {typeof title === 'string' ? <h2 className="panel-title">{title}</h2> : title}
-          {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+          {action ? (
+            <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">{action}</div>
+          ) : null}
         </div>
       ) : null}
       <div className={cn(flush ? undefined : 'panel-body', bodyClassName)}>{children}</div>
@@ -354,13 +360,22 @@ export function Tabs({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
+  // Few enough tabs to read at 320px? Spread them across the full width.
+  // A longer set keeps its natural width and scrolls, which stays legible.
+  const fitsOnOneRow = items.length <= 4;
+
   useEffect(() => {
     const node = ref.current?.querySelector<HTMLElement>('[data-active="true"]');
     node?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [active]);
 
   return (
-    <div ref={ref} className={cn('tabs-bar', className)} role="tablist" aria-label={label}>
+    <div
+      ref={ref}
+      className={cn('tabs-bar', fitsOnOneRow && 'w-full', className)}
+      role="tablist"
+      aria-label={label}
+    >
       {items.map((item) => {
         const isActive = item.id === active;
         return (
@@ -371,7 +386,11 @@ export function Tabs({
             aria-selected={isActive}
             data-active={isActive}
             onClick={() => onChange(item.id)}
-            className={cn('tab-item', isActive && 'tab-item-active')}
+            className={cn(
+              'tab-item justify-center',
+              fitsOnOneRow && 'flex-1 sm:flex-none',
+              isActive && 'tab-item-active'
+            )}
           >
             {item.label}
             {item.count !== undefined ? <span className="tab-count num">{item.count}</span> : null}
@@ -396,8 +415,20 @@ export function SegmentedControl<T extends string>({
   label: string;
   className?: string;
 }) {
+  // Up to four options share the full width evenly on phones. Beyond that the
+  // labels would be unreadable, so the track scrolls instead.
+  const fitsOnOneRow = options.length <= 4;
+
   return (
-    <div className={cn('segmented max-w-full overflow-x-auto scrollbar-hide', className)} role="radiogroup" aria-label={label}>
+    <div
+      className={cn(
+        'segmented max-w-full',
+        fitsOnOneRow ? 'flex w-full sm:w-auto' : 'overflow-x-auto scrollbar-hide',
+        className
+      )}
+      role="radiogroup"
+      aria-label={label}
+    >
       {options.map((option) => (
         <button
           key={option.value}
@@ -405,7 +436,11 @@ export function SegmentedControl<T extends string>({
           role="radio"
           aria-checked={value === option.value}
           onClick={() => onChange(option.value)}
-          className={cn('segmented-item', value === option.value && 'segmented-item-active')}
+          className={cn(
+            'segmented-item',
+            fitsOnOneRow && 'flex-1 sm:flex-none',
+            value === option.value && 'segmented-item-active'
+          )}
         >
           {option.label}
         </button>

@@ -73,6 +73,9 @@ interface OverallTotals {
 }
 
 
+/** Smallest amount worth requesting. Below this a transfer is not viable. */
+const MIN_PAYOUT_AMOUNT = 1;
+
 const statusLabels = {
   PENDING: 'Pending',
   PROCESSING: 'Processing',
@@ -90,6 +93,7 @@ export default function OwnerPayoutsPage() {
   const [filter, setFilter] = useState<'all' | 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'DELAYED' | 'REJECTED'>('all');
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null);
   const [formData, setFormData] = useState({
     eventId: '',
@@ -144,11 +148,25 @@ export default function OwnerPayoutsPage() {
 
   const handleRequestPayout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Guard here too: the field caps typed input, but a paste or an autofill
+    // can still land above the balance.
+    const amount = parseFloat(formData.requestedAmount);
+    if (!Number.isFinite(amount) || amount < MIN_PAYOUT_AMOUNT) {
+      setFormError(`Enter at least ${formatCurrencyAmount(MIN_PAYOUT_AMOUNT, selectedCurrency)}.`);
+      return;
+    }
+    if (amount > maxAmount) {
+      setFormError(`That is more than the ${formatCurrencyAmount(maxAmount, selectedCurrency)} available.`);
+      return;
+    }
+
     try {
       setRequesting(true);
+      setFormError(null);
       await ownerDashboardApi.requestPayout({
         eventId: formData.eventId,
-        requestedAmount: parseFloat(formData.requestedAmount),
+        requestedAmount: amount,
         notes: formData.notes || undefined,
       });
       toast.success('Payout requested');
@@ -172,6 +190,20 @@ export default function OwnerPayoutsPage() {
 
   const selectedEventTotal = eventTotals.find(e => e.eventId === formData.eventId);
   const maxAmount = selectedEventTotal?.availableBalance || 0;
+  const selectedCurrency = selectedEventTotal?.currency || walletSummary?.currency || 'USD';
+  // Nothing to request when the balance cannot cover the minimum.
+  const canRequestPayout = eventTotals.some((entry) => entry.availableBalance >= MIN_PAYOUT_AMOUNT);
+  const payableEvents = events.filter((event) =>
+    eventTotals.some((entry) => entry.eventId === event.id && entry.availableBalance >= MIN_PAYOUT_AMOUNT)
+  );
+
+  const requestedAmountValue = parseFloat(formData.requestedAmount);
+  const amountExceedsBalance = Number.isFinite(requestedAmountValue) && requestedAmountValue > maxAmount;
+  const amountIsValid =
+    Number.isFinite(requestedAmountValue)
+    && requestedAmountValue >= MIN_PAYOUT_AMOUNT
+    && requestedAmountValue <= maxAmount;
+
   const payoutCurrencies = useMemo(
     () =>
       Array.from(
@@ -193,12 +225,25 @@ export default function OwnerPayoutsPage() {
       <PageHeader
         title="Payouts"
         actions={
-          <button onClick={() => setShowRequestForm(true)} className="btn-primary">
+          <button
+            onClick={() => setShowRequestForm(true)}
+            className="btn-primary"
+            disabled={!canRequestPayout}
+            title={
+              canRequestPayout
+                ? undefined
+                : `No event has ${formatCurrencyAmount(MIN_PAYOUT_AMOUNT, selectedCurrency)} available yet`
+            }
+          >
             Request payout
           </button>
         }
         mobileActions={
-          <button onClick={() => setShowRequestForm(true)} className="btn-primary btn-sm">
+          <button
+            onClick={() => setShowRequestForm(true)}
+            className="btn-primary btn-sm"
+            disabled={!canRequestPayout}
+          >
             Request
           </button>
         }
@@ -217,6 +262,13 @@ export default function OwnerPayoutsPage() {
             { label: 'Requests', value: formatCount(overallTotals.totalPayoutCount) },
           ]}
         />
+      ) : null}
+
+      {!canRequestPayout && eventTotals.length > 0 ? (
+        <div className="banner-info" role="status">
+          No balance to pay out yet. An event needs at least{' '}
+          {formatCurrencyAmount(MIN_PAYOUT_AMOUNT, selectedCurrency)} available before you can request a payout.
+        </div>
       ) : null}
 
       {eventTotals.length > 0 ? (
@@ -395,7 +447,7 @@ export default function OwnerPayoutsPage() {
             </button>
             <SubmitButton
               loading={requesting}
-              disabled={!formData.eventId || !formData.requestedAmount}
+              disabled={!formData.eventId || !amountIsValid}
               onClick={() => handleRequestPayout({ preventDefault: () => {} } as React.FormEvent)}
             >
               Submit request
@@ -404,6 +456,12 @@ export default function OwnerPayoutsPage() {
         }
       >
         <div className="space-y-4">
+          {formError ? (
+            <div className="banner-error" role="alert">
+              {formError}
+            </div>
+          ) : null}
+
           <div>
             <label className="label" htmlFor="payout-event">
               Event
@@ -412,13 +470,25 @@ export default function OwnerPayoutsPage() {
               id="payout-event"
               data-autofocus
               value={formData.eventId}
-              onChange={(e) => setFormData({ ...formData, eventId: e.target.value })}
+              onChange={(e) => {
+                // Switching events changes the ceiling, so drop a now-invalid amount.
+                const nextId = e.target.value;
+                const nextMax = eventTotals.find((entry) => entry.eventId === nextId)?.availableBalance || 0;
+                const current = parseFloat(formData.requestedAmount);
+                setFormError(null);
+                setFormData({
+                  ...formData,
+                  eventId: nextId,
+                  requestedAmount:
+                    Number.isFinite(current) && current > nextMax ? '' : formData.requestedAmount,
+                });
+              }}
               className="input"
               required
             >
               <option value="">Select an event</option>
-              {events.map((event) => {
-                const eventTotal = eventTotals.find((e) => e.eventId === event.id);
+              {payableEvents.map((event) => {
+                const eventTotal = eventTotals.find((entry) => entry.eventId === event.id);
                 return (
                   <option key={event.id} value={event.id}>
                     {event.name}
@@ -429,29 +499,69 @@ export default function OwnerPayoutsPage() {
                 );
               })}
             </select>
+            <p className="field-hint">
+              Only events with at least {formatCurrencyAmount(MIN_PAYOUT_AMOUNT, selectedCurrency)} available are listed.
+            </p>
           </div>
 
           <div>
             <label className="label" htmlFor="payout-amount">
               Amount
             </label>
-            <input
-              id="payout-amount"
-              type="number"
-              step="0.01"
-              min="0"
-              max={maxAmount}
-              value={formData.requestedAmount}
-              onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
-              className="input"
-              placeholder="0.00"
-              required
-            />
-            {selectedEventTotal ? (
-              <p className="field-hint num">
-                Up to {formatCurrencyAmount(maxAmount, selectedEventTotal.currency || walletSummary?.currency || 'USD')}
-              </p>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <input
+                id="payout-amount"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={MIN_PAYOUT_AMOUNT}
+                max={maxAmount}
+                value={formData.requestedAmount}
+                onChange={(e) => {
+                  // Cap at the available balance as the value is typed.
+                  const raw = e.target.value;
+                  setFormError(null);
+                  if (raw === '') {
+                    setFormData({ ...formData, requestedAmount: '' });
+                    return;
+                  }
+                  const parsed = parseFloat(raw);
+                  if (!Number.isFinite(parsed)) return;
+                  const capped = Math.min(parsed, maxAmount);
+                  setFormData({
+                    ...formData,
+                    requestedAmount: capped === parsed ? raw : String(capped),
+                  });
+                }}
+                className={amountExceedsBalance ? 'input input-error' : 'input'}
+                placeholder="0.00"
+                disabled={!formData.eventId}
+                aria-describedby="payout-amount-hint"
+                required
+              />
+              <button
+                type="button"
+                className="btn-outline btn-sm shrink-0"
+                disabled={!formData.eventId || maxAmount < MIN_PAYOUT_AMOUNT}
+                onClick={() => {
+                  setFormError(null);
+                  setFormData({ ...formData, requestedAmount: String(maxAmount) });
+                }}
+              >
+                Max
+              </button>
+            </div>
+            <p
+              id="payout-amount-hint"
+              className={amountExceedsBalance ? 'field-error' : 'field-hint num'}
+              role={amountExceedsBalance ? 'alert' : undefined}
+            >
+              {!formData.eventId
+                ? 'Choose an event first.'
+                : amountExceedsBalance
+                ? `Only ${formatCurrencyAmount(maxAmount, selectedCurrency)} is available.`
+                : `Up to ${formatCurrencyAmount(maxAmount, selectedCurrency)} available.`}
+            </p>
           </div>
 
           <div>

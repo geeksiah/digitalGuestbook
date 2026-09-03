@@ -80,13 +80,30 @@ const rsvpStatusSchema = zod_1.z.object({
     status: zod_1.z.enum(['PENDING', 'APPROVED', 'REJECTED']),
     reason: zod_1.z.string().max(400).optional(),
 });
+const INVITE_CHANNELS = ['whatsapp', 'sms', 'email'];
+/**
+ * Invite channels are stored in one string column so any combination works
+ * without a migration: "whatsapp", "sms,email", and so on. "both" is the
+ * legacy value for WhatsApp + email and is still accepted.
+ */
+const parseInviteChannels = (value) => {
+    const raw = String(value || 'whatsapp').toLowerCase();
+    if (raw === 'both')
+        return ['whatsapp', 'email'];
+    const parsed = raw
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => INVITE_CHANNELS.includes(part));
+    return parsed.length ? Array.from(new Set(parsed)) : ['whatsapp'];
+};
 const inviteValidateSchema = zod_1.z.object({
     invites: zod_1.z.array(zod_1.z.object({
         name: zod_1.z.string().trim().optional(),
         phone: zod_1.z.string().trim().optional(),
         email: zod_1.z.string().trim().optional(),
     })),
-    channel: zod_1.z.enum(['whatsapp', 'email', 'both']).optional().default('whatsapp'),
+    // Accepts one channel, a comma-separated set, or the legacy "both".
+    channel: zod_1.z.string().optional().default('whatsapp'),
 });
 const normalizePhone = (value) => String(value || '').replace(/[^\d+]/g, '');
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -899,8 +916,9 @@ router.get('/events/:eventId/rsvp-invites', (0, errorHandler_js_1.asyncHandler)(
 const buildInviteValidation = (invitesInput, channel = 'whatsapp') => {
     const rows = [];
     const seen = new Set();
-    const needsPhone = channel === 'whatsapp' || channel === 'both';
-    const needsEmail = channel === 'email' || channel === 'both';
+    const channels = parseInviteChannels(channel);
+    const needsPhone = channels.includes('whatsapp') || channels.includes('sms');
+    const needsEmail = channels.includes('email');
     invitesInput.forEach((invite, index) => {
         const normalizedPhone = normalizePhone(invite.phone);
         const normalizedEmail = invite.email ? normalizeEmail(invite.email) : null;
@@ -983,8 +1001,11 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
     });
     if (!event)
         throw new errorHandler_js_1.AppError('Event not found', 404);
-    const sendViaWhatsApp = channel === 'whatsapp' || channel === 'both';
-    const sendViaEmail = channel === 'email' || channel === 'both';
+    const channels = parseInviteChannels(channel);
+    const sendViaWhatsApp = channels.includes('whatsapp');
+    const sendViaSms = channels.includes('sms');
+    const sendViaEmail = channels.includes('email');
+    const storedChannel = channels.join(',');
     const created = [];
     const failed = [];
     const skipped = [];
@@ -1030,7 +1051,7 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
                 inviteeName,
                 inviteePhone,
                 inviteeEmail,
-                channel,
+                channel: storedChannel,
                 expiresAt,
                 status: 'SENT',
                 sentByOwnerId: ownerId,
@@ -1049,6 +1070,17 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
                     deliveryErrors.push(('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed');
                 }
             }
+            if (sendViaSms && inviteePhone) {
+                const smsDelivery = await (0, notifications_js_1.sendSmsRsvpInvite)(inviteePhone, {
+                    eventName: event.name,
+                    inviteUrl,
+                    token: invite.token,
+                    inviteeName: inviteeName || undefined,
+                });
+                if (!smsDelivery.success) {
+                    deliveryErrors.push(smsDelivery.error || 'SMS send failed');
+                }
+            }
             if (sendViaEmail && inviteeEmail) {
                 const emailDelivery = await (0, notifications_js_1.sendEmailRsvpInvite)(inviteeEmail, {
                     eventName: event.name,
@@ -1060,7 +1092,11 @@ router.post('/events/:eventId/rsvp-invites/batch', (0, errorHandler_js_1.asyncHa
                     deliveryErrors.push(emailDelivery.error || 'Email send failed');
                 }
             }
-            if (deliveryErrors.length && ((sendViaWhatsApp && sendViaEmail) ? deliveryErrors.length >= 2 : true)) {
+            // Only a total failure counts: one channel getting through is a success.
+            const attemptedChannels = (sendViaWhatsApp && inviteePhone ? 1 : 0)
+                + (sendViaSms && inviteePhone ? 1 : 0)
+                + (sendViaEmail && inviteeEmail ? 1 : 0);
+            if (deliveryErrors.length > 0 && deliveryErrors.length >= attemptedChannels) {
                 failed.push({
                     index: row.index,
                     phone: inviteePhone || inviteeEmail || '',
@@ -1121,10 +1157,10 @@ router.post('/events/:eventId/rsvp-invites/:inviteId/resend', (0, errorHandler_j
     if (!invite)
         throw new errorHandler_js_1.AppError('Invite not found', 404);
     const inviteUrl = getInvitePublicUrl(invite.token);
-    const inviteChannel = invite.channel || 'whatsapp';
+    const resendChannels = parseInviteChannels(invite.channel);
     let delivered = false;
     let lastError = '';
-    if ((inviteChannel === 'whatsapp' || inviteChannel === 'both') && invite.inviteePhone) {
+    if (resendChannels.includes('whatsapp') && invite.inviteePhone) {
         const waDelivery = await (0, notifications_js_1.sendWhatsAppRsvpInvite)(invite.inviteePhone, {
             eventName: event.name,
             inviteUrl,
@@ -1136,7 +1172,20 @@ router.post('/events/:eventId/rsvp-invites/:inviteId/resend', (0, errorHandler_j
         else
             lastError = ('error' in waDelivery && waDelivery.error) ? waDelivery.error : 'WhatsApp send failed';
     }
-    if ((inviteChannel === 'email' || inviteChannel === 'both') && invite.inviteeEmail) {
+    if (resendChannels.includes('sms') && invite.inviteePhone) {
+        const smsDelivery = await (0, notifications_js_1.sendSmsRsvpInvite)(invite.inviteePhone, {
+            eventName: event.name,
+            inviteUrl,
+            token: invite.token,
+            reminder: true,
+            inviteeName: invite.inviteeName || undefined,
+        });
+        if (smsDelivery.success)
+            delivered = true;
+        else
+            lastError = smsDelivery.error || 'SMS send failed';
+    }
+    if (resendChannels.includes('email') && invite.inviteeEmail) {
         const emailDelivery = await (0, notifications_js_1.sendEmailRsvpInvite)(invite.inviteeEmail, {
             eventName: event.name,
             inviteUrl,

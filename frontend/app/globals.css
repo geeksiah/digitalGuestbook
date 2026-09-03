@@ -111,7 +111,7 @@
 @layer components {
   /* ---------------------------------------------------------------- buttons */
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-sm font-semibold leading-none tracking-tight transition-colors duration-150;
+    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-semibold leading-none tracking-tight transition-colors duration-150;
     @apply min-h-[44px] sm:min-h-[40px];
     @apply disabled:pointer-events-none disabled:opacity-45;
   }
@@ -462,6 +462,10 @@
     padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   }
 
+  .modal-footer > * {
+    @apply w-full sm:w-auto;
+  }
+
   .sheet-handle {
     @apply mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-surface-300 sm:hidden;
   }
@@ -529,7 +533,39 @@
   /* Sticky action row for long forms. Clears the mobile tab bar. */
   .form-actions-sticky {
     @apply sticky z-20 flex items-center justify-end gap-2 border-t border-surface-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-5;
+    /* children share the row evenly on phones, size to content from sm up */
     bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
+  }
+
+  .form-actions-sticky > * {
+    @apply flex-1 sm:flex-none;
+  }
+
+  /* A row of actions. One per line on phones; content-sized from sm up. */
+  .actions-row {
+    @apply flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center;
+  }
+
+  .actions-row > * {
+    @apply w-full sm:w-auto;
+  }
+
+  /* Two actions sharing one row, always equal width. */
+  .actions-split {
+    @apply flex w-full items-center gap-2 sm:w-auto;
+  }
+
+  .actions-split > * {
+    @apply flex-1 sm:flex-none;
+  }
+
+  /* Segmented control that fills the width with equal-width options. */
+  .segmented-block {
+    @apply flex w-full sm:w-auto;
+  }
+
+  .segmented-block > * {
+    @apply flex-1 sm:flex-none;
   }
 
   /* ------------------------------------------------------------- feedback */

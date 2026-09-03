@@ -116,6 +116,20 @@ export declare function sendWhatsAppRsvpInvite(to: string, input: WhatsAppRsvpIn
     sid?: undefined;
     messageId?: undefined;
 }>;
+/**
+ * RSVP invite over SMS.
+ *
+ * Uses the same Admin SMS configuration as every other text the platform
+ * sends: the global SMS switch plus the default SMS provider. Kept short
+ * because a long link pushes the message into extra segments.
+ */
+export declare function sendSmsRsvpInvite(to: string, input: WhatsAppRsvpInviteInput & {
+    inviteeName?: string;
+}): Promise<{
+    success: boolean;
+    mode: "sms";
+    error: any;
+}>;
 export declare function sendEmailRsvpInvite(to: string, input: WhatsAppRsvpInviteInput & {
     inviteeName?: string;
 }): Promise<{
