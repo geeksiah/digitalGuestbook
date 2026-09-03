@@ -454,8 +454,11 @@ export default function GiftPage() {
   const [note, setNote] = useState('');
 
   const [giftKind, setGiftKind] = useState<GiftKind>('items');
-  const [cartOpen, setCartOpen] = useState(false);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  // The flow has one position, shared by both breakpoints: browsing the
+  // gift, or filling in checkout. Desktop renders it in the page, mobile
+  // renders it in the one sheet.
+  const [step, setStep] = useState<'choose' | 'checkout'>('choose');
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const itemsEnabled = event?.giftItemsEnabled !== false;
   const cashEnabled = event?.cashGiftsEnabled !== false;
@@ -500,6 +503,18 @@ export default function GiftPage() {
   useEffect(() => {
     loadOptions();
   }, [loadOptions]);
+
+  // Desktop runs the flow inline, so a sheet opened on a phone must not
+  // survive a resize and leave a backdrop sitting over the page.
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1024px)');
+    const sync = () => {
+      if (query.matches) setSheetOpen(false);
+    };
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
 
   const selectedPackageItems = useMemo(
     () =>
@@ -868,7 +883,10 @@ export default function GiftPage() {
           <button
             type="button"
             className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-surface-200 bg-white"
-            onClick={() => setCartOpen(true)}
+            onClick={() => {
+              setStep('choose');
+              setSheetOpen(true);
+            }}
             aria-label={`Open gift summary, ${cartCount} item(s)`}
           >
             <CartIcon />
@@ -901,19 +919,52 @@ export default function GiftPage() {
                     : 'Send a cash gift to the host.'}
                 </p>
               </div>
-              <ProgressSteps current={checkoutOpen ? 2 : 1} />
+              <ProgressSteps current={step === 'checkout' ? 2 : 1} />
             </div>
           </div>
         </div>
 
         <div className="lg:grid lg:grid-cols-12 lg:gap-6">
           <div className="lg:col-span-7 xl:col-span-8">
-            {bothKinds ? <div className="mb-4 hidden lg:block">{kindTabs}</div> : null}
-
-            {showItems ? catalogue : null}
-            {showCash ? (
-              <CashGiftField value={cashGiftAmount} onChange={setCashGiftAmount} currency={displayCurrency} />
+            {/* Desktop puts checkout in place of the browse column, so the
+                flow moves forward on one surface instead of stacking a
+                dialog over the page. */}
+            {step === 'checkout' ? (
+              <section className="hidden rounded-2xl border border-surface-200 bg-white p-5 lg:block">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-brand-900">Checkout</h2>
+                    <p className="mt-0.5 text-sm text-surface-600">
+                      Sending {formatCurrencyAmount(totalAmount, displayCurrency)} to{' '}
+                      {event?.name || 'the host'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-ghost btn-sm shrink-0"
+                    disabled={submitting}
+                    onClick={() => setStep('choose')}
+                  >
+                    &larr; Back to gifts
+                  </button>
+                </div>
+                <div className="mt-5">{checkoutFields}</div>
+              </section>
             ) : null}
+
+            {/* Browsing stays mounted on mobile, where the sheet covers it,
+                and hides on desktop once checkout takes the column. */}
+            <div className={cn(step === 'checkout' && 'lg:hidden')}>
+              {bothKinds ? <div className="mb-4 hidden lg:block">{kindTabs}</div> : null}
+              {showItems ? catalogue : null}
+              {showCash ? (
+                <CashGiftField
+                  value={cashGiftAmount}
+                  onChange={setCashGiftAmount}
+                  currency={displayCurrency}
+                />
+              ) : null}
+            </div>
           </div>
 
           {/* Desktop rail: the gift, with checkout one click away. */}
@@ -939,14 +990,25 @@ export default function GiftPage() {
                   />
                 </div>
               ) : null}
-              <button
-                type="button"
-                className="btn-primary mt-4 w-full justify-center"
-                disabled={totalAmount <= 0}
-                onClick={() => setCheckoutOpen(true)}
-              >
-                Continue to checkout
-              </button>
+              {step === 'checkout' ? (
+                <button
+                  type="button"
+                  className="btn-primary mt-4 w-full justify-center"
+                  disabled={submitting || !canSubmitGift}
+                  onClick={submitCheckout}
+                >
+                  {submitting ? 'Starting...' : `Pay ${formatCurrencyAmount(totalAmount, displayCurrency)}`}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary mt-4 w-full justify-center"
+                  disabled={totalAmount <= 0}
+                  onClick={() => setStep('checkout')}
+                >
+                  Continue to checkout
+                </button>
+              )}
             </div>
           </aside>
         </div>
@@ -968,88 +1030,91 @@ export default function GiftPage() {
             type="button"
             className="btn-primary min-w-[9.5rem] justify-center"
             disabled={totalAmount <= 0}
-            onClick={() => setCartOpen(true)}
+            onClick={() => {
+              setStep('choose');
+              setSheetOpen(true);
+            }}
           >
             Review gift
           </button>
         </div>
       </div>
 
-      {/* Cart review (mobile sheet, desktop dialog) */}
+      {/*
+        One sheet, two steps. Checkout swaps this body rather than opening a
+        second overlay on top of the first.
+      */}
       <Modal
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        title="Your gift"
-        size="md"
-        footer={
-          <button
-            type="button"
-            className="btn-primary justify-center"
-            disabled={totalAmount <= 0}
-            onClick={() => {
-              setCartOpen(false);
-              setCheckoutOpen(true);
-            }}
-          >
-            Continue
-          </button>
+        open={sheetOpen}
+        onClose={() => (submitting ? undefined : setSheetOpen(false))}
+        title={step === 'checkout' ? 'Checkout' : 'Your gift'}
+        description={
+          step === 'checkout'
+            ? `Sending ${formatCurrencyAmount(totalAmount, displayCurrency)} to ${
+                event?.name || 'the host'
+              }`
+            : undefined
         }
-      >
-        <div className="space-y-4">
-          <CartLines
-            lines={cartLines}
-            cashGiftAmount={cashGiftAmount}
-            currency={displayCurrency}
-            onAdjust={adjustQuantity}
-            onClearCash={() => setCashGiftAmount(0)}
-          />
-          {totalAmount > 0 ? (
-            <div className="border-t border-surface-200 pt-3">
-              <Totals
-                packageTotal={packageTotal}
-                cashGiftAmount={cashGiftAmount}
-                totalAmount={totalAmount}
-                currency={displayCurrency}
-              />
-            </div>
-          ) : null}
-        </div>
-      </Modal>
-
-      {/* Checkout */}
-      <Modal
-        open={checkoutOpen}
-        onClose={() => (submitting ? undefined : setCheckoutOpen(false))}
-        title="Checkout"
-        description={`Sending ${formatCurrencyAmount(totalAmount, displayCurrency)} to ${
-          event?.name || 'the host'
-        }`}
         size="md"
         footer={
-          <>
-            <button
-              type="button"
-              className="btn-outline justify-center"
-              disabled={submitting}
-              onClick={() => setCheckoutOpen(false)}
-            >
-              Back
-            </button>
+          step === 'checkout' ? (
+            <>
+              <button
+                type="button"
+                className="btn-outline justify-center"
+                disabled={submitting}
+                onClick={() => setStep('choose')}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="btn-primary justify-center"
+                disabled={submitting || !canSubmitGift}
+                onClick={submitCheckout}
+              >
+                {submitting ? 'Starting...' : 'Pay now'}
+              </button>
+            </>
+          ) : (
             <button
               type="button"
               className="btn-primary justify-center"
-              disabled={submitting || !canSubmitGift}
-              onClick={submitCheckout}
+              disabled={totalAmount <= 0}
+              onClick={() => setStep('checkout')}
             >
-              {submitting ? 'Starting...' : 'Pay now'}
+              Continue
             </button>
-          </>
+          )
         }
       >
-        <div className="mb-4 lg:hidden">
-          <ProgressSteps current={2} />
+        <div className="mb-4">
+          <ProgressSteps current={step === 'checkout' ? 2 : 1} />
         </div>
-        {checkoutFields}
+
+        {step === 'checkout' ? (
+          checkoutFields
+        ) : (
+          <div className="space-y-4">
+            <CartLines
+              lines={cartLines}
+              cashGiftAmount={cashGiftAmount}
+              currency={displayCurrency}
+              onAdjust={adjustQuantity}
+              onClearCash={() => setCashGiftAmount(0)}
+            />
+            {totalAmount > 0 ? (
+              <div className="border-t border-surface-200 pt-3">
+                <Totals
+                  packageTotal={packageTotal}
+                  cashGiftAmount={cashGiftAmount}
+                  totalAmount={totalAmount}
+                  currency={displayCurrency}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -186,6 +186,15 @@ interface GiftPackage {
   assigned?: boolean;
 }
 
+interface GiftOrderItem {
+  id: string;
+  type: 'CASH' | 'PACKAGE' | string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  giftPackage?: { id: string; name: string } | null;
+}
+
 interface GiftOrder {
   id: string;
   guestName: string;
@@ -199,6 +208,15 @@ interface GiftOrder {
   adminRetainedAmount: number;
   status: string;
   createdAt: string;
+  // Returned by the API all along; the list simply never showed them.
+  items?: GiftOrderItem[];
+  note?: string | null;
+  deliveryDate?: string | null;
+  paymentMethod?: string | null;
+  paymentReference?: string | null;
+  payoutRouting?: string | null;
+  platformFeeAmount?: number;
+  processingFeeAmount?: number;
 }
 
 type Tab = 'overview' | 'rsvps' | 'checkin' | 'media' | 'templates' | 'tickets' | 'itinerary' | 'formFields' | 'sales' | 'gifts' | 'voting' | 'settings';
@@ -370,6 +388,7 @@ export default function EventDetailPage() {
     // Blank means unlimited.
     stockQuantity: '',
   });
+  const [detailOrder, setDetailOrder] = useState<GiftOrder | null>(null);
   const [stockEditPackage, setStockEditPackage] = useState<GiftPackage | null>(null);
   const [stockEditValue, setStockEditValue] = useState('');
   const [eventGatewayCurrencies, setEventGatewayCurrencies] = useState<string[]>([]);
@@ -2994,7 +3013,13 @@ export default function EventDetailPage() {
                   <>
                     <div className="divide-y divide-surface-200 lg:hidden">
                       {giftOrders.map((order) => (
-                        <div key={order.id} className="px-4 py-3">
+                        <button
+                          key={order.id}
+                          type="button"
+                          className="w-full px-4 py-3 text-left transition-colors hover:bg-surface-50"
+                          onClick={() => setDetailOrder(order)}
+                          aria-label={`View gift from ${order.guestName}`}
+                        >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-[15px] font-semibold text-brand-900">{order.guestName}</p>
@@ -3026,7 +3051,7 @@ export default function EventDetailPage() {
                               {formatCurrency(Number(order.adminRetainedAmount || 0), order.currency)}
                             </DetailRow>
                           </dl>
-                        </div>
+                        </button>
                       ))}
                     </div>
 
@@ -3046,7 +3071,20 @@ export default function EventDetailPage() {
                         </thead>
                         <tbody>
                           {giftOrders.map((order) => (
-                            <tr key={order.id} className="table-row">
+                            <tr
+                              key={order.id}
+                              className="table-row cursor-pointer focus:outline-none focus-visible:bg-surface-100"
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`View gift from ${order.guestName}`}
+                              onClick={() => setDetailOrder(order)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setDetailOrder(order);
+                                }
+                              }}
+                            >
                               <Td>
                                 <p className="font-medium text-brand-900">{order.guestName}</p>
                                 <p className="meta truncate">{order.guestEmail || order.guestPhone || 'No contact'}</p>
@@ -3078,6 +3116,116 @@ export default function EventDetailPage() {
                   </>
                 )}
               </Panel>
+
+              <Modal
+                open={Boolean(detailOrder)}
+                onClose={() => setDetailOrder(null)}
+                title={detailOrder ? `Gift from ${detailOrder.guestName}` : 'Gift'}
+                description={
+                  detailOrder
+                    ? `${formatDate(detailOrder.createdAt, 'PPp')} · ${humanizeEnum(detailOrder.status)}`
+                    : undefined
+                }
+                size="lg"
+              >
+                {detailOrder ? (
+                  <div className="space-y-5">
+                    <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                      <DetailRow label="Contact">
+                        {detailOrder.guestEmail || detailOrder.guestPhone || 'Not provided'}
+                      </DetailRow>
+                      <DetailRow label="Paid with">
+                        {detailOrder.paymentMethod ? humanizeEnum(detailOrder.paymentMethod) : 'Unknown'}
+                      </DetailRow>
+                      {detailOrder.deliveryDate ? (
+                        <DetailRow label="Deliver on">
+                          {formatDate(detailOrder.deliveryDate, 'PPP')}
+                        </DetailRow>
+                      ) : null}
+                      {detailOrder.paymentReference ? (
+                        <DetailRow label="Reference">
+                          <span className="font-mono text-[12px] break-all">
+                            {detailOrder.paymentReference}
+                          </span>
+                        </DetailRow>
+                      ) : null}
+                    </dl>
+
+                    <div>
+                      <h3 className="text-[13px] font-semibold text-brand-900">What was sent</h3>
+                      {detailOrder.items && detailOrder.items.length ? (
+                        <ul className="mt-2 divide-y divide-surface-200 rounded-xl border border-surface-200">
+                          {detailOrder.items.map((item) => (
+                            <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-brand-900">
+                                  {item.type === 'CASH' ? 'Cash gift' : item.giftPackage?.name || 'Gift item'}
+                                </p>
+                                {item.type === 'PACKAGE' ? (
+                                  <p className="meta mt-0.5">
+                                    {item.quantity} x{' '}
+                                    {formatCurrency(Number(item.unitPrice || 0), detailOrder.currency)}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <p className="num shrink-0 text-sm font-semibold text-brand-900">
+                                {formatCurrency(Number(item.lineTotal || 0), detailOrder.currency)}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 rounded-xl border border-dashed border-surface-300 bg-surface-50 px-3 py-4 text-center text-[13px] text-surface-600">
+                          No itemised breakdown was recorded for this order.
+                        </p>
+                      )}
+                    </div>
+
+                    {detailOrder.note ? (
+                      <div>
+                        <h3 className="text-[13px] font-semibold text-brand-900">Message from the guest</h3>
+                        <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-50 px-3 py-3 text-sm leading-6 text-surface-800">
+                          {detailOrder.note}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    <div>
+                      <h3 className="text-[13px] font-semibold text-brand-900">Settlement</h3>
+                      <dl className="mt-2 space-y-1.5 rounded-xl border border-surface-200 px-3 py-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-surface-600">Guest paid</dt>
+                          <dd className="num font-medium text-brand-900">
+                            {formatCurrency(Number(detailOrder.totalAmount || 0), detailOrder.currency)}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-surface-600">Owner receives</dt>
+                          <dd className="num font-medium text-emerald-700">
+                            {formatCurrency(Number(detailOrder.ownerNetAmount || 0), detailOrder.currency)}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-surface-600">Platform keeps</dt>
+                          <dd className="num font-medium text-brand-900">
+                            {formatCurrency(Number(detailOrder.adminRetainedAmount || 0), detailOrder.currency)}
+                          </dd>
+                        </div>
+                        {detailOrder.payoutRouting ? (
+                          <div className="flex items-center justify-between gap-3 border-t border-surface-200 pt-2">
+                            <dt className="text-surface-600">Routing</dt>
+                            <dd className="text-[13px] font-medium text-surface-700">
+                              {detailOrder.payoutRouting === 'OWNER_AUTOMATED'
+                                ? 'Split to owner at the gateway'
+                                : 'Settled to platform, paid out on request'}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </div>
+                  </div>
+                ) : null}
+              </Modal>
 
               <Modal
                 open={Boolean(stockEditPackage)}
