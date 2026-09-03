@@ -311,3 +311,85 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
 
   return fallback;
 }
+
+/* ==========================================================================
+   Public event URLs.
+   A connected custom domain already identifies the event, so its guest pages
+   drop the /e/<slug> prefix. These rules mirror `frontend/middleware.ts`, so
+   what the dashboard shows is exactly what a guest lands on.
+   ========================================================================== */
+
+export type EventDomainLike = {
+  host: string;
+  status: string;
+  isPrimary?: boolean;
+};
+
+/**
+ * The domain a guest actually reaches, or null when the event has none.
+ * ACTIVE and VERIFIED both route traffic; ACTIVE additionally has HTTPS ready.
+ */
+export function pickLiveEventDomain<T extends EventDomainLike>(
+  domains: T[] | null | undefined
+): T | null {
+  const live = (domains || []).filter(
+    (domain) => domain?.host && (domain.status === 'ACTIVE' || domain.status === 'VERIFIED')
+  );
+  if (live.length === 0) return null;
+
+  const rank = (domain: T) => (domain.isPrimary ? 0 : 1) + (domain.status === 'ACTIVE' ? 0 : 2);
+  return [...live].sort((a, b) => rank(a) - rank(b))[0];
+}
+
+/** Origin guests see for this event: its own domain, else the app host. */
+export function getEventPublicOrigin(domains: EventDomainLike[] | null | undefined): string {
+  const domain = pickLiveEventDomain(domains);
+  if (domain) return `https://${domain.host.replace(/^www\./, '')}`;
+  return typeof window === 'undefined' ? '' : window.location.origin;
+}
+
+/**
+ * Path a guest sees for one of this event's pages.
+ *
+ * `path` is the page relative to the event, e.g. '/rsvp' or '/'. On a custom
+ * domain that is the whole path; otherwise it is prefixed with /e/<slug>,
+ * except gifting, which lives at /gift/<slug> on the shared host.
+ */
+export function getEventPublicPath(
+  slug: string,
+  path: string,
+  domains?: EventDomainLike[] | null
+): string {
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+
+  if (pickLiveEventDomain(domains)) {
+    return suffix === '/' ? '/' : suffix;
+  }
+
+  if (suffix === '/gift' || suffix.startsWith('/gift/')) {
+    return `/gift/${slug}${suffix.slice('/gift'.length)}`;
+  }
+
+  return suffix === '/' ? `/e/${slug}` : `/e/${slug}${suffix}`;
+}
+
+/** Absolute URL for one of this event's guest pages. */
+export function getEventPublicUrl(
+  slug: string,
+  path: string,
+  domains?: EventDomainLike[] | null
+): string {
+  return `${getEventPublicOrigin(domains)}${getEventPublicPath(slug, path, domains)}`;
+}
+
+/**
+ * Make a URL returned by the API safe to show and open.
+ * Older records and misconfigured deployments can yield a bare path.
+ */
+export function toAbsoluteAppUrl(value: string | null | undefined): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (typeof window === 'undefined') return raw;
+  return `${window.location.origin}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}

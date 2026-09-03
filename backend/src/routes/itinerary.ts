@@ -5,6 +5,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateAdminOrOwnerAccount } from '../middleware/auth.js';
 import { publishItineraryUpdate } from '../services/itineraryRealtime.js';
+import { buildEventPublicUrl } from '../utils/siteUrl.js';
 
 const router = Router();
 
@@ -261,7 +262,9 @@ router.post('/events/:eventId/mc-session', authenticateAdminOrOwnerAccount, asyn
   const { eventId } = req.params;
   await requireManagedEvent(req as any, eventId);
 
-  const token = randomBytes(24).toString('hex');
+  // 128 bits of entropy is ample for a session token and keeps the URL short
+  // enough to read out loud or paste into a chat.
+  const token = randomBytes(16).toString('hex');
   const expiresAt = req.body?.expiresInHours
     ? new Date(Date.now() + Number(req.body.expiresInHours) * 60 * 60 * 1000)
     : null;
@@ -275,11 +278,17 @@ router.post('/events/:eventId/mc-session', authenticateAdminOrOwnerAccount, asyn
     },
   });
 
-  const frontend = (process.env.FRONTEND_URL || process.env.SITE_URL || '').replace(/\/+$/, '');
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { slug: true } });
-  const mcUrl = frontend
-    ? `${frontend}/e/${event?.slug}/itinerary/mc/${token}`
-    : `/e/${event?.slug}/itinerary/mc/${token}`;
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      slug: true,
+      domains: { select: { host: true, status: true, isPrimary: true } },
+    },
+  });
+
+  // Always absolute: the MC opens this on their own phone, so a bare path is
+  // useless. Uses the event's connected domain when it has one.
+  const mcUrl = buildEventPublicUrl(event?.slug || '', `/itinerary/mc/${token}`, event?.domains);
 
   res.status(201).json({ session, mcUrl });
 }));

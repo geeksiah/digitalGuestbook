@@ -12,6 +12,7 @@ const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const phase_js_1 = require("../utils/phase.js");
 const featureFlags_js_1 = require("../utils/featureFlags.js");
+const siteUrl_js_1 = require("../utils/siteUrl.js");
 const zod_1 = require("zod");
 const notifications_js_1 = require("../services/notifications.js");
 const invitation_js_1 = require("../services/invitation.js");
@@ -31,12 +32,10 @@ const normalizeDomainHost = (rawHost) => rawHost
     .replace(/^www\./, '')
     .replace(/\.$/, '');
 const isValidDomainHost = (host) => /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
-const getInvitePublicUrl = (token) => {
-    const frontend = (process.env.FRONTEND_URL || process.env.SITE_URL || '').replace(/\/+$/, '');
-    if (frontend)
-        return `${frontend}/invite/${token}`;
-    return `/invite/${token}`;
-};
+// Invite links are opened from an email or a chat app, so they must always be
+// absolute. `/invite/:token` is a platform route, not an event route, so it
+// stays on the app host even when the event has its own domain.
+const getInvitePublicUrl = (token) => (0, siteUrl_js_1.buildSiteUrl)(`/invite/${token}`);
 const eventCreateSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Event name is required'),
     slug: zod_1.z

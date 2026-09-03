@@ -952,17 +952,23 @@ export function Thumb({
 }
 
 /**
- * A guest-facing link belonging to an event: name, path, open and copy.
- * Used by both the admin and owner event workspaces.
+ * A guest-facing link belonging to an event: name, the address a guest sees,
+ * and open / copy / share. Used by both the admin and owner event workspaces.
+ *
+ * Pass `url` when the caller has already resolved the event's public origin
+ * (a connected custom domain); otherwise the current origin is used.
  */
 export function PublicPageRow({
   label,
   path,
+  url,
   disabled,
   onCopy,
 }: {
   label: string;
   path: string;
+  /** Absolute URL a guest would visit. Defaults to path on the current origin. */
+  url?: string;
   disabled?: boolean;
   onCopy?: (path: string) => void;
 }) {
@@ -972,19 +978,23 @@ export function PublicPageRow({
     setOrigin(window.location.origin);
   }, []);
 
-  const href = `${origin}${path}`;
+  const href = url || `${origin}${path}`;
+  // Show what a guest actually types: host + path, without the scheme.
+  const display = href ? href.replace(/^https?:\/\//, '') : path;
 
   return (
-    <div className={cn('flex items-center gap-2 px-4 py-2.5', disabled && 'opacity-60')}>
-      <div className="min-w-0 flex-1">
+    <div className={cn('flex items-center gap-1 px-4 py-2.5', disabled && 'opacity-60')}>
+      <div className="min-w-0 flex-1 pr-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium text-surface-900">{label}</span>
           {disabled ? <StatusBadge tone="neutral">Off</StatusBadge> : null}
         </div>
-        <p className="truncate font-mono text-[12px] text-surface-600">{path}</p>
+        <p className="truncate font-mono text-[12px] text-surface-600" title={display}>
+          {display}
+        </p>
       </div>
       <a
-        href={path}
+        href={href || path}
         target="_blank"
         rel="noopener noreferrer"
         className="icon-btn icon-btn-sm"
@@ -1000,11 +1010,13 @@ export function PublicPageRow({
           />
         </svg>
       </a>
+      {/* Share covers copying on phones; desktop gets the plain copy control. */}
+      <ShareButton url={href} title={label} className="sm:hidden" />
       {onCopy ? (
         <button
           type="button"
-          onClick={() => onCopy(path)}
-          className="icon-btn icon-btn-sm"
+          onClick={() => onCopy(url || path)}
+          className="icon-btn icon-btn-sm hidden sm:inline-flex"
           aria-label={`Copy link to ${label}`}
           title="Copy link"
         >
@@ -1024,8 +1036,100 @@ export function PublicPageRow({
           </svg>
         </button>
       ) : (
-        <CopyButton value={href} label={`Copy link to ${label}`} />
+        <CopyButton value={href} label={`Copy link to ${label}`} className="hidden sm:inline-flex" />
       )}
     </div>
+  );
+}
+
+/**
+ * Hands a link to the device's own share sheet. Falls back to copying, so the
+ * control is never dead on desktop browsers without the Web Share API.
+ */
+export function ShareButton({
+  url,
+  title,
+  text,
+  className,
+  label = 'Share',
+  showLabel,
+}: {
+  url: string;
+  title?: string;
+  text?: string;
+  className?: string;
+  label?: string;
+  /** Render as a labelled button instead of an icon-only control. */
+  showLabel?: boolean;
+}) {
+  const [canShare, setCanShare] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const share = async () => {
+    if (!url) return;
+
+    if (canShare) {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch (error) {
+        // A dismissed share sheet is not a failure; fall through to copying.
+        if ((error as DOMException)?.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const icon = copied ? (
+    <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m5 13 4 4L19 7" />
+    </svg>
+  ) : (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.7}
+        d="M12 4v12m0-12L8.5 7.5M12 4l3.5 3.5M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"
+      />
+    </svg>
+  );
+
+  if (showLabel) {
+    return (
+      <button type="button" onClick={share} disabled={!url} className={cn('btn-outline btn-sm', className)}>
+        {icon}
+        {copied ? 'Copied' : label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={share}
+      disabled={!url}
+      className={cn('icon-btn icon-btn-sm', className)}
+      aria-label={copied ? 'Link copied' : label}
+      title={copied ? 'Link copied' : label}
+    >
+      {icon}
+    </button>
   );
 }

@@ -13,6 +13,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateOwnerAccount } from '../middleware/auth.js';
 import { calculateEventPhase } from '../utils/phase.js';
 import { featureFlags } from '../utils/featureFlags.js';
+import { buildSiteUrl } from '../utils/siteUrl.js';
 import { z } from 'zod';
 import { sendInvitationNotifications, sendWhatsAppRsvpInvite, sendEmailRsvpInvite } from '../services/notifications.js';
 import { generateInvitationPass } from '../services/invitation.js';
@@ -55,11 +56,10 @@ const normalizeDomainHost = (rawHost: string) =>
 const isValidDomainHost = (host: string) =>
   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
 
-const getInvitePublicUrl = (token: string) => {
-  const frontend = (process.env.FRONTEND_URL || process.env.SITE_URL || '').replace(/\/+$/, '');
-  if (frontend) return `${frontend}/invite/${token}`;
-  return `/invite/${token}`;
-};
+// Invite links are opened from an email or a chat app, so they must always be
+// absolute. `/invite/:token` is a platform route, not an event route, so it
+// stays on the app host even when the event has its own domain.
+const getInvitePublicUrl = (token: string) => buildSiteUrl(`/invite/${token}`);
 
 const eventCreateSchema = z.object({
   name: z.string().min(2, 'Event name is required'),

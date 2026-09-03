@@ -732,7 +732,7 @@ async function sendInvitationEmail(invitationId) {
     const invitation = await prisma_js_1.default.invitation.findUnique({
         where: { id: invitationId },
         include: {
-            event: true,
+            event: { include: { domains: { select: { host: true, status: true, isPrimary: true } } } },
             rsvp: true,
         },
     });
@@ -807,7 +807,7 @@ async function sendInvitationWhatsApp(invitationId) {
     const invitation = await prisma_js_1.default.invitation.findUnique({
         where: { id: invitationId },
         include: {
-            event: true,
+            event: { include: { domains: { select: { host: true, status: true, isPrimary: true } } } },
             rsvp: true,
         },
     });
@@ -823,10 +823,9 @@ async function sendInvitationWhatsApp(invitationId) {
     if (!invitation.qrCodeData) {
         return { success: false, error: 'QR code not generated' };
     }
-    // Get the site URL for QR code link
-    const { getSiteUrl } = await import('../utils/siteUrl.js');
-    const siteUrl = getSiteUrl();
-    const checkInUrl = `${siteUrl}/e/${invitation.event.slug}/checkin?code=${invitation.accessCode}`;
+    // Check-in link follows the event's connected domain when it has one.
+    const { buildEventPublicUrl } = await import('../utils/siteUrl.js');
+    const checkInUrl = buildEventPublicUrl(invitation.event.slug, `/checkin?code=${invitation.accessCode}`, invitation.event.domains);
     // WhatsApp message with QR code image and access code
     // Convert QR code data URL to buffer for media attachment
     const qrCodeBuffer = Buffer.from(invitation.qrCodeData.replace(/^data:image\/png;base64,/, ''), 'base64');

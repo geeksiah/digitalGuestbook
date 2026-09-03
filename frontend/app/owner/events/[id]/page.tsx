@@ -5,14 +5,16 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { itineraryApi, ownerDashboardApi } from '@/lib/api';
 import MediaGallery from '@/components/media/MediaGallery';
-import { formatDate, formatCount, getPhaseLabel, getPhaseTone, getStatusTone, getErrorMessage, humanizeEnum, cn, copyToClipboard, formatCurrencyAmount } from '@/lib/utils';
+import { formatDate, formatCount, getPhaseLabel, getPhaseTone, getStatusTone, getErrorMessage, humanizeEnum, cn, copyToClipboard, formatCurrencyAmount, getEventPublicUrl, pickLiveEventDomain, toAbsoluteAppUrl } from '@/lib/utils';
 import {
   DetailRow,
+  PageSkeleton,
   EmptyState,
   ListSkeleton,
   PageHeader,
   Panel,
   PublicPageRow,
+  ShareButton,
   SegmentedControl,
   StatRow,
   StatusBadge,
@@ -290,6 +292,9 @@ export default function OwnerEventDetailPage() {
       const nextEvent = r.data.event;
       setEvent(nextEvent);
 
+      // The voting switch is authoritative. Assigned voting templates only act
+      // as a hint when the config could not be read at all, otherwise turning
+      // voting off would leave it visible for any event that still has one.
       const templateBasedVoting = Boolean(
         nextEvent?.votingPageTemplateId
           || nextEvent?.nominationPageTemplateId
@@ -298,7 +303,8 @@ export default function OwnerEventDetailPage() {
       );
       try {
         const votingResponse = await ownerDashboardApi.getVotingConfig(eventId);
-        setVotingEnabled(Boolean(votingResponse.data?.config?.isEnabled) || templateBasedVoting);
+        const config = votingResponse.data?.config;
+        setVotingEnabled(config ? Boolean(config.isEnabled) : templateBasedVoting);
       } catch {
         setVotingEnabled(templateBasedVoting);
       }
@@ -448,6 +454,8 @@ export default function OwnerEventDetailPage() {
   useEffect(() => {
     fetchEvent();
     fetchApproval();
+    // Overview shows the address guests actually visit, so domains load up front.
+    fetchDomains();
   }, [eventId]);
 
   useEffect(() => {
@@ -478,6 +486,12 @@ export default function OwnerEventDetailPage() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [activeTab, event]);
+
+  /** Copy an already-resolved absolute URL (custom domain aware). */
+  const handleCopyUrl = async (url: string) => {
+    if (await copyToClipboard(url)) toast.success('Link copied');
+    else toast.error('Could not copy. Select the link and copy it manually.');
+  };
 
   const handleCopyLink = async (path: string) => {
     if (await copyToClipboard(`${window.location.origin}${path}`)) {
@@ -1081,8 +1095,8 @@ export default function OwnerEventDetailPage() {
     try {
       const response = await itineraryApi.createMcSession(eventId);
       if (response.data?.mcUrl) {
-        setMcControlUrl(response.data.mcUrl);
-        await copyToClipboard(response.data.mcUrl);
+        setMcControlUrl(toAbsoluteAppUrl(response.data.mcUrl));
+        await copyToClipboard(toAbsoluteAppUrl(response.data.mcUrl));
       }
       toast.success('MC control link generated');
     } catch (error: any) {
@@ -1162,12 +1176,25 @@ export default function OwnerEventDetailPage() {
   }, [activeTab, tabs]);
 
   if (loading || !event) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <PageSkeleton stats={4} rows={4} />;
   }
+
+  // Guest links follow the event's connected domain when it has one, so the
+  // address shown here is the one a guest actually visits.
+  const liveDomain = pickLiveEventDomain(domains);
+  const publicUrl = (path: string) => getEventPublicUrl(event.slug, path, domains);
+
+  const guestPages = [
+    { label: 'Event home', page: '/', enabled: true },
+    { label: 'RSVP', page: '/rsvp', enabled: event.rsvpEnabled !== false },
+    { label: 'Guestbook', page: '/guestbook', enabled: event.guestbookEnabled !== false },
+    { label: 'Check-in', page: '/checkin', enabled: event.checkInEnabled !== false },
+    { label: 'Itinerary', page: '/itinerary', enabled: Boolean(event.itineraryEnabled) },
+    { label: 'Gifts', page: '/gift', enabled: Boolean(event.giftingEnabled) },
+    { label: 'Vote', page: '/vote', enabled: votingEnabled },
+  ]
+    .filter((entry) => entry.enabled)
+    .map((entry) => ({ ...entry, url: publicUrl(entry.page) }));
 
   return (
     <div className="page">
@@ -1257,14 +1284,29 @@ export default function OwnerEventDetailPage() {
             ) : null}
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,1fr)]">
-              <Panel title="Guest pages" flush>
+              <Panel
+                title="Guest pages"
+                action={
+                  liveDomain ? <StatusBadge tone="success">{liveDomain.host}</StatusBadge> : null
+                }
+                flush
+              >
                 <div className="divide-y divide-surface-200">
-                  <PublicPageRow label="Event home" path={`/e/${event.slug}`} onCopy={handleCopyLink} />
-                  <PublicPageRow label="RSVP" path={`/e/${event.slug}/rsvp`} onCopy={handleCopyLink} />
-                  <PublicPageRow label="Gifts" path={`/gift/${event.slug}`} onCopy={handleCopyLink} />
-                  <PublicPageRow label="Vote" path={`/e/${event.slug}/vote`} onCopy={handleCopyLink} />
-                  <PublicPageRow label="Itinerary" path={`/e/${event.slug}/itinerary`} onCopy={handleCopyLink} />
+                  {guestPages.map((page) => (
+                    <PublicPageRow
+                      key={page.page}
+                      label={page.label}
+                      path={page.page}
+                      url={page.url}
+                      onCopy={() => handleCopyUrl(page.url)}
+                    />
+                  ))}
                 </div>
+                {liveDomain ? null : (
+                  <p className="field-hint px-4 py-2.5">
+                    Connect a domain to serve these from your own address.
+                  </p>
+                )}
               </Panel>
 
               <div className="space-y-4">
@@ -1285,16 +1327,18 @@ export default function OwnerEventDetailPage() {
                   ) : null}
                 </Panel>
 
-                <Panel
-                  title="Voting"
-                  action={
-                    <Link href={`/owner/events/${event.id}/voting`} className="btn-primary btn-sm">
-                      Open
-                    </Link>
-                  }
-                >
-                  <p className="meta">Categories, nominees and live results.</p>
-                </Panel>
+                {votingEnabled ? (
+                  <Panel
+                    title="Voting"
+                    action={
+                      <Link href={`/owner/events/${event.id}/voting`} className="btn-primary btn-sm">
+                        Open
+                      </Link>
+                    }
+                  >
+                    <p className="meta">Categories, nominees and live results.</p>
+                  </Panel>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1644,19 +1688,56 @@ export default function OwnerEventDetailPage() {
             </Toolbar>
 
             {mcControlUrl ? (
-              <div className="surface flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-surface-900">MC control link</p>
-                  <p className="truncate font-mono text-[12px] text-surface-600">{mcControlUrl}</p>
+              <div className="surface p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-surface-900">MC control link</p>
+                    <p className="field-hint mt-0.5">
+                      Anyone with this link can mark items done. Send it to your MC only.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-sm shrink-0"
+                    aria-label="Hide MC link"
+                    title="Hide"
+                    onClick={() => setMcControlUrl('')}
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  className="btn-outline btn-sm shrink-0"
-                  onClick={async () => {
-                    if (await copyToClipboard(mcControlUrl)) toast.success('Link copied');
-                  }}
-                >
-                  Copy
-                </button>
+
+                <p className="mt-2 truncate rounded-lg bg-surface-50 px-2.5 py-2 font-mono text-[12px] text-surface-700" title={mcControlUrl}>
+                  {mcControlUrl.replace(/^https?:\/\//, '')}
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a
+                    href={mcControlUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-outline btn-sm"
+                  >
+                    Open
+                  </a>
+                  <button
+                    className="btn-outline btn-sm"
+                    onClick={async () => {
+                      if (await copyToClipboard(mcControlUrl)) toast.success('Link copied');
+                      else toast.error('Could not copy. Select the link and copy it manually.');
+                    }}
+                  >
+                    Copy
+                  </button>
+                  <ShareButton
+                    url={mcControlUrl}
+                    title="MC control link"
+                    text="Use this link to run the event itinerary."
+                    showLabel
+                    />
+                </div>
               </div>
             ) : null}
 
@@ -2305,10 +2386,10 @@ export default function OwnerEventDetailPage() {
 
             <Panel title="Voting links" flush>
               <div className="divide-y divide-surface-200">
-                <PublicPageRow label="Vote" path={`/e/${event.slug}/vote`} onCopy={handleCopyLink} />
-                <PublicPageRow label="Nominations" path={`/e/${event.slug}/nominate`} onCopy={handleCopyLink} />
-                <PublicPageRow label="Nominees" path={`/e/${event.slug}/nominees`} onCopy={handleCopyLink} />
-                <PublicPageRow label="Leaderboard" path={`/e/${event.slug}/leaderboard`} onCopy={handleCopyLink} />
+                <PublicPageRow label="Vote" path="/vote" url={publicUrl('/vote')} onCopy={() => handleCopyUrl(publicUrl('/vote'))} />
+                <PublicPageRow label="Nominations" path="/nominate" url={publicUrl('/nominate')} onCopy={() => handleCopyUrl(publicUrl('/nominate'))} />
+                <PublicPageRow label="Nominees" path="/nominees" url={publicUrl('/nominees')} onCopy={() => handleCopyUrl(publicUrl('/nominees'))} />
+                <PublicPageRow label="Leaderboard" path="/leaderboard" url={publicUrl('/leaderboard')} onCopy={() => handleCopyUrl(publicUrl('/leaderboard'))} />
                 <PublicPageRow label="Embed script" path="/embed/vote.js" onCopy={handleCopyLink} />
               </div>
             </Panel>

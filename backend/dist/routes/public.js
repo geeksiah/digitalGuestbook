@@ -24,6 +24,7 @@ const template_helper_js_1 = require("../utils/template-helper.js");
 const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const itineraryRealtime_js_1 = require("../services/itineraryRealtime.js");
 const featureFlags_js_1 = require("../utils/featureFlags.js");
+const siteUrl_js_1 = require("../utils/siteUrl.js");
 const router = (0, express_1.Router)();
 const getQueryString = (value, fallback) => typeof value === 'string' ? value : fallback;
 const compareSemver = (a, b) => {
@@ -149,17 +150,15 @@ const EVENT_PUBLIC_SELECT = {
             isEnabled: true,
         },
     },
+    domains: {
+        select: { host: true, status: true, isPrimary: true },
+    },
 };
 // ─── Helper: standard template data ────────────────────────────────────────────
 function buildTemplateData(event, currentPhase, capabilities) {
-    const frontendUrl = (process.env.FRONTEND_URL ||
-        process.env.SITE_URL ||
-        process.env.APP_URL ||
-        '').replace(/\/+$/, '');
-    const apiBaseUrl = (process.env.API_URL ||
-        process.env.BACKEND_URL ||
-        process.env.RENDER_EXTERNAL_URL ||
-        frontendUrl).replace(/\/+$/, '');
+    // Guest links follow the event's own domain when it has one connected.
+    const publicUrl = (path) => (0, siteUrl_js_1.buildEventPublicUrl)(event.slug, path, event.domains);
+    const apiBaseUrl = (0, siteUrl_js_1.getApiUrl)();
     return {
         event: {
             name: event.name,
@@ -184,26 +183,26 @@ function buildTemplateData(event, currentPhase, capabilities) {
         phase: currentPhase,
         capabilities,
         urls: {
-            rsvp: event.rsvpEnabled ? `${frontendUrl}/e/${event.slug}/rsvp` : null,
-            guestbook: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/guestbook` : null,
-            booth: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth` : null,
-            thankYou: `${frontendUrl}/e/${event.slug}/thanks`,
-            invitation: `${frontendUrl}/e/${event.slug}`,
-            live: `${frontendUrl}/e/${event.slug}/live`,
-            checkIn: event.checkInEnabled ? `${frontendUrl}/e/${event.slug}/checkin` : null,
-            guestbookVideo: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/guestbook/video` : null,
-            guestbookAudio: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/guestbook/audio` : null,
-            guestbookPhoto: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/guestbook/photo` : null,
-            boothVideo: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth/video` : null,
-            boothAudio: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth/audio` : null,
-            boothPhoto: event.guestbookEnabled ? `${frontendUrl}/e/${event.slug}/booth/photo` : null,
-            itinerary: event.itineraryEnabled ? `${frontendUrl}/e/${event.slug}/itinerary` : null,
-            gifting: event.giftingEnabled ? `${frontendUrl}/gift/${event.slug}` : null,
-            vote: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/vote` : null,
-            voting: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/vote` : null,
-            nominate: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/nominate` : null,
-            nominees: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/nominees` : null,
-            leaderboard: event.votingConfig?.isEnabled ? `${frontendUrl}/e/${event.slug}/leaderboard` : null,
+            rsvp: event.rsvpEnabled ? publicUrl('/rsvp') : null,
+            guestbook: event.guestbookEnabled ? publicUrl('/guestbook') : null,
+            booth: event.guestbookEnabled ? publicUrl('/booth') : null,
+            thankYou: publicUrl('/thanks'),
+            invitation: publicUrl('/'),
+            live: publicUrl('/live'),
+            checkIn: event.checkInEnabled ? publicUrl('/checkin') : null,
+            guestbookVideo: event.guestbookEnabled ? publicUrl('/guestbook/video') : null,
+            guestbookAudio: event.guestbookEnabled ? publicUrl('/guestbook/audio') : null,
+            guestbookPhoto: event.guestbookEnabled ? publicUrl('/guestbook/photo') : null,
+            boothVideo: event.guestbookEnabled ? publicUrl('/booth/video') : null,
+            boothAudio: event.guestbookEnabled ? publicUrl('/booth/audio') : null,
+            boothPhoto: event.guestbookEnabled ? publicUrl('/booth/photo') : null,
+            itinerary: event.itineraryEnabled ? publicUrl('/itinerary') : null,
+            gifting: event.giftingEnabled ? publicUrl('/gift') : null,
+            vote: event.votingConfig?.isEnabled ? publicUrl('/vote') : null,
+            voting: event.votingConfig?.isEnabled ? publicUrl('/vote') : null,
+            nominate: event.votingConfig?.isEnabled ? publicUrl('/nominate') : null,
+            nominees: event.votingConfig?.isEnabled ? publicUrl('/nominees') : null,
+            leaderboard: event.votingConfig?.isEnabled ? publicUrl('/leaderboard') : null,
         },
         api: {
             baseUrl: apiBaseUrl,

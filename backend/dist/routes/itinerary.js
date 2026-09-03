@@ -10,6 +10,7 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const itineraryRealtime_js_1 = require("../services/itineraryRealtime.js");
+const siteUrl_js_1 = require("../utils/siteUrl.js");
 const router = (0, express_1.Router)();
 const templateSchema = zod_1.z.object({
     name: zod_1.z.string().min(2),
@@ -221,7 +222,9 @@ router.post('/events/:eventId/items/reorder', auth_js_1.authenticateAdminOrOwner
 router.post('/events/:eventId/mc-session', auth_js_1.authenticateAdminOrOwnerAccount, (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
     const { eventId } = req.params;
     await requireManagedEvent(req, eventId);
-    const token = (0, crypto_1.randomBytes)(24).toString('hex');
+    // 128 bits of entropy is ample for a session token and keeps the URL short
+    // enough to read out loud or paste into a chat.
+    const token = (0, crypto_1.randomBytes)(16).toString('hex');
     const expiresAt = req.body?.expiresInHours
         ? new Date(Date.now() + Number(req.body.expiresInHours) * 60 * 60 * 1000)
         : null;
@@ -233,11 +236,16 @@ router.post('/events/:eventId/mc-session', auth_js_1.authenticateAdminOrOwnerAcc
             expiresAt,
         },
     });
-    const frontend = (process.env.FRONTEND_URL || process.env.SITE_URL || '').replace(/\/+$/, '');
-    const event = await prisma_js_1.default.event.findUnique({ where: { id: eventId }, select: { slug: true } });
-    const mcUrl = frontend
-        ? `${frontend}/e/${event?.slug}/itinerary/mc/${token}`
-        : `/e/${event?.slug}/itinerary/mc/${token}`;
+    const event = await prisma_js_1.default.event.findUnique({
+        where: { id: eventId },
+        select: {
+            slug: true,
+            domains: { select: { host: true, status: true, isPrimary: true } },
+        },
+    });
+    // Always absolute: the MC opens this on their own phone, so a bare path is
+    // useless. Uses the event's connected domain when it has one.
+    const mcUrl = (0, siteUrl_js_1.buildEventPublicUrl)(event?.slug || '', `/itinerary/mc/${token}`, event?.domains);
     res.status(201).json({ session, mcUrl });
 }));
 // ============================================

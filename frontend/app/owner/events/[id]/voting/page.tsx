@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { formatCount, getErrorMessage } from '@/lib/utils';
-import { PageSkeleton, StatRow } from '@/components/ui/Primitives';
+import { EmptyState, PageHeader, PageSkeleton, StatRow } from '@/components/ui/Primitives';
 import { ConfirmDialog } from '@/components/ui/Overlay';
 import VotingWorkspaceHeader from '@/components/voting/VotingWorkspaceHeader';
 import VotingWorkspaceTabs from '@/components/voting/VotingWorkspaceTabs';
@@ -892,6 +892,25 @@ export default function AdminVotingPage() {
 
   if (loading) {
     return <PageSkeleton stats={4} rows={4} />;
+  }
+
+  // Voting is off for this event, so nothing about it belongs on screen. The
+  // route stays reachable by URL, so it has to answer for itself.
+  if (config && !config.isEnabled) {
+    return (
+      <div className="page">
+        <PageHeader title="Voting" backHref={`/owner/events/${eventId}`} backLabel="Event" />
+        <EmptyState
+          title="Voting is turned off for this event"
+          hint="Ask your EventPeepo admin to switch it on if you need nominations, voting or a leaderboard."
+          action={
+            <Link href={`/owner/events/${eventId}`} className="btn-primary btn-sm">
+              Back to event
+            </Link>
+          }
+        />
+      </div>
+    );
   }
 
   return (
