@@ -11,6 +11,7 @@ const prisma_js_1 = __importDefault(require("../utils/prisma.js"));
 const errorHandler_js_1 = require("../middleware/errorHandler.js");
 const auth_js_1 = require("../middleware/auth.js");
 const paymentCore_js_1 = require("../services/paymentCore.js");
+const siteUrl_js_1 = require("../utils/siteUrl.js");
 const supabaseStorage_js_1 = require("../services/supabaseStorage.js");
 const fees_js_1 = require("../utils/fees.js");
 const walletPolicy_js_1 = require("../utils/walletPolicy.js");
@@ -33,6 +34,8 @@ const packageSchema = zod_1.z.object({
     currency: zod_1.z.string().default('USD'),
     thumbnailPath: zod_1.z.string().optional().nullable(),
     isActive: zod_1.z.boolean().optional(),
+    /** Null clears the limit and makes the package unlimited again. */
+    stockQuantity: zod_1.z.number().int().min(0).optional().nullable(),
 });
 const checkoutSchema = zod_1.z.object({
     guestName: zod_1.z.string().min(2),
@@ -43,6 +46,8 @@ const checkoutSchema = zod_1.z.object({
     note: zod_1.z.string().optional().nullable(),
     deliveryDate: zod_1.z.string().datetime().optional().nullable(),
     cashGiftAmount: zod_1.z.number().min(0).optional().nullable(),
+    /** Absolute URL of the gift page the guest is on, used to route them back. */
+    returnUrl: zod_1.z.string().optional().nullable(),
     packageItems: zod_1.z.array(zod_1.z.object({
         giftPackageId: zod_1.z.string().uuid(),
         quantity: zod_1.z.number().int().min(1).default(1),
@@ -51,6 +56,50 @@ const checkoutSchema = zod_1.z.object({
 const assignmentSchema = zod_1.z.object({
     packageIds: zod_1.z.array(zod_1.z.string().uuid()).default([]),
 });
+/**
+ * Remaining stock for a package. Null stock means unlimited, so it reports
+ * null rather than a number and never blocks a purchase.
+ */
+const remainingStock = (pkg) => {
+    if (pkg.stockQuantity === null || pkg.stockQuantity === undefined)
+        return null;
+    return Math.max(0, pkg.stockQuantity - Number(pkg.soldQuantity || 0));
+};
+/**
+ * Where the gateway should send the payer back to. The guest may be on the
+ * platform host or on the event's own domain, so the page tells us where it
+ * is and we accept it only if that host really belongs to this event. Anything
+ * else falls back to the canonical gift URL rather than trusting the input.
+ */
+const resolveGiftReturnUrl = (params) => {
+    const canonical = `${(0, siteUrl_js_1.buildEventPublicUrl)(params.slug, '/gift', params.domains)}/status`;
+    const requested = String(params.requested || '').trim();
+    if (!requested)
+        return canonical;
+    let parsed;
+    try {
+        parsed = new URL(requested);
+    }
+    catch {
+        return canonical;
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+        return canonical;
+    const allowedHosts = new Set();
+    try {
+        allowedHosts.add(new URL((0, siteUrl_js_1.getSiteUrl)()).host.toLowerCase());
+    }
+    catch {
+        /* getSiteUrl already falls back to a safe default */
+    }
+    for (const domain of params.domains || []) {
+        if (domain.status === 'ACTIVE' || domain.status === 'VERIFIED') {
+            allowedHosts.add(String(domain.host || '').toLowerCase());
+            allowedHosts.add(`www.${String(domain.host || '').toLowerCase()}`);
+        }
+    }
+    return allowedHosts.has(parsed.host.toLowerCase()) ? parsed.toString() : canonical;
+};
 const roundMoney = (value) => Math.round(value * 100) / 100;
 /**
  * Orders written since gift settlement was introduced carry their own frozen
@@ -108,11 +157,14 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
             slug: true,
             name: true,
             giftingEnabled: true,
+            giftItemsEnabled: true,
+            cashGiftsEnabled: true,
             coverImagePath: true,
             coverImageAlt: true,
             socialTitle: true,
             socialDescription: true,
             ownerId: true,
+            domains: { select: { host: true, status: true, isPrimary: true } },
         },
     });
     if (!event)
@@ -124,14 +176,18 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
         select: { giftPackageId: true },
     });
     const assignedPackageIds = eventPackageLinks.map((link) => link.giftPackageId);
-    const packages = await prisma_js_1.default.giftPackage.findMany({
-        where: {
-            isActive: true,
-            ...(assignedPackageIds.length ? { id: { in: assignedPackageIds } } : {}),
-        },
-        orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
-    });
-    const { ownerId, ...eventPublic } = event;
+    const packages = event.giftItemsEnabled
+        ? await prisma_js_1.default.giftPackage.findMany({
+            where: {
+                isActive: true,
+                ...(assignedPackageIds.length ? { id: { in: assignedPackageIds } } : {}),
+            },
+            orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
+        })
+        : [];
+    const { ownerId, domains: eventDomains, ...eventPublic } = event;
+    // Where "Back to event" should go: the custom domain when one is live.
+    const eventUrl = (0, siteUrl_js_1.buildEventPublicUrl)(event.slug, '', eventDomains || []);
     const eventGateways = await prisma_js_1.default.eventPaymentGateway.findMany({
         where: {
             eventId: event.id,
@@ -184,10 +240,16 @@ router.get('/public/:slug/options', (0, errorHandler_js_1.asyncHandler)(async (r
     const paystackWallet = walletState.walletByType.get('paystack');
     res.json({
         event: eventPublic,
-        packages: packages.map((pkg) => ({
-            ...pkg,
-            thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
-        })),
+        eventUrl,
+        packages: packages.map((pkg) => {
+            const remaining = remainingStock(pkg);
+            return {
+                ...pkg,
+                thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+                remainingStock: remaining,
+                inStock: remaining === null || remaining > 0,
+            };
+        }),
         momoEnabled: true,
         walletMode: walletState.mode,
         settlementPolicy: {
@@ -237,6 +299,8 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
             id: true,
             name: true,
             giftingEnabled: true,
+            giftItemsEnabled: true,
+            cashGiftsEnabled: true,
             ownerId: true,
             feeOverridesEnabled: true,
             platformFeeMode: true,
@@ -250,6 +314,8 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
             cashGiftFeeMode: true,
             cashGiftFeePercent: true,
             cashGiftFeeFixed: true,
+            slug: true,
+            domains: { select: { host: true, status: true, isPrimary: true } },
             Owner: {
                 select: {
                     countryCode: true,
@@ -274,6 +340,14 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
         throw new errorHandler_js_1.AppError('Event not found', 404);
     if (!event.giftingEnabled)
         throw new errorHandler_js_1.AppError('Gifting is disabled for this event', 404);
+    // The page hides the kind it cannot take, but the rule belongs here too:
+    // a stale tab or a direct API call must not slip past it.
+    if (packageItems.length && !event.giftItemsEnabled) {
+        throw new errorHandler_js_1.AppError('This event is not accepting gift items', 400);
+    }
+    if (cashGiftAmount > 0 && !event.cashGiftsEnabled) {
+        throw new errorHandler_js_1.AppError('This event is not accepting cash gifts', 400);
+    }
     const configuredGateways = await prisma_js_1.default.eventPaymentGateway.findMany({
         where: {
             eventId: event.id,
@@ -315,6 +389,14 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
         const pkg = giftPackages.find((p) => p.id === item.giftPackageId);
         if (!pkg)
             throw new errorHandler_js_1.AppError('One or more gift packages are unavailable', 400);
+        // Checked here for a clear message; fulfilment re-checks atomically,
+        // because two guests can pass this point at the same moment.
+        const remaining = remainingStock(pkg);
+        if (remaining !== null && item.quantity > remaining) {
+            throw new errorHandler_js_1.AppError(remaining === 0
+                ? `${pkg.name} is out of stock`
+                : `Only ${remaining} of ${pkg.name} left`, 400);
+        }
         const lineTotal = pkg.price * item.quantity;
         packagesTotal += lineTotal;
         return {
@@ -394,6 +476,11 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
                 giftPackageId: item.giftPackageId,
                 quantity: item.quantity,
             })),
+            callbackUrl: resolveGiftReturnUrl({
+                requested: data.returnUrl,
+                slug: event.slug,
+                domains: (event.domains || []),
+            }),
             ownerWalletId: ownerConnectedAccountId ? ownerWallet?.id : undefined,
             routedWalletType: ownerConnectedAccountId ? selectedGatewayType : undefined,
         },
@@ -421,6 +508,118 @@ router.post('/public/:slug/checkout', (0, errorHandler_js_1.asyncHandler)(async 
         message: 'Gift checkout initialized. Complete payment to confirm.',
     });
 }));
+/**
+ * GET /api/gifting/public/:slug/order-status?reference=...
+ *
+ * Backs the page a guest lands on after paying. The gateway redirect usually
+ * beats its own webhook, so this verifies the reference directly rather than
+ * telling the guest their gift failed while the webhook is still in flight.
+ * Verification is idempotent: fulfilment already refuses to write an order
+ * twice for the same intent.
+ */
+router.get('/public/:slug/order-status', (0, errorHandler_js_1.asyncHandler)(async (req, res) => {
+    const { slug } = req.params;
+    const reference = String(req.query.reference || '').trim();
+    const event = await prisma_js_1.default.event.findUnique({
+        where: { slug },
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            giftingEnabled: true,
+            domains: { select: { host: true, status: true, isPrimary: true } },
+        },
+    });
+    if (!event)
+        throw new errorHandler_js_1.AppError('Event not found', 404);
+    const eventUrl = (0, siteUrl_js_1.buildEventPublicUrl)(event.slug, '', event.domains || []);
+    const giftUrl = (0, siteUrl_js_1.buildEventPublicUrl)(event.slug, '/gift', event.domains || []);
+    const baseResponse = {
+        event: { name: event.name, slug: event.slug },
+        eventUrl,
+        giftUrl,
+    };
+    if (!reference) {
+        return res.json({ ...baseResponse, status: 'UNKNOWN', order: null });
+    }
+    const intent = await prisma_js_1.default.paymentIntent.findFirst({
+        where: {
+            eventId: event.id,
+            purpose: 'GIFT',
+            OR: [
+                { gatewayReference: reference },
+                { id: reference.replace(/^pi_/, '') },
+            ],
+        },
+    });
+    if (!intent) {
+        return res.json({ ...baseResponse, status: 'UNKNOWN', order: null });
+    }
+    // Ask the gateway only while the outcome is still open. Once an intent has
+    // settled either way, the stored status is the answer.
+    if (intent.status !== 'SUCCEEDED' && intent.status !== 'FAILED') {
+        try {
+            await (0, paymentCore_js_1.verifyGatewayTransaction)(intent.id, reference);
+        }
+        catch (error) {
+            // A gateway that cannot be reached must not turn into a false failure;
+            // the webhook is still the source of truth and will land shortly.
+            console.warn('[Gift status] verification failed', {
+                intentId: intent.id,
+                error: error?.message,
+            });
+        }
+    }
+    const settled = await prisma_js_1.default.paymentIntent.findUnique({ where: { id: intent.id } });
+    const order = await prisma_js_1.default.giftOrder.findFirst({
+        where: { paymentIntentId: intent.id },
+        select: {
+            id: true,
+            guestName: true,
+            currency: true,
+            totalAmount: true,
+            cashGiftAmount: true,
+            packageAmount: true,
+            createdAt: true,
+            items: {
+                select: {
+                    type: true,
+                    quantity: true,
+                    unitPrice: true,
+                    lineTotal: true,
+                    giftPackage: { select: { name: true } },
+                },
+            },
+        },
+    });
+    const status = order || settled?.status === 'SUCCEEDED'
+        ? 'SUCCEEDED'
+        : settled?.status === 'FAILED' || settled?.status === 'EXPIRED'
+            ? 'FAILED'
+            : 'PENDING';
+    res.json({
+        ...baseResponse,
+        status,
+        reference: settled?.gatewayReference || reference,
+        order: order
+            ? {
+                id: order.id,
+                guestName: order.guestName,
+                currency: order.currency,
+                totalAmount: order.totalAmount,
+                cashGiftAmount: order.cashGiftAmount,
+                packageAmount: order.packageAmount,
+                createdAt: order.createdAt,
+                items: (order.items || []).map((item) => ({
+                    type: item.type,
+                    name: item.giftPackage?.name || 'Cash gift',
+                    quantity: item.quantity,
+                    lineTotal: item.lineTotal,
+                })),
+            }
+            : null,
+    });
+}));
 // ============================================
 // Admin package management
 // ============================================
@@ -432,6 +631,7 @@ router.get('/packages', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.async
         packages: packages.map((pkg) => ({
             ...pkg,
             thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+            remainingStock: remainingStock(pkg),
         })),
     });
 }));
@@ -472,6 +672,7 @@ router.post('/packages', auth_js_1.authenticateAdmin, (0, errorHandler_js_1.asyn
             currency: data.currency,
             thumbnailPath: data.thumbnailPath ?? null,
             isActive: data.isActive ?? true,
+            stockQuantity: data.stockQuantity ?? null,
         },
     });
     res.status(201).json({ package: giftPackage });
@@ -487,6 +688,7 @@ router.patch('/packages/:id', auth_js_1.authenticateAdmin, (0, errorHandler_js_1
             currency: data.currency,
             thumbnailPath: data.thumbnailPath !== undefined ? data.thumbnailPath : undefined,
             isActive: data.isActive,
+            stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : undefined,
         },
     });
     res.json({ package: giftPackage });
@@ -519,6 +721,7 @@ router.get('/events/:eventId/packages', auth_js_1.authenticateAdmin, (0, errorHa
         packages: packages.map((pkg) => ({
             ...pkg,
             thumbnailUrl: pkg.thumbnailPath ? (0, supabaseStorage_js_1.buildPublicUrl)(supabaseStorage_js_1.BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+            remainingStock: remainingStock(pkg),
             assigned: assignedSet.has(pkg.id),
         })),
     });

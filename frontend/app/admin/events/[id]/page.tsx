@@ -55,6 +55,8 @@ interface Event {
   strictInviteOnly: boolean;
   itineraryEnabled: boolean;
   giftingEnabled: boolean;
+  giftItemsEnabled?: boolean;
+  cashGiftsEnabled?: boolean;
   ownerAccessToken: string;
   invitationEnabled: boolean;
   rsvpEnabled: boolean;
@@ -177,6 +179,10 @@ interface GiftPackage {
   currency: string;
   thumbnailPath: string | null;
   isActive: boolean;
+  /** Null means unlimited. */
+  stockQuantity?: number | null;
+  soldQuantity?: number;
+  remainingStock?: number | null;
   assigned?: boolean;
 }
 
@@ -361,7 +367,11 @@ export default function EventDetailPage() {
     description: '',
     price: '',
     currency: 'GHS',
+    // Blank means unlimited.
+    stockQuantity: '',
   });
+  const [stockEditPackage, setStockEditPackage] = useState<GiftPackage | null>(null);
+  const [stockEditValue, setStockEditValue] = useState('');
   const [eventGatewayCurrencies, setEventGatewayCurrencies] = useState<string[]>([]);
   const [newGiftPackagePhoto, setNewGiftPackagePhoto] = useState<File | null>(null);
   const [newGiftPackagePhotoPreview, setNewGiftPackagePhotoPreview] = useState<string | null>(null);
@@ -420,6 +430,7 @@ export default function EventDetailPage() {
     socialTitle: '', socialDescription: '', coverImageAlt: '',
     venue: '', timezone: '', defaultCurrency: 'USD', invitationOnly: false, reelEnabled: false,
     strictInviteOnly: false, itineraryEnabled: false, giftingEnabled: false,
+    giftItemsEnabled: true, cashGiftsEnabled: true,
     // Feature toggles
     invitationEnabled: true, rsvpEnabled: true, guestbookEnabled: true, checkInEnabled: true,
     // RSVP Mode & Ticketing
@@ -516,17 +527,19 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     if (activeTab !== 'gifts' && activeTab !== 'sales') return;
+    // Background refresh: silent, so the panel never drops back to a
+    // skeleton, and orders-only, so unsaved edits above it survive.
     const refresh = () => {
       if (document.visibilityState !== 'visible') return;
-      if (activeTab === 'gifts') void fetchGifts();
-      if (activeTab === 'sales') void fetchSales();
+      if (activeTab === 'gifts') void fetchGiftOrders({ silent: true });
+      if (activeTab === 'sales') void fetchSales({ silent: true });
     };
     const interval = window.setInterval(refresh, 12000);
-    window.addEventListener('focus', refresh);
+    // visibilitychange alone is enough; adding focus made every tab switch
+    // fire the same refresh two or three times over.
     document.addEventListener('visibilitychange', refresh);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [activeTab, eventId]);
@@ -566,6 +579,8 @@ export default function EventDetailPage() {
         venue: event.venue || '', timezone: event.timezone, defaultCurrency: event.defaultCurrency || 'USD', invitationOnly: event.invitationOnly,
         reelEnabled: event.reelEnabled || false, strictInviteOnly: event.strictInviteOnly || false,
         itineraryEnabled: event.itineraryEnabled || false, giftingEnabled: event.giftingEnabled || false,
+        giftItemsEnabled: event.giftItemsEnabled ?? true,
+        cashGiftsEnabled: event.cashGiftsEnabled ?? true,
         // Feature toggles
         invitationEnabled: event.invitationEnabled ?? true,
         rsvpEnabled: event.rsvpEnabled ?? true,
@@ -732,16 +747,34 @@ export default function EventDetailPage() {
     }
   };
 
-  const fetchSales = async () => {
+  const fetchSales = async ({ silent = false }: { silent?: boolean } = {}) => {
     try {
-      setLoadingSales(true);
+      if (!silent) setLoadingSales(true);
       const r = await adminApi.sales({ eventId });
       setSales(r.data.sales || []);
       setSalesStats(r.data.stats || null);
     } catch {
-      toast.error('Failed to load sales');
+      if (!silent) toast.error('Failed to load sales');
     } finally {
-      setLoadingSales(false);
+      if (!silent) setLoadingSales(false);
+    }
+  };
+
+  /**
+   * Orders only. This is what the 12s poll refreshes: it never touches the
+   * package checkboxes, which may hold assignment edits the admin has not
+   * saved yet, and it stays silent so the panel does not flash a skeleton.
+   */
+  const fetchGiftOrders = async ({ silent = false }: { silent?: boolean } = {}) => {
+    try {
+      if (!silent) setLoadingGifts(true);
+      const ordersResponse = await giftingApi.listOrders(eventId);
+      setGiftOrders(ordersResponse.data.orders || []);
+    } catch (e: any) {
+      // A failed background refresh keeps the last good data and stays quiet.
+      if (!silent) toast.error(getErrorMessage(e, 'Failed to load gift orders'));
+    } finally {
+      if (!silent) setLoadingGifts(false);
     }
   };
 
@@ -801,18 +834,22 @@ export default function EventDetailPage() {
         uploadedThumbnailPath = uploadResponse.data?.thumbnailPath || null;
       }
 
+      const trimmedStock = String(newGiftPackage.stockQuantity ?? '').trim();
       await giftingApi.createPackage({
         name: newGiftPackage.name.trim(),
         description: newGiftPackage.description.trim() || null,
         price,
         currency: (newGiftPackage.currency || primaryEventCurrency).toUpperCase(),
         thumbnailPath: uploadedThumbnailPath,
+        // Blank means unlimited, which the API stores as null.
+        stockQuantity: trimmedStock === '' ? null : Math.max(0, Number(trimmedStock) || 0),
       });
       setNewGiftPackage({
         name: '',
         description: '',
         price: '',
         currency: (newGiftPackage.currency || primaryEventCurrency).toUpperCase(),
+        stockQuantity: '',
       });
       setNewGiftPackagePhoto(null);
       setNewGiftPackagePhotoPreview(null);
@@ -823,6 +860,32 @@ export default function EventDetailPage() {
       toast.error(getErrorMessage(e, 'Failed to create gift package'));
     } finally {
       setSavingGiftPackage(false);
+    }
+  };
+
+  // Seed the field from whichever package the dialog was opened for.
+  useEffect(() => {
+    if (!stockEditPackage) return;
+    setStockEditValue(
+      stockEditPackage.stockQuantity === null || stockEditPackage.stockQuantity === undefined
+        ? ''
+        : String(stockEditPackage.stockQuantity)
+    );
+  }, [stockEditPackage]);
+
+  const handleUpdateGiftPackageStock = async (pkg: GiftPackage, raw: string) => {
+    const trimmed = raw.trim();
+    const stockQuantity = trimmed === '' ? null : Math.max(0, Number(trimmed) || 0);
+    try {
+      await giftingApi.updatePackage(pkg.id, { stockQuantity });
+      toast.success(
+        stockQuantity === null
+          ? `${pkg.name} set to unlimited`
+          : `${pkg.name} stock set to ${stockQuantity}`
+      );
+      await fetchGifts();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, 'Failed to update stock'));
     }
   };
 
@@ -1272,6 +1335,8 @@ export default function EventDetailPage() {
         strictInviteOnly: eventSettings.strictInviteOnly,
         itineraryEnabled: eventSettings.itineraryEnabled,
         giftingEnabled: eventSettings.giftingEnabled,
+        giftItemsEnabled: eventSettings.giftItemsEnabled,
+        cashGiftsEnabled: eventSettings.cashGiftsEnabled,
         // Feature toggles
         invitationEnabled: eventSettings.invitationEnabled,
         rsvpEnabled: eventSettings.rsvpEnabled,
@@ -2895,10 +2960,21 @@ export default function EventDetailPage() {
                           <div className="flex min-w-0 items-center gap-2">
                             <span className="truncate text-[15px] font-semibold text-brand-900">{pkg.name}</span>
                             {pkg.isActive ? null : <StatusBadge tone="neutral">Disabled</StatusBadge>}
+                            {pkg.remainingStock === 0 ? (
+                              <StatusBadge tone="danger">Out of stock</StatusBadge>
+                            ) : typeof pkg.remainingStock === 'number' && pkg.remainingStock <= 5 ? (
+                              <StatusBadge tone="warning">{pkg.remainingStock} left</StatusBadge>
+                            ) : null}
                           </div>
-                          <p className="mt-0.5 meta num">{formatCurrency(Number(pkg.price || 0), pkg.currency)}</p>
+                          <p className="mt-0.5 meta num">
+                            {formatCurrency(Number(pkg.price || 0), pkg.currency)}
+                            {typeof pkg.remainingStock === 'number'
+                              ? ` · ${pkg.remainingStock} of ${pkg.stockQuantity} left`
+                              : ' · Unlimited'}
+                          </p>
                         </label>
                         <Menu label={`Actions for ${pkg.name}`} sheetTitle={pkg.name}>
+                          <MenuItem onClick={() => setStockEditPackage(pkg)}>Set stock</MenuItem>
                           <MenuItem onClick={() => handleToggleGiftPackageActive(pkg)}>
                             {pkg.isActive ? 'Disable package' : 'Enable package'}
                           </MenuItem>
@@ -3004,6 +3080,51 @@ export default function EventDetailPage() {
               </Panel>
 
               <Modal
+                open={Boolean(stockEditPackage)}
+                onClose={() => setStockEditPackage(null)}
+                title={stockEditPackage ? `Stock for ${stockEditPackage.name}` : 'Set stock'}
+                description="Leave blank for unlimited."
+                size="sm"
+                footer={
+                  <>
+                    <button className="btn-outline" onClick={() => setStockEditPackage(null)}>
+                      Cancel
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={async () => {
+                        if (!stockEditPackage) return;
+                        await handleUpdateGiftPackageStock(stockEditPackage, stockEditValue);
+                        setStockEditPackage(null);
+                      }}
+                    >
+                      Save stock
+                    </button>
+                  </>
+                }
+              >
+                <label className="label" htmlFor="gift-stock-edit">
+                  Units available
+                </label>
+                <input
+                  id="gift-stock-edit"
+                  type="number"
+                  min={0}
+                  step="1"
+                  className="input"
+                  placeholder="Unlimited"
+                  value={stockEditValue}
+                  onChange={(e) => setStockEditValue(e.target.value)}
+                />
+                {stockEditPackage && typeof stockEditPackage.soldQuantity === 'number' ? (
+                  <p className="field-hint">
+                    {stockEditPackage.soldQuantity} already sold. Set a number at or above that to
+                    keep the package available.
+                  </p>
+                ) : null}
+              </Modal>
+
+              <Modal
                 open={showCreateGiftPackage}
                 onClose={() => setShowCreateGiftPackage(false)}
                 title="New gift package"
@@ -3088,6 +3209,28 @@ export default function EventDetailPage() {
                       </select>
                       <p className="field-hint">Follows the gateways enabled for this event.</p>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="label" htmlFor="gift-stock">
+                      Stock <span className="font-normal text-surface-600">(optional)</span>
+                    </label>
+                    <input
+                      id="gift-stock"
+                      type="number"
+                      min={0}
+                      step="1"
+                      className="input"
+                      placeholder="Unlimited"
+                      value={newGiftPackage.stockQuantity}
+                      onChange={(e) =>
+                        setNewGiftPackage({ ...newGiftPackage, stockQuantity: e.target.value })
+                      }
+                    />
+                    <p className="field-hint">
+                      Leave blank for unlimited. At zero the package shows as out of stock and
+                      cannot be added to a gift.
+                    </p>
                   </div>
 
                   <div>
@@ -3389,6 +3532,35 @@ export default function EventDetailPage() {
                 checked={eventSettings.giftingEnabled}
                 onChange={(checked) => setEventSettings({ ...eventSettings, giftingEnabled: checked })}
               />
+              {eventSettings.giftingEnabled ? (
+                <div className="ml-0 space-y-3 border-l-2 border-surface-200 pl-4 sm:ml-2">
+                  <Switch
+                    label="Gift items"
+                    description="Guests can buy packages from the catalogue."
+                    checked={eventSettings.giftItemsEnabled}
+                    onChange={(checked) =>
+                      setEventSettings({
+                        ...eventSettings,
+                        giftItemsEnabled: checked,
+                        // Gifting with neither kind on would leave guests a dead page.
+                        cashGiftsEnabled: checked ? eventSettings.cashGiftsEnabled : true,
+                      })
+                    }
+                  />
+                  <Switch
+                    label="Cash gifts"
+                    description="Guests can send money straight to the host."
+                    checked={eventSettings.cashGiftsEnabled}
+                    onChange={(checked) =>
+                      setEventSettings({
+                        ...eventSettings,
+                        cashGiftsEnabled: checked,
+                        giftItemsEnabled: checked ? eventSettings.giftItemsEnabled : true,
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
               <Switch
                 label="Voting"
                 description="Nominations, voting and the leaderboard."

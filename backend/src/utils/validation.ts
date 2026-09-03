@@ -91,6 +91,9 @@ export const createEventSchema = z.object({
   itineraryEnabled: z.boolean().default(false),
   itineraryTemplateId: nullableTemplateIdSchema,
   giftingEnabled: z.boolean().default(false),
+  // Both kinds are on by default, so enabling gifting behaves as it always did.
+  giftItemsEnabled: z.boolean().default(true),
+  cashGiftsEnabled: z.boolean().default(true),
   itineraryPageTemplateId: nullableTemplateIdSchema,
   giftingPageTemplateId: nullableTemplateIdSchema,
   votingPageTemplateId: nullableTemplateIdSchema,
@@ -182,6 +185,8 @@ export const updateEventSchema = z.object({
   itineraryEnabled: z.boolean().optional(),
   itineraryTemplateId: nullableTemplateIdSchema,
   giftingEnabled: z.boolean().optional(),
+  giftItemsEnabled: z.boolean().optional(),
+  cashGiftsEnabled: z.boolean().optional(),
   itineraryPageTemplateId: nullableTemplateIdSchema,
   giftingPageTemplateId: nullableTemplateIdSchema,
   votingPageTemplateId: nullableTemplateIdSchema,

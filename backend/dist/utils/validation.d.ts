@@ -55,6 +55,8 @@ export declare const createEventSchema: z.ZodObject<{
     itineraryEnabled: z.ZodDefault<z.ZodBoolean>;
     itineraryTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
     giftingEnabled: z.ZodDefault<z.ZodBoolean>;
+    giftItemsEnabled: z.ZodDefault<z.ZodBoolean>;
+    cashGiftsEnabled: z.ZodDefault<z.ZodBoolean>;
     itineraryPageTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
     giftingPageTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
     votingPageTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
@@ -109,6 +111,8 @@ export declare const createEventSchema: z.ZodObject<{
     strictInviteOnly: boolean;
     itineraryEnabled: boolean;
     giftingEnabled: boolean;
+    giftItemsEnabled: boolean;
+    cashGiftsEnabled: boolean;
     maxRecordingDuration: number;
     minRecordingDuration: number;
     maxPhotosPerGuest: number;
@@ -188,6 +192,8 @@ export declare const createEventSchema: z.ZodObject<{
     itineraryEnabled?: boolean | undefined;
     itineraryTemplateId?: unknown;
     giftingEnabled?: boolean | undefined;
+    giftItemsEnabled?: boolean | undefined;
+    cashGiftsEnabled?: boolean | undefined;
     itineraryPageTemplateId?: unknown;
     giftingPageTemplateId?: unknown;
     votingPageTemplateId?: unknown;
@@ -257,6 +263,8 @@ export declare const updateEventSchema: z.ZodObject<{
     itineraryEnabled: z.ZodOptional<z.ZodBoolean>;
     itineraryTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
     giftingEnabled: z.ZodOptional<z.ZodBoolean>;
+    giftItemsEnabled: z.ZodOptional<z.ZodBoolean>;
+    cashGiftsEnabled: z.ZodOptional<z.ZodBoolean>;
     itineraryPageTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
     giftingPageTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
     votingPageTemplateId: z.ZodEffects<z.ZodOptional<z.ZodNullable<z.ZodString>>, string | null | undefined, unknown>;
@@ -328,6 +336,8 @@ export declare const updateEventSchema: z.ZodObject<{
     itineraryEnabled?: boolean | undefined;
     itineraryTemplateId?: string | null | undefined;
     giftingEnabled?: boolean | undefined;
+    giftItemsEnabled?: boolean | undefined;
+    cashGiftsEnabled?: boolean | undefined;
     itineraryPageTemplateId?: string | null | undefined;
     giftingPageTemplateId?: string | null | undefined;
     votingPageTemplateId?: string | null | undefined;
@@ -398,6 +408,8 @@ export declare const updateEventSchema: z.ZodObject<{
     itineraryEnabled?: boolean | undefined;
     itineraryTemplateId?: unknown;
     giftingEnabled?: boolean | undefined;
+    giftItemsEnabled?: boolean | undefined;
+    cashGiftsEnabled?: boolean | undefined;
     itineraryPageTemplateId?: unknown;
     giftingPageTemplateId?: unknown;
     votingPageTemplateId?: unknown;

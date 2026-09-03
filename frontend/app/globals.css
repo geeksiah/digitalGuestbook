@@ -168,6 +168,22 @@
   }
 
   /* ----------------------------------------------------------------- inputs */
+  /* Safari gives date and time inputs an intrinsic width from the native
+     picker, which overflows a narrow container even though .input is w-full.
+     Native appearance is left alone; only the sizing is pinned. */
+  .input[type='date'],
+  .input[type='time'],
+  .input[type='datetime-local'],
+  .input[type='month'] {
+    @apply block min-w-0 max-w-full;
+  }
+
+  .input[type='date']::-webkit-date-and-time-value,
+  .input[type='time']::-webkit-date-and-time-value,
+  .input[type='datetime-local']::-webkit-date-and-time-value {
+    @apply m-0 text-left;
+  }
+
   .input {
     @apply w-full rounded-lg border border-surface-400 bg-white px-3 text-base text-navy-900 placeholder-surface-500 transition-colors duration-150 sm:text-sm;
     @apply min-h-[44px] py-2.5 sm:min-h-[40px] sm:py-2;

@@ -4,7 +4,13 @@ exports.paystackAdapter = void 0;
 const errorHandler_js_1 = require("../../middleware/errorHandler.js");
 const paystack_js_1 = require("../paystack.js");
 const PAYSTACK_BASE_URL = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
-const buildCallbackUrl = (gatewayConfig) => {
+const buildCallbackUrl = (intent, gatewayConfig) => {
+    // The caller knows best where the payer should land -- a gift returns to
+    // its own status page, on whichever host the guest started from. Falling
+    // back to the gateway config, then the site root, keeps older flows working.
+    const requested = String((intent.metadata || {}).callbackUrl || '').trim();
+    if (requested)
+        return requested;
     const explicit = String(gatewayConfig.successUrl || '').trim();
     if (explicit)
         return explicit;
@@ -44,7 +50,7 @@ const buildSplitFields = (intent) => {
 };
 const initializePaystack = async (intent, gatewayConfig) => {
     const secret = resolveSecret(gatewayConfig);
-    const callbackUrl = buildCallbackUrl(gatewayConfig);
+    const callbackUrl = buildCallbackUrl(intent, gatewayConfig);
     const metadata = intent.metadata || {};
     const email = String(metadata.email || metadata.guestEmail || metadata.customerEmail || '').trim() ||
         'guest@eventpeepo.com';

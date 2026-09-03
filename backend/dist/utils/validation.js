@@ -78,6 +78,9 @@ exports.createEventSchema = zod_1.z.object({
     itineraryEnabled: zod_1.z.boolean().default(false),
     itineraryTemplateId: nullableTemplateIdSchema,
     giftingEnabled: zod_1.z.boolean().default(false),
+    // Both kinds are on by default, so enabling gifting behaves as it always did.
+    giftItemsEnabled: zod_1.z.boolean().default(true),
+    cashGiftsEnabled: zod_1.z.boolean().default(true),
     itineraryPageTemplateId: nullableTemplateIdSchema,
     giftingPageTemplateId: nullableTemplateIdSchema,
     votingPageTemplateId: nullableTemplateIdSchema,
@@ -160,6 +163,8 @@ exports.updateEventSchema = zod_1.z.object({
     itineraryEnabled: zod_1.z.boolean().optional(),
     itineraryTemplateId: nullableTemplateIdSchema,
     giftingEnabled: zod_1.z.boolean().optional(),
+    giftItemsEnabled: zod_1.z.boolean().optional(),
+    cashGiftsEnabled: zod_1.z.boolean().optional(),
     itineraryPageTemplateId: nullableTemplateIdSchema,
     giftingPageTemplateId: nullableTemplateIdSchema,
     votingPageTemplateId: nullableTemplateIdSchema,

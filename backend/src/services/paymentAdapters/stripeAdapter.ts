@@ -53,8 +53,13 @@ const initializeStripe = async (
   gatewayConfig: AdapterGatewayConfig
 ): Promise<AdapterInitializeResult> => {
   const secret = resolveSecret(gatewayConfig);
-  const successUrl = String(gatewayConfig.successUrl || process.env.FRONTEND_URL || '').trim() || 'https://eventpeepo.com';
-  const cancelUrl = String(gatewayConfig.cancelUrl || successUrl).trim();
+  // Same precedence as Paystack: the intent picks its own return target.
+  const requestedCallback = String((intent.metadata || {}).callbackUrl || '').trim();
+  const successUrl =
+    requestedCallback ||
+    String(gatewayConfig.successUrl || process.env.FRONTEND_URL || '').trim() ||
+    'https://eventpeepo.com';
+  const cancelUrl = String((intent.metadata || {}).cancelUrl || gatewayConfig.cancelUrl || successUrl).trim();
   const amountMinor = Math.round(intent.amount * 100);
   if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
     throw new AppError('Invalid amount for Stripe initialization', 400);

@@ -758,6 +758,10 @@ export const itineraryApi = {
 export const giftingApi = {
   getPublicOptions: (slug: string) => axios.get(`${API_BASE_URL}/api/gifting/public/${slug}/options`),
   checkout: (slug: string, data: any) => axios.post(`${API_BASE_URL}/api/gifting/public/${slug}/checkout`, data),
+  getPublicOrderStatus: (slug: string, reference?: string) =>
+    axios.get(`${API_BASE_URL}/api/gifting/public/${slug}/order-status`, {
+      params: reference ? { reference } : undefined,
+    }),
   listPackages: () => api.get('/gifting/packages'),
   uploadPackageImage: (file: File) => {
     const formData = new FormData();

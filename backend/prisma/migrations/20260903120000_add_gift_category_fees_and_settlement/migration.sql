@@ -28,3 +28,15 @@ ADD COLUMN IF NOT EXISTS "platformFeeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0
 ADD COLUMN IF NOT EXISTS "processingFeeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
 ADD COLUMN IF NOT EXISTS "ownerNetAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
 ADD COLUMN IF NOT EXISTS "payoutRouting" TEXT NOT NULL DEFAULT 'ADMIN_MANUAL';
+
+-- Which gift kinds an event accepts. Default true so existing events keep
+-- offering both, matching how gifting behaved before this switch existed.
+ALTER TABLE "Event"
+ADD COLUMN IF NOT EXISTS "giftItemsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS "cashGiftsEnabled" BOOLEAN NOT NULL DEFAULT true;
+
+-- Optional stock control for gift packages. NULL keeps a package unlimited,
+-- which is how every existing package has always behaved.
+ALTER TABLE "GiftPackage"
+ADD COLUMN IF NOT EXISTS "stockQuantity" INTEGER,
+ADD COLUMN IF NOT EXISTS "soldQuantity" INTEGER NOT NULL DEFAULT 0;

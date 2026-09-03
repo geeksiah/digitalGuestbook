@@ -282,6 +282,20 @@ export const fulfillGiftPurchase = async (intent: PaymentIntent, tx: Transaction
       },
     });
 
+    // Stock is recorded here, not enforced here. Checkout already refused an
+    // oversized order; by this point the guest has paid, so the only correct
+    // move is to record the sale. Two buyers racing for a last item can
+    // oversell by one, which is far better than taking money and writing no
+    // order because a guarded update matched zero rows.
+    for (const item of packageItems) {
+      const pkg = packages.find((entry) => entry.id === item.giftPackageId);
+      if (!pkg || pkg.stockQuantity === null || pkg.stockQuantity === undefined) continue;
+      await db.giftPackage.update({
+        where: { id: pkg.id },
+        data: { soldQuantity: { increment: item.quantity } },
+      });
+    }
+
     if (lines.length) {
       await db.giftOrderItem.createMany({
         data: lines.map((line) => ({

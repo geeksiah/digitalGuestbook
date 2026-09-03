@@ -5,7 +5,8 @@ import { randomUUID, createHash } from 'crypto';
 import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateOwnerAccount } from '../middleware/auth.js';
-import { createPaymentIntent } from '../services/paymentCore.js';
+import { createPaymentIntent, verifyGatewayTransaction } from '../services/paymentCore.js';
+import { buildEventPublicUrl, getSiteUrl } from '../utils/siteUrl.js';
 import { BUCKETS, buildPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 import {
   computeGiftSettlement,
@@ -40,6 +41,8 @@ const packageSchema = z.object({
   currency: z.string().default('USD'),
   thumbnailPath: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
+  /** Null clears the limit and makes the package unlimited again. */
+  stockQuantity: z.number().int().min(0).optional().nullable(),
 });
 
 const checkoutSchema = z.object({
@@ -51,6 +54,8 @@ const checkoutSchema = z.object({
   note: z.string().optional().nullable(),
   deliveryDate: z.string().datetime().optional().nullable(),
   cashGiftAmount: z.number().min(0).optional().nullable(),
+  /** Absolute URL of the gift page the guest is on, used to route them back. */
+  returnUrl: z.string().optional().nullable(),
   packageItems: z.array(z.object({
     giftPackageId: z.string().uuid(),
     quantity: z.number().int().min(1).default(1),
@@ -60,6 +65,57 @@ const checkoutSchema = z.object({
 const assignmentSchema = z.object({
   packageIds: z.array(z.string().uuid()).default([]),
 });
+
+/**
+ * Remaining stock for a package. Null stock means unlimited, so it reports
+ * null rather than a number and never blocks a purchase.
+ */
+const remainingStock = (pkg: { stockQuantity?: number | null; soldQuantity?: number | null }) => {
+  if (pkg.stockQuantity === null || pkg.stockQuantity === undefined) return null;
+  return Math.max(0, pkg.stockQuantity - Number(pkg.soldQuantity || 0));
+};
+
+type EventDomainRow = { host: string; status: string; isPrimary: boolean };
+
+/**
+ * Where the gateway should send the payer back to. The guest may be on the
+ * platform host or on the event's own domain, so the page tells us where it
+ * is and we accept it only if that host really belongs to this event. Anything
+ * else falls back to the canonical gift URL rather than trusting the input.
+ */
+const resolveGiftReturnUrl = (params: {
+  requested?: string | null;
+  slug: string;
+  domains: EventDomainRow[];
+}) => {
+  const canonical = `${buildEventPublicUrl(params.slug, '/gift', params.domains)}/status`;
+
+  const requested = String(params.requested || '').trim();
+  if (!requested) return canonical;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(requested);
+  } catch {
+    return canonical;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return canonical;
+
+  const allowedHosts = new Set<string>();
+  try {
+    allowedHosts.add(new URL(getSiteUrl()).host.toLowerCase());
+  } catch {
+    /* getSiteUrl already falls back to a safe default */
+  }
+  for (const domain of params.domains || []) {
+    if (domain.status === 'ACTIVE' || domain.status === 'VERIFIED') {
+      allowedHosts.add(String(domain.host || '').toLowerCase());
+      allowedHosts.add(`www.${String(domain.host || '').toLowerCase()}`);
+    }
+  }
+
+  return allowedHosts.has(parsed.host.toLowerCase()) ? parsed.toString() : canonical;
+};
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
@@ -130,11 +186,14 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
       slug: true,
       name: true,
       giftingEnabled: true,
+      giftItemsEnabled: true,
+      cashGiftsEnabled: true,
       coverImagePath: true,
       coverImageAlt: true,
       socialTitle: true,
       socialDescription: true,
       ownerId: true,
+      domains: { select: { host: true, status: true, isPrimary: true } },
     },
   });
 
@@ -147,14 +206,18 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
   });
   const assignedPackageIds = eventPackageLinks.map((link: { giftPackageId: string }) => link.giftPackageId);
 
-  const packages = await prisma.giftPackage.findMany({
-    where: {
-      isActive: true,
-      ...(assignedPackageIds.length ? { id: { in: assignedPackageIds } } : {}),
-    },
-    orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
-  });
-  const { ownerId, ...eventPublic } = event;
+  const packages = event.giftItemsEnabled
+    ? await prisma.giftPackage.findMany({
+        where: {
+          isActive: true,
+          ...(assignedPackageIds.length ? { id: { in: assignedPackageIds } } : {}),
+        },
+        orderBy: [{ price: 'asc' }, { createdAt: 'desc' }],
+      })
+    : [];
+  const { ownerId, domains: eventDomains, ...eventPublic } = event;
+  // Where "Back to event" should go: the custom domain when one is live.
+  const eventUrl = buildEventPublicUrl(event.slug, '', eventDomains || []);
 
   const eventGateways = await prisma.eventPaymentGateway.findMany({
     where: {
@@ -210,10 +273,16 @@ router.get('/public/:slug/options', asyncHandler(async (req, res) => {
 
   res.json({
     event: eventPublic,
-    packages: packages.map((pkg) => ({
-      ...pkg,
-      thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
-    })),
+    eventUrl,
+    packages: packages.map((pkg) => {
+      const remaining = remainingStock(pkg);
+      return {
+        ...pkg,
+        thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+        remainingStock: remaining,
+        inStock: remaining === null || remaining > 0,
+      };
+    }),
     momoEnabled: true,
     walletMode: walletState.mode,
     settlementPolicy: {
@@ -268,6 +337,8 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       id: true,
       name: true,
       giftingEnabled: true,
+      giftItemsEnabled: true,
+      cashGiftsEnabled: true,
       ownerId: true,
       feeOverridesEnabled: true,
       platformFeeMode: true,
@@ -281,6 +352,8 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
       cashGiftFeeMode: true,
       cashGiftFeePercent: true,
       cashGiftFeeFixed: true,
+      slug: true,
+      domains: { select: { host: true, status: true, isPrimary: true } },
       Owner: {
         select: {
           countryCode: true,
@@ -303,6 +376,15 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
   });
   if (!event) throw new AppError('Event not found', 404);
   if (!event.giftingEnabled) throw new AppError('Gifting is disabled for this event', 404);
+
+  // The page hides the kind it cannot take, but the rule belongs here too:
+  // a stale tab or a direct API call must not slip past it.
+  if (packageItems.length && !event.giftItemsEnabled) {
+    throw new AppError('This event is not accepting gift items', 400);
+  }
+  if (cashGiftAmount > 0 && !event.cashGiftsEnabled) {
+    throw new AppError('This event is not accepting cash gifts', 400);
+  }
 
   const configuredGateways = await prisma.eventPaymentGateway.findMany({
     where: {
@@ -347,6 +429,17 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
   const normalizedPackageItems = packageItems.map((item) => {
     const pkg = giftPackages.find((p) => p.id === item.giftPackageId);
     if (!pkg) throw new AppError('One or more gift packages are unavailable', 400);
+    // Checked here for a clear message; fulfilment re-checks atomically,
+    // because two guests can pass this point at the same moment.
+    const remaining = remainingStock(pkg);
+    if (remaining !== null && item.quantity > remaining) {
+      throw new AppError(
+        remaining === 0
+          ? `${pkg.name} is out of stock`
+          : `Only ${remaining} of ${pkg.name} left`,
+        400
+      );
+    }
     const lineTotal = pkg.price * item.quantity;
     packagesTotal += lineTotal;
     return {
@@ -443,6 +536,11 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
         giftPackageId: item.giftPackageId,
         quantity: item.quantity,
       })),
+      callbackUrl: resolveGiftReturnUrl({
+        requested: data.returnUrl,
+        slug: event.slug,
+        domains: (event.domains || []) as EventDomainRow[],
+      }),
       ownerWalletId: ownerConnectedAccountId ? ownerWallet?.id : undefined,
       routedWalletType: ownerConnectedAccountId ? selectedGatewayType : undefined,
     },
@@ -473,6 +571,127 @@ router.post('/public/:slug/checkout', asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/gifting/public/:slug/order-status?reference=...
+ *
+ * Backs the page a guest lands on after paying. The gateway redirect usually
+ * beats its own webhook, so this verifies the reference directly rather than
+ * telling the guest their gift failed while the webhook is still in flight.
+ * Verification is idempotent: fulfilment already refuses to write an order
+ * twice for the same intent.
+ */
+router.get('/public/:slug/order-status', asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const reference = String(req.query.reference || '').trim();
+
+  const event = await (prisma as any).event.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      giftingEnabled: true,
+      domains: { select: { host: true, status: true, isPrimary: true } },
+    },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  const eventUrl = buildEventPublicUrl(event.slug, '', event.domains || []);
+  const giftUrl = buildEventPublicUrl(event.slug, '/gift', event.domains || []);
+  const baseResponse = {
+    event: { name: event.name, slug: event.slug },
+    eventUrl,
+    giftUrl,
+  };
+
+  if (!reference) {
+    return res.json({ ...baseResponse, status: 'UNKNOWN', order: null });
+  }
+
+  const intent = await prisma.paymentIntent.findFirst({
+    where: {
+      eventId: event.id,
+      purpose: 'GIFT',
+      OR: [
+        { gatewayReference: reference },
+        { id: reference.replace(/^pi_/, '') },
+      ],
+    },
+  });
+
+  if (!intent) {
+    return res.json({ ...baseResponse, status: 'UNKNOWN', order: null });
+  }
+
+  // Ask the gateway only while the outcome is still open. Once an intent has
+  // settled either way, the stored status is the answer.
+  if (intent.status !== 'SUCCEEDED' && intent.status !== 'FAILED') {
+    try {
+      await verifyGatewayTransaction(intent.id, reference);
+    } catch (error) {
+      // A gateway that cannot be reached must not turn into a false failure;
+      // the webhook is still the source of truth and will land shortly.
+      console.warn('[Gift status] verification failed', {
+        intentId: intent.id,
+        error: (error as Error)?.message,
+      });
+    }
+  }
+
+  const settled = await prisma.paymentIntent.findUnique({ where: { id: intent.id } });
+  const order = await (prisma as any).giftOrder.findFirst({
+    where: { paymentIntentId: intent.id },
+    select: {
+      id: true,
+      guestName: true,
+      currency: true,
+      totalAmount: true,
+      cashGiftAmount: true,
+      packageAmount: true,
+      createdAt: true,
+      items: {
+        select: {
+          type: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+          giftPackage: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  const status =
+    order || settled?.status === 'SUCCEEDED'
+      ? 'SUCCEEDED'
+      : settled?.status === 'FAILED' || settled?.status === 'EXPIRED'
+      ? 'FAILED'
+      : 'PENDING';
+
+  res.json({
+    ...baseResponse,
+    status,
+    reference: settled?.gatewayReference || reference,
+    order: order
+      ? {
+          id: order.id,
+          guestName: order.guestName,
+          currency: order.currency,
+          totalAmount: order.totalAmount,
+          cashGiftAmount: order.cashGiftAmount,
+          packageAmount: order.packageAmount,
+          createdAt: order.createdAt,
+          items: (order.items || []).map((item: any) => ({
+            type: item.type,
+            name: item.giftPackage?.name || 'Cash gift',
+            quantity: item.quantity,
+            lineTotal: item.lineTotal,
+          })),
+        }
+      : null,
+  });
+}));
+
 // ============================================
 // Admin package management
 // ============================================
@@ -485,6 +704,7 @@ router.get('/packages', authenticateAdmin, asyncHandler(async (_req, res) => {
     packages: packages.map((pkg) => ({
       ...pkg,
       thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+      remainingStock: remainingStock(pkg),
     })),
   });
 }));
@@ -530,6 +750,7 @@ router.post('/packages', authenticateAdmin, asyncHandler(async (req, res) => {
       currency: data.currency,
       thumbnailPath: data.thumbnailPath ?? null,
       isActive: data.isActive ?? true,
+      stockQuantity: data.stockQuantity ?? null,
     },
   });
   res.status(201).json({ package: giftPackage });
@@ -546,6 +767,7 @@ router.patch('/packages/:id', authenticateAdmin, asyncHandler(async (req, res) =
       currency: data.currency,
       thumbnailPath: data.thumbnailPath !== undefined ? data.thumbnailPath : undefined,
       isActive: data.isActive,
+      stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : undefined,
     },
   });
   res.json({ package: giftPackage });
@@ -584,6 +806,7 @@ router.get('/events/:eventId/packages', authenticateAdmin, asyncHandler(async (r
     packages: packages.map((pkg) => ({
       ...pkg,
       thumbnailUrl: pkg.thumbnailPath ? buildPublicUrl(BUCKETS.MEDIA, pkg.thumbnailPath) : null,
+      remainingStock: remainingStock(pkg),
       assigned: assignedSet.has(pkg.id),
     })),
   });

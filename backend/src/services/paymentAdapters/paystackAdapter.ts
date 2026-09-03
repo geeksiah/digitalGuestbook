@@ -11,7 +11,12 @@ import type {
 
 const PAYSTACK_BASE_URL = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
 
-const buildCallbackUrl = (gatewayConfig: AdapterGatewayConfig) => {
+const buildCallbackUrl = (intent: AdapterIntent, gatewayConfig: AdapterGatewayConfig) => {
+  // The caller knows best where the payer should land -- a gift returns to
+  // its own status page, on whichever host the guest started from. Falling
+  // back to the gateway config, then the site root, keeps older flows working.
+  const requested = String((intent.metadata || {}).callbackUrl || '').trim();
+  if (requested) return requested;
   const explicit = String(gatewayConfig.successUrl || '').trim();
   if (explicit) return explicit;
   const base = String(process.env.FRONTEND_URL || process.env.SITE_URL || '').trim().replace(/\/+$/, '');
@@ -57,7 +62,7 @@ const initializePaystack = async (
   gatewayConfig: AdapterGatewayConfig
 ): Promise<AdapterInitializeResult> => {
   const secret = resolveSecret(gatewayConfig);
-  const callbackUrl = buildCallbackUrl(gatewayConfig);
+  const callbackUrl = buildCallbackUrl(intent, gatewayConfig);
   const metadata = intent.metadata || {};
   const email =
     String(metadata.email || metadata.guestEmail || metadata.customerEmail || '').trim() ||

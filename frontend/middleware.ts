@@ -172,6 +172,21 @@ export async function middleware(request: NextRequest) {
     redirectUrl.pathname = '/gift';
     return NextResponse.redirect(redirectUrl, 308);
   }
+  // Where a gateway returns the payer after checkout.
+  if (pathname === `/gift/${mapping.slug}/status`) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/gift/status';
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+  if (pathname === '/gift/status') {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = `/gift/${mapping.slug}/status`;
+    return NextResponse.rewrite(rewriteUrl, {
+      request: {
+        headers: getRewriteRequestHeaders(request, mapping, pathname),
+      },
+    });
+  }
   if (pathname.startsWith('/gift/')) return notFound();
   if (pathname === '/gift') {
     const rewriteUrl = request.nextUrl.clone();

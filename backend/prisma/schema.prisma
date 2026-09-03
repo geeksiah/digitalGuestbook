@@ -376,6 +376,10 @@ model Event {
   itineraryEnabled        Boolean @default(false)
   itineraryTemplateId     String?
   giftingEnabled          Boolean @default(false)
+  // Which kinds of gift an event accepts. Both default on, so turning gifting
+  // on behaves as it always has; admin narrows it to items-only or cash-only.
+  giftItemsEnabled        Boolean @default(true)
+  cashGiftsEnabled        Boolean @default(true)
   itineraryPageTemplateId String?
   giftingPageTemplateId   String?
   votingPageTemplateId    String?
@@ -1479,6 +1483,11 @@ model GiftPackage {
   currency      String   @default("USD")
   thumbnailPath String?
   isActive      Boolean  @default(true)
+  // Null means unlimited, which is how every package behaved before stock
+  // existed. A number is the remaining count and is decremented on payment.
+  stockQuantity Int?
+  // Sold count is kept for reporting even once stock is switched back to null.
+  soldQuantity  Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
