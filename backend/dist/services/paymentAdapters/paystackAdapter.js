@@ -54,7 +54,18 @@ const initializePaystack = async (intent, gatewayConfig) => {
     const metadata = intent.metadata || {};
     const email = String(metadata.email || metadata.guestEmail || metadata.customerEmail || '').trim() ||
         'guest@eventpeepo.com';
-    const reference = `pi_${intent.id}`;
+    // A retry needs its own reference: Paystack rejects a repeat of one it has
+    // already seen, which would strand a guest whose first attempt lapsed.
+    const attempt = Number(metadata.checkoutAttempt || 0);
+    const reference = attempt > 0 ? `pi_${intent.id}_${attempt}` : `pi_${intent.id}`;
+    // Name and phone ride along so the Paystack record identifies the sender.
+    const guestName = String(metadata.guestName || '').trim();
+    const [firstName, ...restOfName] = guestName.split(/\s+/).filter(Boolean);
+    const guestPhone = String(metadata.guestPhone || '').trim();
+    const customFields = [
+        guestName ? { display_name: 'Sender', variable_name: 'sender_name', value: guestName } : null,
+        guestPhone ? { display_name: 'Sender phone', variable_name: 'sender_phone', value: guestPhone } : null,
+    ].filter(Boolean);
     const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
         method: 'POST',
         headers: {
@@ -68,11 +79,16 @@ const initializePaystack = async (intent, gatewayConfig) => {
             reference,
             callback_url: callbackUrl,
             ...buildSplitFields(intent),
+            first_name: firstName || undefined,
+            last_name: restOfName.join(' ') || undefined,
+            phone: guestPhone || undefined,
             metadata: {
                 paymentIntentId: intent.id,
                 eventId: intent.eventId,
                 purpose: intent.purpose,
                 ...metadata,
+                // Shown against the transaction in the Paystack dashboard.
+                ...(customFields.length ? { custom_fields: customFields } : {}),
             },
         }),
     });

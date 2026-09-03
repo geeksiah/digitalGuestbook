@@ -2580,8 +2580,12 @@ export default function OwnerEventDetailPage() {
         {detailOrder ? (
           <div className="space-y-5">
             <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-              <DetailRow label="Contact">
-                {detailOrder.guestEmail || detailOrder.guestPhone || 'Not provided'}
+              <DetailRow label="Sender">{detailOrder.guestName}</DetailRow>
+              <DetailRow label="Phone">
+                {detailOrder.guestPhone || <span className="text-surface-500">Not provided</span>}
+              </DetailRow>
+              <DetailRow label="Email">
+                {detailOrder.guestEmail || <span className="text-surface-500">Not provided</span>}
               </DetailRow>
               <DetailRow label="Paid with">
                 {detailOrder.paymentMethod ? humanizeEnum(detailOrder.paymentMethod) : 'Unknown'}

@@ -64,6 +64,12 @@ type HandleWebhookInput = {
   rawPayload?: string;
 };
 
+/**
+ * How long a gateway checkout link is treated as still usable. Past this a
+ * repeat checkout starts a new attempt instead of resending a stale link.
+ */
+const CHECKOUT_LINK_TTL_MS = 30 * 60 * 1000;
+
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const toJsonString = (value: Record<string, unknown>) => JSON.stringify(value);
@@ -300,6 +306,7 @@ export const createPaymentIntent = async (
   };
 
   let intent: PaymentIntent;
+  let reusedExistingIntent = false;
   try {
     intent = await prisma.paymentIntent.create({
       data: {
@@ -323,6 +330,7 @@ export const createPaymentIntent = async (
     });
     if (!existing) throw error;
     intent = existing;
+    reusedExistingIntent = true;
   }
 
   const adapter = getPaymentAdapter(gatewayType);
@@ -336,20 +344,56 @@ export const createPaymentIntent = async (
     split,
   } as const;
 
-  let nextAction: PaymentNextAction = { type: 'NONE', reference: intent.gatewayReference || undefined };
-  if (!intent.gatewayReference || intent.status === 'PENDING') {
-    const initialized = await adapter.initializePayment(adapterIntent, selectedGateway);
-    intent = await prisma.paymentIntent.update({
-      where: { id: intent.id },
-      data: {
-        status: 'INITIALIZED',
-        gatewayReference: initialized.gatewayReference,
-      },
-    });
-    nextAction = initialized.nextAction;
+  // An already-settled intent has nothing left to pay.
+  if (intent.status === 'SUCCEEDED') {
+    return {
+      intent,
+      nextAction: { type: 'NONE', reference: intent.gatewayReference || undefined },
+    };
   }
 
-  return { intent, nextAction };
+  const storedMetadata: Record<string, unknown> = reusedExistingIntent
+    ? parseIntentMetadata(intent)
+    : metadataPayload;
+  const storedAction = storedMetadata.nextAction as PaymentNextAction | undefined;
+  const initializedAt = Number(storedMetadata.initializedAt || 0);
+  const linkIsFresh =
+    Boolean(storedAction?.url) && Date.now() - initializedAt < CHECKOUT_LINK_TTL_MS;
+
+  // Resume the link the guest already has rather than issuing a second one.
+  if (reusedExistingIntent && linkIsFresh) {
+    return { intent, nextAction: storedAction as PaymentNextAction };
+  }
+
+  // Otherwise start a fresh attempt. The attempt number gives the gateway a
+  // reference it has not seen before.
+  const attempt = Number(storedMetadata.checkoutAttempt || 0) + (reusedExistingIntent ? 1 : 0);
+  const attemptMetadata = {
+    // A reused intent keeps the economics frozen at its first checkout; only
+    // the attempt bookkeeping moves on.
+    ...storedMetadata,
+    checkoutAttempt: attempt,
+  };
+
+  const initialized = await adapter.initializePayment(
+    { ...adapterIntent, metadata: attemptMetadata },
+    selectedGateway
+  );
+
+  intent = await prisma.paymentIntent.update({
+    where: { id: intent.id },
+    data: {
+      status: 'INITIALIZED',
+      gatewayReference: initialized.gatewayReference,
+      metadataJson: toJsonString({
+        ...attemptMetadata,
+        nextAction: initialized.nextAction,
+        initializedAt: Date.now(),
+      }),
+    },
+  });
+
+  return { intent, nextAction: initialized.nextAction };
 };
 
 export const verifyGatewayTransaction = async (intentId: string, reference?: string) => {

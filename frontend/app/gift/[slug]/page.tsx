@@ -674,7 +674,16 @@ export default function GiftPage() {
         return;
       }
 
-      toast.success('Checkout started. Complete payment to send your gift.');
+      // No overlay and no redirect means there is nothing for the guest to pay
+      // with. The status page can say what actually happened to this reference;
+      // a cheerful toast here would strand them on an unfinished checkout.
+      const reference = nextAction?.reference as string | undefined;
+      if (reference) {
+        window.location.href = statusUrl(reference);
+        return;
+      }
+
+      toast.error('We could not open the payment window. Please try again.');
       setSubmitting(false);
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit gift'));
