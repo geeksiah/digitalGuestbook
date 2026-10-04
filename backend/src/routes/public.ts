@@ -157,6 +157,7 @@ const EVENT_PUBLIC_SELECT = {
   domains: {
     select: { host: true, status: true, isPrimary: true },
   },
+  invitationMedia: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] },
 };
 
 // ─── Helper: standard template data ────────────────────────────────────────────
@@ -164,6 +165,12 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
   // Guest links follow the event's own domain when it has one connected.
   const publicUrl = (path: string) => buildEventPublicUrl(event.slug, path, event.domains);
   const apiBaseUrl = getApiUrl();
+  const invitationMedia = (event.invitationMedia || []).map((item: any) => ({
+    id: item.id, role: item.role, type: item.type, isVideo: item.type === 'VIDEO', url: getPublicUrl(BUCKETS.MEDIA, item.filePath),
+    posterUrl: item.posterPath ? getPublicUrl(BUCKETS.MEDIA, item.posterPath) : null, alt: item.alt || '', caption: item.caption || ''
+  }));
+  const sections = invitationMedia.filter((item:any) => item.role === 'SECTION');
+  const gallery = invitationMedia.filter((item:any) => item.role === 'GALLERY');
   return {
     event: {
       name: event.name,
@@ -187,6 +194,15 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
     },
     phase: currentPhase,
     capabilities,
+    media: {
+      hero: invitationMedia.find((item:any) => item.role === 'HERO') || null,
+      section: sections[0] || null,
+      sections,
+      gallery,
+      galleryPreview: gallery.slice(0, 6),
+      galleryCount: gallery.length,
+      galleryRemainingCount: Math.max(0, gallery.length - 6),
+    },
     urls: {
       rsvp: event.rsvpEnabled ? publicUrl('/rsvp') : null,
       guestbook: event.guestbookEnabled ? publicUrl('/guestbook') : null,

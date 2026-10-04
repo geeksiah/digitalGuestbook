@@ -51,6 +51,10 @@ export const eventsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   deleteCover: (id: string) => api.delete(`/events/${id}/cover`),
+  uploadInvitationMedia: (id: string, formData: FormData) => api.post(`/events/${id}/invitation-media`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  updateInvitationMedia: (id: string, mediaId: string, data: any) => api.patch(`/events/${id}/invitation-media/${mediaId}`, data),
+  reorderInvitationMedia: (id: string, ids: string[]) => api.post(`/events/${id}/invitation-media/reorder`, { ids }),
+  deleteInvitationMedia: (id: string, mediaId: string) => api.delete(`/events/${id}/invitation-media/${mediaId}`),
   getDomains: (id: string) => api.get(`/events/${id}/domains`),
   addDomain: (id: string, data: { host: string; isPrimary?: boolean }) =>
     api.post(`/events/${id}/domains`, data),

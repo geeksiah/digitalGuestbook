@@ -20,6 +20,23 @@ import { calculateEventPhase } from '../utils/phase.js';
 import { BUCKETS, buildPublicUrl, deleteFromSupabase, getPublicUrl, uploadToSupabase } from '../services/supabaseStorage.js';
 
 const router = Router();
+const invitationMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/') && !file.mimetype.startsWith('video/')) {
+      cb(new AppError('Invitation media must be an image or video', 400)); return;
+    }
+    cb(null, true);
+  },
+});
+
+const resolveInvitationMedia = (item: any) => ({
+  ...item,
+  url: resolveCoverUrl(item.filePath),
+  posterUrl: item.posterPath ? resolveCoverUrl(item.posterPath) : null,
+});
+
 const coverUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -271,6 +288,7 @@ router.get('/', asyncHandler(async (req, res) => {
     ...event,
     currentPhase: calculateEventPhase(event),
     coverImageUrl: resolveCoverUrl(event.coverImagePath),
+    invitationMedia: (event as any).invitationMedia?.map(resolveInvitationMedia) || [],
   }));
 
   // Filter by phase if requested
@@ -304,6 +322,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
       domains: {
         orderBy: { createdAt: 'asc' },
       },
+      invitationMedia: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] },
       _count: {
         select: {
           rsvps: true,
@@ -324,6 +343,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
       ...event,
       currentPhase: calculateEventPhase(event),
       coverImageUrl: resolveCoverUrl(event.coverImagePath),
+      invitationMedia: (event as any).invitationMedia?.map(resolveInvitationMedia) || [],
     },
   });
 }));
@@ -881,6 +901,57 @@ router.delete('/:id/cover', asyncHandler(async (req, res) => {
       coverImageUrl: null,
     },
   });
+}));
+
+/** Invitation design media */
+router.post('/:id/invitation-media', invitationMediaUpload.single('media'), asyncHandler(async (req, res) => {
+  const { id } = req.params; const file = req.file;
+  if (!file) throw new AppError('Media file is required', 400);
+  const event = await prisma.event.findUnique({ where: { id }, select: { id: true } });
+  if (!event) throw new AppError('Event not found', 404);
+  const role = String(req.body.role || 'GALLERY').toUpperCase();
+  if (!['HERO','SECTION','GALLERY'].includes(role)) throw new AppError('Invalid invitation media role', 400);
+  const type = file.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE';
+  if (role === 'HERO' && type !== 'IMAGE') throw new AppError('Hero media must be an image', 400);
+  const count = await prisma.invitationMedia.count({ where: { eventId: id } });
+  if (count >= 100) throw new AppError('Invitation media limit reached (100)', 400);
+  const ext = (file.originalname.split('.').pop() || (type === 'VIDEO' ? 'mp4' : 'jpg')).replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const storagePath = `events/${id}/invitation/${Date.now()}-${randomUUID()}.${ext}`;
+  const upload = await uploadToSupabase(BUCKETS.MEDIA, storagePath, file.buffer, { contentType: file.mimetype, cacheControl: '31536000' });
+  if (role === 'HERO') {
+    const oldHeroes = await prisma.invitationMedia.findMany({ where: { eventId: id, role: 'HERO' } });
+    await Promise.all(oldHeroes.map((m:any) => deleteFromSupabase(BUCKETS.MEDIA, m.filePath).catch(()=>null)));
+    await prisma.invitationMedia.deleteMany({ where: { eventId: id, role: 'HERO' } });
+  }
+  const max = await prisma.invitationMedia.aggregate({ where: { eventId: id, role }, _max: { sortOrder: true } });
+  const media = await prisma.invitationMedia.create({ data: { eventId:id, role, type, filePath:upload.path, fileName:file.originalname, mimeType:file.mimetype, fileSize:file.size, alt:req.body.alt?.trim()||null, caption:req.body.caption?.trim()||null, sortOrder:(max._max.sortOrder ?? -1)+1 } });
+  res.status(201).json({ media: resolveInvitationMedia(media) });
+}));
+
+router.patch('/:id/invitation-media/:mediaId', asyncHandler(async (req,res) => {
+  const existing = await prisma.invitationMedia.findFirst({ where:{ id:req.params.mediaId, eventId:req.params.id } });
+  if (!existing) throw new AppError('Invitation media not found',404);
+  const role = req.body.role ? String(req.body.role).toUpperCase() : existing.role;
+  if (!['HERO','SECTION','GALLERY'].includes(role)) throw new AppError('Invalid invitation media role',400);
+  if (role === 'HERO' && existing.type !== 'IMAGE') throw new AppError('Hero media must be an image',400);
+  if (role === 'HERO') await prisma.invitationMedia.updateMany({ where:{eventId:req.params.id, role:'HERO', id:{not:existing.id}}, data:{role:'GALLERY'} });
+  const media = await prisma.invitationMedia.update({ where:{id:existing.id}, data:{ role, alt:req.body.alt===undefined?undefined:(req.body.alt?.trim()||null), caption:req.body.caption===undefined?undefined:(req.body.caption?.trim()||null), sortOrder:Number.isInteger(req.body.sortOrder)?req.body.sortOrder:undefined } });
+  res.json({media:resolveInvitationMedia(media)});
+}));
+
+router.post('/:id/invitation-media/reorder', asyncHandler(async (req,res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+  await prisma.$transaction(ids.map((mediaId:string,index:number)=>prisma.invitationMedia.updateMany({where:{id:mediaId,eventId:req.params.id},data:{sortOrder:index}})));
+  res.json({ok:true});
+}));
+
+router.delete('/:id/invitation-media/:mediaId', asyncHandler(async (req,res) => {
+  const media = await prisma.invitationMedia.findFirst({where:{id:req.params.mediaId,eventId:req.params.id}});
+  if (!media) throw new AppError('Invitation media not found',404);
+  await deleteFromSupabase(BUCKETS.MEDIA, media.filePath).catch(()=>null);
+  if (media.posterPath) await deleteFromSupabase(BUCKETS.MEDIA, media.posterPath).catch(()=>null);
+  await prisma.invitationMedia.delete({where:{id:media.id}});
+  res.json({ok:true});
 }));
 
 /**

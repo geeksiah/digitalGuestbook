@@ -34,6 +34,8 @@ import { ExternalLink } from '@/components/ui/icons';
 import { CURRENCY_OPTIONS, getCurrencyOption, uniqueCurrencyCodes } from '@/lib/paymentGatewayConfig';
 import toast from 'react-hot-toast';
 
+interface InvitationMediaItem { id:string; role:'HERO'|'SECTION'|'GALLERY'; type:'IMAGE'|'VIDEO'; url:string; posterUrl?:string|null; alt?:string|null; caption?:string|null; sortOrder:number; fileName:string; }
+
 interface Event {
   id: string;
   slug: string;
@@ -44,6 +46,7 @@ interface Event {
   coverImagePath: string | null;
   coverImageAlt: string | null;
   coverImageUrl?: string | null;
+  invitationMedia?: InvitationMediaItem[];
   date: string;
   endDate: string | null;
   venue: string | null;
@@ -480,6 +483,9 @@ export default function EventDetailPage() {
   });
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [invitationMediaFile, setInvitationMediaFile] = useState<File | null>(null);
+  const [invitationMediaRole, setInvitationMediaRole] = useState<'HERO'|'SECTION'|'GALLERY'>('GALLERY');
+  const [uploadingInvitationMedia, setUploadingInvitationMedia] = useState(false);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainHost, setDomainHost] = useState('');
   const [savingDomain, setSavingDomain] = useState(false);
@@ -1147,6 +1153,35 @@ export default function EventDetailPage() {
     } finally {
       setUploadingCover(false);
     }
+  };
+
+  const handleUploadInvitationMedia = async () => {
+    if (!invitationMediaFile) return;
+    setUploadingInvitationMedia(true);
+    try {
+      const fd = new FormData(); fd.append('media', invitationMediaFile); fd.append('role', invitationMediaRole);
+      await eventsApi.uploadInvitationMedia(eventId, fd);
+      toast.success('Invitation media uploaded'); setInvitationMediaFile(null); await fetchEvent();
+    } catch (e) { toast.error(getErrorMessage(e, 'Failed to upload invitation media')); }
+    finally { setUploadingInvitationMedia(false); }
+  };
+
+  const handleInvitationMediaRole = async (item: InvitationMediaItem, role: 'HERO'|'SECTION'|'GALLERY') => {
+    try { await eventsApi.updateInvitationMedia(eventId, item.id, { role }); await fetchEvent(); }
+    catch (e) { toast.error(getErrorMessage(e, 'Failed to update invitation media')); }
+  };
+
+  const handleDeleteInvitationMedia = async (mediaId: string) => {
+    try { await eventsApi.deleteInvitationMedia(eventId, mediaId); toast.success('Invitation media removed'); await fetchEvent(); }
+    catch (e) { toast.error(getErrorMessage(e, 'Failed to remove invitation media')); }
+  };
+
+  const moveInvitationMedia = async (item: InvitationMediaItem, direction: -1|1) => {
+    const same = (event?.invitationMedia || []).filter(m => m.role === item.role).sort((a,b)=>a.sortOrder-b.sortOrder);
+    const index = same.findIndex(m => m.id === item.id); const target = index + direction; if (index < 0 || target < 0 || target >= same.length) return;
+    [same[index], same[target]] = [same[target], same[index]];
+    try { await eventsApi.reorderInvitationMedia(eventId, same.map(m=>m.id)); await fetchEvent(); }
+    catch (e) { toast.error(getErrorMessage(e, 'Failed to reorder invitation media')); }
   };
 
   const handleDeleteCover = async () => {
@@ -3978,6 +4013,30 @@ export default function EventDetailPage() {
                     {eventSettings.socialDescription || eventSettings.description || 'No share description set.'}
                   </p>
                 </div>
+              </div>
+
+              <div className="sm:col-span-2 border-t border-surface-200 pt-5">
+                <p className="label">Invitation media</p>
+                <p className="field-hint mb-3">Separate from the social cover. Hero replaces the invitation background; Section and Gallery can contain multiple items. Gallery videos play in the template lightbox.</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <select className="input sm:w-36" value={invitationMediaRole} onChange={(e)=>setInvitationMediaRole(e.target.value as any)}>
+                    <option value="HERO">Hero</option><option value="SECTION">Section</option><option value="GALLERY">Gallery</option>
+                  </select>
+                  <input type="file" accept={invitationMediaRole === 'HERO' ? 'image/*' : 'image/*,video/*'} className="input flex-1" onChange={(e)=>setInvitationMediaFile(e.target.files?.[0] || null)} />
+                  <button type="button" className="btn-outline" disabled={!invitationMediaFile || uploadingInvitationMedia} onClick={handleUploadInvitationMedia}>{uploadingInvitationMedia ? 'Uploading…' : 'Add media'}</button>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {(event.invitationMedia || []).sort((a,b)=>a.role.localeCompare(b.role)||a.sortOrder-b.sortOrder).map((item)=>(
+                    <div key={item.id} className="overflow-hidden rounded-xl border border-surface-200">
+                      <div className="aspect-video bg-surface-100">{item.type === 'VIDEO' ? <video src={item.url} poster={item.posterUrl || undefined} className="h-full w-full object-cover" muted /> : <img src={item.url} alt={item.alt || item.fileName} className="h-full w-full object-cover" />}</div>
+                      <div className="space-y-2 p-3"><div className="flex items-center justify-between"><span className="text-xs font-semibold">{item.role} · {item.type}</span><button type="button" className="text-xs text-red-600" onClick={()=>handleDeleteInvitationMedia(item.id)}>Remove</button></div>
+                        <select className="input text-xs" value={item.role} onChange={(e)=>handleInvitationMediaRole(item,e.target.value as any)}><option value="HERO" disabled={item.type==='VIDEO'}>Hero</option><option value="SECTION">Section</option><option value="GALLERY">Gallery</option></select>
+                        {item.role !== 'HERO' ? <div className="flex gap-2"><button type="button" className="btn-outline btn-sm" onClick={()=>moveInvitationMedia(item,-1)}>← Earlier</button><button type="button" className="btn-outline btn-sm" onClick={()=>moveInvitationMedia(item,1)}>Later →</button></div> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {(event.invitationMedia || []).length === 0 ? <p className="mt-3 text-sm text-surface-500">No invitation-specific media yet. The template's bundled fallback images will be used.</p> : null}
               </div>
 
               <div className="sm:col-span-2 border-t border-surface-200 pt-4">

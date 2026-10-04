@@ -481,6 +481,7 @@ model Event {
   invitations          Invitation[]
   checkIns             CheckIn[]
   mediaAssets          MediaAsset[]
+  invitationMedia      InvitationMedia[]
   broadcasts           Broadcast[]
   auditLogs            AuditLog[]
   formFields           EventFormField[]
@@ -1208,6 +1209,28 @@ model CheckIn {
 // ============================================
 // GUESTBOOK & MEDIA (SRS Section 9-10)
 // ============================================
+
+
+model InvitationMedia {
+  id        String   @id @default(uuid())
+  eventId   String
+  role      String   @default("GALLERY") // HERO | SECTION | GALLERY
+  type      String   // IMAGE | VIDEO
+  filePath  String
+  fileName  String
+  mimeType  String
+  fileSize  Int
+  alt       String?
+  caption   String?
+  posterPath String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, role, sortOrder])
+}
 
 model MediaAsset {
   id      String @id @default(uuid())
