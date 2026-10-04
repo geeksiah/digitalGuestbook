@@ -366,12 +366,15 @@ async function fetchPublicEvent(slug: string) {
 }
 
 // ─── Helper: compute Supabase public base URL for template assets ──────────────
-function getTemplateAssetBase(templateId: string): string | null {
+function getTemplateAssetBase(assetsPath: string | null | undefined): string | null {
   const supabaseUrl = process.env.SUPABASE_URL;
-  if (!supabaseUrl) return null;
+  if (!supabaseUrl || !assetsPath) return null;
 
-  // Supabase public URL pattern for the templates bucket
-  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/templates/${templateId}/`;
+  // assetsPath is the actual storage location written by the template uploader
+  // (for example: tpl_123_xyz/assets). The Prisma template id is NOT the
+  // Supabase folder name, so using template.id here produces broken CDN URLs.
+  const normalized = assetsPath.replace(/^\/+|\/+$/g, '').replaceAll(/\\/g, '/');
+  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/templates/${normalized}/`;
 }
 
 function resolveEventCoverUrl(coverImagePath: string | null | undefined): string | null {
@@ -466,7 +469,7 @@ async function renderEventTemplate(
 
   // Try Supabase CDN path first (if TEMPLATES bucket is public)
   const supabaseAssetBase = template.assetsPath
-    ? getTemplateAssetBase(template.id)
+    ? getTemplateAssetBase(template.assetsPath)
     : null;
 
   // Backend API fallback path
