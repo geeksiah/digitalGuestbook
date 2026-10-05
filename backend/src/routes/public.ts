@@ -157,7 +157,13 @@ const EVENT_PUBLIC_SELECT = {
   domains: {
     select: { host: true, status: true, isPrimary: true },
   },
-  invitationMedia: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] },
+  invitationMedia: {
+  orderBy: [
+    { role: 'asc' as const },
+    { sortOrder: 'asc' as const },
+    { createdAt: 'asc' as const },
+  ],
+},
 };
 
 // ─── Helper: standard template data ────────────────────────────────────────────
