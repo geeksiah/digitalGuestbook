@@ -157,13 +157,7 @@ const EVENT_PUBLIC_SELECT = {
   domains: {
     select: { host: true, status: true, isPrimary: true },
   },
-  invitationMedia: {
-  orderBy: [
-    { role: "asc" as const },
-    { sortOrder: "asc" as const },
-    { createdAt: "asc" as const },
-  ],
-},
+  invitationMedia: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] },
 };
 
 // ─── Helper: standard template data ────────────────────────────────────────────
@@ -372,15 +366,17 @@ async function fetchPublicEvent(slug: string) {
 }
 
 // ─── Helper: compute Supabase public base URL for template assets ──────────────
-function getTemplateAssetBase(assetsPath: string | null | undefined): string | null {
+function getTemplateAssetBase(assetsPath: string): string | null {
   const supabaseUrl = process.env.SUPABASE_URL;
   if (!supabaseUrl || !assetsPath) return null;
 
-  // assetsPath is the actual storage location written by the template uploader
-  // (for example: tpl_123_xyz/assets). The Prisma template id is NOT the
-  // Supabase folder name, so using template.id here produces broken CDN URLs.
-  const normalized = assetsPath.replace(/^\/+|\/+$/g, '').replaceAll(/\\/g, '/');
-  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/templates/${normalized}/`;
+  const normalizedAssetsPath = assetsPath
+    .replaceAll(/\\/g, '/')
+    .replaceAll(/\/+/g, '/')
+    .replace(/^\//, '')
+    .replace(/\/$/, '');
+
+  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/template-assets/${normalizedAssetsPath}/`;
 }
 
 function resolveEventCoverUrl(coverImagePath: string | null | undefined): string | null {

@@ -40,7 +40,7 @@ const getSupabaseClient = (): SupabaseClient => {
 export const BUCKETS = {
   MEDIA: 'media-assets' as const,
   REELS: 'generated-reels' as const,
-  TEMPLATES: 'templates' as const,
+  TEMPLATES: 'template-assets' as const,
   PDFS: 'invitation-pdfs' as const,
 };
 export type BucketName = (typeof BUCKETS)[keyof typeof BUCKETS];
