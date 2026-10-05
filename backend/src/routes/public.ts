@@ -950,7 +950,10 @@ router.get('/event/:slug/itinerary-page', asyncHandler(async (req, res) => {
       completedAt: true,
     },
   });
-function formatItineraryTime(value: string | Date | null | undefined): string {
+function formatItineraryTime(
+  value: string | Date | null | undefined,
+  timezone?: string | null
+): string {
   if (!value) return '';
 
   const date = value instanceof Date ? value : new Date(value);
@@ -963,6 +966,7 @@ function formatItineraryTime(value: string | Date | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    ...(timezone ? { timeZone: timezone } : {}),
   });
 }
   const itinerary = itineraryItems.map((item) => ({
