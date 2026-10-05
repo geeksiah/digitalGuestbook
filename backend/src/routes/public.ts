@@ -950,7 +950,21 @@ router.get('/event/:slug/itinerary-page', asyncHandler(async (req, res) => {
       completedAt: true,
     },
   });
+function formatItineraryTime(value: string | Date | null | undefined): string {
+  if (!value) return '';
 
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
   const itinerary = itineraryItems.map((item) => ({
     id: item.id,
     title: item.title,
