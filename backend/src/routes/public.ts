@@ -166,7 +166,7 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
   const publicUrl = (path: string) => buildEventPublicUrl(event.slug, path, event.domains);
   const apiBaseUrl = getApiUrl();
   const invitationMedia = (event.invitationMedia || []).map((item: any) => ({
-    id: item.id, role: item.role, type: item.type, isVideo: item.type === 'VIDEO', url: getPublicUrl(BUCKETS.MEDIA, item.filePath),
+    id: item.id, role: item.role, slotKey: item.slotKey, collectionKey: item.collectionKey, type: item.type, isVideo: item.type === 'VIDEO', url: getPublicUrl(BUCKETS.MEDIA, item.filePath),
     posterUrl: item.posterPath ? getPublicUrl(BUCKETS.MEDIA, item.posterPath) : null, alt: item.alt || '', caption: item.caption || ''
   }));
   const mediaData: Record<string, any> = {};
@@ -287,82 +287,97 @@ function renderTemplateWithBlocks(
   rootData: any,
   depth = 0
 ): string {
-  if (depth > 12) return tpl;
+  if (depth > 20) return tpl;
 
-  let output = tpl;
+  // Parse blocks structurally rather than with a non-nesting regex. Templates may
+  // legitimately contain {{#if}} inside {{#each}} (or another {{#if}}).
+  const openRe = /\{\{#(if|each)\s+([^}]+)\}\}/g;
+  const first = openRe.exec(tpl);
 
-  // {{#each path}}...{{/each}}
-  output = output.replaceAll(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_match, pathStr, inner) => {
-    const collection = resolveTemplateValue(pathStr, currentData, rootData);
-    if (Array.isArray(collection)) {
-      return collection
-        .map((item, index) => {
-          const itemCtx =
-            item && typeof item === 'object'
-              ? { ...item, this: item, '@index': index }
-              : { this: item, '@index': index };
-          return renderTemplateWithBlocks(inner, itemCtx, rootData, depth + 1);
-        })
-        .join('');
+  if (first) {
+    const kind = first[1];
+    const pathStr = first[2].trim();
+    const openStart = first.index;
+    const contentStart = openRe.lastIndex;
+    const tokenRe = /\{\{#(if|each)\s+[^}]+\}\}|\{\{else\}\}|\{\{\/(if|each)\}\}/g;
+    tokenRe.lastIndex = contentStart;
+
+    const stack: string[] = [kind];
+    let elseStart = -1;
+    let elseEnd = -1;
+    let closeStart = -1;
+    let closeEnd = -1;
+    let token: RegExpExecArray | null;
+
+    while ((token = tokenRe.exec(tpl))) {
+      const raw = token[0];
+      if (raw.startsWith('{{#')) {
+        const nestedKind = token[1];
+        stack.push(nestedKind);
+      } else if (raw === '{{else}}') {
+        if (stack.length === 1 && kind === 'if') {
+          elseStart = token.index;
+          elseEnd = tokenRe.lastIndex;
+        }
+      } else {
+        const closingKind = token[2];
+        if (stack[stack.length - 1] === closingKind) stack.pop();
+        if (stack.length === 0) {
+          closeStart = token.index;
+          closeEnd = tokenRe.lastIndex;
+          break;
+        }
+      }
     }
-    if (collection && typeof collection === 'object') {
-      return Object.entries(collection)
-        .map(([key, value], index) => {
-          const itemCtx =
-            value && typeof value === 'object'
-              ? { ...value, this: value, '@key': key, '@index': index }
-              : { this: value, '@key': key, '@index': index };
-          return renderTemplateWithBlocks(inner, itemCtx, rootData, depth + 1);
-        })
-        .join('');
-    }
-    return '';
-  });
 
-  // {{#if path}}...{{else}}...{{/if}}
-  output = output.replaceAll(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g, (_match, pathStr, truthyBlock, falsyBlock = '') => {
-    const conditionValue = resolveTemplateValue(pathStr, currentData, rootData);
-    const chosenBlock = isTruthyTemplateValue(conditionValue) ? truthyBlock : falsyBlock;
-    return renderTemplateWithBlocks(chosenBlock, currentData, rootData, depth + 1);
-  });
+    // Leave malformed markup untouched rather than leaking partial control tags.
+    if (closeStart === -1) return tpl;
+
+    const before = tpl.slice(0, openStart);
+    const after = tpl.slice(closeEnd);
+    let rendered = '';
+
+    if (kind === 'each') {
+      const inner = tpl.slice(contentStart, closeStart);
+      const collection = resolveTemplateValue(pathStr, currentData, rootData);
+      if (Array.isArray(collection)) {
+        rendered = collection.map((item, index) => {
+          const itemCtx = item && typeof item === 'object'
+            ? { ...item, this: item, '@index': index }
+            : { this: item, '@index': index };
+          return renderTemplateWithBlocks(inner, itemCtx, rootData, depth + 1);
+        }).join('');
+      } else if (collection && typeof collection === 'object') {
+        rendered = Object.entries(collection).map(([key, value], index) => {
+          const itemCtx = value && typeof value === 'object'
+            ? { ...(value as object), this: value, '@key': key, '@index': index }
+            : { this: value, '@key': key, '@index': index };
+          return renderTemplateWithBlocks(inner, itemCtx, rootData, depth + 1);
+        }).join('');
+      }
+    } else {
+      const truthyEnd = elseStart >= 0 ? elseStart : closeStart;
+      const truthyBlock = tpl.slice(contentStart, truthyEnd);
+      const falsyBlock = elseStart >= 0 ? tpl.slice(elseEnd, closeStart) : '';
+      const value = resolveTemplateValue(pathStr, currentData, rootData);
+      rendered = renderTemplateWithBlocks(
+        isTruthyTemplateValue(value) ? truthyBlock : falsyBlock,
+        currentData,
+        rootData,
+        depth + 1
+      );
+    }
+
+    return renderTemplateWithBlocks(before + rendered + after, currentData, rootData, depth + 1);
+  }
 
   // Standard variables: {{event.name}}, {{title}}, {{this}}
-  output = output.replaceAll(/\{\{\s*([^#/][^}]*)\s*\}\}/g, (match, pathStr) => {
+  return tpl.replaceAll(/\{\{\s*([^#/][^}]*)\s*\}\}/g, (_match, pathStr) => {
     const value = resolveTemplateValue(pathStr, currentData, rootData);
     if (value === undefined || value === null) return '';
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   });
-
-  // Compatibility syntax: {urls.invitation}
-  output = output.replaceAll(/\{\s*((?:urls|event|phase|capabilities|itinerary|itineraryMeta)\.[^{}]+?)\s*\}/g, (match, pathStr) => {
-    const value = resolveTemplateValue(pathStr, currentData, rootData);
-    if (value === undefined || value === null) return match;
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
-  });
-
-  return output;
-}
-
-function formatItineraryTime(value: Date | string | null | undefined, timezone: string | null | undefined): string {
-  if (!value) return '';
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: timezone || 'UTC',
-    }).format(date);
-  } catch {
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    }).format(date);
-  }
 }
 
 // ─── Helper: fetch event or throw ──────────────────────────────────────────────
