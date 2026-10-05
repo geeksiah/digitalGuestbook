@@ -1892,7 +1892,7 @@ model GiftOrderItem {
 
 model SystemSettings {
   id String @id @default("default")
-
+  pricingConfigJson String?
   // General Settings
   siteName String  @default("Digital Event Platform")
   siteUrl  String?

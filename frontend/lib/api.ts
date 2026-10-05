@@ -162,6 +162,7 @@ export const checkInApi = {
 
 // Public API (no auth required)
 export const publicApi = {
+  getPricing: () => axios.get(`${API_BASE_URL}/api/public/pricing`),
   getEvent: (slug: string) => axios.get(`${API_BASE_URL}/api/public/event/${slug}`),
   getEventByToken: (token: string) => axios.get(`${API_BASE_URL}/api/event-owner/${token}`),
   getRsvpInvite: (token: string) => axios.get(`${API_BASE_URL}/api/public/rsvp-invite/${token}`),
@@ -216,6 +217,8 @@ export const coupleApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
   update: (data: any) => api.patch('/settings', data),
+  getPricing: () => api.get('/settings/pricing'),
+  updatePricing: (pricingConfigJson: string) => api.patch('/settings/pricing', { pricingConfigJson }),
   listEmailProviders: () => api.get('/settings/email-providers'),
   listSmsProviders: () => api.get('/settings/sms-providers'),
   listWhatsAppProviders: () => api.get('/settings/whatsapp-providers'),

@@ -951,7 +951,7 @@ export default function HomePage() {
           <div className="hidden md:flex items-center gap-10">
             <a href="#features" className="text-sm font-semibold text-gray-600 hover:text-[#063932] transition-colors">Features</a>
             <a href="#how-it-works" className="text-sm font-semibold text-gray-600 hover:text-[#063932] transition-colors">Process</a>
-            <a href="#solutions" className="text-sm font-semibold text-gray-600 hover:text-[#063932] transition-colors">Solutions</a>
+            <a href="/pricing" className="text-sm font-semibold text-gray-600 hover:text-[#063932] transition-colors">Pricing</a>
           </div>
 
           <div className="flex items-center gap-4">
@@ -1195,8 +1195,8 @@ export default function HomePage() {
               <li className="flex items-center gap-3"><div className="p-0.5 bg-green-100 rounded-full"><Icons.Check className="w-3 h-3 text-green-700"/></div> Priority Support</li>
             </ul>
             <div className="flex justify-center">
-                <a href="https://eventpeepo.com/#contact" className="px-10 py-4 rounded-xl bg-[#063932] text-white font-bold hover:bg-[#084d43] transition-colors w-full sm:w-auto shadow-lg shadow-[#063932]/10" target="_blank" rel="noopener noreferrer">
-                  Request a Quote
+                <a href="/pricing" className="px-10 py-4 rounded-xl bg-[#063932] text-white font-bold hover:bg-[#084d43] transition-colors w-full sm:w-auto shadow-lg shadow-[#063932]/10">
+                  View Packages
                 </a>
             </div>
           </div>

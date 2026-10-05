@@ -76,6 +76,7 @@ router.patch('/', authenticateAdmin, asyncHandler(async (req: Request, res: Resp
     supportEmail: body.supportEmail,
     supportWhatsAppNumber: body.supportWhatsAppNumber,
     faqContentJson: body.faqContentJson,
+    pricingConfigJson: body.pricingConfigJson,
     oneSignalAppId: body.oneSignalAppId,
     oneSignalApiKey: body.oneSignalApiKey,
   };
@@ -103,6 +104,41 @@ router.patch('/', authenticateAdmin, asyncHandler(async (req: Request, res: Resp
   });
   
   res.json({ settings, message: 'Settings updated' });
+}));
+
+// ============================================
+// PUBLIC PRICING CONFIGURATION (ADMIN EDITOR)
+// ============================================
+
+router.get('/pricing', authenticateAdmin, asyncHandler(async (_req: Request, res: Response) => {
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: 'default' },
+    select: { pricingConfigJson: true },
+  });
+  res.json({ pricingConfigJson: settings?.pricingConfigJson ?? null });
+}));
+
+router.patch('/pricing', authenticateAdmin, asyncHandler(async (req: Request, res: Response) => {
+  const raw = req.body?.pricingConfigJson;
+  if (typeof raw !== 'string') return res.status(400).json({ error: 'pricingConfigJson must be a JSON string' });
+  try { JSON.parse(raw); } catch { return res.status(400).json({ error: 'Invalid pricing configuration JSON' }); }
+
+  const settings = await prisma.systemSettings.upsert({
+    where: { id: 'default' },
+    create: { id: 'default', pricingConfigJson: raw },
+    update: { pricingConfigJson: raw },
+    select: { pricingConfigJson: true },
+  });
+  await prisma.auditLog.create({
+    data: {
+      adminId: (req as any).admin?.adminId,
+      action: 'PRICING_SETTINGS_UPDATED',
+      entityType: 'SYSTEM_SETTINGS',
+      entityId: 'default',
+      details: JSON.stringify({ updatedFields: ['pricingConfigJson'] }),
+    },
+  });
+  res.json({ pricingConfigJson: settings.pricingConfigJson, message: 'Pricing updated' });
 }));
 
 // ============================================

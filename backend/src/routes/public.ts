@@ -23,6 +23,45 @@ import { featureFlags } from '../utils/featureFlags.js';
 import { buildEventPublicUrl, getApiUrl } from '../utils/siteUrl.js';
 
 const router = Router();
+const DEFAULT_PRICING_CONFIG = {
+  currency: 'GHS',
+  plans: [
+    {
+      key: 'starter',
+      name: 'Starter',
+      price: '',
+      priceSuffix: '',
+      description: 'The essentials to get your event online.',
+      featured: false,
+      features: [
+        'Event website / digital invitation',
+        'Online RSVP linked to the invitation page',
+      ],
+    },
+  ],
+};
+
+router.get(
+  '/pricing',
+  asyncHandler(async (_req, res) => {
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { pricingConfigJson: true },
+    });
+
+    if (!settings?.pricingConfigJson) {
+      return res.json({ pricing: DEFAULT_PRICING_CONFIG });
+    }
+
+    try {
+      return res.json({
+        pricing: JSON.parse(settings.pricingConfigJson),
+      });
+    } catch {
+      return res.json({ pricing: DEFAULT_PRICING_CONFIG });
+    }
+  })
+);
 
 const getQueryString = (value: unknown, fallback: string) =>
   typeof value === 'string' ? value : fallback;

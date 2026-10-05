@@ -24,6 +24,7 @@ const navigation: NavItem[] = [
   { name: 'Events', href: '/admin/events', icon: Calendar },
   { name: 'Owners', href: '/admin/owners', icon: Building2 },
   { name: 'Sales', href: '/admin/sales', icon: ShoppingBag },
+  { name: 'Pricing', href: '/admin/pricing', icon: CreditCard },
   { name: 'Templates', href: '/admin/templates', icon: LayoutTemplate },
   { name: 'Payouts', href: '/admin/payouts', icon: Wallet },
   { name: 'Payment gateways', href: '/admin/payment-gateways', icon: CreditCard },
