@@ -196,7 +196,7 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
     event: {
       name: event.name,
       description: event.description,
-      date: event.date,
+      date: new Date(event.date).toISOString(),
       formattedDate: new Date(event.date).toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
