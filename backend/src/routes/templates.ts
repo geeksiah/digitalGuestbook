@@ -203,6 +203,7 @@ router.get('/', asyncHandler(async (req, res) => {
     isDefault: true,
     assetsPath: true,
     thumbnailPath: true,
+    variables: true,
     createdAt: true,
     updatedAt: true,
     _count: {
@@ -515,6 +516,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
   let cssContent = '';
   let jsContent = '';
   let thumbnailPath: string | null = null;
+  let templateManifest: any = null;
   const uploadedFiles: string[] = [];
 
   // Pass 1: load html/css/js
@@ -527,6 +529,11 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
 
     const lowerName = relativePath.toLowerCase();
     const baseName = path.basename(lowerName);
+
+    if (baseName === 'template.json') {
+      try { templateManifest = JSON.parse(entry.getData().toString('utf-8')); }
+      catch { throw new AppError('template.json contains invalid JSON', 400); }
+    }
 
     if (!htmlContent && (baseName === 'index.html' || lowerName.endsWith('.html'))) {
       htmlContent = entry.getData().toString('utf-8');
@@ -601,6 +608,7 @@ router.post('/upload', upload.single('template'), asyncHandler(async (req, res) 
       jsContent: jsContent || null,
       assetsPath: assetsPathForDb,
       thumbnailPath,
+      variables: templateManifest ? JSON.stringify(templateManifest) : null,
       isDefault: false,
     },
   });

@@ -157,13 +157,7 @@ const EVENT_PUBLIC_SELECT = {
   domains: {
     select: { host: true, status: true, isPrimary: true },
   },
-  invitationMedia: {
-  orderBy: [
-    { role: 'asc' as const },
-    { sortOrder: 'asc' as const },
-    { createdAt: 'asc' as const },
-  ],
-},
+  invitationMedia: { orderBy: [{ slotKey: 'asc' as const }, { collectionKey: 'asc' as const }, { sortOrder: 'asc' as const }, { createdAt: 'asc' as const }] },
 };
 
 // ─── Helper: standard template data ────────────────────────────────────────────
@@ -175,8 +169,29 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
     id: item.id, role: item.role, type: item.type, isVideo: item.type === 'VIDEO', url: getPublicUrl(BUCKETS.MEDIA, item.filePath),
     posterUrl: item.posterPath ? getPublicUrl(BUCKETS.MEDIA, item.posterPath) : null, alt: item.alt || '', caption: item.caption || ''
   }));
-  const sections = invitationMedia.filter((item:any) => item.role === 'SECTION');
-  const gallery = invitationMedia.filter((item:any) => item.role === 'GALLERY');
+  const mediaData: Record<string, any> = {};
+  for (const item of invitationMedia) {
+    if (item.slotKey) mediaData[item.slotKey] = item;
+    if (item.collectionKey) {
+      if (!mediaData[item.collectionKey]) mediaData[item.collectionKey] = [];
+      mediaData[item.collectionKey].push(item);
+    }
+  }
+  for (const [key, value] of Object.entries(mediaData)) {
+    if (!Array.isArray(value)) continue;
+    mediaData[`${key}Preview`] = value.slice(0, 6);
+    mediaData[`${key}Count`] = value.length;
+    mediaData[`${key}RemainingCount`] = Math.max(0, value.length - 6);
+  }
+  // Legacy records remain renderable during migration.
+  if (!mediaData.hero) mediaData.hero = invitationMedia.find((item:any) => item.role === 'HERO') || null;
+  if (!mediaData.gallery) {
+    const legacyGallery = invitationMedia.filter((item:any) => item.role === 'GALLERY');
+    mediaData.gallery = legacyGallery;
+    mediaData.galleryPreview = legacyGallery.slice(0, 6);
+    mediaData.galleryCount = legacyGallery.length;
+    mediaData.galleryRemainingCount = Math.max(0, legacyGallery.length - 6);
+  }
   return {
     event: {
       name: event.name,
@@ -200,15 +215,7 @@ function buildTemplateData(event: any, currentPhase: string, capabilities: any) 
     },
     phase: currentPhase,
     capabilities,
-    media: {
-      hero: invitationMedia.find((item:any) => item.role === 'HERO') || null,
-      section: sections[0] || null,
-      sections,
-      gallery,
-      galleryPreview: gallery.slice(0, 6),
-      galleryCount: gallery.length,
-      galleryRemainingCount: Math.max(0, gallery.length - 6),
-    },
+    media: mediaData,
     urls: {
       rsvp: event.rsvpEnabled ? publicUrl('/rsvp') : null,
       guestbook: event.guestbookEnabled ? publicUrl('/guestbook') : null,

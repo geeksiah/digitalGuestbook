@@ -322,7 +322,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
       domains: {
         orderBy: { createdAt: 'asc' },
       },
-      invitationMedia: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] },
+      invitationMedia: { orderBy: [{ slotKey: 'asc' as const }, { collectionKey: 'asc' as const }, { sortOrder: 'asc' as const }, { createdAt: 'asc' as const }] },
       _count: {
         select: {
           rsvps: true,
@@ -903,45 +903,81 @@ router.delete('/:id/cover', asyncHandler(async (req, res) => {
   });
 }));
 
-/** Invitation design media */
+/** Invitation design media — driven by the assigned template's manifest. */
+type MediaDeclaration = { key: string; label?: string; accept?: string[]; maxItems?: number };
+const readInvitationMediaConfig = (variables: string | null | undefined) => {
+  try {
+    const parsed = variables ? JSON.parse(variables) : {};
+    const media = parsed?.eventpeepo?.media || parsed?.media || {};
+    return {
+      slots: (Array.isArray(media.slots) ? media.slots : []) as MediaDeclaration[],
+      collections: (Array.isArray(media.collections) ? media.collections : []) as MediaDeclaration[],
+    };
+  } catch { return { slots: [] as MediaDeclaration[], collections: [] as MediaDeclaration[] }; }
+};
+const getInvitationMediaTarget = async (eventId: string, slotKey?: string, collectionKey?: string) => {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, invitationTemplate: { select: { variables: true } } } });
+  if (!event) throw new AppError('Event not found', 404);
+  if (!event.invitationTemplate) throw new AppError('Assign an invitation template before uploading invitation media', 400);
+  const config = readInvitationMediaConfig(event.invitationTemplate.variables);
+  if (slotKey) {
+    const declaration = config.slots.find((x) => x.key === slotKey);
+    if (!declaration) throw new AppError(`Template does not declare media slot "${slotKey}"`, 400);
+    return { kind: 'slot' as const, declaration };
+  }
+  if (collectionKey) {
+    const declaration = config.collections.find((x) => x.key === collectionKey);
+    if (!declaration) throw new AppError(`Template does not declare media collection "${collectionKey}"`, 400);
+    return { kind: 'collection' as const, declaration };
+  }
+  throw new AppError('slotKey or collectionKey is required', 400);
+};
+
 router.post('/:id/invitation-media', invitationMediaUpload.single('media'), asyncHandler(async (req, res) => {
   const { id } = req.params; const file = req.file;
   if (!file) throw new AppError('Media file is required', 400);
-  const event = await prisma.event.findUnique({ where: { id }, select: { id: true } });
-  if (!event) throw new AppError('Event not found', 404);
-  const role = String(req.body.role || 'GALLERY').toUpperCase();
-  if (!['HERO','SECTION','GALLERY'].includes(role)) throw new AppError('Invalid invitation media role', 400);
+  const slotKey = req.body.slotKey ? String(req.body.slotKey).trim() : undefined;
+  const collectionKey = req.body.collectionKey ? String(req.body.collectionKey).trim() : undefined;
+  if (Boolean(slotKey) === Boolean(collectionKey)) throw new AppError('Choose exactly one media slot or collection', 400);
+  const target = await getInvitationMediaTarget(id, slotKey, collectionKey);
   const type = file.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE';
-  if (role === 'HERO' && type !== 'IMAGE') throw new AppError('Hero media must be an image', 400);
+  const accepted = (target.declaration.accept || ['IMAGE']).map((x) => String(x).toUpperCase());
+  if (!accepted.includes(type)) throw new AppError(`${target.declaration.label || target.declaration.key} does not accept ${type.toLowerCase()} files`, 400);
   const count = await prisma.invitationMedia.count({ where: { eventId: id } });
   if (count >= 100) throw new AppError('Invitation media limit reached (100)', 400);
+  if (target.kind === 'collection' && target.declaration.maxItems) {
+    const collectionCount = await prisma.invitationMedia.count({ where: { eventId: id, collectionKey } });
+    if (collectionCount >= target.declaration.maxItems) throw new AppError(`${target.declaration.label || collectionKey} media limit reached`, 400);
+  }
   const ext = (file.originalname.split('.').pop() || (type === 'VIDEO' ? 'mp4' : 'jpg')).replace(/[^a-z0-9]/gi,'').toLowerCase();
   const storagePath = `events/${id}/invitation/${Date.now()}-${randomUUID()}.${ext}`;
   const upload = await uploadToSupabase(BUCKETS.MEDIA, storagePath, file.buffer, { contentType: file.mimetype, cacheControl: '31536000' });
-  if (role === 'HERO') {
-    const oldHeroes = await prisma.invitationMedia.findMany({ where: { eventId: id, role: 'HERO' } });
-    await Promise.all(oldHeroes.map((m:any) => deleteFromSupabase(BUCKETS.MEDIA, m.filePath).catch(()=>null)));
-    await prisma.invitationMedia.deleteMany({ where: { eventId: id, role: 'HERO' } });
+  if (target.kind === 'slot') {
+    const old = await prisma.invitationMedia.findMany({ where: { eventId: id, slotKey } });
+    await Promise.all(old.map((m:any) => deleteFromSupabase(BUCKETS.MEDIA, m.filePath).catch(()=>null)));
+    await prisma.invitationMedia.deleteMany({ where: { eventId: id, slotKey } });
   }
-  const max = await prisma.invitationMedia.aggregate({ where: { eventId: id, role }, _max: { sortOrder: true } });
-  const media = await prisma.invitationMedia.create({ data: { eventId:id, role, type, filePath:upload.path, fileName:file.originalname, mimeType:file.mimetype, fileSize:file.size, alt:req.body.alt?.trim()||null, caption:req.body.caption?.trim()||null, sortOrder:(max._max.sortOrder ?? -1)+1 } });
+  const orderWhere = target.kind === 'slot' ? { eventId:id, slotKey } : { eventId:id, collectionKey };
+  const max = await prisma.invitationMedia.aggregate({ where: orderWhere, _max: { sortOrder: true } });
+  const media = await prisma.invitationMedia.create({ data: { eventId:id, role:null, slotKey:slotKey||null, collectionKey:collectionKey||null, type, filePath:upload.path, fileName:file.originalname, mimeType:file.mimetype, fileSize:file.size, alt:req.body.alt?.trim()||null, caption:req.body.caption?.trim()||null, sortOrder:(max._max.sortOrder ?? -1)+1 } });
   res.status(201).json({ media: resolveInvitationMedia(media) });
 }));
 
 router.patch('/:id/invitation-media/:mediaId', asyncHandler(async (req,res) => {
   const existing = await prisma.invitationMedia.findFirst({ where:{ id:req.params.mediaId, eventId:req.params.id } });
   if (!existing) throw new AppError('Invitation media not found',404);
-  const role = req.body.role ? String(req.body.role).toUpperCase() : existing.role;
-  if (!['HERO','SECTION','GALLERY'].includes(role)) throw new AppError('Invalid invitation media role',400);
-  if (role === 'HERO' && existing.type !== 'IMAGE') throw new AppError('Hero media must be an image',400);
-  if (role === 'HERO') await prisma.invitationMedia.updateMany({ where:{eventId:req.params.id, role:'HERO', id:{not:existing.id}}, data:{role:'GALLERY'} });
-  const media = await prisma.invitationMedia.update({ where:{id:existing.id}, data:{ role, alt:req.body.alt===undefined?undefined:(req.body.alt?.trim()||null), caption:req.body.caption===undefined?undefined:(req.body.caption?.trim()||null), sortOrder:Number.isInteger(req.body.sortOrder)?req.body.sortOrder:undefined } });
+  const media = await prisma.invitationMedia.update({ where:{id:existing.id}, data:{ alt:req.body.alt===undefined?undefined:(req.body.alt?.trim()||null), caption:req.body.caption===undefined?undefined:(req.body.caption?.trim()||null) } });
   res.json({media:resolveInvitationMedia(media)});
 }));
 
 router.post('/:id/invitation-media/reorder', asyncHandler(async (req,res) => {
   const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
-  await prisma.$transaction(ids.map((mediaId:string,index:number)=>prisma.invitationMedia.updateMany({where:{id:mediaId,eventId:req.params.id},data:{sortOrder:index}})));
+  if (!ids.length) return res.json({ok:true});
+  const items = await prisma.invitationMedia.findMany({ where:{eventId:req.params.id,id:{in:ids}} });
+  if (items.length !== ids.length) throw new AppError('One or more invitation media items are invalid',400);
+  const collection = items[0]?.collectionKey;
+  if (!collection || items.some((x:any)=>x.collectionKey!==collection)) throw new AppError('Only items from the same collection can be reordered',400);
+  await prisma.$transaction(ids.map((mediaId:string,index:number)=>prisma.invitationMedia.update({where:{id:mediaId},data:{sortOrder:index}})));
   res.json({ok:true});
 }));
 

@@ -1214,7 +1214,9 @@ model CheckIn {
 model InvitationMedia {
   id        String   @id @default(uuid())
   eventId   String
-  role      String   @default("GALLERY") // HERO | SECTION | GALLERY
+  role      String?  // Legacy compatibility only; new templates use slotKey/collectionKey
+  slotKey   String?  // Single-media named slot declared by the template (hero, venue, ceremony, ...)
+  collectionKey String? // Multi-media collection declared by the template (gallery, sponsors, ...)
   type      String   // IMAGE | VIDEO
   filePath  String
   fileName  String
@@ -1229,7 +1231,8 @@ model InvitationMedia {
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  @@index([eventId, role, sortOrder])
+  @@index([eventId, slotKey, sortOrder])
+  @@index([eventId, collectionKey, sortOrder])
 }
 
 model MediaAsset {
