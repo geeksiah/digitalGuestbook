@@ -32,9 +32,37 @@ export default function PricingPage() {
   const [config, setConfig] = useState<PricingConfig>(fallback);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    publicApi.getPricing().then((r) => setConfig(r.data?.pricing || fallback)).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+ useEffect(() => {
+  publicApi
+    .getPricing()
+    .then((r) => {
+      const incoming = r.data?.pricing;
+
+      if (!incoming) {
+        setConfig(fallback);
+        return;
+      }
+
+      setConfig({
+        ...fallback,
+        ...incoming,
+        plans: Array.isArray(incoming.plans) ? incoming.plans : fallback.plans,
+        sharedFeatures: Array.isArray(incoming.sharedFeatures)
+          ? incoming.sharedFeatures
+          : fallback.sharedFeatures,
+        customDomainAddon: {
+          ...fallback.customDomainAddon,
+          ...(incoming.customDomainAddon || {}),
+        },
+        customService: {
+          ...fallback.customService,
+          ...(incoming.customService || {}),
+        },
+      });
+    })
+    .catch(() => setConfig(fallback))
+    .finally(() => setLoading(false));
+}, []);
 
   return (
     <main className="min-h-screen bg-[#f7f9f8] text-slate-900">
