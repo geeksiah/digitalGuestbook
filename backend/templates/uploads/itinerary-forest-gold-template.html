@@ -281,7 +281,7 @@
         <p>Your presence is the greatest gift. Safe travels, and see you on the dance floor.</p>
       </div>
       {{else}}
-      <!-- Curated client program (times editable in the PROGRAM list below) -->
+      <!-- Fallback when the event has no dashboard items yet: shows a "coming soon" note, never sample data -->
       <nav class="tabs" id="chips" aria-label="Filter program">
         <button class="tab" data-filter="all" aria-pressed="true">All</button>
         <button class="tab" data-filter="welcome" aria-pressed="false">Welcome</button>
@@ -291,7 +291,7 @@
         <button class="tab" data-filter="toasts" aria-pressed="false">Toasts</button>
       </nav>
       <div class="timeline" id="timeline"></div>
-      <div class="finale">
+      <div class="finale" id="finaleStatic">
         <h3>Thank you for celebrating with us.</h3>
         <p>Your presence is the greatest gift. Safe travels, and see you on the dance floor.</p>
       </div>
@@ -305,7 +305,11 @@
 
   <script>
     (function () {
-      /* ============ EDITABLE PROGRAM (times, titles, details) ============ */
+      /* ============ SAMPLE PROGRAM (preview only) ============
+         Real guest pages render dashboard items instead. When the event
+         has no items yet, guests see a "coming soon" note — never this
+         sample list. DEMO is flipped to true only in the preview file. */
+      var DEMO = false;
       var PROGRAM = [
         {t:"10:00 AM",title:"Arrival of Guests",sub:"Settle in & be seated",desc:"Our celebration begins! Kindly arrive, find your seats, and get ready for a memorable day ahead.",phase:"welcome",done:false,doneAt:null},
         {t:"10:30 AM",title:"Welcome by the MC",sub:"Opening remarks",desc:"Our MC takes the stage to welcome everyone, set the tone, and walk us through the beautiful day ahead.",phase:"welcome",done:false,doneAt:null},
@@ -371,6 +375,14 @@
       }
       function render() {
         if (!timeline) return;
+        if (!DEMO) {
+          var tabsNav = document.getElementById('chips');
+          if (tabsNav) tabsNav.style.display = 'none';
+          var fin = document.getElementById('finaleStatic');
+          if (fin) fin.style.display = 'none';
+          timeline.innerHTML = '<div class="empty">The full order of events will be shared here soon. Please check back closer to the day.</div>';
+          return;
+        }
         var currentIdx = -1;
         PROGRAM.forEach(function (it, i) { if (currentIdx === -1 && !it.done) currentIdx = i; });
         var html = '';
