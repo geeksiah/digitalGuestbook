@@ -258,7 +258,7 @@
       <!-- Dynamic platform-driven list (dashboard items): MC check-offs render here automatically -->
       <div class="timeline" id="timelineDyn">
         {{#each itinerary}}
-        <article class="card dyn" data-completed="{{isCompleted}}">
+        <article class="card dyn" data-completed="{{isCompleted}}" data-key="d{{id}}">
           <div class="t" data-time="{{startsAt}}"><span class="t-big"></span><span class="t-ap"></span></div>
           <div class="div"><span class="node" data-node><svg viewBox="0 0 10 10"><path d="M1.5 5.2 4 7.5 8.5 2.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
           <button class="body" aria-expanded="false">
@@ -362,7 +362,7 @@
         var statusHTML = status === 'done'
           ? '<span class="status s-done">Done</span>'
           : (status === 'current' ? '<span class="status s-current">Current</span>' : '');
-        return '<article class="card' + (item.done ? ' done-card' : '') + '" data-phase="' + item.phase + '" data-idx="' + idx + '">' +
+        return '<article class="card' + (item.done ? ' done-card' : '') + '" data-phase="' + item.phase + '" data-idx="' + idx + '" data-key="p' + idx + '"' + (status === 'current' ? ' data-default="true"' : '') + '>' +
           '<div class="t' + (st ? '' : ' t-empty') + '"><span class="t-big">' + (st ? esc(st.big) : '') + '</span><span class="t-ap">' + (st ? esc(st.ap) : '') + '</span></div>' +
           '<div class="div"><span class="node' + (item.done ? ' done' : '') + '">' + CHECK_SVG + '</span></div>' +
           '<button class="body" aria-expanded="false">' +
@@ -394,13 +394,46 @@
         timeline.innerHTML = html || '<div class="empty">Nothing in this section yet.</div>';
         bindCards(timeline);
         observeCards();
-        /* first visible card opens, like the inspo */
-        openFirst(timeline);
+        /* open the guest's card, else the Current item, else the first */
+        openPreferred(timeline);
       }
-      function openFirst(container) {
+      /* Remember the guest's manually opened card across refreshes and
+         live re-renders; otherwise fall back to the Current item. */
+      function lsGet() {
+        try {
+          var scope = location.pathname || 'itin';
+          return window.localStorage.getItem('itin-open-card:' + scope);
+        } catch (e) { return null; }
+      }
+      function lsSet(v) {
+        try {
+          var scope = location.pathname || 'itin';
+          var k = 'itin-open-card:' + scope;
+          if (v) window.localStorage.setItem(k, v); else window.localStorage.removeItem(k);
+        } catch (e) {}
+      }
+      function openPreferred(container) {
         if (!container) return;
-        var first = container.querySelector('.card .body[aria-expanded]');
-        if (first) { first.setAttribute('aria-expanded', 'true'); first.closest('.card').classList.add('open'); }
+        var vis = Array.prototype.slice.call(container.querySelectorAll('.card .body[aria-expanded]'))
+          .filter(function (b) { var c = b.closest('.card'); return c && c.offsetParent !== null; });
+        if (!vis.length) return;
+        var saved = lsGet();
+        var target = null;
+        var i;
+        if (saved) {
+          for (i = 0; i < vis.length; i++) {
+            var sk = vis[i].closest('.card').getAttribute('data-key');
+            if (sk === saved) { target = vis[i]; break; }
+          }
+        }
+        if (!target) {
+          for (i = 0; i < vis.length; i++) {
+            if (vis[i].closest('.card').hasAttribute('data-default')) { target = vis[i]; break; }
+          }
+        }
+        if (!target) target = vis[0];
+        target.setAttribute('aria-expanded', 'true');
+        target.closest('.card').classList.add('open');
       }
       function bindCards(container) {
         if (!container) return;
@@ -410,7 +443,11 @@
             var isOpen = btn.getAttribute('aria-expanded') === 'true';
             container.querySelectorAll('.card.open').forEach(function (c) { c.classList.remove('open'); });
             container.querySelectorAll('.card .body').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
-            if (!isOpen) { btn.setAttribute('aria-expanded', 'true'); card.classList.add('open'); }
+            if (!isOpen) {
+              btn.setAttribute('aria-expanded', 'true'); card.classList.add('open');
+              var k = card.getAttribute('data-key');
+              lsSet(k || null);
+            } else { lsSet(null); }
           });
         });
       }
@@ -484,6 +521,7 @@
       dynCards.forEach(function (row) {
         if (!dynCurrent && (row.getAttribute('data-completed') || '').toLowerCase() !== 'true') dynCurrent = row;
       });
+      if (dynCurrent) dynCurrent.setAttribute('data-default', 'true');
       dynCards.forEach(function (row) {
         var completed = (row.getAttribute('data-completed') || '').toLowerCase() === 'true';
         var tBox = row.querySelector('[data-time]');
@@ -524,10 +562,10 @@
 
       render();
       observeCards();
-      /* dashboard-driven list gets the same accordion, first card open */
+      /* dashboard-driven list gets the same accordion, Current card open */
       var dynTl = document.getElementById('timelineDyn');
       bindCards(dynTl);
-      openFirst(dynTl);
+      openPreferred(dynTl);
       onScroll();
     })();
   </script>
