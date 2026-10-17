@@ -293,12 +293,14 @@ router.post('/events/:eventId/mc-session', authenticateAdminOrOwnerAccount, asyn
   }
   if (!session) throw new AppError('Could not generate MC link, please retry', 500);
 
-  // /mc/<token> is a platform route: the token already identifies the event,
-  // so it works unchanged on the event's own domain. Prefer the live custom
-  // domain when one is connected, otherwise fall back to the shared app host.
+  // Short global route on the shared host: /mc/<token> needs no slug.
+  // On a connected custom domain the /mc/* platform path is blocked by the
+  // frontend middleware, so use the event-scoped equivalent instead:
+  // <domain>/itinerary/mc/<token> rewrites to the same control screen.
+  // Prefer the live custom domain when one is connected.
   const liveDomain = pickLiveEventDomain(event.domains);
   const mcUrl = liveDomain
-    ? `https://${liveDomain.host.replace(/^www\./, '')}/mc/${session.token}`
+    ? `https://${liveDomain.host.replace(/^www\./, '')}/itinerary/mc/${session.token}`
     : buildSiteUrl(`/mc/${session.token}`);
 
   res.status(201).json({ session, mcUrl });
