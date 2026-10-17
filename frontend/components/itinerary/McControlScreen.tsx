@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { API_BASE_URL, itineraryApi } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import ItineraryBoard from '@/components/itinerary/ItineraryBoard';
 
@@ -24,8 +23,6 @@ export default function McControlScreen() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [eventName, setEventName] = useState('');
   const [slug, setSlug] = useState('');
   const [items, setItems] = useState<McItem[]>([]);
@@ -38,14 +35,14 @@ export default function McControlScreen() {
     toggleTimeoutsRef.current = [];
   };
 
+  // Sync runs silently in the background (poll + realtime stream + tab
+  // focus); nothing on screen flickers while it happens.
   const fetchData = async (silent = false) => {
     try {
-      if (silent) setSyncing(true);
       const response = await itineraryApi.getMcSession(token);
       setEventName(response.data.event.name);
       if (response.data.event.slug) setSlug(response.data.event.slug);
       setItems(response.data.event.itineraryItems || []);
-      setLastSyncedAt(new Date());
       hasShownErrorRef.current = false;
     } catch (error: any) {
       if (!silent && !hasShownErrorRef.current) {
@@ -53,7 +50,6 @@ export default function McControlScreen() {
         hasShownErrorRef.current = true;
       }
     } finally {
-      if (silent) setSyncing(false);
       setLoading(false);
     }
   };
@@ -134,7 +130,6 @@ export default function McControlScreen() {
       mode="mc"
       eventName={eventName}
       items={items}
-      syncLabel={syncing ? 'Syncing...' : `Synced${lastSyncedAt ? ` - ${formatDate(lastSyncedAt.toISOString(), 'p')}` : ''}`}
       submittingId={submitting}
       recentlyChangedIds={recentlyToggledIds}
       onToggleItem={toggleItem}
