@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Order of Events</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --forest-950: #0e241a;
+      --forest-900: #143325;
+      --forest-800: #1a4631;
+      --forest-600: #3c6b52;
+      --gold-700: #9c7c1e;
+      --gold-500: #c9a227;
+      --gold-300: #e2cd85;
+      --gold-line: #d9c88f;
+      --paper: #f4f1e8;
+      --card: #fffdf6;
+      --card-line: #e7dfc8;
+      --ink: #1e2620;
+      --ink-soft: #6b7268;
+      --theme-primary: #1a4631;
+      --theme-secondary: #0e241a;
+      --theme-accent: #c9a227;
+      --font-display: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background: var(--paper);
+      overflow-x: hidden;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 60; }
+    .progress span {
+      display: block; height: 100%; background: var(--theme-accent);
+      transform-origin: 0 50%; transform: scaleX(0);
+    }
+
+    .page { position: relative; width: 100%; max-width: 520px; margin: 0 auto; padding: 0 20px 90px; }
+
+    /* ---------- botanical corners ---------- */
+    .flora { position: absolute; top: 0; width: 120px; height: 120px; z-index: 0; opacity: 0.55; pointer-events: none; }
+    .flora.left { left: -8px; }
+    .flora.right { right: -8px; transform: scaleX(-1); }
+
+    /* ---------- masthead ---------- */
+    .masthead { position: relative; z-index: 1; text-align: center; padding: 44px 8px 6px; }
+    .status { display: block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; margin-bottom: 5px; }
+    .status:empty { display: none; }
+    .status.s-done { color: var(--forest-600); }
+    .status.s-done::before { content: "\2713  "; }
+    .status.s-current { color: var(--gold-700); }
+    .status.s-current::before {
+      content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--gold-500); margin-right: 7px; vertical-align: 1px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .card.open .status.s-current { color: var(--gold-300); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .eyebrow {
+      margin: 14px 0 0; font-size: 0.66rem; font-weight: 700;
+      letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold-700);
+    }
+    .masthead h1 {
+      margin: 10px 0 0; font-family: var(--font-display); font-weight: 700;
+      font-size: clamp(2.3rem, 9.5vw, 3.1rem); line-height: 1.05; color: var(--forest-950);
+    }
+    .masthead .date { margin: 12px 0 0; font-size: 0.92rem; font-weight: 600; color: var(--ink); }
+    .masthead .venue { margin: 4px 0 0; font-size: 0.88rem; color: var(--ink-soft); }
+    .masthead .date:empty, .masthead .venue:empty { display: none; }
+    .divider { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 20px 0 16px; }
+    .divider::before, .divider::after { content: ""; height: 1px; width: 84px; background: var(--gold-line); }
+    .divider svg { width: 30px; height: 20px; }
+    .tagline { margin: 0 auto; font-size: 0.88rem; line-height: 1.65; color: var(--ink-soft); max-width: 38ch; }
+
+    /* ---------- filter pills ---------- */
+    .tabs {
+      position: sticky; top: 0; z-index: 40;
+      display: flex; gap: 10px; overflow-x: auto;
+      padding: 16px 20px; margin: 22px -20px 0;
+      background: color-mix(in srgb, var(--paper) 90%, transparent);
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      flex: 0 0 auto; appearance: none; cursor: pointer;
+      font-family: var(--font-body); font-size: 0.78rem; font-weight: 600;
+      color: var(--forest-800); background: rgba(255,253,246,0.7);
+      border: 1px solid var(--card-line); border-radius: 999px;
+      padding: 10px 20px; min-height: 42px;
+      transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+    .tab[aria-pressed="true"] { background: var(--forest-900); border-color: var(--forest-900); color: #fff; }
+
+    /* ---------- cards ---------- */
+    .timeline { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; padding-top: 18px; }
+
+    .card {
+      display: grid; grid-template-columns: 62px 20px minmax(0, 1fr); gap: 4px;
+      background: var(--card); border: 1px solid var(--card-line); border-radius: 18px;
+      box-shadow: 0 10px 24px rgba(20, 51, 37, 0.06);
+      padding: 18px 16px 18px 6px;
+      opacity: 0; transform: translateY(18px);
+      transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.22,1,0.36,1), background 0.35s ease;
+    }
+    .card.in { opacity: 1; transform: none; }
+    .card.hidden { display: none; }
+    .card.open { background: var(--forest-900); border-color: var(--forest-900); }
+
+    .t { text-align: center; padding-top: 2px; }
+    .t-big { display: block; font-size: 1.02rem; font-weight: 700; color: var(--gold-700); letter-spacing: 0.01em; }
+    .t-ap { display: block; margin-top: 2px; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.22em; color: var(--gold-700); }
+    .card.open .t-big, .card.open .t-ap { color: var(--gold-300); }
+    .t-empty .t-big, .t-empty .t-ap { display: none; }
+
+    .div { position: relative; }
+    .div::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 50%; width: 1px; background: var(--gold-line); }
+    .card.open .div::before { background: rgba(226, 205, 133, 0.45); }
+    .node {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 15px; height: 15px; border-radius: 50%;
+      background: var(--paper); border: 1.5px solid var(--gold-500);
+      display: grid; place-items: center;
+    }
+    .card.open .node { background: var(--paper); }
+    .node svg { width: 9px; height: 9px; display: none; }
+    .node.done { background: var(--gold-500); border-color: var(--gold-500); }
+    .node.done svg { display: block; }
+
+    .body {
+      appearance: none; background: none; border: 0; padding: 0 0 0 8px;
+      width: 100%; text-align: left; font-family: inherit; color: inherit; cursor: pointer;
+      display: grid; grid-template-columns: minmax(0, 1fr) 22px; gap: 8px; align-items: start;
+    }
+
+    .body h2 {
+      margin: 0; font-family: var(--font-display);
+      font-size: 1.38rem; line-height: 1.18; font-weight: 700; color: var(--ink);
+    }
+    .card.open .body h2 { color: #fff; }
+    .sub { display: block; margin-top: 3px; font-size: 0.8rem; color: var(--ink-soft); }
+    .card.open .sub { color: rgba(244, 241, 232, 0.72); }
+    .chev { padding-top: 4px; color: var(--gold-700); transition: transform 0.35s ease; }
+    .chev svg { width: 16px; height: 16px; display: block; }
+    .body[aria-expanded="true"] .chev { transform: rotate(180deg); }
+    .card.open .chev { color: var(--gold-300); }
+    .detail { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.45s cubic-bezier(0.22,1,0.36,1); }
+    .body[aria-expanded="true"] .detail { grid-template-rows: 1fr; }
+    .detail-inner { overflow: hidden; }
+    .detail p { margin: 10px 0 0; font-size: 0.87rem; line-height: 1.65; color: var(--ink-soft); }
+    .card.open .detail p { color: rgba(244, 241, 232, 0.85); }
+    .detail p:empty { display: none; }
+    .donetime { margin: 8px 0 0; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; color: var(--gold-700); }
+    .card.open .donetime { color: var(--gold-300); }
+    .donetime:empty { display: none; }
+
+    .finale { text-align: center; padding: 44px 12px 0; }
+    .finale h3 {
+      margin: 0; font-family: var(--font-display);
+      font-size: 1.8rem; font-weight: 500; font-style: italic; color: var(--forest-950);
+    }
+    .finale p { margin: 10px 0 0; font-size: 0.87rem; line-height: 1.65; color: var(--ink-soft); }
+
+    .empty { padding: 28px 0; text-align: center; color: var(--ink-soft); font-style: italic; }
+
+    .footer {
+      position: sticky; bottom: 0; z-index: 45;
+      margin: 36px -20px 0; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+      background: color-mix(in srgb, var(--paper) 92%, transparent);
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      border-top: 1px solid var(--card-line); text-align: center;
+    }
+    .footer p { margin: 0; font-size: 0.78rem; color: var(--ink-soft); }
+    .back-link { color: var(--forest-800); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--gold-500); }
+
+    @media (min-width: 720px) {
+      .page { padding-bottom: 120px; }
+      .body h2 { font-size: 1.5rem; }
+      .flora { width: 150px; height: 150px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .status.s-current::before { animation: none; }
+      .card { opacity: 1 !important; transform: none !important; transition: none !important; }
+      .detail, .chev, .tab { transition: none !important; }
+    }
+  </style>
+</head>
+<body data-primary="{{event.primaryColor}}" data-secondary="{{event.secondaryColor}}" data-accent="{{event.accentColor}}">
+  <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+
+  <main class="page">
+    <svg class="flora left" viewBox="0 0 120 120" aria-hidden="true">
+      <g fill="none" stroke="#1a4631" stroke-width="1.6" opacity="0.7">
+        <path d="M8 112 C 30 84, 44 60, 52 20" />
+        <path d="M8 112 C 34 96, 62 88, 96 84" />
+      </g>
+      <g fill="#1a4631" opacity="0.5">
+        <ellipse cx="34" cy="82" rx="11" ry="5" transform="rotate(-38 34 82)" />
+        <ellipse cx="44" cy="60" rx="11" ry="5" transform="rotate(-32 44 60)" />
+        <ellipse cx="50" cy="38" rx="10" ry="4.6" transform="rotate(-24 50 38)" />
+        <ellipse cx="40" cy="100" rx="10" ry="4.6" transform="rotate(-12 40 100)" />
+        <ellipse cx="66" cy="92" rx="10" ry="4.6" transform="rotate(-8 66 92)" />
+      </g>
+      <g fill="#c9a227" opacity="0.65">
+        <ellipse cx="27" cy="94" rx="7" ry="3.4" transform="rotate(-40 27 94)" />
+        <ellipse cx="48" cy="50" rx="6" ry="3" transform="rotate(-28 48 50)" />
+      </g>
+    </svg>
+    <svg class="flora right" viewBox="0 0 120 120" aria-hidden="true">
+      <g fill="none" stroke="#1a4631" stroke-width="1.6" opacity="0.7">
+        <path d="M8 112 C 30 84, 44 60, 52 20" />
+        <path d="M8 112 C 34 96, 62 88, 96 84" />
+      </g>
+      <g fill="#1a4631" opacity="0.5">
+        <ellipse cx="34" cy="82" rx="11" ry="5" transform="rotate(-38 34 82)" />
+        <ellipse cx="44" cy="60" rx="11" ry="5" transform="rotate(-32 44 60)" />
+        <ellipse cx="50" cy="38" rx="10" ry="4.6" transform="rotate(-24 50 38)" />
+        <ellipse cx="40" cy="100" rx="10" ry="4.6" transform="rotate(-12 40 100)" />
+        <ellipse cx="66" cy="92" rx="10" ry="4.6" transform="rotate(-8 66 92)" />
+      </g>
+      <g fill="#c9a227" opacity="0.65">
+        <ellipse cx="27" cy="94" rx="7" ry="3.4" transform="rotate(-40 27 94)" />
+        <ellipse cx="48" cy="50" rx="6" ry="3" transform="rotate(-28 48 50)" />
+      </g>
+    </svg>
+
+    <header class="masthead">
+      <p class="eyebrow">The Day's Celebration</p>
+      <h1>Order of Events</h1>
+      <p class="date" id="eventDate">{{event.formattedDate}}</p>
+      <p class="venue" id="eventVenue">{{event.venue}}</p>
+      <div class="divider" aria-hidden="true">
+        <svg viewBox="0 0 30 20"><g fill="none" stroke="#c9a227" stroke-width="1.6"><circle cx="11" cy="10" r="7" /><circle cx="19" cy="10" r="7" /></g></svg>
+      </div>
+      <p class="tagline">A day of love, family and beautiful beginnings. Here&rsquo;s how the celebration unfolds.</p>
+    </header>
+
+    <section id="program" aria-label="Wedding day program">
+      {{#if itinerary}}
+      <!-- Dynamic platform-driven list (dashboard items): MC check-offs render here automatically -->
+      <div class="timeline" id="timelineDyn">
+        {{#each itinerary}}
+        <article class="card dyn" data-completed="{{isCompleted}}">
+          <div class="t" data-time="{{startsAt}}"><span class="t-big"></span><span class="t-ap"></span></div>
+          <div class="div"><span class="node" data-node><svg viewBox="0 0 10 10"><path d="M1.5 5.2 4 7.5 8.5 2.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+          <button class="body" aria-expanded="false">
+            <span>
+              <span class="status" data-status></span>
+              <h2>{{title}}</h2>
+              <span class="sub">{{location}}</span>
+              <span class="detail"><span class="detail-inner">
+                <p>{{description}}</p>
+                <p class="donetime" data-donetime="{{completedAt}}"></p>
+              </span></span>
+            </span>
+            <span class="chev"><svg viewBox="0 0 16 16"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </button>
+        </article>
+        {{/each}}
+      </div>
+      <div class="finale">
+        <h3>Thank you for celebrating with us.</h3>
+        <p>Your presence is the greatest gift. Safe travels, and see you on the dance floor.</p>
+      </div>
+      {{else}}
+      <!-- Curated client program (times editable in the PROGRAM list below) -->
+      <nav class="tabs" id="chips" aria-label="Filter program">
+        <button class="tab" data-filter="all" aria-pressed="true">All</button>
+        <button class="tab" data-filter="welcome" aria-pressed="false">Welcome</button>
+        <button class="tab" data-filter="entrances" aria-pressed="false">Entrances</button>
+        <button class="tab" data-filter="vows" aria-pressed="false">Vows</button>
+        <button class="tab" data-filter="party" aria-pressed="false">Party</button>
+        <button class="tab" data-filter="toasts" aria-pressed="false">Toasts</button>
+      </nav>
+      <div class="timeline" id="timeline"></div>
+      <div class="finale">
+        <h3>Thank you for celebrating with us.</h3>
+        <p>Your presence is the greatest gift. Safe travels, and see you on the dance floor.</p>
+      </div>
+      {{/if}}
+    </section>
+
+    <div class="footer" id="footerWrap">
+      <p>Crafted with love for this special day · <a class="back-link" id="invitationLink" href="{{urls.invitation}}">Back to Invitation</a></p>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      /* ============ EDITABLE PROGRAM (times, titles, details) ============ */
+      var PROGRAM = [
+        {t:"10:00 AM",title:"Arrival of Guests",sub:"Settle in & be seated",desc:"Our celebration begins! Kindly arrive, find your seats, and get ready for a memorable day ahead.",phase:"welcome",done:false,doneAt:null},
+        {t:"10:30 AM",title:"Welcome by the MC",sub:"Opening remarks",desc:"Our MC takes the stage to welcome everyone, set the tone, and walk us through the beautiful day ahead.",phase:"welcome",done:false,doneAt:null},
+        {t:"10:45 AM",title:"Opening Prayer & Energizers",sub:"Blessing & cheer",desc:"We commit the day to God in prayer, then lift the energy with joyful shout-outs and crowd energizers.",phase:"welcome",done:false,doneAt:null},
+        {t:"11:00 AM",title:"Entrance of the Groom's Parents",sub:"Honouring family",desc:"With pride and joy, the groom's parents make their grand entrance to warm applause.",phase:"entrances",done:false,doneAt:null},
+        {t:"11:10 AM",title:"Entrance of the Bride's Parents",sub:"Honouring family",desc:"The bride's parents follow in elegance as we honour both families at the heart of this union.",phase:"entrances",done:false,doneAt:null},
+        {t:"11:20 AM",title:"Grand Entrance of the Bride & Groom",sub:"The moment awaits",desc:"Stand to your feet, wave and cheer — the stars of the day make their unforgettable grand entrance.",phase:"entrances",done:false,doneAt:null},
+        {t:"11:40 AM",title:"Recognition of Special Guests",sub:"Honour & gratitude",desc:"We pause to acknowledge our distinguished guests, elders, and loved ones who travelled to celebrate with us.",phase:"vows",done:false,doneAt:null},
+        {t:"11:55 AM",title:"Brief Sermon",sub:"Word & counsel",desc:"A short, heartfelt charge on love, covenant, and marriage to bless the couple's new journey.",phase:"vows",done:false,doneAt:null},
+        {t:"12:15 PM",title:"Exchange of Vows & Rings",sub:"The covenant",desc:"Promises are spoken and rings exchanged — sealed with love before God and witnesses.",phase:"vows",done:false,doneAt:null},
+        {t:"12:35 PM",title:"Choreography",sub:"Showtime",desc:"A specially rehearsed dance presentation lights up the hall. Cameras ready!",phase:"party",done:false,doneAt:null},
+        {t:"12:50 PM",title:"Couple's First Dance",sub:"Parents join after",desc:"The newlyweds share their first dance as a married couple — then invite both sets of parents to join them on the floor.",phase:"party",done:false,doneAt:null},
+        {t:"1:15 PM",title:"Serving of Food & Drinks",sub:"Dine & refresh",desc:"Kindly remain seated as our ushers serve a delicious spread of food and drinks. Eat, relax, and mingle.",phase:"party",done:false,doneAt:null},
+        {t:"2:00 PM",title:"Audience Games",sub:"Fun & laughter",desc:"Everyone gets involved — lively games with the crowd, prizes to be won, and plenty of laughter.",phase:"party",done:false,doneAt:null},
+        {t:"2:30 PM",title:"Bridesmaids & Groomsmen Challenge",sub:"Battle of the train",desc:"Both trains face off in a spirited challenge. Cheer for your favourite side!",phase:"party",done:false,doneAt:null},
+        {t:"3:00 PM",title:"Interlude",sub:"Music & breather",desc:"A soft musical interlude — stretch, take photos, and soak in the atmosphere.",phase:"party",done:false,doneAt:null},
+        {t:"3:15 PM",title:"Couple's Game",sub:"How well do they know?",desc:"The bride and groom put their chemistry to the test in a playful game. Expect surprises!",phase:"party",done:false,doneAt:null},
+        {t:"3:45 PM",title:"Toasts & Remarks",sub:"Words of love",desc:"Heartfelt toasts from the groom's family & friends, the bride's family & friends, and general well-wishers.",phase:"toasts",done:false,doneAt:null},
+        {t:"4:30 PM",title:"Vote of Thanks & Final Dance",sub:"Gratitude & goodbye",desc:"The couple thanks everyone for coming, then closes the celebration with a final dance. Thank you for being part of our story.",phase:"toasts",done:false,doneAt:null}
+      ];
+
+      var CHECK_SVG = '<svg viewBox="0 0 10 10"><path d="M1.5 5.2 4 7.5 8.5 2.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      var CHEV_SVG = '<svg viewBox="0 0 16 16"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+      function splitTime(raw) {
+        var m = String(raw || '').trim().match(/^(\d{1,2}:\d{2})\s*([AP]M)?$/i);
+        if (!m) return null;
+        return { big: m[1], ap: (m[2] || '').toUpperCase() };
+      }
+      function formatDoneTime(raw) {
+        if (!raw) return '';
+        raw = String(raw).trim();
+        if (!raw || raw.indexOf('{{') !== -1) return '';
+        if (/^\d{1,2}:\d{2}\s*[AP]M$/i.test(raw)) return raw.toUpperCase();
+        var d = new Date(raw);
+        if (isNaN(d.getTime())) return '';
+        try { return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+        catch (e) { return ''; }
+      }
+
+      /* ---------- render curated program ---------- */
+      var timeline = document.getElementById('timeline');
+      var activeFilter = 'all';
+      function cardHTML(item, idx, status) {
+        var st = splitTime(item.t);
+        var doneLabel = item.done ? formatDoneTime(item.doneAt) : '';
+        var statusHTML = status === 'done'
+          ? '<span class="status s-done">Done</span>'
+          : (status === 'current' ? '<span class="status s-current">Current</span>' : '');
+        return '<article class="card' + (item.done ? ' done-card' : '') + '" data-phase="' + item.phase + '" data-idx="' + idx + '">' +
+          '<div class="t' + (st ? '' : ' t-empty') + '"><span class="t-big">' + (st ? esc(st.big) : '') + '</span><span class="t-ap">' + (st ? esc(st.ap) : '') + '</span></div>' +
+          '<div class="div"><span class="node' + (item.done ? ' done' : '') + '">' + CHECK_SVG + '</span></div>' +
+          '<button class="body" aria-expanded="false">' +
+            '<span>' + statusHTML + '<h2>' + esc(item.title) + '</h2><span class="sub">' + esc(item.sub) + '</span>' +
+            '<span class="detail"><span class="detail-inner"><p>' + esc(item.desc) + '</p>' +
+            '<p class="donetime">' + (doneLabel ? 'Completed \u00B7 ' + esc(doneLabel) : '') + '</p>' +
+            '</span></span></span>' +
+            '<span class="chev">' + CHEV_SVG + '</span>' +
+          '</button></article>';
+      }
+      function render() {
+        if (!timeline) return;
+        var currentIdx = -1;
+        PROGRAM.forEach(function (it, i) { if (currentIdx === -1 && !it.done) currentIdx = i; });
+        var html = '';
+        PROGRAM.forEach(function (item, idx) {
+          if (activeFilter !== 'all' && item.phase !== activeFilter) return;
+          var status = item.done ? 'done' : (idx === currentIdx ? 'current' : '');
+          html += cardHTML(item, idx, status);
+        });
+        timeline.innerHTML = html || '<div class="empty">Nothing in this section yet.</div>';
+        bindCards(timeline);
+        observeCards();
+        /* first visible card opens, like the inspo */
+        openFirst(timeline);
+      }
+      function openFirst(container) {
+        if (!container) return;
+        var first = container.querySelector('.card .body[aria-expanded]');
+        if (first) { first.setAttribute('aria-expanded', 'true'); first.closest('.card').classList.add('open'); }
+      }
+      function bindCards(container) {
+        if (!container) return;
+        container.querySelectorAll('.card .body[aria-expanded]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var card = btn.closest('.card');
+            var isOpen = btn.getAttribute('aria-expanded') === 'true';
+            container.querySelectorAll('.card.open').forEach(function (c) { c.classList.remove('open'); });
+            container.querySelectorAll('.card .body').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+            if (!isOpen) { btn.setAttribute('aria-expanded', 'true'); card.classList.add('open'); }
+          });
+        });
+      }
+
+      /* ---------- filters ---------- */
+      var tabs = document.querySelectorAll('#chips .tab');
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          tabs.forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+          tab.setAttribute('aria-pressed', 'true');
+          activeFilter = tab.getAttribute('data-filter');
+          render();
+        });
+      });
+
+      /* ---------- reveal on scroll ---------- */
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var io = null;
+      if (!reduced && ('IntersectionObserver' in window)) {
+        io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+          });
+        }, { threshold: 0.1, rootMargin: '0px 0px -4% 0px' });
+      }
+      function observeCards() {
+        var cards = document.querySelectorAll('#timeline .card, #timelineDyn .card');
+        if (!io) { cards.forEach(function (c) { c.classList.add('in'); }); return; }
+        cards.forEach(function (c) { io.observe(c); });
+      }
+
+      /* ---------- progress hairline ---------- */
+      var bar = document.getElementById('progressBar');
+      function onScroll() {
+        var h = document.documentElement;
+        var max = h.scrollHeight - h.clientHeight;
+        var pr = max > 0 ? (h.scrollTop / max) : 0;
+        if (bar) bar.style.transform = 'scaleX(' + pr.toFixed(3) + ')';
+      }
+      var ticking = false;
+      window.addEventListener('scroll', function () {
+        if (!ticking) { ticking = true; requestAnimationFrame(function () { onScroll(); ticking = false; }); }
+      }, { passive: true });
+      window.addEventListener('resize', onScroll);
+
+      /* ---------- masthead: monogram initials + empty cleanup ---------- */
+      function cleanText(id) {
+        var n = document.getElementById(id);
+        if (!n) return '';
+        var t = (n.textContent || '').replace(/\{\{[^}]+\}\}/g, '').trim();
+        if (!t) n.remove();
+        else n.textContent = t;
+        return t;
+      }
+      cleanText('eventDate');
+      cleanText('eventVenue');
+
+      /* ---------- empty invitation link ---------- */
+      var inv = document.getElementById('invitationLink');
+      if (inv) {
+        var href = (inv.getAttribute('href') || '').trim();
+        if (!href || href === '#' || href.indexOf('{{') !== -1) {
+          var fw = document.getElementById('footerWrap');
+          if (fw) fw.style.display = 'none';
+        }
+      }
+
+      /* ---------- dynamic platform rows: times, check nodes, done times ---------- */
+      var dynCards = Array.prototype.slice.call(document.querySelectorAll('#timelineDyn .card'));
+      var dynCurrent = null;
+      dynCards.forEach(function (row) {
+        if (!dynCurrent && (row.getAttribute('data-completed') || '').toLowerCase() !== 'true') dynCurrent = row;
+      });
+      dynCards.forEach(function (row) {
+        var completed = (row.getAttribute('data-completed') || '').toLowerCase() === 'true';
+        var tBox = row.querySelector('[data-time]');
+        if (tBox) {
+          var st = splitTime(tBox.getAttribute('data-time'));
+          var big = tBox.querySelector('.t-big'), ap = tBox.querySelector('.t-ap');
+          if (st) { if (big) big.textContent = st.big; if (ap) ap.textContent = st.ap; }
+          else { tBox.classList.add('t-empty'); if (big) big.textContent = ''; if (ap) ap.textContent = ''; }
+        }
+        var node = row.querySelector('[data-node]');
+        if (node && completed) node.classList.add('done');
+        var doneLabel = '';
+        var dt = row.querySelector('[data-donetime]');
+        if (dt) {
+          var label = formatDoneTime(dt.getAttribute('data-donetime'));
+          if (completed && label) { dt.textContent = 'Completed \u00B7 ' + label; doneLabel = label; }
+          else dt.textContent = '';
+        }
+        var sstat = row.querySelector('[data-status]');
+        if (sstat) {
+          if (completed) { sstat.className = 'status s-done'; sstat.textContent = 'Done'; }
+          else if (row === dynCurrent) { sstat.className = 'status s-current'; sstat.textContent = 'Current'; }
+          else { sstat.className = 'status'; sstat.textContent = ''; }
+        }
+        /* dashboard fields are optional: rows with no expandable content become static */
+        var descP = row.querySelector('.detail-inner p:not(.donetime)');
+        var hasDesc = descP && descP.textContent.trim() !== '';
+        if (!hasDesc && descP) descP.remove();
+        if (!hasDesc && !doneLabel) {
+          var chevEl = row.querySelector('.chev');
+          if (chevEl) chevEl.remove();
+          var det = row.querySelector('.detail');
+          if (det) det.remove();
+          var bodyEl = row.querySelector('.body');
+          if (bodyEl) { bodyEl.removeAttribute('aria-expanded'); bodyEl.style.cursor = 'default'; }
+        }
+      });
+
+      render();
+      observeCards();
+      /* dashboard-driven list gets the same accordion, first card open */
+      var dynTl = document.getElementById('timelineDyn');
+      bindCards(dynTl);
+      openFirst(dynTl);
+      onScroll();
+    })();
+  </script>
+</body>
+</html>

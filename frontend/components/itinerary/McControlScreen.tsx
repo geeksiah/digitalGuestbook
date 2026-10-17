@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { itineraryApi } from '@/lib/api';
+import { API_BASE_URL, itineraryApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import ItineraryBoard from '@/components/itinerary/ItineraryBoard';
@@ -15,6 +15,7 @@ interface McItem {
   endsAt: string | null;
   location: string | null;
   isCompleted: boolean;
+  completedAt: string | null;
 }
 
 export default function McControlScreen() {
@@ -26,6 +27,7 @@ export default function McControlScreen() {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [eventName, setEventName] = useState('');
+  const [slug, setSlug] = useState('');
   const [items, setItems] = useState<McItem[]>([]);
   const [recentlyToggledIds, setRecentlyToggledIds] = useState<string[]>([]);
   const toggleTimeoutsRef = useRef<number[]>([]);
@@ -41,6 +43,7 @@ export default function McControlScreen() {
       if (silent) setSyncing(true);
       const response = await itineraryApi.getMcSession(token);
       setEventName(response.data.event.name);
+      if (response.data.event.slug) setSlug(response.data.event.slug);
       setItems(response.data.event.itineraryItems || []);
       setLastSyncedAt(new Date());
       hasShownErrorRef.current = false;
@@ -70,11 +73,36 @@ export default function McControlScreen() {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!slug) return;
+    let stream: EventSource | null = null;
+    try {
+      stream = new EventSource(`${API_BASE_URL}/api/public/event/${slug}/itinerary/stream`);
+      const onUpdate = () => fetchData(true);
+      stream.addEventListener('itinerary-update', onUpdate as EventListener);
+      return () => {
+        if (stream) {
+          stream.removeEventListener('itinerary-update', onUpdate as EventListener);
+          stream.close();
+        }
+      };
+    } catch {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
   const toggleItem = async (itemId: string) => {
     setSubmitting(itemId);
     const currentItem = items.find((item) => item.id === itemId);
     const nextCompleted = currentItem ? !currentItem.isCompleted : true;
-    setItems((current) => current.map((item) => (item.id === itemId ? { ...item, isCompleted: nextCompleted } : item)));
+    setItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? { ...item, isCompleted: nextCompleted, completedAt: nextCompleted ? new Date().toISOString() : null }
+          : item
+      )
+    );
     try {
       const response = await itineraryApi.toggleMcItem(token, itemId, nextCompleted);
       const updatedItem = response.data.item as McItem;

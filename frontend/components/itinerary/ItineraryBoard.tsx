@@ -11,6 +11,7 @@ type ItineraryBoardItem = {
   endsAt?: string | null;
   location?: string | null;
   isCompleted: boolean;
+  completedAt?: string | null;
 };
 
 type ItineraryBoardProps = {
@@ -55,6 +56,17 @@ const getTimeLabel = (startsAt?: string | null, endsAt?: string | null) => {
     if (!Number.isNaN(e.getTime())) parts.push(formatDate(e.toISOString(), 'p'));
   }
   return parts.join(' - ');
+};
+
+const getCompletedLabel = (completedAt?: string | null) => {
+  if (!completedAt) return '';
+  const date = new Date(completedAt);
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return formatDate(date.toISOString(), 'p');
+  } catch {
+    return '';
+  }
 };
 
 export default function ItineraryBoard({
@@ -196,6 +208,11 @@ export default function ItineraryBoard({
                           {item.description ? (
                             <p className="mt-1.5 text-[12.5px] md:text-[13.5px] text-[#6f636b] leading-snug">
                               {item.description}
+                            </p>
+                          ) : null}
+                          {item.isCompleted ? (
+                            <p className="mt-1.5 text-[11px] md:text-xs font-semibold text-emerald-700">
+                              ✓ Done{getCompletedLabel(item.completedAt) ? ` at ${getCompletedLabel(item.completedAt)}` : ''}
                             </p>
                           ) : null}
                         </div>

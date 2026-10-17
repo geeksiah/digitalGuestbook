@@ -5,7 +5,7 @@ import prisma from '../utils/prisma.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { authenticateAdmin, authenticateAdminOrOwnerAccount } from '../middleware/auth.js';
 import { publishItineraryUpdate } from '../services/itineraryRealtime.js';
-import { buildSiteUrl } from '../utils/siteUrl.js';
+import { buildSiteUrl, pickLiveEventDomain } from '../utils/siteUrl.js';
 
 const router = Router();
 
@@ -262,26 +262,44 @@ router.post('/events/:eventId/mc-session', authenticateAdminOrOwnerAccount, asyn
   const { eventId } = req.params;
   await requireManagedEvent(req as any, eventId);
 
-  // The MC opens this on a phone at the venue, often typed or read aloud, so
-  // the link is kept short: base64url instead of hex (22 chars rather than 32)
-  // still carries 128 bits of entropy.
-  const token = randomBytes(16).toString('base64url');
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      slug: true,
+      domains: { select: { host: true, status: true, isPrimary: true } },
+    },
+  });
+  if (!event) throw new AppError('Event not found', 404);
+
+  // The MC opens this on a phone at the venue, often typed or read aloud,
+  // so the token is short: 12 base64url chars (~72 bits). Previously issued
+  // longer tokens keep working; only new sessions use the short form.
+  // A collision (unique token) is retried rather than failing the request.
   const expiresAt = req.body?.expiresInHours
     ? new Date(Date.now() + Number(req.body.expiresInHours) * 60 * 60 * 1000)
     : null;
+  const displayName = req.body?.displayName ? String(req.body.displayName) : null;
 
-  const session = await prisma.itineraryMcSession.create({
-    data: {
-      eventId,
-      token,
-      displayName: req.body?.displayName ? String(req.body.displayName) : null,
-      expiresAt,
-    },
-  });
+  let session = null;
+  for (let attempt = 0; attempt < 5 && !session; attempt += 1) {
+    const token = randomBytes(9).toString('base64url');
+    try {
+      session = await prisma.itineraryMcSession.create({
+        data: { eventId, token, displayName, expiresAt },
+      });
+    } catch (error: any) {
+      if (error?.code !== 'P2002' || attempt === 4) throw error;
+    }
+  }
+  if (!session) throw new AppError('Could not generate MC link, please retry', 500);
 
   // /mc/<token> is a platform route: the token already identifies the event,
-  // so no slug is needed and the URL stays as short as it can be.
-  const mcUrl = buildSiteUrl(`/mc/${token}`);
+  // so it works unchanged on the event's own domain. Prefer the live custom
+  // domain when one is connected, otherwise fall back to the shared app host.
+  const liveDomain = pickLiveEventDomain(event.domains);
+  const mcUrl = liveDomain
+    ? `https://${liveDomain.host.replace(/^www\./, '')}/mc/${session.token}`
+    : buildSiteUrl(`/mc/${session.token}`);
 
   res.status(201).json({ session, mcUrl });
 }));

@@ -276,6 +276,13 @@
       color: var(--text-700);
     }
 
+    .donetime {
+      margin: 5px 0 0;
+      font-size: 0.76rem;
+      color: var(--done-text);
+      font-weight: 700;
+    }
+
     .time:empty,
     .location:empty,
     .desc:empty { display: none; }
@@ -383,7 +390,7 @@
         </div>
 
         {{#each itinerary}}
-        <article class="row" data-completed="{{isCompleted}}">
+        <article class="row" data-completed="{{isCompleted}}" data-completed-at="{{completedAt}}">
           <div class="left">
             <span class="dot"></span>
             <span class="done">Done</span>
@@ -393,6 +400,7 @@
             <p class="time">{{startsAt}} {{endsAt}}</p>
             <p class="location">{{location}}</p>
             <p class="desc">{{description}}</p>
+            <p class="donetime" data-donetime="{{completedAt}}"></p>
           </div>
         </article>
         {{/each}}
@@ -470,12 +478,29 @@
         if (time && !(time.textContent || '').trim()) time.remove();
         if (location && !(location.textContent || '').trim()) location.remove();
         if (desc && !(desc.textContent || '').trim()) desc.remove();
+
+        var donetime = row.querySelector('[data-donetime]');
+        if (donetime) {
+          var doneLabel = formatDoneTime(donetime.getAttribute('data-donetime'));
+          if (!completed || !doneLabel) donetime.remove();
+          else donetime.textContent = 'Done \u00B7 ' + doneLabel;
+        }
       });
 
       var dateLabel = document.getElementById('dateLabel');
       if (dateLabel && !(dateLabel.textContent || '').trim()) {
         dateLabel.textContent = 'Event schedule';
       }
+
+      var formatDoneTime = function (raw) {
+        if (!raw) return '';
+        raw = String(raw).trim();
+        if (!raw || raw.indexOf('{{') !== -1) return '';
+        var d = new Date(raw);
+        if (isNaN(d.getTime())) return '';
+        try { return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+        catch (e) { return ''; }
+      };
 
       var container = document.getElementById('petals');
       if (!container) return;
