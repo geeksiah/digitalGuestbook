@@ -5,6 +5,8 @@ import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTe
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerWakingMessage } from '@/lib/serverStatus';
 
 interface EventData {
   event: {
@@ -59,6 +61,8 @@ export default function ThankYouPage() {
   if (hasTemplate) {
     return <BackendTemplateFrame slug={slug} endpoint="thank-you" />;
   }
+
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
 
   if (error || !event) {
     return (

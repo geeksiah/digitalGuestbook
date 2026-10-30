@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { installServerStatusInterceptors } from './serverStatus';
 
 const normalizeOwnerEmail = (email: string) => email.trim().toLowerCase();
 const readToken = (key: string) => {
@@ -16,6 +17,9 @@ export const API_BASE_URL = typeof window !== 'undefined'
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
 });
+
+// Quiet retries + friendly message while the API wakes from sleep.
+installServerStatusInterceptors(api);
 
 // Add auth token to requests
 api.interceptors.request.use((config) => {

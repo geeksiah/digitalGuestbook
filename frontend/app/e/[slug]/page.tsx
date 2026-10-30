@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { publicApi } from '@/lib/api';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { formatDate } from '@/lib/utils';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerWakingMessage } from '@/lib/serverStatus';
 
 interface EventData {
   event: {
@@ -149,6 +151,8 @@ export default function EventPage() {
   }
 
   // ─── Error state ───────────────────────────────────────────────────────────
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
+
   if (error || !data) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center p-4">

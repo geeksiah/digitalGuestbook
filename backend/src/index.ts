@@ -313,7 +313,7 @@ import votingAdminV2Routes from './routes/v2-admin-voting.js';
 import ussdV2Routes from './routes/channels-ussd-v2.js';
 
 // Middleware
-import { errorHandler } from './middleware/errorHandler.js';
+import { errorHandler, renderFriendlyPage } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { authenticateAdmin } from './middleware/auth.js';
 
@@ -420,6 +420,14 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Couple-Token', 'X-Owner-Token', 'X-Invite-Token'],
 }));
+
+// Lightweight wake-up / liveness probe. The frontend pings this to wake the
+// service on a cold start (free hosting sleeps when idle), so it must stay
+// cheap: no database, no filesystem, no rate limit.
+app.get(['/healthz', '/api/healthz'], (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, uptime: Math.round(process.uptime()) });
+});
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -632,12 +640,32 @@ app.use('/api/channels/ussd', ussdV2Routes);
 app.use('/api/whatsapp', whatsappWebhookRoutes);
 
 // 404 Handler
+// Browsers that land here directly get a readable page instead of raw JSON.
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+  const wantsHtml = req.method === 'GET'
+    && !req.path.startsWith('/api/')
+    && req.accepts(['html', 'json']) === 'html';
+
+  if (wantsHtml) {
+    res.status(404).type('html').send(renderFriendlyPage({
+      title: 'Page not found',
+      message: 'This address does not exist, or it has moved.',
+    }));
+    return;
+  }
+
+  res.status(404).json({ error: 'We could not find what you were looking for.' });
 });
 
 // Global Error Handler
 app.use(errorHandler);
+
+// A stray rejected promise (e.g. a background email or storage call) would
+// otherwise crash the process on Node 15+, and every guest would then hit a
+// cold restart. Log it and keep serving.
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] Unhandled promise rejection:', reason);
+});
 
 // Start Server
 try {

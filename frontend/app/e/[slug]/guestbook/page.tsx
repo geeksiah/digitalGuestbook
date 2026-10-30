@@ -7,6 +7,8 @@ import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
 import toast from 'react-hot-toast';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerWakingMessage } from '@/lib/serverStatus';
 
 type ViewState = 'menu' | 'video' | 'audio' | 'photo' | 'success';
 type RecordingState = 'idle' | 'ready' | 'recording' | 'preview' | 'uploading';
@@ -613,6 +615,8 @@ export default function GuestbookPage() {
       </div>
     );
   }
+
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
 
   if (error) {
     return (

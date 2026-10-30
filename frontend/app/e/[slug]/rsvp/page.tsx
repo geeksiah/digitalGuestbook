@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import { publicApi, rsvpApi, ticketingApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerWakingMessage } from '@/lib/serverStatus';
 
 type FieldType = 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox' | 'radio' | 'textarea' | 'date';
 
@@ -382,6 +384,8 @@ export default function EventRsvpPage() {
       </div>
     );
   }
+
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
 
   if (error || !eventData) {
     return (

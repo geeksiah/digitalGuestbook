@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, formatDistanceToNow } from 'date-fns';
+import { isServerUnavailableError, OFFLINE_MESSAGE, SERVER_WAKING_MESSAGE } from './serverStatus';
 
 const getPublicApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
@@ -291,6 +292,9 @@ const isUsableMessage = (value: unknown): value is string =>
  * the most useful thing we can show, so it wins over the status-code wording.
  */
 export function getErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
+  if (isServerUnavailableError(error)) {
+    return typeof navigator !== 'undefined' && navigator.onLine === false ? OFFLINE_MESSAGE : SERVER_WAKING_MESSAGE;
+  }
   const response = (error as any)?.response;
   const data = response?.data;
 

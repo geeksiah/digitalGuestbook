@@ -42,13 +42,13 @@ export default function GlobalError({ error, reset }: Props) {
             textAlign: 'center',
           }}
         >
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#063932' }}>Something broke</h1>
+          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#063932' }}>This page did not load</h1>
           <p style={{ margin: '6px 0 0', fontSize: '13px', lineHeight: 1.5, color: '#5b6469' }}>
-            EventPeepo could not render this page. Reloading usually fixes it.
+            This page could not load. It may still be starting up, so please refresh in a moment.
           </p>
           {error?.digest ? (
             <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#6e777d', fontFamily: 'ui-monospace, monospace' }}>
-              Reference {error.digest}
+              Error reference {error.digest}
             </p>
           ) : null}
 
@@ -72,7 +72,10 @@ export default function GlobalError({ error, reset }: Props) {
             </a>
             <button
               type="button"
-              onClick={reset}
+              onClick={() => {
+                if (typeof window !== 'undefined') window.location.reload();
+                else reset();
+              }}
               style={{
                 minHeight: '40px',
                 padding: '0 14px',
@@ -85,7 +88,7 @@ export default function GlobalError({ error, reset }: Props) {
                 cursor: 'pointer',
               }}
             >
-              Try again
+              Refresh page
             </button>
           </div>
         </div>

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { API_BASE_URL } from '@/lib/api';
 import toast from 'react-hot-toast';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerUnavailableError, isServerWakingMessage, SERVER_WAKING_MESSAGE } from '@/lib/serverStatus';
 
 interface Photo {
   id: string;
@@ -35,6 +37,8 @@ export default function BoothDownloadPage() {
         if (!response.ok) {
           if (response.status === 404) {
             setError('Download link has expired or is invalid');
+          } else if (response.status >= 500) {
+            setError(SERVER_WAKING_MESSAGE);
           } else {
             setError('Failed to load photos');
           }
@@ -50,7 +54,7 @@ export default function BoothDownloadPage() {
         // Auto-download causes issues on iPhone where new downloads cancel previous ones
       } catch (err: any) {
         console.error('Fetch error:', err);
-        setError('Failed to load photos. Please try again.');
+        setError(isServerUnavailableError(err) ? SERVER_WAKING_MESSAGE : 'Failed to load photos. Please try again.');
         setLoading(false);
       }
     };
@@ -124,6 +128,8 @@ export default function BoothDownloadPage() {
       </div>
     );
   }
+
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
 
   if (error) {
     return (

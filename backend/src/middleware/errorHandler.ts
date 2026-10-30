@@ -40,14 +40,51 @@ const logError = (err: Error | AppError, req: Request, statusCode: number) => {
   }
 };
 
+/** What guests see when something fails on our side. No internals. */
+export const GENERIC_SERVER_ERROR = 'Something went wrong on our side. Please refresh the page and try again.';
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
+
+/**
+ * A small self-contained page for browsers that land on the API host directly,
+ * so they never see raw JSON or a stack trace.
+ */
+export const renderFriendlyPage = ({ title, message }: { title: string; message: string }) => `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>${escapeHtml(title)}</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f5f6f7;color:#1a1a2e;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  .card{width:100%;max-width:420px;background:#fff;border:1px solid #e8eaec;border-radius:12px;padding:24px;text-align:center}
+  h1{margin:0;font-size:20px;color:#063932}
+  p{margin:8px 0 0;font-size:14px;line-height:1.5;color:#5b6469}
+  button{margin-top:20px;min-height:40px;padding:0 16px;border:0;border-radius:8px;background:#063932;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>${escapeHtml(title)}</h1>
+    <p>${escapeHtml(message)}</p>
+    <button type="button" onclick="location.reload()">Refresh page</button>
+  </div>
+</body>
+</html>`;
+
 export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
-  _next: NextFunction
+  next: NextFunction
 ) => {
+  // Response already streaming: let Express close the connection.
+  if (res.headersSent) return next(err);
+
   let statusCode = 500;
-  let errorMessage = 'Internal server error';
+  let errorMessage = GENERIC_SERVER_ERROR;
   let errorDetails: any = undefined;
 
   if (err instanceof AppError) {
@@ -99,9 +136,51 @@ export const errorHandler = (
     statusCode = 404;
     errorMessage = 'Resource not found';
   }
+  // Malformed or oversized request bodies (express.json / urlencoded)
+  else if ((err as any).type === 'entity.parse.failed') {
+    statusCode = 400;
+    errorMessage = 'The request could not be read. Please try again.';
+  }
+  else if ((err as any).type === 'entity.too.large') {
+    statusCode = 413;
+    errorMessage = 'That upload is too large.';
+  }
+  // Database unreachable (common right after a cold start)
+  else if (
+    err.name === 'PrismaClientInitializationError'
+    || err.name === 'PrismaClientRustPanicError'
+    || (err as any).code === 'P1001'
+    || (err as any).code === 'P1017'
+  ) {
+    statusCode = 503;
+    errorMessage = 'We are getting things ready. Please refresh the page in a moment.';
+    res.set('Retry-After', '10');
+  }
+
+  // Server-side failures can carry internal text (storage, SMTP, SQL...), e.g.
+  // "Failed to upload file: <provider error>". Outside development keep only
+  // our own wording before the first colon.
+  if (statusCode >= 500 && statusCode !== 503 && process.env.NODE_ENV !== 'development') {
+    const ownWording = err instanceof AppError ? errorMessage.split(':')[0].trim() : '';
+    errorMessage = ownWording && ownWording.length < 120
+      ? `${ownWording.replace(/[.!]+$/, '')}. Please try again.`
+      : GENERIC_SERVER_ERROR;
+  }
 
   // Log the error
   logError(err, req, statusCode);
+
+  // A browser navigating straight to the API gets a page, not JSON.
+  const wantsHtml = req.method === 'GET'
+    && !req.path.startsWith('/api/')
+    && req.accepts(['html', 'json']) === 'html';
+  if (wantsHtml) {
+    res.status(statusCode).type('html').send(renderFriendlyPage({
+      title: statusCode >= 500 ? 'This page did not load' : 'Something is not right',
+      message: errorMessage,
+    }));
+    return;
+  }
 
   // Send error response
   res.status(statusCode).json({

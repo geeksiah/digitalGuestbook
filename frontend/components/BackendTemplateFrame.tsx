@@ -2,6 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL } from "@/lib/api";
+import ServerWakingScreen from "@/components/ServerWakingScreen";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PRODUCTION-SAFE UPDATE — BackendTemplateFrame.tsx
@@ -657,11 +658,11 @@ export default function BackendTemplateFrame({
 
   if (!available || !html || !parsed) {
     const status = unavailableInfo?.status ?? 404;
+    // Server asleep, booting or failing: friendly wake-up screen, no codes.
+    if (status >= 500) return <ServerWakingScreen />;
     const phase = unavailableInfo?.phase;
     const phaseLabel = phase ? phase.replace(/_/g, " ").toLowerCase() : null;
-    const title = status >= 500
-      ? "Temporary Error"
-      : status === 410
+    const title = status === 410
         ? "Event Unavailable"
         : status === 403
           ? "Page Not Available In This Phase"
@@ -670,10 +671,7 @@ export default function BackendTemplateFrame({
     return (
       <div className="min-h-screen bg-gradient-to-br from-surface-50 via-white to-surface-100 flex items-center justify-center px-4">
         <div className="w-full max-w-xl rounded-2xl border border-surface-200 bg-white shadow-xl p-8 text-center">
-          <div className="inline-flex items-center rounded-full border border-surface-200 px-3 py-1 text-xs font-semibold text-surface-600">
-            HTTP {status}
-          </div>
-          <h1 className="mt-4 text-2xl font-semibold text-brand-900">{title}</h1>
+          <h1 className="text-2xl font-semibold text-brand-900">{title}</h1>
           <p className="mt-3 text-surface-600">
             {unavailableInfo?.message || "This page is not available right now."}
           </p>
@@ -694,7 +692,7 @@ export default function BackendTemplateFrame({
               onClick={() => window.location.reload()}
               className="inline-flex items-center justify-center rounded-lg border border-surface-300 px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 transition-colors"
             >
-              Retry
+              Refresh page
             </button>
           </div>
         </div>

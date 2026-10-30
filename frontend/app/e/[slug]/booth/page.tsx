@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerWakingMessage } from '@/lib/serverStatus';
 
 type ViewState = 'welcome' | 'menu' | 'video' | 'audio' | 'photo' | 'photo-preview' | 'download-qr' | 'success';
 type RecordingState = 'idle' | 'countdown' | 'ready' | 'recording' | 'preview' | 'uploading';
@@ -635,6 +637,8 @@ export default function BoothPage() {
       </div>
     );
   }
+
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
 
   if (error) {
     return (

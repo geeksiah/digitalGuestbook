@@ -132,16 +132,41 @@ export async function resolveMetadataLocation(slug: string, fallbackPublicPath?:
   };
 }
 
+/**
+ * Metadata is fetched on the server before any HTML is sent. If the API is
+ * asleep (free hosting), waiting on it would stall the whole page, and the
+ * hosting function would time out with a raw platform error. So we wait a
+ * short while, then render with the last good copy or generic tags; the page
+ * itself loads the event in the browser and shows a friendly wake-up state.
+ */
+const METADATA_TIMEOUT_MS = 3_500;
+const metadataCache = new Map<string, { event: any; fetchedAt: number }>();
+const METADATA_STALE_MS = 6 * 60 * 60 * 1000;
+
 export async function fetchEventForMetadata(slug: string) {
+  const cached = metadataCache.get(slug);
+  const fallback = cached && Date.now() - cached.fetchedAt < METADATA_STALE_MS ? cached.event : null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), METADATA_TIMEOUT_MS);
   try {
     const response = await fetch(`${API_BASE_URL}/api/public/event/${slug}`, {
       cache: 'no-store',
+      signal: controller.signal,
     });
-    if (!response.ok) return null;
+    if (response.status === 404) {
+      metadataCache.delete(slug);
+      return null;
+    }
+    if (!response.ok) return fallback;
     const payload = await response.json();
-    return payload?.event || null;
+    const event = payload?.event || null;
+    if (event) metadataCache.set(slug, { event, fetchedAt: Date.now() });
+    return event;
   } catch {
-    return null;
+    return fallback;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

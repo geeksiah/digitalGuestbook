@@ -6,6 +6,8 @@ import { publicApi, checkInApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import QrScanner from 'qr-scanner';
+import ServerWakingScreen from '@/components/ServerWakingScreen';
+import { isServerWakingMessage } from '@/lib/serverStatus';
 
 type CheckInState = 'idle' | 'checking' | 'success' | 'error';
 type InputMode = 'scan' | 'manual';
@@ -262,6 +264,8 @@ export default function CheckInPage() {
       </div>
     );
   }
+
+  if (isServerWakingMessage(error)) return <ServerWakingScreen />;
 
   if (error) {
     return (

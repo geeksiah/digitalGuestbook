@@ -4,6 +4,7 @@ import Script from 'next/script';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
 import ServiceWorkerRegister from "./_components/ServiceWorkerRegister";
+import ServerStatusNotice from "@/components/ServerStatusNotice";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -112,6 +113,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans">
         <ServiceWorkerRegister />
         {children}
+        <ServerStatusNotice />
         <Toaster
           position="top-right"
           toastOptions={{
