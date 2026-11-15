@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { TemplatePageLoader, useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { useParams } from 'next/navigation';
 import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
@@ -617,11 +617,7 @@ export default function BoothPage() {
 
   // ==================== RENDER STATES ====================
   if (templateLoading) {
-    return (
-      <div className="min-h-screen section-gradient flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
   if (hasTemplate) {
     return <BackendTemplateFrame slug={slug} endpoint="booth" />;
