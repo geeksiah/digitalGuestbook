@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { TemplatePageLoader, useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
@@ -50,11 +50,7 @@ export default function ThankYouPage() {
   // FIX: Show loading spinner while checking for backend template
   // This prevents the default UI from flashing before the template loads
   if (templateLoading || loading) {
-    return (
-      <div className="min-h-screen section-gradient flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   // FIX: If backend template is available, render it immediately (no flash)
