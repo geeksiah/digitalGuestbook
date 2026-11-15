@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi } from '@/lib/api';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { TemplatePageLoader, useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { formatDate } from '@/lib/utils';
 import ServerWakingScreen from '@/components/ServerWakingScreen';
 import { isServerWakingMessage } from '@/lib/serverStatus';
@@ -50,77 +50,15 @@ export default function EventPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Phase-aware template checks
-  // We check for BOTH invitation and live templates, then decide based on actual phase
-  const [checkedInvitationTemplate, setCheckedInvitationTemplate] = useState(false);
-  const [useInvitationTemplate, setUseInvitationTemplate] = useState(false);
-  const [checkedLiveTemplate, setCheckedLiveTemplate] = useState(false);
-  const [useLiveTemplate, setUseLiveTemplate] = useState(false);
-  const [checkedEndedTemplate, setCheckedEndedTemplate] = useState(false);
-  const [useEndedTemplate, setUseEndedTemplate] = useState(false);
-
-  // Backend template check for invitation
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/invitation`);
-        const ct = res.headers.get('content-type') || '';
-        if (!cancelled && res.ok && ct.includes('text/html')) {
-          setUseInvitationTemplate(true);
-        }
-      } catch (e) {
-        // ignore — will fall back to default UI
-      } finally {
-        if (!cancelled) setCheckedInvitationTemplate(true);
-      }
-    };
-    if (slug) check();
-    return () => { cancelled = true; };
-  }, [slug]);
-
-  // Backend template check for live landing
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/live`);
-        const ct = res.headers.get('content-type') || '';
-        if (!cancelled && res.ok && ct.includes('text/html')) {
-          setUseLiveTemplate(true);
-        }
-      } catch (e) {
-        // ignore
-      } finally {
-        if (!cancelled) setCheckedLiveTemplate(true);
-      }
-    };
-    if (slug) check();
-    return () => { cancelled = true; };
-  }, [slug]);
-
-  // Backend template check for event ended
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const res = await fetch(`${API_BASE_URL}/api/public/event/${slug}/ended`);
-        const ct = res.headers.get('content-type') || '';
-        if (!cancelled && res.ok && ct.includes('text/html')) {
-          setUseEndedTemplate(true);
-        }
-      } catch (e) {
-        // ignore
-      } finally {
-        if (!cancelled) setCheckedEndedTemplate(true);
-      }
-    };
-    if (slug) check();
-    return () => { cancelled = true; };
-  }, [slug]);
+  // Phase-aware template checks. All three share the template store with
+  // <BackendTemplateFrame>, so the frame renders the chosen template from
+  // memory — one request per endpoint, one loading screen, no second spinner.
+  const invitationTpl = useBackendTemplate(slug, 'invitation');
+  const liveTpl = useBackendTemplate(slug, 'live');
+  const endedTpl = useBackendTemplate(slug, 'ended');
+  const useInvitationTemplate = invitationTpl.available;
+  const useLiveTemplate = liveTpl.available;
+  const useEndedTemplate = endedTpl.available;
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -137,17 +75,12 @@ export default function EventPage() {
   }, [slug]);
 
   // ─── Loading state ─────────────────────────────────────────────────────────
-  // Wait for BOTH the event data AND the relevant template check to complete
-  // before rendering anything, to prevent the default UI flash.
-  const templateChecksComplete =
-    checkedInvitationTemplate && checkedLiveTemplate && checkedEndedTemplate;
+  // Wait for the event data AND the template checks before rendering anything,
+  // to prevent the default UI flashing ahead of a custom template.
+  const templateChecksComplete = !invitationTpl.loading && !liveTpl.loading && !endedTpl.loading;
 
   if (loading || !templateChecksComplete) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-950 to-navy-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   // ─── Error state ───────────────────────────────────────────────────────────
