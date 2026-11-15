@@ -1,0 +1,15 @@
+{
+  "name": "Stephen & Agnes · Invitation",
+  "eventpeepo": {
+    "media": {
+      "slots": [
+        { "key": "hero", "label": "Cover photo (portrait)", "accept": ["IMAGE"] },
+        { "key": "portrait", "label": "Couple portrait (also used on itinerary + guestbook)", "accept": ["IMAGE"] },
+        { "key": "verse", "label": "Venue section photo", "accept": ["IMAGE"] }
+      ],
+      "collections": [
+        { "key": "gallery", "label": "Gallery (first 6 shown)", "accept": ["IMAGE"], "maxItems": 24 }
+      ]
+    }
+  }
+}

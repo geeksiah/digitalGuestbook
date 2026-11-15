@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2e0b29">
+<title>RSVP · {{event.name}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,400;1,500&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Jost:wght@400;500&family=Great+Vibes&display=swap">
+<style>
+:root{
+  --night:#2e0b29; --plum:#4a1342; --plum-2:#5e1a52; --orchid:#8e4c8a; --blush:#d9a3c2; --blush-pale:#f3e3ec;
+  --gold:#bf9b5f; --gold-pale:#e9dcc4; --ivory:#f8f4ef; --linen:#f1eae2; --ink:#2b1a27; --muted:#76626f; --error:#b23a4e;
+  --rule:rgba(74,19,66,.16); --rule-strong:rgba(74,19,66,.4);
+  --serif:'Cormorant Garamond',Georgia,'Times New Roman',serif; --sans:'Jost',system-ui,-apple-system,'Segoe UI',sans-serif; --script:'Great Vibes',cursive;
+  --ease:cubic-bezier(.22,.7,.18,1); --pad:clamp(22px,6vw,80px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ivory);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.rs{font-variant-numeric:lining-nums;min-height:100vh}
+.rs img{display:block;max-width:100%}
+:where(.rs) a{color:inherit;text-decoration:none}
+.rs [hidden]{display:none!important}
+:where(.rs) :is(h1,h2){margin:0;font-family:var(--serif);font-weight:300;color:inherit;letter-spacing:-.01em}
+:where(.rs) p{margin:0}
+.amp{font-family:var(--script);color:var(--blush)}
+.label{font:500 .68rem/1.3 var(--sans);letter-spacing:.26em;text-transform:uppercase;color:var(--muted)}
+
+/* Photo sa-sec: a short strip on phones, a fixed half on desktop */
+.side{position:relative;height:46svh;min-height:300px;background:var(--night);color:#fff;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}
+.side img{position:absolute;inset:0;z-index:-2;width:100%;height:100%;object-fit:cover;object-position:50% 20%}
+.side::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(46,11,41,.55) 0%,rgba(46,11,41,0) 30%,rgba(46,11,41,.15) 55%,rgba(46,11,41,.92) 100%)}
+.side-top{display:flex;justify-content:space-between;align-items:center;padding:calc(18px + env(safe-area-inset-top)) var(--pad) 0}
+.back{display:inline-flex;align-items:center;gap:10px;font:500 .7rem/1 var(--sans);letter-spacing:.22em;text-transform:uppercase}
+.back svg{width:16px;height:16px}
+.mono{font-family:var(--serif);letter-spacing:.24em}
+.mono i{font-family:var(--script);font-style:normal;color:var(--blush);letter-spacing:0;font-size:1.3em}
+.side-copy{padding:0 var(--pad) 26px}
+.side-copy h1{font-size:clamp(2.8rem,13vw,5.6rem);line-height:.92}
+.side-copy p{margin-top:12px;color:rgba(255,255,255,.8);font-size:.92rem}
+
+/* Form */
+.main{padding:44px var(--pad) calc(130px + env(safe-area-inset-bottom))}
+.main-in{max-width:560px}
+.main h2{font-size:clamp(2.6rem,10vw,4.2rem);line-height:1;color:var(--plum)}
+.main h2 em{font-style:italic;color:var(--orchid)}
+.lede{margin-top:14px;color:var(--muted);max-width:40ch}
+form{margin-top:36px}
+.q{padding:26px 0 0}
+.q-title{display:block;font-family:var(--serif);font-size:1.5rem;line-height:1.2;color:var(--ink);margin-bottom:6px}
+.q-title small{font-family:var(--sans);font-size:.78rem;color:var(--muted);margin-left:6px}
+.choices{border-top:1px solid var(--rule);margin-top:12px}
+.choice{position:relative;display:flex;align-items:center;gap:16px;padding:18px 4px;border-bottom:1px solid var(--rule);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .2s}
+.choice input{position:absolute;opacity:0;pointer-events:none}
+.choice .dot{flex:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule-strong);display:grid;place-items:center;transition:border-color .2s}
+.choice .dot::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--plum);transform:scale(0);transition:transform .25s var(--ease)}
+.choice b{font-family:var(--serif);font-weight:400;font-size:1.45rem;line-height:1.15;color:var(--ink)}
+.choice span.sub{display:block;font-size:.84rem;color:var(--muted)}
+.choice:hover{background:rgba(74,19,66,.03)}
+.choice input:checked ~ .dot{border-color:var(--plum)}
+.choice input:checked ~ .dot::after{transform:scale(1)}
+.choice input:checked ~ div b{color:var(--plum)}
+.choice input:focus-visible ~ .dot{outline:2px solid var(--orchid);outline-offset:3px}
+.field{position:relative;padding-top:22px}
+.field label{display:block;font:500 .68rem/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+.field label small{letter-spacing:.04em;text-transform:none;font-size:.78rem;font-weight:400;margin-left:4px}
+.field input,.field textarea{width:100%;border:0;border-bottom:1px solid var(--rule-strong);background:transparent;padding:12px 0 12px;font:400 1.35rem/1.3 var(--serif);color:var(--ink);border-radius:0;outline:none;transition:border-color .2s;-webkit-appearance:none}
+.field textarea{font-size:1.2rem;resize:vertical;min-height:96px}
+.field input::placeholder,.field textarea::placeholder{color:rgba(118,98,111,.55)}
+.field input:focus,.field textarea:focus{border-bottom-color:var(--plum)}
+.field.bad input{border-bottom-color:var(--error)}
+.err{display:block;min-height:1.1em;margin-top:6px;font-size:.8rem;color:var(--error)}
+.two{display:grid;gap:0 28px}
+.stepper{display:flex;align-items:center;gap:0;margin-top:12px;border:1px solid var(--rule-strong);width:max-content}
+.stepper button{width:54px;height:54px;border:0;background:transparent;color:var(--plum);font-size:1.5rem;cursor:pointer}
+.stepper button:disabled{color:rgba(74,19,66,.25);cursor:default}
+.stepper output{min-width:64px;text-align:center;font:400 1.7rem/1 var(--serif);color:var(--ink)}
+.count-note{margin-top:8px;font-size:.84rem;color:var(--muted)}
+.form-error{margin-top:22px;padding:14px 16px;border-left:2px solid var(--error);background:rgba(178,58,78,.06);color:var(--error);font-size:.92rem}
+
+/* Floating submit on phones, inline on desktop */
+.submit-bar{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(248,244,239,0),rgba(248,244,239,.96) 30%)}
+.submit{display:flex;width:100%;align-items:center;justify-content:center;gap:12px;height:58px;border:0;border-radius:999px;background:var(--plum);color:#fff;font:500 .78rem/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;cursor:pointer;box-shadow:0 14px 36px rgba(46,11,41,.3);transition:background .25s}
+.submit:hover{background:var(--night)}
+.submit:disabled{opacity:.6;cursor:progress}
+.submit svg{width:16px;height:16px}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Contacts fallback */
+.alt{margin-top:46px;padding-top:26px;border-top:1px solid var(--rule)}
+.alt p{color:var(--muted);font-size:.92rem}
+.alt ul{list-style:none;margin:14px 0 0;padding:0}
+.alt li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule);font-family:var(--serif);font-size:1.2rem}
+.alt li a{font-family:var(--sans);font-size:.9rem;color:var(--plum);letter-spacing:.04em;border-bottom:1px solid var(--blush)}
+
+/* Done */
+.done{padding-top:10px}
+.done .seal{width:84px;height:84px;border-radius:50%;border:1px solid var(--gold);display:grid;place-items:center;color:var(--gold);margin-bottom:26px}
+.done .seal svg{width:34px;height:34px}
+.done h2{font-size:clamp(3rem,12vw,5rem)}
+.done .msg{margin-top:16px;font-family:var(--serif);font-size:1.4rem;line-height:1.4;color:var(--ink);max-width:28ch}
+.done .api{margin-top:12px;color:var(--muted);font-size:.92rem}
+.done nav{display:flex;flex-wrap:wrap;gap:16px 30px;margin-top:34px}
+.link-arrow{display:inline-flex;align-items:center;gap:12px;font:500 .74rem/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;padding:6px 0;border-bottom:1px solid currentColor;color:var(--plum)}
+
+@media (min-width:640px){.two{grid-template-columns:1fr 1fr}}
+@media (min-width:1000px){
+  .rs{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr)}
+  .side{position:sticky;top:0;height:100vh}
+  .side-copy{padding-bottom:56px}
+  .side-copy h1{font-size:clamp(5rem,7.6vw,8rem)}
+  .main{padding:110px var(--pad) 110px;display:flex;justify-content:center}
+  .main-in{width:100%}
+  .submit-bar{position:static;padding:34px 0 0;background:none}
+  .submit{width:auto;padding:0 44px;border-radius:0;box-shadow:none}
+}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
+.sa input,.sa textarea,.sa output,.sa button,.rs input,.rs textarea,.rs output,.rs button,.gb input,.gb button{font-variant-numeric:lining-nums}
+
+/* Title typography: Playfair Display for presence, balanced wrapping everywhere */
+@font-face{font-family:'Display Fallback';src:local('Georgia');size-adjust:104%;ascent-override:92%;descent-override:24%}
+:root{--display:'Playfair Display','Display Fallback',Georgia,serif}
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
+.side-copy h1,.main h2,.done h2{font-family:var(--display);font-weight:500}
+.side-copy h1{font-size:clamp(2.6rem,11vw,5rem);line-height:1.02}
+.main h2 em,.done h2 em{font-weight:400}
+.q-title{font-family:var(--display);font-weight:500;font-size:1.3rem}
+.choice b{font-family:var(--display);font-weight:500;font-size:1.2rem}
+.field input,.field textarea{font-family:var(--serif);font-weight:500}
+.stepper output{font-family:var(--display)}
+.main{padding-top:56px}
+form{margin-top:40px}
+.q{padding-top:32px}
+.field{padding-top:28px}
+.alt{margin-top:56px;padding-top:32px}
+@media (min-width:1000px){.side-copy h1{font-size:clamp(4rem,6vw,6rem)}.main{padding:120px var(--pad)}}
+
+
+/* The app sets its own font on <body>; pin ours on the template root */
+.rs{font-family:var(--sans);color:var(--ink);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+</style>
+</head>
+<body>
+<div class="rs" id="rs" data-api="{{api.baseUrl}}" data-slug="{{event.slug}}" data-date="{{event.date}}">
+  <aside class="side">
+    {{#if media.portrait.url}}<img src="{{media.portrait.url}}" alt="{{media.portrait.alt}}" fetchpriority="high" decoding="async">{{else}}{{#if media.hero.url}}<img src="{{media.hero.url}}" alt="{{media.hero.alt}}" fetchpriority="high" decoding="async">{{/if}}{{/if}}
+    <div class="side-top">
+      <a class="back" href="{{urls.invitation}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Invitation</a>
+      <svg width="46" height="46" viewBox="0 0 120 120" style="display:block;color:#eadcc2" role="img" aria-label="S and A monogram">
+        <circle cx="60" cy="60" r="57" fill="none" stroke="currentColor" stroke-width="1"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width=".5" opacity=".7"/>
+        <g fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round">
+          <path d="M34 92c8 6 17 9 26 9s18-3 26-9"/>
+          <path d="M40 95c-4-1-7-4-8-8 4 0 7 3 8 8z"/><path d="M47 99c-4 0-7-3-9-6 4-1 7 2 9 6z"/>
+          <path d="M80 95c4-1 7-4 8-8-4 0-7 3-8 8z"/><path d="M73 99c4 0 7-3 9-6-4-1-7 2-9 6z"/>
+          <path d="M60 15l3 4-3 4-3-4z"/>
+        </g>
+        <text x="47" y="70" text-anchor="middle" font-size="40" font-family="Playfair Display, Georgia, serif" font-style="italic" font-weight="500" fill="currentColor">S</text>
+        <text x="73" y="80" text-anchor="middle" font-size="40" font-family="Playfair Display, Georgia, serif" font-style="italic" font-weight="500" fill="currentColor">A</text>
+        <path d="M44 84l32-48" stroke="currentColor" stroke-width=".7" opacity=".55"/>
+      </svg>
+    </div>
+    <div class="side-copy">
+      <h1>Stephen <span class="amp">&amp;</span> Agnes</h1>
+      <p data-long-date>{{event.formattedDate}}</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-in">
+      <section id="formWrap">
+        <h2>Kindly <em>respond</em></h2>
+        <p class="lede">Let Stephen and Agnes know whether you can share their Holy Matrimony with them.</p>
+
+        <form id="form" novalidate>
+          <div class="q">
+            <span class="q-title" id="attLabel">Will you attend?</span>
+            <div class="choices" role="radiogroup" aria-labelledby="attLabel">
+              <label class="choice"><input type="radio" name="attendance" value="YES" checked><span class="dot"></span><div><b>Joyfully accept</b><span class="sub">I will be there</span></div></label>
+              <label class="choice"><input type="radio" name="attendance" value="MAYBE"><span class="dot"></span><div><b>Not sure yet</b><span class="sub">I will confirm closer to the day</span></div></label>
+              <label class="choice"><input type="radio" name="attendance" value="NO"><span class="dot"></span><div><b>Regretfully decline</b><span class="sub">I will be with you in spirit</span></div></label>
+            </div>
+          </div>
+
+          <div class="field" id="fName">
+            <label for="name">Full name</label>
+            <input id="name" name="primaryName" autocomplete="name" placeholder="Your name" required minlength="2" maxlength="80">
+            <span class="err" aria-live="polite"></span>
+          </div>
+          <div class="two">
+            <div class="field" id="fPhone">
+              <label for="phone">Phone <small>(recommended)</small></label>
+              <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="024 000 0000" maxlength="20">
+              <span class="err" aria-live="polite"></span>
+            </div>
+            <div class="field" id="fEmail">
+              <label for="email">Email <small>(optional)</small></label>
+              <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" maxlength="120">
+              <span class="err" aria-live="polite"></span>
+            </div>
+          </div>
+
+          <div class="q" id="countQ">
+            <span class="q-title">How many in your party? <small>including you</small></span>
+            <div class="stepper">
+              <button type="button" id="minus" aria-label="Fewer guests">&minus;</button>
+              <output id="count" aria-live="polite">1</output>
+              <button type="button" id="plus" aria-label="More guests">+</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="note">A note for the couple <small>(optional)</small></label>
+            <textarea id="note" name="note" maxlength="500" placeholder="Your wishes, or anything they should know"></textarea>
+          </div>
+
+          <div class="form-error" id="formError" role="alert" hidden></div>
+
+          <div class="submit-bar">
+            <button class="submit" type="submit" id="submit"><span id="submitText">Send my response</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </div>
+        </form>
+
+        <div class="alt">
+          <p>Prefer to call? Reach any of our contacts.</p>
+          <ul>
+            <li>Eric Narh <a href="tel:+233246451525">024 645 1525</a></li>
+            <li>Micheal Tawiah <a href="tel:+233550137058">055 013 7058</a></li>
+            <li>Roger Essel <a href="tel:+233541907204">054 190 7204</a></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="done" id="done" hidden aria-live="polite">
+        <span class="seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
+        <h2 id="doneTitle">Thank you</h2>
+        <p class="msg" id="doneMsg"></p>
+        <p class="api" id="doneApi"></p>
+        <nav>
+          <a class="link-arrow" href="{{urls.invitation}}">Back to the invitation</a>
+          {{#if urls.itinerary}}<a class="link-arrow" href="{{urls.itinerary}}">Order of service</a>{{/if}}
+        </nav>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('rs');
+  if (!root || root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+  var $ = function (id) { return document.getElementById(id); };
+  var api = (root.getAttribute('data-api') || '').replace(/\/+$/, '');
+  var slug = (root.getAttribute('data-slug') || '').trim();
+  var TZ = 'Africa/Accra';
+
+  var start = new Date(root.getAttribute('data-date'));
+  if (!isNaN(start.getTime())) {
+    var f = function (o) { try { return new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: TZ }, o)).format(start); } catch (e) { return ''; } };
+    var t = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(start).toLowerCase();
+    root.querySelectorAll('[data-long-date]').forEach(function (n) { n.textContent = f({ weekday: 'long' }) + ', ' + f({ day: 'numeric' }) + ' ' + f({ month: 'long' }) + ' ' + f({ year: 'numeric' }) + ' · ' + t; });
+  }
+
+  /* Party size */
+  var count = 1, MAX = 20;
+  function renderCount() { $('count').textContent = count; $('minus').disabled = count <= 1; $('plus').disabled = count >= MAX; }
+  $('minus').addEventListener('click', function () { if (count > 1) { count--; renderCount(); } });
+  $('plus').addEventListener('click', function () { if (count < MAX) { count++; renderCount(); } });
+  renderCount();
+
+  function attendance() { var c = root.querySelector('input[name="attendance"]:checked'); return c ? c.value : 'YES'; }
+  function syncAttendance() {
+    var a = attendance();
+    $('countQ').hidden = a === 'NO';
+    $('submitText').textContent = a === 'NO' ? 'Send my regrets' : 'Send my response';
+  }
+  root.querySelectorAll('input[name="attendance"]').forEach(function (r) { r.addEventListener('change', syncAttendance); });
+  syncAttendance();
+
+  /* Remember what the guest typed */
+  ['name', 'phone', 'email'].forEach(function (id) {
+    try { var v = localStorage.getItem('sa_rsvp_' + id); if (v) $(id).value = v; } catch (e) {}
+    $(id).addEventListener('input', function () { try { localStorage.setItem('sa_rsvp_' + id, $(id).value); } catch (e) {} setErr(id, ''); });
+  });
+  function setErr(id, msg) { var w = $(id).closest('.field'); w.classList.toggle('bad', !!msg); w.querySelector('.err').textContent = msg || ''; }
+
+  function validate() {
+    var ok = true;
+    var name = $('name').value.trim(), email = $('email').value.trim(), phone = $('phone').value.trim();
+    if (name.length < 2) { setErr('name', 'Please enter your name.'); ok = false; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { setErr('email', 'This email does not look right.'); ok = false; }
+    if (phone && phone.replace(/\D/g, '').length < 9) { setErr('phone', 'Please check this number.'); ok = false; }
+    if (!ok) { var first = root.querySelector('.field.bad input'); if (first) first.focus(); }
+    return ok;
+  }
+
+  var qs = new URLSearchParams(location.search);
+  var inviteToken = qs.get('inviteToken') || qs.get('token') || '';
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    $('formError').hidden = true;
+    if (!validate()) return;
+    var a = attendance();
+    var body = { primaryName: $('name').value.trim(), attendance: a, guestCount: a === 'NO' ? 1 : count, submissionChannel: 'WEB' };
+    var phone = $('phone').value.trim(), email = $('email').value.trim(), note = $('note').value.trim();
+    if (phone) body.phone = phone;
+    if (email) body.email = email;
+    if (note) body.note = note;
+    if (inviteToken) body.inviteToken = inviteToken;
+
+    var btn = $('submit'), label = $('submitText').textContent;
+    btn.disabled = true; btn.innerHTML = '<span class="spin" aria-hidden="true"></span><span>Sending</span>';
+    fetch(api + '/api/rsvp/' + encodeURIComponent(slug), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          var msg = res.j.error || res.j.message || 'We could not send your response. Please try again.';
+          if (Array.isArray(res.j.details) && res.j.details[0] && res.j.details[0].message) msg = res.j.details[0].message;
+          throw new Error(msg);
+        }
+        var first = body.primaryName.split(/\s+/)[0];
+        $('doneTitle').textContent = a === 'NO' ? 'Thank you, ' + first : 'See you there, ' + first;
+        $('doneMsg').textContent = a === 'YES'
+          ? 'Stephen and Agnes are delighted you will celebrate with them' + (body.guestCount > 1 ? ', together with ' + (body.guestCount - 1) + (body.guestCount === 2 ? ' guest.' : ' guests.') : '.')
+          : a === 'MAYBE' ? 'Thank you for letting them know. Please confirm when you can.' : 'You will be missed. Thank you for letting them know.';
+        $('doneApi').textContent = res.j.message || '';
+        $('formWrap').hidden = true; $('done').hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      })
+      .catch(function (err) {
+        $('formError').textContent = err && err.message && err.message.indexOf('Failed to fetch') === -1 ? err.message : 'We could not reach the server. Please check your connection and try again.';
+        $('formError').hidden = false;
+        btn.disabled = false; btn.innerHTML = '<span id="submitText">' + label + '</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+      });
+  });
+})();
+</script>
+</body>
+</html>

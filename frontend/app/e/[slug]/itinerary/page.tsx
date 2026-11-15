@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { API_BASE_URL, publicApi } from '@/lib/api';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { TemplatePageLoader, useBackendTemplate } from '@/components/BackendTemplateFrame';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import ItineraryBoard from '@/components/itinerary/ItineraryBoard';
@@ -104,11 +104,7 @@ export default function EventItineraryPage() {
   }, [slug, templateLoading, hasTemplate]);
 
   if (templateLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   if (hasTemplate) {
@@ -125,11 +121,7 @@ export default function EventItineraryPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
-        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   return (

@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { publicApi, rsvpApi, ticketingApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { TemplatePageLoader, useBackendTemplate } from '@/components/BackendTemplateFrame';
 import ServerWakingScreen from '@/components/ServerWakingScreen';
 import { isServerWakingMessage } from '@/lib/serverStatus';
 
@@ -366,11 +366,7 @@ export default function EventRsvpPage() {
   };
 
   if (templateLoading) {
-    return (
-      <div className="min-h-screen section-gradient flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   if (hasTemplate) {
@@ -378,11 +374,7 @@ export default function EventRsvpPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen section-gradient flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   if (isServerWakingMessage(error)) return <ServerWakingScreen />;

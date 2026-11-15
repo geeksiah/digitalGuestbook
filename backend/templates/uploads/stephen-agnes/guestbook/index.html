@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3f0f37">
+<title>Guestbook · {{event.name}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,400;1,500&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Jost:wght@400;500&family=Great+Vibes&display=swap">
+<style>
+:root{
+  --night:#2e0b29; --ivory:#f8f4ef; --paper:#fbf8f4; --blush-soft:#f3e3ec; --lilac-soft:#efe6ee;
+  --plum:#4a1342; --plum-deep:#2e0b29; --orchid:#8e4c8a; --blush:#d9a3c2; --lilac:#c9b3c6;
+  --gold:#bf9b5f; --gold-soft:#e9dcc4; --ink:#2b1a27; --muted:#76626f; --line:rgba(74,19,66,.16); --rec:#e0475f;
+  --serif:'Cormorant Garamond',Georgia,'Times New Roman',serif; --sans:'Jost',system-ui,-apple-system,'Segoe UI',sans-serif; --script:'Great Vibes',cursive;
+  --radius:0px; --ease:cubic-bezier(.22,.7,.18,1); --pad:clamp(22px,6vw,80px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ivory);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.gb img,.gb video{display:block;max-width:100%}
+:where(.gb) a{color:inherit}
+.gb [hidden]{display:none!important}
+.script{font-family:var(--script);font-weight:400;line-height:1.05}
+.eyebrow{font:500 .7rem/1.4 var(--sans);letter-spacing:.32em;text-transform:uppercase;color:var(--orchid);margin:0}
+.sa-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 24px;border-radius:999px;font:500 .8rem/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;text-decoration:none;border:1px solid transparent;cursor:pointer;transition:transform .2s var(--ease),background .2s,color .2s,opacity .2s;-webkit-tap-highlight-color:transparent}
+.sa-btn:active{transform:scale(.97)}
+.sa-btn:disabled{opacity:.45;cursor:not-allowed}
+.sa-btn svg{width:18px;height:18px;flex:none}
+.sa-btn-plum{background:var(--plum);color:#fff}
+.sa-btn-line{border-color:var(--plum);color:var(--plum);background:transparent}
+.sa-btn-ghost{border-color:rgba(255,255,255,.45);color:#fff;background:rgba(255,255,255,.08)}
+.sa-btn-white{background:#fff;color:var(--plum)}
+
+/* Home: a dark, photographic welcome with the three ways to leave a message */
+.gb{font-variant-numeric:lining-nums}
+.home{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--night);color:#fff}
+.hero{position:relative;min-height:52svh;display:flex;flex-direction:column;justify-content:space-between;isolation:isolate;overflow:hidden}
+.hero img{position:absolute;inset:0;z-index:-2;width:100%;height:100%;object-fit:cover;object-position:50% 22%}
+.hero::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(46,11,41,.5) 0%,rgba(46,11,41,0) 30%,rgba(46,11,41,.3) 60%,var(--night) 100%)}
+.hero .top{display:flex;justify-content:space-between;align-items:center;padding:calc(18px + env(safe-area-inset-top)) var(--pad) 0;font:500 .7rem/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.8)}
+.mono{font-family:var(--serif);font-size:1.05rem;letter-spacing:.24em;text-transform:none;color:#fff;text-decoration:none}
+.mono i{font-family:var(--script);font-style:normal;color:var(--blush);letter-spacing:0;font-size:1.3em}
+.hero-copy{padding:0 var(--pad) 8px}
+.hero h1{margin:0;font-family:var(--serif);font-weight:300;font-size:clamp(3rem,13vw,6.4rem);line-height:.92;color:#fff;letter-spacing:-.01em}
+.hero h1 em{font-style:italic;color:var(--blush)}
+.hero p.lead{margin:14px 0 0;max-width:34ch;color:rgba(255,255,255,.78);font-size:.98rem}
+.right{padding:18px var(--pad) calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column}
+.sa-sec{max-width:560px;width:100%}
+.field label{display:block;font:500 .66rem/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.6);margin:0 0 4px}
+.field input{width:100%;height:56px;padding:0;border:0;border-bottom:1px solid rgba(255,255,255,.35);border-radius:0;background:transparent;font:400 1.5rem var(--serif);color:#fff;outline:none;transition:border-color .2s}
+.field input::placeholder{color:rgba(255,255,255,.35)}
+.field input:focus{border-bottom-color:var(--gold)}
+.field .hint{font-size:.8rem;color:var(--blush);margin:8px 0 0;min-height:1em}
+.modes{display:grid;margin-top:22px;border-top:1px solid rgba(255,255,255,.18)}
+.mode{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:14px;width:100%;padding:20px 0;border:0;border-bottom:1px solid rgba(255,255,255,.18);background:none;text-align:left;cursor:pointer;font:inherit;color:#fff;-webkit-tap-highlight-color:transparent;transition:padding .3s var(--ease)}
+.mode:hover{padding-left:8px}
+.mode .n{font-family:var(--serif);font-size:1rem;color:var(--gold)}
+.mode b{display:block;font-family:var(--serif);font-weight:300;font-size:2rem;line-height:1.05}
+.mode small{display:block;margin-top:2px;color:rgba(255,255,255,.6);font-size:.86rem}
+.mode .arr{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.3);display:grid;place-items:center;transition:background .25s,color .25s,border-color .25s}
+.mode .arr svg{width:16px;height:16px}
+.mode:hover .arr{background:var(--gold);border-color:var(--gold);color:var(--night)}
+.home-foot{margin:28px 0 0;display:flex;gap:26px;font:500 .7rem/1 var(--sans);letter-spacing:.2em;text-transform:uppercase}
+.home-foot a{color:var(--gold-soft);text-decoration:none;padding-bottom:6px;border-bottom:1px solid currentColor}
+.notice{margin:16px 0 0;padding:12px 0 0;border-top:1px solid rgba(255,255,255,.18);color:var(--blush);font-size:.88rem}
+#gate .eyebrow{color:var(--gold-soft)}
+.code-row input{background:transparent!important;color:#fff!important;border-bottom-color:rgba(255,255,255,.35)!important}
+/* ── Code gate ── */
+.code-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:6px 0 4px}
+.code-row input{height:56px;text-align:center;font:600 1.4rem var(--serif);padding:0}
+
+/* ── Studio: full-screen on phones ── */
+.studio{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:#120510;color:#fff;height:100vh;height:100dvh}
+.studio .top{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;background:linear-gradient(180deg,rgba(0,0,0,.45),transparent)}
+.round{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.25);color:#fff;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.round svg{width:20px;height:20px}
+.timer{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:rgba(0,0,0,.35);font:500 .9rem/1 var(--sans);font-variant-numeric:tabular-nums;letter-spacing:.06em;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.timer i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.5)}
+.studio.recording .timer i{background:var(--rec);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+.stage{position:relative;flex:1;min-height:0;overflow:hidden;display:grid;place-items:center}
+.stage video{width:100%;height:100%;object-fit:cover;background:#000}
+.stage video.mirror{transform:scaleX(-1)}
+.stage .msg{position:absolute;inset:0;display:grid;place-items:center;padding:30px;text-align:center;color:rgba(255,255,255,.85)}
+.controls{position:relative;z-index:3;display:flex;align-items:center;justify-content:center;gap:16px;padding:18px 18px calc(22px + env(safe-area-inset-bottom));background:linear-gradient(0deg,rgba(0,0,0,.55),transparent)}
+.video-mode .controls{position:absolute;left:0;right:0;bottom:0}
+.video-mode.reviewing .controls{position:relative;background:#120510}
+.video-mode.reviewing .stage video{object-fit:contain}
+.reviewing .limit{display:none}
+.rec{width:78px;height:78px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.rec i{width:58px;height:58px;border-radius:50%;background:var(--rec);transition:all .25s var(--ease)}
+.studio.recording .rec i{width:28px;height:28px;border-radius:8px}
+.rec:disabled{opacity:.4}
+.side-slot{width:46px;height:46px}
+.review{display:flex;gap:10px;width:100%;max-width:420px}
+.review .sa-btn{flex:1}
+.limit{position:absolute;left:0;right:0;bottom:calc(118px + env(safe-area-inset-bottom));text-align:center;font-size:.78rem;color:rgba(255,255,255,.75);z-index:3}
+
+/* audio studio */
+.audio-mode{background:radial-gradient(120% 80% at 50% 20%,#7a2d6c 0%,var(--plum) 45%,var(--plum-deep) 100%)}
+.orb{position:relative;width:min(64vw,260px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center}
+.orb::before{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(211,153,188,.18);transform:scale(var(--lvl,1));transition:transform .08s linear}
+.orb::after{content:"";position:absolute;inset:14%;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.orb .core{position:relative;width:46%;aspect-ratio:1;border-radius:50%;background:#fff;color:var(--plum);display:grid;place-items:center;box-shadow:0 18px 40px rgba(0,0,0,.25)}
+.orb .core svg{width:40%;height:40%}
+.audio-mode .caption{margin-top:26px;text-align:center;color:rgba(255,255,255,.85);max-width:300px}
+.audio-mode .caption b{display:block;font-family:var(--serif);font-weight:300;font-size:2.2rem;color:#fff}
+.audio-mode audio{width:min(86vw,360px);margin-top:22px}
+
+/* photo studio */
+.photo-mode{background:var(--ivory);color:var(--ink)}
+.photo-mode .top{position:static;background:none;color:var(--plum)}
+.photo-mode .round{color:var(--plum);border-color:var(--line);background:#fff}
+.photo-mode .top h2{margin:0;font-family:var(--serif);font-weight:400;font-size:1.6rem;color:var(--plum)}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:6px 16px 0}
+.pick label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:104px;border:1px solid var(--line);background:var(--paper);color:var(--plum);font:500 .74rem/1.2 var(--sans);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;text-align:center}
+.pick label svg{width:26px;height:26px}
+.pick input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.thumbs{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px;align-content:start}
+.thumb{position:relative;aspect-ratio:1;overflow:hidden;background:var(--lilac-soft)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;cursor:pointer}
+.thumb button svg{width:14px;height:14px}
+.thumb .bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.4)}
+.thumb .bar i{display:block;height:100%;width:0;background:var(--plum);transition:width .2s}
+.thumb.ok::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;background:rgba(94,26,82,.45);color:#fff;font-size:1.6rem}
+.photo-mode .controls{background:none;border-top:1px solid var(--line);background:var(--paper)}
+.photo-count{text-align:center;font-size:.8rem;color:var(--muted);padding:0 16px}
+
+/* progress overlay */
+.sending{position:absolute;inset:0;z-index:5;display:grid;place-items:center;background:rgba(18,5,16,.72);color:#fff;text-align:center;padding:30px}
+.photo-mode .sending{background:rgba(251,248,243,.85);color:var(--plum)}
+.meter{width:min(70vw,260px);height:6px;border-radius:999px;background:rgba(255,255,255,.2);overflow:hidden;margin:16px auto 8px}
+.photo-mode .meter{background:var(--lilac-soft)}
+.meter i{display:block;height:100%;width:0;background:var(--blush);transition:width .2s}
+
+/* ── Thank you ── */
+.done{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 24px calc(30px + env(safe-area-inset-bottom));text-align:center;color:#fff;background:var(--night)}
+.done .seal{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--gold);color:var(--gold);margin-bottom:22px}
+.done .seal svg{width:42px;height:42px}
+.done h2{font-family:var(--serif);font-weight:300;font-style:italic;font-size:3.6rem;margin:0;color:#fff}
+.done p{max-width:320px;color:rgba(255,255,255,.85);margin:10px 0 26px}
+.done .actions{display:grid;gap:10px;width:100%;max-width:320px}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));z-index:90;transform:translateX(-50%);max-width:calc(100% - 32px);padding:12px 18px;background:var(--ink);color:#fff;font-size:.9rem;box-shadow:0 14px 34px rgba(0,0,0,.25)}
+
+/* ── Desktop: a two-column guestbook with an in-page studio ── */
+@media (min-width:960px){
+  .home{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);min-height:100vh}
+  .hero{min-height:100vh}
+  .hero::after{background:linear-gradient(180deg,rgba(46,11,41,.45) 0%,rgba(46,11,41,0) 30%,rgba(46,11,41,.25) 60%,rgba(46,11,41,.9) 100%)}
+  .hero-copy{padding:0 var(--pad) 64px}
+  .hero h1{font-size:clamp(4.6rem,7vw,7.4rem)}
+  .right{justify-content:center;padding:80px var(--pad)}
+  .studio{inset:auto;top:50%;left:50%;width:min(92vw,980px);height:min(86vh,680px);transform:translate(-50%,-50%);overflow:hidden;box-shadow:0 40px 120px rgba(18,5,16,.55)}
+  .backdrop{position:fixed;inset:0;z-index:55;background:rgba(30,8,26,.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+  .thumbs{grid-template-columns:repeat(5,1fr)}
+  .done{inset:auto;top:50%;left:50%;width:min(92vw,560px);height:auto;min-height:440px;transform:translate(-50%,-50%);box-shadow:0 40px 120px rgba(18,5,16,.55)}
+}
+@media (max-width:959px){.backdrop{display:none}}
+@media (prefers-reduced-motion:reduce){.studio.recording .timer i{animation:none}}
+.sa input,.sa textarea,.sa output,.sa button,.rs input,.rs textarea,.rs output,.rs button,.gb input,.gb button{font-variant-numeric:lining-nums}
+
+/* Title typography: Playfair Display for presence, balanced wrapping everywhere */
+@font-face{font-family:'Display Fallback';src:local('Georgia');size-adjust:104%;ascent-override:92%;descent-override:24%}
+:root{--display:'Playfair Display','Display Fallback',Georgia,serif}
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
+.hero h1,.mode b,.done h2,.audio-mode .caption b,.photo-mode .top h2{font-family:var(--display);font-weight:500}
+.hero h1 em{font-weight:400}
+.hero h1{font-size:clamp(2.6rem,11vw,6rem);line-height:1.05}
+.mode b{font-size:1.5rem;line-height:1.2}
+.done h2{font-style:italic;font-weight:400}
+.right{padding-top:28px}
+.modes{margin-top:32px}
+.mode{padding:22px 0}
+.home-foot{margin-top:36px}
+
+
+/* The app sets its own font on <body>; pin ours on the template root */
+.gb{font-family:var(--sans);color:var(--ink);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+</style>
+</head>
+<body>
+<div class="gb" id="gb" data-slug="{{event.slug}}" data-api="{{api.baseUrl}}" data-phase="{{phase}}">
+
+  <div class="home" id="home">
+    <header class="hero">
+      {{#if media.portrait.url}}<img src="{{media.portrait.url}}" alt="{{media.portrait.alt}}" fetchpriority="high" decoding="async">{{/if}}
+      <div class="top"><a href="{{urls.invitation}}" aria-label="Back to the invitation"><svg width="46" height="46" viewBox="0 0 120 120" style="display:block;color:#eadcc2" role="img" aria-label="S and A monogram">
+        <circle cx="60" cy="60" r="57" fill="none" stroke="currentColor" stroke-width="1"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width=".5" opacity=".7"/>
+        <g fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round">
+          <path d="M34 92c8 6 17 9 26 9s18-3 26-9"/>
+          <path d="M40 95c-4-1-7-4-8-8 4 0 7 3 8 8z"/><path d="M47 99c-4 0-7-3-9-6 4-1 7 2 9 6z"/>
+          <path d="M80 95c4-1 7-4 8-8-4 0-7 3-8 8z"/><path d="M73 99c4 0 7-3 9-6-4-1-7 2-9 6z"/>
+          <path d="M60 15l3 4-3 4-3-4z"/>
+        </g>
+        <text x="47" y="70" text-anchor="middle" font-size="40" font-family="Playfair Display, Georgia, serif" font-style="italic" font-weight="500" fill="currentColor">S</text>
+        <text x="73" y="80" text-anchor="middle" font-size="40" font-family="Playfair Display, Georgia, serif" font-style="italic" font-weight="500" fill="currentColor">A</text>
+        <path d="M44 84l32-48" stroke="currentColor" stroke-width=".7" opacity=".55"/>
+      </svg></a><span>Guestbook</span></div>
+      <div class="hero-copy">
+        <h1>Leave your <em>wishes</em></h1>
+        <p class="lead">A video, a voice note or your photographs from today. Stephen and Agnes will keep every one.</p>
+      </div>
+    </header>
+
+    <div class="right">
+      <section class="sa-sec" id="sa-sec">
+        <div id="gate" hidden>
+          <p class="eyebrow" style="margin-bottom:8px">Your access code</p>
+          <p style="margin:0 0 14px;color:rgba(255,255,255,.7);font-size:.92rem">Enter the 6-digit code from your invitation to open the guestbook.</p>
+          <div class="field"><div class="code-row" id="codeRow"></div><p class="hint" id="codeHint"></p></div>
+          <button class="sa-btn sa-btn-white" id="codeGo" style="width:100%" type="button">Continue</button>
+        </div>
+
+        <div id="choose">
+          <div class="field">
+            <label for="guestName">Your name</label>
+            <input id="guestName" autocomplete="name" maxlength="60" placeholder="So they know it is from you">
+            <p class="hint" id="nameHint"></p>
+          </div>
+          <div class="modes">
+            <button class="mode" type="button" data-mode="video"><span class="n">01</span><span><b>Video message</b><small data-limit>Record a short wish</small></span><span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+            <button class="mode" type="button" data-mode="audio"><span class="n">02</span><span><b>Voice note</b><small>Say it from the heart</small></span><span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+            <button class="mode" type="button" data-mode="photo"><span class="n">03</span><span><b>Photographs</b><small id="photoLimit">Share your pictures from today</small></span><span class="arr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+          </div>
+          <p class="notice" id="notice" hidden></p>
+        </div>
+      </section>
+      <p class="home-foot"><a href="{{urls.invitation}}">Invitation</a>{{#if urls.itinerary}}<a href="{{urls.itinerary}}">Order of service</a>{{/if}}</p>
+    </div>
+  </div>
+  <div class="backdrop" id="backdrop" hidden></div>
+
+  <!-- Video studio -->
+  <section class="studio video-mode" id="videoStudio" hidden aria-label="Record a video message">
+    <div class="top">
+      <button class="round" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <span class="timer"><i></i><span data-time>0:00</span></span>
+      <button class="round" type="button" id="flip" aria-label="Switch camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9.8l.4 1.4-1.4.3M10 16.2l-.4-1.4 1.4-.3"/></svg></button>
+    </div>
+    <div class="stage">
+      <video id="cam" playsinline muted autoplay class="mirror"></video>
+      <video id="vReview" playsinline controls hidden></video>
+      <div class="msg" id="camMsg">Starting camera…</div>
+    </div>
+    <p class="limit" data-limit-text></p>
+    <div class="controls">
+      <span class="side-slot"></span>
+      <button class="rec" id="vRec" type="button" aria-label="Start recording" disabled><i></i></button>
+      <span class="side-slot"></span>
+      <div class="review" id="vReviewBar" hidden>
+        <button class="sa-btn sa-btn-ghost" type="button" data-retake>Retake</button>
+        <button class="sa-btn sa-btn-white" type="button" data-send>Send</button>
+      </div>
+    </div>
+    <div class="sending" hidden><div><b style="font-family:var(--serif);font-size:1.5rem">Sending your message…</b><div class="meter"><i></i></div><span data-pct>0%</span></div></div>
+  </section>
+
+  <!-- Audio studio -->
+  <section class="studio audio-mode" id="audioStudio" hidden aria-label="Record a voice note">
+    <div class="top">
+      <button class="round" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <span class="timer"><i></i><span data-time>0:00</span></span>
+      <span class="side-slot"></span>
+    </div>
+    <div class="stage">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="orb" id="orb"><span class="core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span></div>
+        <div class="caption" id="aCaption"><b>Voice note</b><span data-limit-text>Tap the button and speak</span></div>
+        <audio id="aReview" controls hidden></audio>
+      </div>
+    </div>
+    <div class="controls">
+      <span class="side-slot"></span>
+      <button class="rec" id="aRec" type="button" aria-label="Start recording" disabled><i></i></button>
+      <span class="side-slot"></span>
+      <div class="review" id="aReviewBar" hidden>
+        <button class="sa-btn sa-btn-ghost" type="button" data-retake>Retake</button>
+        <button class="sa-btn sa-btn-white" type="button" data-send>Send</button>
+      </div>
+    </div>
+    <div class="sending" hidden><div><b style="font-family:var(--serif);font-size:1.5rem">Sending your voice note…</b><div class="meter"><i></i></div><span data-pct>0%</span></div></div>
+  </section>
+
+  <!-- Photo studio -->
+  <section class="studio photo-mode" id="photoStudio" hidden aria-label="Share photos">
+    <div class="top">
+      <button class="round" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2>Share photos</h2>
+      <span class="side-slot"></span>
+    </div>
+    <div class="pick">
+      <label><input type="file" accept="image/*" capture="environment" id="pCamera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>Take a photo</label>
+      <label><input type="file" accept="image/*" multiple id="pGallery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 16l-5-5-9 9"/></svg>From gallery</label>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <p class="photo-count" id="photoCount"></p>
+    <div class="controls">
+      <button class="sa-btn sa-btn-plum" type="button" id="pSend" style="width:100%;max-width:420px" disabled>Send photos</button>
+    </div>
+    <div class="sending" hidden><div><b style="font-family:var(--serif);font-size:1.5rem" data-photo-status>Sending photos…</b><div class="meter"><i></i></div><span data-pct>0%</span></div></div>
+  </section>
+
+  <!-- Thank you -->
+  <section class="done" id="done" hidden aria-live="polite">
+    <span class="seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
+    <h2>Thank you</h2>
+    <p id="doneText">Your message is safely with Stephen &amp; Agnes.</p>
+    <div class="actions">
+      <button class="sa-btn sa-btn-white" type="button" id="again">Leave another</button>
+      {{#if urls.itinerary}}<a class="sa-btn sa-btn-ghost" href="{{urls.itinerary}}">Order of service</a>{{/if}}
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('gb');
+  if (!root || root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+
+  var slug = (root.getAttribute('data-slug') || '').trim();
+  var api = (root.getAttribute('data-api') || '').replace(/\/+$/, '');
+  var $ = function (id) { return document.getElementById(id); };
+  var config = { maxRecordingDuration: 120, maxPhotosPerGuest: 10 };
+  var MAX_BYTES = 50 * 1024 * 1024;
+
+  /* ---------- helpers ---------- */
+  function toast(msg) {
+    var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg;
+    document.body.appendChild(t); setTimeout(function () { t.remove(); }, 4200);
+  }
+  function mmss(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
+  function deviceId() {
+    try {
+      var id = localStorage.getItem('device_id');
+      if (!id) { id = 'device_' + Math.random().toString(36).slice(2, 11); localStorage.setItem('device_id', id); }
+      return id;
+    } catch (e) { return ''; }
+  }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function pickType(list) {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    for (var i = 0; i < list.length; i++) if (MediaRecorder.isTypeSupported(list[i])) return list[i];
+    return '';
+  }
+  function extFor(mime, kind) {
+    mime = (mime || '').toLowerCase();
+    if (mime.indexOf('mp4') > -1) return kind === 'audio' ? 'm4a' : 'mp4';
+    if (mime.indexOf('ogg') > -1) return 'ogg';
+    if (mime.indexOf('webm') > -1) return 'webm';
+    return kind === 'audio' ? 'webm' : 'mp4';
+  }
+
+  /* ---------- access code ---------- */
+  var qs = new URLSearchParams(location.search);
+  var codeKey = 'guestbook_access_' + slug;
+  var accessCode = qs.get('code') || qs.get('token') || qs.get('accessCode') || lsGet(codeKey) || '';
+  if (qs.get('code') || qs.get('token') || qs.get('accessCode')) lsSet(codeKey, accessCode);
+  function withCode(url) { return accessCode ? url + (url.indexOf('?') > -1 ? '&' : '?') + 'accessCode=' + encodeURIComponent(accessCode) : url; }
+
+  function loadConfig() {
+    if (!api || !slug) return Promise.resolve();
+    return fetch(withCode(api + '/api/guestbook/' + encodeURIComponent(slug) + '/config')).then(function (r) {
+      if (r.status === 401) { showGate(accessCode ? 'That code did not work. Please check and try again.' : ''); throw new Error('gate'); }
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error(j && (j.error || j.message) || 'unavailable');
+        if (j && j.config) config = Object.assign(config, j.config);
+        applyLimits();
+        $('gate').hidden = true; $('choose').hidden = false;
+      });
+    }).catch(function (err) {
+      if (err && err.message === 'gate') return;
+      var n = $('notice'); n.hidden = false;
+      n.textContent = err && err.message && err.message !== 'unavailable' && err.message.indexOf('fetch') === -1 ? err.message : 'We could not reach the guestbook just now. You can still try, or refresh in a moment.';
+    });
+  }
+  function applyLimits() {
+    var max = Number(config.maxRecordingDuration) || 120;
+    var txt = 'Up to ' + (max >= 60 ? Math.round(max / 60 * 10) / 10 + ' min' : max + ' sec');
+    root.querySelectorAll('[data-limit]').forEach(function (n) { n.textContent = txt + ' · record a short wish'; });
+    root.querySelectorAll('[data-limit-text]').forEach(function (n) { n.textContent = txt; });
+    var pl = $('photoLimit'); if (pl) pl.textContent = 'Up to ' + (config.maxPhotosPerGuest || 10) + ' photos from today';
+  }
+  function showGate(hint) {
+    $('choose').hidden = true; $('gate').hidden = false;
+    var row = $('codeRow');
+    if (!row.children.length) {
+      for (var i = 0; i < 6; i++) {
+        var inp = document.createElement('input');
+        inp.inputMode = 'numeric'; inp.maxLength = 1; inp.setAttribute('aria-label', 'Digit ' + (i + 1)); inp.autocomplete = 'one-time-code';
+        row.appendChild(inp);
+      }
+      var boxes = row.querySelectorAll('input');
+      boxes.forEach(function (b, i) {
+        b.addEventListener('input', function () {
+          var v = b.value.replace(/\D/g, '');
+          if (v.length > 1) { v.split('').slice(0, 6 - i).forEach(function (d, k) { boxes[i + k].value = d; }); (boxes[Math.min(5, i + v.length)] || b).focus(); return; }
+          b.value = v; if (v && boxes[i + 1]) boxes[i + 1].focus();
+        });
+        b.addEventListener('keydown', function (e) { if (e.key === 'Backspace' && !b.value && boxes[i - 1]) boxes[i - 1].focus(); });
+      });
+    }
+    $('codeHint').textContent = hint || '';
+    row.querySelector('input').focus();
+  }
+  $('codeGo').addEventListener('click', function () {
+    var code = Array.prototype.map.call($('codeRow').querySelectorAll('input'), function (i) { return i.value; }).join('');
+    if (code.length !== 6) { $('codeHint').textContent = 'Please enter all 6 digits.'; return; }
+    accessCode = code; lsSet(codeKey, code); loadConfig();
+  });
+
+  /* ---------- name ---------- */
+  var nameInput = $('guestName');
+  nameInput.value = lsGet('ep_guest_name') || '';
+  nameInput.addEventListener('input', function () { $('nameHint').textContent = ''; lsSet('ep_guest_name', nameInput.value.trim()); });
+  function guestName() { return nameInput.value.trim(); }
+  function requireName() {
+    if (guestName().length >= 2) return true;
+    $('nameHint').textContent = 'Please add your name first.';
+    nameInput.focus();
+    return false;
+  }
+
+  /* ---------- upload (XHR for progress) ---------- */
+  function upload(blob, fileName, type, duration, onProgress) {
+    return new Promise(function (resolve, reject) {
+      var fd = new FormData();
+      fd.append('media', blob, fileName);
+      fd.append('type', type);
+      fd.append('guestName', guestName() || 'Guest');
+      fd.append('captureMode', 'PERSONAL');
+      var did = deviceId(); if (did) fd.append('deviceId', did);
+      if (duration) fd.append('duration', String(Math.round(duration)));
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', withCode(api + '/api/guestbook/' + encodeURIComponent(slug) + '/upload'));
+      xhr.upload.onprogress = function (e) { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+      xhr.onload = function () {
+        var body = {}; try { body = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
+        if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+        else reject(new Error(body.error || body.message || 'Upload failed. Please try again.'));
+      };
+      xhr.onerror = function () { reject(new Error('Network problem. Please check your connection and try again.')); };
+      xhr.send(fd);
+    });
+  }
+
+  /* ---------- studio plumbing ---------- */
+  var active = null, stream = null;
+  function stopStream() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } }
+  function openStudio(id) {
+    active = $(id); active.hidden = false; $('backdrop').hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+  }
+  function closeStudio() {
+    stopRecording(true); stopStream(); stopMeter();
+    if (active) active.hidden = true;
+    active = null; $('backdrop').hidden = true;
+    document.documentElement.style.overflow = '';
+  }
+  root.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', closeStudio); });
+  $('backdrop').addEventListener('click', closeStudio);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && active && !recorder) closeStudio(); });
+
+  function setSending(studio, on, pct) {
+    var s = studio.querySelector('.sending'); s.hidden = !on;
+    if (pct != null) { s.querySelector('.meter i').style.width = Math.round(pct * 100) + '%'; s.querySelector('[data-pct]').textContent = Math.round(pct * 100) + '%'; }
+  }
+  function showDone(text) {
+    closeStudio();
+    $('doneText').textContent = text;
+    $('done').hidden = false; $('backdrop').hidden = false;
+  }
+  $('again').addEventListener('click', function () { $('done').hidden = true; $('backdrop').hidden = true; });
+
+  /* ---------- recording (video + audio share one recorder) ---------- */
+  var recorder = null, chunks = [], startedAt = 0, tick = null, recBlob = null, recMime = '', recSecs = 0, facing = 'user';
+
+  function startTimer(studio) {
+    var t = studio.querySelector('[data-time]'); var max = Number(config.maxRecordingDuration) || 120;
+    startedAt = Date.now(); t.textContent = '0:00';
+    tick = setInterval(function () {
+      var s = (Date.now() - startedAt) / 1000; t.textContent = mmss(s) + ' / ' + mmss(max);
+      if (s >= max) stopRecording();
+    }, 250);
+  }
+  function stopRecording(discard) {
+    if (tick) { clearInterval(tick); tick = null; }
+    if (recorder && recorder.state !== 'inactive') { recorder._discard = !!discard; recorder.stop(); }
+  }
+  function beginRecording(studio, kind, onDone) {
+    var types = kind === 'video'
+      ? ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      : ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+    var mime = pickType(types);
+    var opts = {}; if (mime) opts.mimeType = mime;
+    if (kind === 'video') opts.videoBitsPerSecond = 2500000; else opts.audioBitsPerSecond = 128000;
+    try { recorder = new MediaRecorder(stream, opts); } catch (e) { try { recorder = new MediaRecorder(stream); } catch (e2) { toast('Recording is not supported on this browser.'); return; } }
+    chunks = [];
+    recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = function () {
+      var discard = recorder && recorder._discard; var r = recorder; recorder = null;
+      studio.classList.remove('recording');
+      if (discard) return;
+      recMime = (r.mimeType || mime || (kind === 'video' ? 'video/mp4' : 'audio/webm')).split(';')[0];
+      recBlob = new Blob(chunks, { type: recMime });
+      recSecs = (Date.now() - startedAt) / 1000;
+      onDone();
+    };
+    recorder.start(1000);
+    studio.classList.add('recording');
+    startTimer(studio);
+  }
+
+  /* ---------- video ---------- */
+  var cam = $('cam'), vReview = $('vReview'), vRec = $('vRec'), vStudio = $('videoStudio');
+  function startCamera() {
+    stopStream();
+    $('camMsg').hidden = false; $('camMsg').textContent = 'Starting camera…'; vRec.disabled = true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('camMsg').textContent = 'Your browser cannot record video. Try a voice note or photos instead.'; return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } })
+      .then(function (s) {
+        if (!active || active !== vStudio) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+        stream = s; cam.srcObject = s; cam.classList.toggle('mirror', facing === 'user');
+        cam.play().catch(function () {}); $('camMsg').hidden = true; vRec.disabled = false;
+      })
+      .catch(function (err) {
+        $('camMsg').textContent = err && err.name === 'NotAllowedError'
+          ? 'Camera access was blocked. Allow camera and microphone in your browser settings, then try again.'
+          : 'We could not start your camera. Please check it is not in use by another app.';
+      });
+  }
+  function resetVideo() {
+    vStudio.classList.remove('reviewing'); recBlob = null; vReview.hidden = true; vReview.removeAttribute('src'); cam.hidden = false;
+    $('vReviewBar').hidden = true; vRec.hidden = false; vStudio.querySelectorAll('.side-slot').forEach(function (s) { s.hidden = false; });
+    vStudio.querySelector('[data-time]').textContent = '0:00'; $('flip').hidden = false;
+  }
+  vRec.addEventListener('click', function () {
+    if (recorder) { stopRecording(); return; }
+    $('flip').hidden = true;
+    beginRecording(vStudio, 'video', function () {
+      stopStream(); cam.hidden = true;
+      vReview.src = URL.createObjectURL(recBlob); vReview.hidden = false;
+      vRec.hidden = true; vStudio.querySelectorAll('.side-slot').forEach(function (s) { s.hidden = true; });
+      $('vReviewBar').hidden = false; vStudio.classList.add('reviewing');
+    });
+  });
+  $('flip').addEventListener('click', function () { facing = facing === 'user' ? 'environment' : 'user'; startCamera(); });
+  vStudio.querySelector('[data-retake]').addEventListener('click', function () { resetVideo(); startCamera(); });
+  vStudio.querySelector('[data-send]').addEventListener('click', function () { sendRecording(vStudio, 'VIDEO', 'video', 'Your video message is safely with Stephen & Agnes.'); });
+
+  /* ---------- audio ---------- */
+  var aRec = $('aRec'), aStudio = $('audioStudio'), aReview = $('aReview'), meterRaf = null, actx = null;
+  function stopMeter() { if (meterRaf) cancelAnimationFrame(meterRaf); meterRaf = null; if (actx) { try { actx.close(); } catch (e) {} actx = null; } $('orb').style.setProperty('--lvl', 1); }
+  function startMic() {
+    stopStream(); aRec.disabled = true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('aCaption').lastElementChild.textContent = 'Your browser cannot record audio.'; return; }
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then(function (s) {
+        if (!active || active !== aStudio) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+        stream = s; aRec.disabled = false;
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext; actx = new AC();
+          var an = actx.createAnalyser(); an.fftSize = 256; actx.createMediaStreamSource(s).connect(an);
+          var buf = new Uint8Array(an.frequencyBinCount);
+          var loop = function () { an.getByteFrequencyData(buf); var sum = 0; for (var i = 0; i < buf.length; i++) sum += buf[i]; $('orb').style.setProperty('--lvl', (1 + Math.min(.45, sum / buf.length / 160)).toFixed(3)); meterRaf = requestAnimationFrame(loop); };
+          loop();
+        } catch (e) {}
+      })
+      .catch(function (err) {
+        $('aCaption').lastElementChild.textContent = err && err.name === 'NotAllowedError'
+          ? 'Microphone access was blocked. Allow it in your browser settings, then try again.'
+          : 'We could not start your microphone.';
+      });
+  }
+  function resetAudio() {
+    recBlob = null; aReview.hidden = true; aReview.removeAttribute('src'); $('aReviewBar').hidden = true; aRec.hidden = false;
+    aStudio.querySelectorAll('.side-slot').forEach(function (s) { s.hidden = false; });
+    aStudio.querySelector('[data-time]').textContent = '0:00'; $('orb').hidden = false;
+    $('aCaption').firstElementChild.textContent = 'Voice note'; applyLimits();
+  }
+  aRec.addEventListener('click', function () {
+    if (recorder) { stopRecording(); return; }
+    $('aCaption').firstElementChild.textContent = 'Listening…';
+    beginRecording(aStudio, 'audio', function () {
+      stopMeter(); stopStream();
+      aReview.src = URL.createObjectURL(recBlob); aReview.hidden = false; $('orb').hidden = true;
+      $('aCaption').firstElementChild.textContent = 'Listen back';
+      $('aCaption').lastElementChild.textContent = 'Happy with it? Send it to the couple.';
+      aRec.hidden = true; aStudio.querySelectorAll('.side-slot').forEach(function (s) { s.hidden = true; });
+      $('aReviewBar').hidden = false;
+    });
+  });
+  aStudio.querySelector('[data-retake]').addEventListener('click', function () { resetAudio(); startMic(); });
+  aStudio.querySelector('[data-send]').addEventListener('click', function () { sendRecording(aStudio, 'AUDIO', 'audio', 'Your voice note is safely with Stephen & Agnes.'); });
+
+  function sendRecording(studio, type, kind, okText) {
+    if (!recBlob) return;
+    if (recBlob.size > MAX_BYTES) { toast('That recording is too long to send. Please record a shorter one.'); return; }
+    var btns = studio.querySelectorAll('.review .sa-btn'); btns.forEach(function (b) { b.disabled = true; });
+    setSending(studio, true, 0);
+    upload(recBlob, kind + '-message.' + extFor(recMime, kind), type, recSecs, function (p) { setSending(studio, true, p); })
+      .then(function () { setSending(studio, false); btns.forEach(function (b) { b.disabled = false; }); showDone(okText); })
+      .catch(function (err) { setSending(studio, false); btns.forEach(function (b) { b.disabled = false; }); toast(err.message); });
+  }
+
+  /* ---------- photos ---------- */
+  var photos = [], pStudio = $('photoStudio');
+  function renderThumbs() {
+    var wrap = $('thumbs'); wrap.innerHTML = '';
+    photos.forEach(function (p, i) {
+      var d = document.createElement('div'); d.className = 'thumb' + (p.ok ? ' ok' : '');
+      d.innerHTML = '<img alt=""><button type="button" aria-label="Remove photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="bar"><i></i></span>';
+      d.querySelector('img').src = p.url;
+      d.querySelector('button').addEventListener('click', function () { URL.revokeObjectURL(p.url); photos.splice(i, 1); renderThumbs(); });
+      if (p.ok) d.querySelector('button').remove();
+      p.el = d; wrap.appendChild(d);
+    });
+    var max = Number(config.maxPhotosPerGuest) || 10;
+    $('photoCount').textContent = photos.length ? photos.length + ' of ' + max + ' selected' : 'You can share up to ' + max + ' photos.';
+    $('pSend').disabled = !photos.filter(function (p) { return !p.ok; }).length;
+  }
+  function addFiles(list) {
+    var max = Number(config.maxPhotosPerGuest) || 10;
+    Array.prototype.forEach.call(list, function (f) {
+      if (!/^image\//.test(f.type)) return;
+      if (photos.length >= max) { toast('You can share up to ' + max + ' photos.'); return; }
+      if (f.size > MAX_BYTES) { toast(f.name + ' is too large to send.'); return; }
+      photos.push({ file: f, url: URL.createObjectURL(f), ok: false });
+    });
+    renderThumbs();
+  }
+  $('pCamera').addEventListener('change', function (e) { addFiles(e.target.files); e.target.value = ''; });
+  $('pGallery').addEventListener('change', function (e) { addFiles(e.target.files); e.target.value = ''; });
+  $('pSend').addEventListener('click', function () {
+    var queue = photos.filter(function (p) { return !p.ok; });
+    if (!queue.length) return;
+    $('pSend').disabled = true; setSending(pStudio, true, 0);
+    var i = 0, sent = 0;
+    var next = function () {
+      if (i >= queue.length) {
+        setSending(pStudio, false);
+        if (sent === queue.length) { photos.forEach(function (p) { URL.revokeObjectURL(p.url); }); photos = []; renderThumbs(); showDone(sent === 1 ? 'Your photo is safely with Stephen & Agnes.' : 'Your ' + sent + ' photos are safely with Stephen & Agnes.'); }
+        else { renderThumbs(); }
+        return;
+      }
+      var p = queue[i];
+      pStudio.querySelector('[data-photo-status]').textContent = 'Sending photo ' + (i + 1) + ' of ' + queue.length + '…';
+      var ext = (p.file.name.split('.').pop() || 'jpg').toLowerCase();
+      upload(p.file, 'photo-' + (i + 1) + '.' + ext, 'PHOTO', 0, function (fr) { setSending(pStudio, true, (i + fr) / queue.length); })
+        .then(function () { p.ok = true; sent++; i++; next(); })
+        .catch(function (err) { toast(err.message); i = queue.length; next(); });
+    };
+    next();
+  });
+
+  /* ---------- mode switching ---------- */
+  function openMode(mode) {
+    if (!requireName()) return;
+    if (mode === 'video') { resetVideo(); openStudio('videoStudio'); startCamera(); }
+    else if (mode === 'audio') { resetAudio(); openStudio('audioStudio'); startMic(); }
+    else if (mode === 'photo') { openStudio('photoStudio'); renderThumbs(); }
+  }
+  root.querySelectorAll('.mode[data-mode]').forEach(function (b) { b.addEventListener('click', function () { openMode(b.getAttribute('data-mode')); }); });
+
+  /* Sub-pages (/guestbook/video|audio|photo) open their studio straight away once a name is known */
+  var m = location.pathname.match(/\/guestbook\/(video|audio|photo)\/?$/);
+  applyLimits();
+  loadConfig().then(function () {
+    if (m && $('gate').hidden) {
+      if (guestName().length >= 2) openMode(m[1]);
+      else { var btn = root.querySelector('.mode[data-mode="' + m[1] + '"]'); if (btn) btn.style.borderColor = 'var(--blush)'; nameInput.focus(); }
+    }
+  });
+})();
+</script>
+</body>
+</html>

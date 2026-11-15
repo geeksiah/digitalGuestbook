@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { publicApi, guestbookApi } from '@/lib/api';
 import { formatDuration, getDeviceId, cn } from '@/lib/utils';
-import BackendTemplateFrame, { useBackendTemplate } from '@/components/BackendTemplateFrame';
+import BackendTemplateFrame, { TemplatePageLoader, useBackendTemplate } from '@/components/BackendTemplateFrame';
 import toast from 'react-hot-toast';
 import ServerWakingScreen from '@/components/ServerWakingScreen';
 import { isServerWakingMessage } from '@/lib/serverStatus';
@@ -33,27 +33,21 @@ const storeAccessCode = (slug: string, code: string) => {
 
 export default function GuestbookPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const slug = params.slug as string;
+
+  // Backend template check (render backend HTML if assigned). The default
+  // guestbook lives in its own component so its hooks are never called
+  // conditionally (the old early-return here broke the Rules of Hooks).
+  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'guestbook');
+  if (templateLoading) return <TemplatePageLoader />;
+  if (hasTemplate) return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
+  return <DefaultGuestbook slug={slug} />;
+}
+
+function DefaultGuestbook({ slug }: { slug: string }) {
+  const searchParams = useSearchParams();
   const urlCode = searchParams.get('code');
   const urlToken = searchParams.get('token');
-
-  // Backend template check (render backend HTML if assigned)
-  const { loading: templateLoading, available: hasTemplate } = useBackendTemplate(slug, 'guestbook');
-  if (templateLoading) {
-    return (
-      <div className="min-h-screen section-gradient flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-900" />
-      </div>
-    );
-  }
-
-  // If backend template is available, render it instead of default UI
-  if (hasTemplate) {
-    return <BackendTemplateFrame slug={slug} endpoint="guestbook" />;
-  }
-
-  
 
   // Core state
   const [loading, setLoading] = useState(true);
@@ -609,11 +603,7 @@ export default function GuestbookPage() {
   // ==================== RENDER STATES ====================
 
   if (loading) {
-    return (
-      <div className="min-h-screen section-gradient flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-900" />
-      </div>
-    );
+    return <TemplatePageLoader />;
   }
 
   if (isServerWakingMessage(error)) return <ServerWakingScreen />;
