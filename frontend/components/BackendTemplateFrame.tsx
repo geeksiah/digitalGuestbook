@@ -20,15 +20,97 @@ const FRONTEND_URL = typeof window !== "undefined"
   ? window.location.origin
   : (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || "");
 
-// ─── SWR Cache ─────────────────────────────────────────────────────────────────
-// In-memory cache with 30s stale-while-revalidate.
-// On cache hit: return stale data immediately, then revalidate in background.
+// ─── Shared template store ─────────────────────────────────────────────────────
+// Every page that asks "is there a template?" and the frame that renders it
+// read from ONE store. A request for the same slug/endpoint is made once and
+// shared (in-flight de-duplication), and the result is available synchronously
+// on the next mount. This removes the old "page spinner → frame spinner →
+// template" double/triple loading layers.
 const CACHE_TTL_MS = 30_000;
-const templateCache = new Map<string, {
-  html: string;
-  assetBase: string | null;
-  fetchedAt: number;
-}>();
+
+type TemplateUnavailableInfo = {
+  status: number;
+  message: string;
+  phase?: string | null;
+};
+
+type TemplateResult =
+  | { ok: true; html: string; assetBase: string | null; fetchedAt: number }
+  | { ok: false; info: TemplateUnavailableInfo; fetchedAt: number };
+
+const templateCache = new Map<string, TemplateResult>();
+const inflight = new Map<string, Promise<TemplateResult>>();
+
+const cacheKeyFor = (slug: string, endpoint: string) => `${slug}/${endpoint}`;
+
+async function requestTemplate(slug: string, endpoint: string, bustCache = false): Promise<TemplateResult> {
+  let url = `${API_BASE_URL}/api/public/event/${slug}/${endpoint}`;
+  if (bustCache) url += `${url.includes("?") ? "&" : "?"}_rt=${Date.now()}`;
+
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    const ct = res.headers.get("content-type") || "";
+
+    if (!res.ok || !ct.includes("text/html")) {
+      let message = "This page is not available right now.";
+      let phase: string | null = null;
+      try {
+        const payload = await res.json();
+        if (typeof payload?.message === "string" && payload.message.trim()) message = payload.message.trim();
+        else if (typeof payload?.error === "string" && payload.error.trim()) message = payload.error.trim();
+        if (typeof payload?.phase === "string") phase = payload.phase;
+      } catch {
+        // Keep default message when payload is not JSON.
+      }
+      return { ok: false, info: { status: res.ok ? 404 : (res.status || 404), message, phase }, fetchedAt: Date.now() };
+    }
+
+    const assetBase = res.headers.get("x-template-asset-base") || null;
+    const html = await res.text();
+    return { ok: true, html, assetBase, fetchedAt: Date.now() };
+  } catch {
+    return {
+      ok: false,
+      info: { status: 500, message: "We could not load this page right now. Please try again shortly.", phase: null },
+      fetchedAt: Date.now(),
+    };
+  }
+}
+
+/**
+ * Load (or join an in-flight load of) a template. Results are cached so a
+ * second consumer — usually <BackendTemplateFrame> mounted right after a page
+ * checked for a template — renders synchronously with no loader.
+ */
+export function loadBackendTemplate(slug: string, endpoint: string, opts: { network?: boolean } = {}): Promise<TemplateResult> {
+  const key = cacheKeyFor(slug, endpoint);
+  const existing = inflight.get(key);
+  if (existing) return existing;
+
+  const p = requestTemplate(slug, endpoint, Boolean(opts.network)).then((result) => {
+    // Server/network failures are not cached, so a retry can succeed.
+    if (result.ok || result.info.status < 500) templateCache.set(key, result);
+    else templateCache.delete(key);
+    return result;
+  }).finally(() => {
+    inflight.delete(key);
+  });
+  inflight.set(key, p);
+  return p;
+}
+
+/** Fire-and-forget warm-up, e.g. on hover or from a parent page. */
+export function prefetchBackendTemplate(slug: string, endpoint: string) {
+  if (!slug || templateCache.has(cacheKeyFor(slug, endpoint))) return;
+  void loadBackendTemplate(slug, endpoint);
+}
+
+function rewriteResult(result: TemplateResult): string | null {
+  if (!result.ok) return null;
+  return result.assetBase
+    ? rewriteWithAssetBase(result.html, result.assetBase, FRONTEND_URL)
+    : rewriteTemplateHtml(result.html, API_BASE_URL, FRONTEND_URL);
+}
 
 interface Props {
   slug: string;
@@ -41,32 +123,36 @@ interface Props {
   eventStreamPath?: string;
 }
 
-type TemplateUnavailableInfo = {
-  status: number;
-  message: string;
-  phase?: string | null;
-};
-
 type UseBackendTemplateOptions = {
   refreshIntervalMs?: number;
   revalidateOnFocus?: boolean;
+  /** Revalidate against the network on mount even when a cached copy exists. */
   forceFresh?: boolean;
   eventStreamPath?: string;
 };
 
+type HookState = {
+  loading: boolean;
+  available: boolean;
+  html: string | null;
+  unavailableInfo: TemplateUnavailableInfo | null;
+};
+
+function stateFromResult(result: TemplateResult | undefined): HookState {
+  if (!result) return { loading: true, available: false, html: null, unavailableInfo: null };
+  if (result.ok) return { loading: false, available: true, html: rewriteResult(result), unavailableInfo: null };
+  return { loading: false, available: false, html: null, unavailableInfo: result.info };
+}
+
 /**
- * Hook: fetch backend template HTML with SWR caching.
- *
- * PERFORMANCE FIX (vs previous version):
- * - NO HEAD preflight — single GET, check Content-Type on the response
- * - If response is JSON (not HTML) → no template assigned → show default UI
- * - Reads X-Template-Asset-Base header for CDN-direct asset URLs
+ * Hook: template HTML for an event page, backed by the shared store.
+ * - First render is synchronous when the store already has the template.
+ * - Concurrent callers share one request.
+ * - Stale entries render instantly and revalidate in the background.
  */
 export function useBackendTemplate(slug: string, endpoint: string, options: UseBackendTemplateOptions = {}) {
-  const [loading, setLoading] = useState(true);
-  const [available, setAvailable] = useState(false);
-  const [html, setHtml] = useState<string | null>(null);
-  const [unavailableInfo, setUnavailableInfo] = useState<TemplateUnavailableInfo | null>(null);
+  const key = cacheKeyFor(slug, endpoint);
+  const [state, setState] = useState<HookState>(() => stateFromResult(slug ? templateCache.get(key) : undefined));
   const refreshIntervalMs = Math.max(0, options.refreshIntervalMs ?? 0);
   const shouldRevalidateOnFocus = options.revalidateOnFocus ?? refreshIntervalMs > 0;
   const shouldForceFresh = Boolean(options.forceFresh);
@@ -74,179 +160,99 @@ export function useBackendTemplate(slug: string, endpoint: string, options: UseB
 
   useEffect(() => {
     let cancelled = false;
-    const cacheKey = `${slug}/${endpoint}`;
-
-    const applyResult = (
-      rawHtml: string,
-      assetBase: string | null,
-    ) => {
-      if (cancelled) return;
-
-      // Rewrite URLs: prefer CDN asset base from header, fall back to existing rewriting
-      const rewritten = assetBase
-        ? rewriteWithAssetBase(rawHtml, assetBase, FRONTEND_URL)
-        : rewriteTemplateHtml(rawHtml, API_BASE_URL, FRONTEND_URL);
-
-      setHtml(rewritten);
-      setAvailable(true);
-      setUnavailableInfo(null);
-      setLoading(false);
-    };
-
-    const fetchTemplate = async (isRevalidation = false, forceNetwork = false) => {
-      try {
-        let url = `${API_BASE_URL}/api/public/event/${slug}/${endpoint}`;
-        if (forceNetwork || shouldForceFresh) {
-          const separator = url.includes("?") ? "&" : "?";
-          url = `${url}${separator}_rt=${Date.now()}`;
-        }
-
-        const res = await fetch(url, { cache: "no-store" });
-        if (cancelled) return;
-
-        const ct = res.headers.get("content-type") || "";
-
-        if (!res.ok || !ct.includes("text/html")) {
-          let message = "This page is not available right now.";
-          let phase: string | null = null;
-
-          try {
-            const payload = await res.json();
-            if (typeof payload?.message === "string" && payload.message.trim()) {
-              message = payload.message.trim();
-            } else if (typeof payload?.error === "string" && payload.error.trim()) {
-              message = payload.error.trim();
-            }
-            if (typeof payload?.phase === "string") {
-              phase = payload.phase;
-            }
-          } catch {
-            // Keep default message when payload is not JSON.
-          }
-
-          if (!isRevalidation) {
-            setAvailable(false);
-            setUnavailableInfo({
-              status: res.status || 404,
-              message,
-              phase,
-            });
-            setLoading(false);
-          }
-          templateCache.delete(cacheKey);
-          return;
-        }
-
-        // Read CDN asset base from header (new feature)
-        const assetBase = res.headers.get("x-template-asset-base") || null;
-
-        const rawHtml = await res.text();
-        if (cancelled) return;
-
-        // Update cache
-        templateCache.set(cacheKey, {
-          html: rawHtml,
-          assetBase,
-          fetchedAt: Date.now(),
-        });
-
-        applyResult(rawHtml, assetBase);
-      } catch {
-        if (!cancelled && !isRevalidation) {
-          setAvailable(false);
-          setUnavailableInfo({
-            status: 500,
-            message: "We could not load this page right now. Please try again shortly.",
-            phase: null,
-          });
-          setLoading(false);
-        }
-      }
-    };
 
     if (!slug) {
-      setLoading(false);
+      setState({ loading: false, available: false, html: null, unavailableInfo: null });
       return;
     }
 
-    // Check SWR cache
-    const cached = shouldForceFresh ? null : templateCache.get(cacheKey);
-    if (cached) {
-      // Return cached data immediately
-      applyResult(cached.html, cached.assetBase);
+    const apply = (result: TemplateResult, isRevalidation: boolean) => {
+      if (cancelled) return;
+      // A failed background refresh never replaces a page that is already showing.
+      if (isRevalidation && !result.ok) return;
+      setState((prev) => {
+        const next = stateFromResult(result);
+        if (prev.html === next.html && prev.available === next.available && prev.loading === next.loading) return prev;
+        return next;
+      });
+    };
 
-      // If stale, revalidate in background
-      if (Date.now() - cached.fetchedAt > CACHE_TTL_MS) {
-        fetchTemplate(/* isRevalidation */ true);
+    const cached = templateCache.get(key);
+    if (cached) {
+      apply(cached, false);
+      const age = Date.now() - cached.fetchedAt;
+      // forceFresh pages revalidate on mount, unless the copy was fetched a
+      // moment ago by the page's own template check (avoids a duplicate request).
+      if ((shouldForceFresh && age > 2_000) || age > CACHE_TTL_MS) {
+        loadBackendTemplate(slug, endpoint, { network: true }).then((r) => apply(r, true));
       }
     } else {
-      // No cache — fetch fresh
-      fetchTemplate();
+      loadBackendTemplate(slug, endpoint).then((r) => apply(r, false));
     }
+
+    const revalidate = () => {
+      loadBackendTemplate(slug, endpoint, { network: true }).then((r) => apply(r, true));
+    };
 
     let intervalId: number | null = null;
-    const revalidate = () => {
-      fetchTemplate(true, true);
-    };
-
-    if (refreshIntervalMs > 0) {
-      intervalId = window.setInterval(revalidate, refreshIntervalMs);
-    }
+    if (refreshIntervalMs > 0) intervalId = window.setInterval(revalidate, refreshIntervalMs);
 
     const onVisibilityOrFocus = () => {
-      if (document.visibilityState === "visible") {
-        revalidate();
-      }
+      if (document.visibilityState === "visible") revalidate();
     };
-
     if (shouldRevalidateOnFocus) {
       document.addEventListener("visibilitychange", onVisibilityOrFocus);
       window.addEventListener("focus", onVisibilityOrFocus);
     }
 
     let stream: EventSource | null = null;
-    let onRealtimeUpdate: (() => void) | null = null;
+    const onRealtimeUpdate = () => revalidate();
     if (eventStreamPath) {
-      const streamUrl = eventStreamPath.startsWith("http://") || eventStreamPath.startsWith("https://")
+      const streamUrl = /^https?:\/\//.test(eventStreamPath)
         ? eventStreamPath
         : `${API_BASE_URL}${eventStreamPath.startsWith("/") ? "" : "/"}${eventStreamPath}`;
-
       try {
         stream = new EventSource(streamUrl);
-        onRealtimeUpdate = () => {
-          revalidate();
-        };
         stream.addEventListener("itinerary-update", onRealtimeUpdate as EventListener);
       } catch {
-        // Keep polling/focus revalidation as fallback if EventSource fails.
+        // Polling/focus revalidation remains as the fallback.
       }
     }
 
     return () => {
       cancelled = true;
       if (stream) {
-        if (onRealtimeUpdate) {
-          stream.removeEventListener("itinerary-update", onRealtimeUpdate as EventListener);
-        }
+        stream.removeEventListener("itinerary-update", onRealtimeUpdate as EventListener);
         stream.close();
       }
-      if (intervalId !== null) {
-        window.clearInterval(intervalId);
-      }
+      if (intervalId !== null) window.clearInterval(intervalId);
       if (shouldRevalidateOnFocus) {
         document.removeEventListener("visibilitychange", onVisibilityOrFocus);
         window.removeEventListener("focus", onVisibilityOrFocus);
       }
     };
-  }, [slug, endpoint, refreshIntervalMs, shouldRevalidateOnFocus, shouldForceFresh, eventStreamPath]);
+  }, [slug, endpoint, key, refreshIntervalMs, shouldRevalidateOnFocus, shouldForceFresh, eventStreamPath]);
 
-  return { loading, available, html, unavailableInfo };
+  return state;
 }
 
 /** @deprecated Use useBackendTemplate instead */
 export function useBackendTemplateAvailable(slug: string, endpoint: string) {
   const { loading, available } = useBackendTemplate(slug, endpoint);
   return { loading, available };
+}
+
+/**
+ * The one loading surface for every guest-facing event page. It is a quiet,
+ * neutral screen; the spinner only fades in if loading takes longer than
+ * ~450ms, so fast loads go straight from blank to the finished page.
+ */
+export function TemplatePageLoader() {
+  return (
+    <div className="ep-page-loader" role="status" aria-label="Loading">
+      <span className="ep-page-loader__ring" aria-hidden />
+    </div>
+  );
 }
 
 // ─── HTML Parsing ──────────────────────────────────────────────────────────────
@@ -633,27 +639,19 @@ export default function BackendTemplateFrame({
     const cleanupHead = injectHead(parsed.headContent, templateKey);
     const cleanupBody = applyBodyAttrs(parsed.bodyAttrs);
 
-    const raf = requestAnimationFrame(() => {
-      if (!containerRef.current) return;
-      executeScripts(containerRef.current, templateKey);
-      window.dispatchEvent(new Event("load"));
-    });
+    // Run template scripts before the browser paints, so guests never see a
+    // half-initialised frame (e.g. on each live itinerary refresh).
+    executeScripts(containerRef.current, templateKey);
+    window.dispatchEvent(new Event("load"));
 
     return () => {
-      cancelAnimationFrame(raf);
       cleanupHead();
       cleanupBody();
     };
   }, [parsed?.headContent, parsed?.bodyContent, parsed?.bodyAttrs, templateKey]);
 
   if (loading) {
-    return (
-      fallback || (
-        <div className="min-h-screen flex items-center justify-center bg-white">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
-        </div>
-      )
-    );
+    return <>{fallback || <TemplatePageLoader />}</>;
   }
 
   if (!available || !html || !parsed) {

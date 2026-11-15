@@ -60,6 +60,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`}>
       <head>
+        {/* Open connections early: every guest page fetches its template from
+            the API, and event templates pull fonts from Google Fonts. */}
+        {process.env.NEXT_PUBLIC_API_URL ? (
+          <link rel="preconnect" href={process.env.NEXT_PUBLIC_API_URL} crossOrigin="anonymous" />
+        ) : null}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <Script id="chunk-load-recovery" strategy="beforeInteractive">
           {`(() => {
   const retryFlag = "__ep_chunk_retry_done";
